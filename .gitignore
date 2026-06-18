@@ -1,0 +1,22 @@
+# IDE / AI-tool config (kept on disk, never versioned)
+.idea/
+.claude/
+
+# x86 assembly / C OS-dev build artifacts
+*.o
+*.obj
+*.bin
+*.elf
+*.iso
+*.img
+*.exe
+*.a
+*.so
+*.dll
+build/
+bin/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
