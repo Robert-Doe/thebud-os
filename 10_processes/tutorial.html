@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 10 — Processes & Scheduler | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#38bdf8;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(56,189,248,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(56,189,248,0.08),rgba(13,148,136,0.08));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .state-row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap;}
+  .state-badge{font-family:'Source Code Pro',monospace;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;}
+  .s-ready{background:rgba(74,222,128,0.15);border:1px solid var(--green);color:var(--green);}
+  .s-run{background:rgba(56,189,248,0.15);border:1px solid var(--cyan);color:var(--cyan);}
+  .s-wait{background:rgba(251,146,60,0.15);border:1px solid var(--orange);color:var(--orange);}
+  .s-zombie{background:rgba(167,139,250,0.15);border:1px solid var(--purple);color:var(--purple);}
+  .s-dead{background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);}
+  .arrow{color:var(--muted);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 10 — PHASE 2</div>
+  <h1>Processes <span>&amp; Scheduler</span></h1>
+  <p class="tagline">Phase 2 begins. The timer IRQ now fires 100× per second, and each tick the scheduler picks a new process to run. Context switching: saving one process's registers and restoring another's — that's it. That's multitasking.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">PCB</div><div class="label">Process Control Block — one per process</div></div>
+    <div class="hero-stat"><div class="num">ESP</div><div class="label">the only register that matters for switching</div></div>
+    <div class="hero-stat"><div class="num">round-robin</div><div class="label">scheduler algorithm</div></div>
+    <div class="hero-stat"><div class="num">IRQ0</div><div class="label">timer — the preemption trigger</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-stack">The Stack</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of a chef managing several dishes on a stove. Every 10 seconds (timer tick), the chef puts down their current pan, writes a note about its current state ("burner 3, 40% done, lid on"), picks up the next pan, reads its note, and continues stirring. Each dish thinks it has the chef's full attention — but really the chef is time-sharing between all of them.</p>
+      <p style="margin-top:10px;">Each "dish" is a process. The "note" is the PCB (Process Control Block) — mainly the saved stack pointer. The chef is the CPU. The context switch is putting down one pan and picking up another.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Process Control Block</h2>
+    <pre><code>typedef enum { PROC_READY, PROC_RUNNING, PROC_WAITING,
+               PROC_ZOMBIE, PROC_DEAD } proc_state_t;
+
+struct process {
+    uint32_t     pid;
+    uint32_t     esp;           /* saved stack pointer — the whole context */
+    uint8_t     *stack;         /* base of the kernel stack allocation */
+    uint32_t     kernel_stack_top;
+    uint32_t     cr3;           /* page directory (Module 15+) */
+    uint32_t     parent_pid;
+    int          exit_code;
+    proc_state_t state;
+    struct process *next;       /* intrusive linked list */
+    /* ... extended in later modules: signals, fds, vm_regions, threads */
+};</code></pre>
+    <div class="callout cyan">
+      <div class="label">Why just ESP?</div>
+      <p>The timer IRQ is a normal hardware interrupt. When it fires, the CPU pushes EIP, CS, EFLAGS (and ESP/SS for ring switches) onto the <em>current</em> stack before calling your handler. Your <code>isr_common_stub</code> then pushes all the general-purpose registers. So when <code>scheduler_tick</code> runs, the entire CPU state is already on the stack. Saving ESP is enough — the full context comes along for free.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — The Context Switch</h2>
+    <pre><code>/* process.c — called from the timer IRQ handler */
+uint32_t scheduler_tick(uint32_t current_esp) {
+    if (current) current->esp = current_esp; /* save outgoing ESP */
+
+    /* find next READY process (round-robin) */
+    struct process *next = pick_next();
+    if (!next) return current_esp; /* nothing else to run */
+
+    current = next;
+    current->state = PROC_RUNNING;
+    return current->esp; /* return incoming ESP */
+}
+
+/* isr.asm — the timer IRQ stub */
+timer_irq_stub:
+    pusha
+    push esp            ; pass current ESP to scheduler_tick
+    call scheduler_tick ; returns new ESP
+    mov esp, eax        ; switch stacks!
+    popa
+    iret                ; resume the new process</code></pre>
+    <div class="callout orange">
+      <div class="label">The Magic Line</div>
+      <p><code>mov esp, eax</code> is the entire context switch. Before it, ESP points at the outgoing process's kernel stack. After it, ESP points at the incoming process's kernel stack — which has that process's saved registers waiting to be popped by <code>popa</code> and its saved EIP waiting for <code>iret</code>. One instruction, full CPU context switch.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Process States</h2>
+    <div class="state-row">
+      <div class="state-badge s-ready">READY</div><div class="arrow">→ scheduler picks it →</div>
+      <div class="state-badge s-run">RUNNING</div><div class="arrow">→ blocks on I/O →</div>
+      <div class="state-badge s-wait">WAITING</div>
+    </div>
+    <div class="state-row">
+      <div class="state-badge s-run">RUNNING</div><div class="arrow">→ calls exit() →</div>
+      <div class="state-badge s-zombie">ZOMBIE</div><div class="arrow">→ parent waits →</div>
+      <div class="state-badge s-dead">DEAD</div>
+    </div>
+    <div class="state-row">
+      <div class="state-badge s-wait">WAITING</div><div class="arrow">→ I/O completes / signal arrives →</div>
+      <div class="state-badge s-ready">READY</div>
+    </div>
+    <p style="color:var(--muted);font-size:14px;margin-top:12px;">ZOMBIE = process has exited but parent hasn't called wait() yet. The PCB is kept so the parent can read the exit code. DEAD = PCB can be recycled.</p>
+  </section>
+
+  <section>
+    <h2>05 — Creating a Process</h2>
+    <pre><code>int process_create(void (*entry)(void)) {
+    struct process *p = kmalloc(sizeof(*p));
+    p->pid   = next_pid++;
+    p->state = PROC_READY;
+    p->stack = kmalloc(STACK_SIZE);  /* 8KB kernel stack */
+    p->kernel_stack_top = (uint32_t)p->stack + STACK_SIZE;
+
+    /* Build an initial interrupt frame on the new stack
+       so scheduler_tick can "return" into the new process */
+    uint32_t *sp = (uint32_t*)p->kernel_stack_top;
+    *--sp = 0x00000202; /* EFLAGS: interrupts enabled */
+    *--sp = 0x08;       /* CS: kernel code selector */
+    *--sp = (uint32_t)entry; /* EIP: function to run */
+    /* 8 zeros for pusha's registers */
+    for (int i = 0; i < 8; i++) *--sp = 0;
+    p->esp = (uint32_t)sp;
+
+    /* add to ready list */
+    enqueue(p);
+    return 1;
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>06 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 10 — Processes &amp; Scheduler</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\10_processes
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Three processes run concurrently — each prints its own letter:</div>
+      <pre><code>[BobOS] Module 10 -- Processes &amp; Scheduler
+  Spawning process A, B, C...
+AAABBBCCCAAABBBCCCAAABBB...
+  (interleaved output proves preemption is working)</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> When <code>process_create()</code> builds the initial stack frame, it pushes 8 zeros for the general-purpose registers (as if <code>pusha</code> had been called). Then <code>scheduler_tick</code> returns the new ESP, and the stub does <code>popa</code> then <code>iret</code>.</p>
+      <p style="margin-top:14px;color:var(--muted);">What happens if you forget the 8 zeros? What does <code>popa</code> pop instead — and what does <code>iret</code> try to use as EIP?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Is this real multitasking or fake?</div>
+      <div class="a">It's real preemptive multitasking — the timer genuinely interrupts processes without their cooperation. What makes it "simple" is that it's cooperative within a tick (no priorities, no sleep/wake), all processes share kernel address space (until Module 15), and there's only one CPU core. But the mechanism is identical to what Linux does on a single core.</div>
+      <div class="q">Q: What's the difference between a process and a thread at this point?</div>
+      <div class="a">At this stage, all "processes" share the same page directory (same address space). They're really threads by modern terminology. True process isolation — separate page directories — comes in Module 15. Actual threads sharing an address space come in Module 24.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 11 — System Calls</div>
+      <p>Processes can run concurrently, but they have no way to ask the kernel for services. Module 11 adds the <code>int 0x80</code> syscall gate — the interface between user code and the kernel. SYS_EXIT, SYS_WRITE, SYS_GETPID, SYS_YIELD are the first four.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>process.c</code> · <code>process.h</code></p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 10 of 42 &nbsp;|&nbsp; <a href="../09_keyboard/tutorial.html">← Module 09</a> &nbsp;·&nbsp; <a href="../11_syscalls/tutorial.html">Module 11 →</a></footer>
+</body>
+</html>
