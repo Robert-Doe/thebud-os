@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 09 — Keyboard Driver | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#a78bfa;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(167,139,250,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(167,139,250,0.08),rgba(56,189,248,0.08));border:1px solid rgba(167,139,250,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .scancode-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:16px 0;font-family:'Source Code Pro',monospace;font-size:13px;}
+  .sc{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px 6px;text-align:center;}
+  .sc .hex{color:var(--purple);font-size:12px;display:block;}
+  .sc .chr{color:var(--text);font-weight:700;font-size:15px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 09 — PHASE 1</div>
+  <h1>Keyboard <span>Driver</span></h1>
+  <p class="tagline">Every key press fires IRQ1. The keyboard controller sends a scancode byte. Your job: catch the IRQ, read the byte, translate it to ASCII, and put it in a ring buffer for the shell to consume.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">IRQ1</div><div class="label">keyboard hardware interrupt</div></div>
+    <div class="hero-stat"><div class="num">0x60</div><div class="label">keyboard data port</div></div>
+    <div class="hero-stat"><div class="num">0x80</div><div class="label">key release flag in scancode</div></div>
+    <div class="hero-stat"><div class="num">256</div><div class="label">ring buffer size</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-io">Port I/O</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-interrupts">Interrupts</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine a receptionist (the keyboard controller) sitting at a desk outside your office. Every time a visitor (key press) arrives, the receptionist rings a bell (IRQ1) and writes a note (scancode) on a slip of paper. Your IRQ handler runs to the desk, grabs the slip, translates it ("scancode 0x1E → the letter 'A'"), and drops it in an in-tray (ring buffer).</p>
+      <p style="margin-top:10px;">Your main code doesn't wait at the desk — it just checks the in-tray whenever it wants input. That decoupling is the whole point of interrupt-driven I/O.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Scancodes vs ASCII</h2>
+    <p>The keyboard doesn't send ASCII. It sends <strong>scancodes</strong> — hardware codes specific to the PS/2 keyboard protocol. Key press = scancode. Key release = scancode | 0x80.</p>
+    <div class="scancode-grid">
+      <div class="sc"><span class="hex">0x1E</span><span class="chr">A</span></div>
+      <div class="sc"><span class="hex">0x30</span><span class="chr">B</span></div>
+      <div class="sc"><span class="hex">0x2E</span><span class="chr">C</span></div>
+      <div class="sc"><span class="hex">0x20</span><span class="chr">D</span></div>
+      <div class="sc"><span class="hex">0x12</span><span class="chr">E</span></div>
+      <div class="sc"><span class="hex">0x02</span><span class="chr">1</span></div>
+      <div class="sc"><span class="hex">0x0E</span><span class="chr">⌫</span></div>
+      <div class="sc"><span class="hex">0x1C</span><span class="chr">↵</span></div>
+      <div class="sc"><span class="hex">0x39</span><span class="chr">_</span></div>
+      <div class="sc"><span class="hex">0x2A</span><span class="chr">⇧L</span></div>
+      <div class="sc"><span class="hex">0x36</span><span class="chr">⇧R</span></div>
+      <div class="sc"><span class="hex">0x0F</span><span class="chr">⇥</span></div>
+    </div>
+    <pre><code>/* A flat lookup table: scancode → ASCII (simplified, US layout) */
+static const char scancode_map[128] = {
+    0, 0, '1','2','3','4','5','6','7','8','9','0','-','=','\b',
+    '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',
+    0,'a','s','d','f','g','h','j','k','l',';','\'','`',
+    0,'\\','z','x','c','v','b','n','m',',','.','/', 0,
+    '*', 0, ' ', /* ... */
+};</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — The IRQ Handler</h2>
+    <pre><code>/* keyboard.c */
+#define KB_DATA_PORT 0x60
+
+static char  ring_buf[256];
+static uint8_t ring_head = 0, ring_tail = 0;
+
+static void keyboard_irq_handler(struct interrupt_frame *f) {
+    uint8_t scancode = inb(KB_DATA_PORT);
+
+    if (scancode & 0x80) return; /* key release — ignore */
+    if (scancode >= 128)  return; /* extended key — ignore for now */
+
+    char ascii = scancode_map[scancode];
+    if (!ascii) return;
+
+    ring_buf[ring_head++] = ascii; /* head wraps via uint8_t overflow */
+    pic_send_eoi(1);               /* MUST send EOI to re-enable IRQ1 */
+}
+
+char keyboard_getchar(void) {
+    while (ring_head == ring_tail) { /* spin until a key is available */
+        __asm__ volatile ("hlt");    /* sleep until next interrupt */
+    }
+    return ring_buf[ring_tail++];
+}</code></pre>
+    <div class="callout orange">
+      <div class="label">The hlt trick</div>
+      <p><code>keyboard_getchar()</code> spins waiting for a key. The <code>hlt</code> instruction stops the CPU until the next interrupt fires. That interrupt is the keyboard IRQ itself — which fills the ring buffer and then lets <code>hlt</code> return. Without <code>hlt</code>, the spin loop burns 100% CPU doing nothing useful while waiting for a keypress.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The Ring Buffer</h2>
+    <p>The ring buffer is a fixed-size circular array. <code>ring_head</code> is where new characters go in; <code>ring_tail</code> is where they come out. Because both are <code>uint8_t</code>, they wrap from 255 back to 0 automatically — no modulo needed.</p>
+    <div class="callout red">
+      <div class="label">Buffer Overflow</div>
+      <p>If you type 256 characters without the consumer reading them, <code>ring_head</code> wraps around and overwrites old data. For a kernel driver demo this is fine — a real driver would check <code>(ring_head + 1) != ring_tail</code> before writing and silently drop the character if full.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 09 — Keyboard Driver</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\09_keyboard
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">In the QEMU window: type any keys. You should see them echoed back in real time.</div>
+      <pre><code>[BobOS] Module 09 -- Keyboard Driver
+  IRQ1 enabled. Type something:
+  &gt; hello world
+  You typed: hello world</code></pre></div>
+      <div class="step"><div class="desc">Click inside the QEMU window first to capture keyboard focus.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> The shift key (scancode 0x2A / 0x36) is a modifier — it doesn't produce a character itself. But when held down, the next key should produce its uppercase version. Our simple scancode_map doesn't handle this.</p>
+      <p style="margin-top:14px;color:var(--muted);">How would you implement shift support? You need to track whether shift is currently pressed. Where in the IRQ handler would you add this, and how would you select between the normal and shifted scancode maps?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why does the keyboard send scancodes instead of ASCII?</div>
+      <div class="a">Because the keyboard doesn't know your locale, your keymap, or whether Shift/Alt/Ctrl is held. It just reports raw hardware events — "key 0x1E went down." The OS driver decides what that means in context. This separation lets you implement any keyboard layout in software without changing the keyboard hardware.</div>
+      <div class="q">Q: What's the difference between PS/2 and USB keyboards at this level?</div>
+      <div class="a">PS/2 uses a direct wire to port 0x60 and fires IRQ1 — it's simple and always works in QEMU. USB keyboards need a USB controller driver (XHCI/EHCI), USB protocol stack, HID class driver — hundreds of times more code. QEMU emulates a PS/2 keyboard even when you plug in a real USB keyboard on the host, which is why we can use PS/2 for this module.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 10 — Processes &amp; Scheduler</div>
+      <p>Phase 1 is complete. You have a fully functional bare-metal OS with output, memory management, interrupts, and input. Phase 2 starts with the biggest leap: multiple processes running concurrently with the timer IRQ preempting between them via round-robin scheduling.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>keyboard.c</code> · <code>keyboard.h</code></p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 09 of 42 &nbsp;|&nbsp; <a href="../08_heap/tutorial.html">← Module 08</a> &nbsp;·&nbsp; <a href="../10_processes/tutorial.html">Module 10 →</a></footer>
+</body>
+</html>
