@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 19 — VFS Layer | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#0d9488;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(13,148,136,0.08) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--teal);color:#fff;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--teal);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--teal);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--teal);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(13,148,136,0.08),rgba(74,222,128,0.08));border:1px solid rgba(13,148,136,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--teal);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .vfs-layer{margin:20px 0;}
+  .vl-row{display:flex;align-items:center;padding:12px 18px;border-radius:8px;margin:4px 0;gap:12px;}
+  .vl-row .lname{font-family:'Source Code Pro',monospace;font-size:13px;font-weight:700;min-width:140px;}
+  .vl-row .ldesc{font-size:14px;color:var(--muted);}
+  .vl-row.user{background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.2);}.vl-row.user .lname{color:var(--purple);}
+  .vl-row.vfs{background:rgba(13,148,136,0.08);border:1px solid rgba(13,148,136,0.2);}.vl-row.vfs .lname{color:var(--teal);}
+  .vl-row.backend{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);}.vl-row.backend .lname{color:var(--cyan);}
+  .arrow-center{text-align:center;color:var(--muted);font-size:20px;margin:2px 0;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 19 — PHASE 4</div>
+  <h1>VFS <span>Layer</span></h1>
+  <p class="tagline">One interface to rule them all. Whether you're reading a file from disk, a pipe from another process, or a character from the terminal — the VFS makes it look identical: open → read → write → close. The backend is just a vtable.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">fd</div><div class="label">file descriptor — integer per open file</div></div>
+    <div class="hero-stat"><div class="num">0/1/2</div><div class="label">stdin / stdout / stderr</div></div>
+    <div class="hero-stat"><div class="num">vfs_ops</div><div class="label">vtable: open/read/write/close</div></div>
+    <div class="hero-stat"><div class="num">fd_table</div><div class="label">per-process array of open files</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-stack">The Stack</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of a universal TV remote. You don't care if the TV is a Samsung, LG, or Sony — you press "volume up" and it works. The remote is the VFS. The "volume up" button is <code>read(fd, buf, n)</code>. The Samsung/LG/Sony driver is the backend (BobFS, pipe, terminal). Each backend implements the same four buttons differently, but your code only ever touches the remote.</p>
+      <p style="margin-top:10px;">This is classic object-oriented design in C: a struct of function pointers (vtable) that different backends fill in differently.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The VFS Stack</h2>
+    <div class="vfs-layer">
+      <div class="vl-row user"><div class="lname">User code</div><div class="ldesc">calls SYS_READ(fd, buf, n) — doesn't know what fd points to</div></div>
+      <div class="arrow-center">↓</div>
+      <div class="vl-row vfs"><div class="lname">VFS / syscall</div><div class="ldesc">looks up fd in process fd_table → gets struct file_descriptor</div></div>
+      <div class="arrow-center">↓</div>
+      <div class="vl-row vfs"><div class="lname">fd_table[fd].ops</div><div class="ldesc">calls ops->read(inode, buf, n, offset) via function pointer</div></div>
+      <div class="arrow-center">↓</div>
+      <div class="vl-row backend"><div class="lname">BobFS backend</div><div class="ldesc">reads sectors from disk, copies bytes into buf</div></div>
+      <div class="vl-row backend"><div class="lname">Pipe backend</div><div class="ldesc">copies bytes from pipe ring buffer into buf</div></div>
+      <div class="vl-row backend"><div class="lname">VGA/terminal</div><div class="ldesc">for writes: calls vga_putchar for each byte</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — The Key Structs</h2>
+    <pre><code>/* vfs.h */
+struct vfs_ops {
+    int  (*open) (const char *path, int flags);
+    int  (*read) (int inode, char *buf, int n, int offset);
+    int  (*write)(int inode, const char *buf, int n, int offset);
+    void (*close)(int inode);
+};
+
+struct file_descriptor {
+    int          valid;    /* 1 = slot occupied */
+    int          inode;    /* backend-specific handle */
+    int          offset;   /* current read/write position */
+    struct vfs_ops *ops;   /* pointer to the backend's vtable */
+};
+
+/* Each process gets a table of open file descriptors */
+#define MAX_FDS 16
+/* In struct process: */
+struct file_descriptor fd_table[MAX_FDS];
+
+/* Backend vtables — defined in their respective .c files */
+extern struct vfs_ops bobfs_ops;
+extern struct vfs_ops vga_ops;    /* stdout: write calls kprintf */
+extern struct vfs_ops pipe_read_ops, pipe_write_ops; /* Module 20 */</code></pre>
+  </section>
+
+  <section>
+    <h2>04 — Opening stdin / stdout / stderr</h2>
+    <pre><code>/* process.c — when creating a new process */
+void setup_standard_fds(struct process *p) {
+    /* fd 0: stdin — terminal input (keyboard, stub for now) */
+    p->fd_table[0].valid  = 1;
+    p->fd_table[0].inode  = 0;
+    p->fd_table[0].offset = 0;
+    p->fd_table[0].ops    = &vga_ops;  /* or keyboard_ops */
+
+    /* fd 1: stdout — VGA terminal */
+    p->fd_table[1].valid  = 1;
+    p->fd_table[1].inode  = 0;
+    p->fd_table[1].offset = 0;
+    p->fd_table[1].ops    = &vga_ops;
+
+    /* fd 2: stderr — same as stdout */
+    p->fd_table[2]        = p->fd_table[1];
+}
+
+/* SYS_OPEN: find a free fd slot, call ops->open */
+int do_open(const char *path, int flags) {
+    int fd = find_free_fd(current);
+    if (fd < 0) return -1;
+    /* determine which backend based on path prefix */
+    struct vfs_ops *ops = vfs_resolve(path);
+    int inode = ops->open(path, flags);
+    if (inode < 0) return -1;
+    current->fd_table[fd] = (struct file_descriptor){1, inode, 0, ops};
+    return fd;
+}
+
+/* SYS_READ: look up fd, call its ops->read */
+int do_read(int fd, char *buf, int n) {
+    if (fd < 0 || fd >= MAX_FDS || !current->fd_table[fd].valid) return -1;
+    struct file_descriptor *f = &current->fd_table[fd];
+    int r = f->ops->read(f->inode, buf, n, f->offset);
+    if (r > 0) f->offset += r;
+    return r;
+}</code></pre>
+    <div class="callout green">
+      <div class="label">fork inherits file descriptors</div>
+      <p>When a process forks, the child's <code>fd_table</code> is copied from the parent's — the child inherits all open file descriptors with the same offsets. This is how shell pipelines work: the parent opens a pipe, forks, and both parent and child have the same pipe fds. The child then writes to the pipe; the parent reads from it.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 19 — VFS</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\19_vfs
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output — user process uses fd-based I/O:</div>
+      <pre><code>[BobOS] Module 19 -- VFS Layer
+  [proc] open("hello.txt") → fd=3
+  [proc] read(fd=3, buf, 13) → 13 bytes: "Hello, BobOS!"
+  [proc] write(fd=1, "via stdout\n", 11) → 11  [VGA]
+  [proc] close(fd=3) → OK
+  [proc] open("missing") → -1 (not found)
+  VFS OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> The <code>offset</code> field in <code>file_descriptor</code> tracks the current read position. Two processes that both open the same file get <em>separate</em> fd_table entries — so they have independent offsets.</p>
+      <p style="margin-top:14px;color:var(--muted);">But after <code>fork()</code>, the fd_table is <em>copied</em> — so parent and child initially have the same offset for each fd. If the child reads 100 bytes from fd=3, does the parent's offset advance? How does Linux solve this with "open file description" objects shared between processes?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why not just use BobFS directly instead of a VFS layer?</div>
+      <div class="a">Without VFS, every syscall would have an <code>if (is_file) ... else if (is_pipe) ... else if (is_terminal) ...</code> chain. Every new backend requires editing the syscall handler. With VFS, adding a new backend means implementing four functions and registering a vtable — zero changes to SYS_READ/SYS_WRITE. It's the Open/Closed Principle applied to OS design.</div>
+      <div class="q">Q: What's an inode in our VFS vs a real filesystem?</div>
+      <div class="a">In our VFS, "inode" is just an integer handle that means something to the backend — for BobFS it's the inode table index, for a pipe it's the pipe buffer index, for VGA it's meaningless (always 0). Real filesystems have full inode structures with permissions, timestamps, link counts, and block maps. We use the word loosely as "backend file handle."</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 20 — Pipes &amp; IPC</div>
+      <p>The VFS vtable is in place. Module 20 plugs in the first non-disk backend: an anonymous kernel ring buffer (pipe) connecting two processes. SYS_PIPE creates two file descriptors — one for reading, one for writing. The foundation for shell pipelines.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>vfs.h</code> · <code>vfs.c</code> · <code>process.h</code> (fd_table)</p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 19 of 42 &nbsp;|&nbsp; <a href="../18_signals/tutorial.html">← Module 18</a> &nbsp;·&nbsp; <a href="../20_pipes/tutorial.html">Module 20 →</a></footer>
+</body>
+</html>
