@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 17 — fork & exec | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#f5c842;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(245,200,66,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--gold);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--gold);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--gold);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(245,200,66,0.08),rgba(251,146,60,0.08));border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .fork-tree{margin:20px 0;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-family:'Source Code Pro',monospace;font-size:13px;line-height:2;}
+  .fork-tree .parent{color:var(--cyan);}
+  .fork-tree .child{color:var(--green);padding-left:24px;}
+  .fork-tree .arrow{color:var(--muted);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 17 — PHASE 3</div>
+  <h1>fork <span>&amp; exec</span></h1>
+  <p class="tagline">The Unix process model in two syscalls. <code>fork()</code> clones the current process — address space and all. <code>exec()</code> replaces it with a new ELF binary. <code>wait()</code> lets the parent collect the exit code. Together they are how every Unix process ever born came to exist.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">SYS_FORK</div><div class="label">deep-copy address space, return twice</div></div>
+    <div class="hero-stat"><div class="num">SYS_EXEC</div><div class="label">replace current image with ELF</div></div>
+    <div class="hero-stat"><div class="num">SYS_WAIT</div><div class="label">block until child becomes zombie</div></div>
+    <div class="hero-stat"><div class="num">0 / pid</div><div class="label">fork return values: child=0, parent=child_pid</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-stack">The Stack</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine a photocopier (fork) that makes a perfect physical copy of every document on your desk. Now you have two identical desks. Then one of you (the child) throws away all the documents and replaces them with new ones from a filing cabinet (exec). The original desk is untouched.</p>
+      <p style="margin-top:10px;">That's fork+exec. Fork makes the copy. Exec replaces the copy's contents. The parent never changed. And when the child is done, it hands a note (exit code) to the parent who was waiting for it (wait).</p>
+    </div>
+
+    <div class="fork-tree">
+      <div class="parent">parent (PID 1) calls fork()</div>
+      <div class="arrow">├── parent continues: fork() returns child_pid (e.g. 2)</div>
+      <div class="child">└── child created: fork() returns 0</div>
+      <div class="child" style="padding-left:48px;">child calls exec("hello.elf") → image replaced</div>
+      <div class="child" style="padding-left:48px;">child runs hello.elf → exits with code 0</div>
+      <div class="arrow">parent calls wait() → unblocks, gets exit code 0</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — fork: Cloning the Address Space</h2>
+    <pre><code>/* process.c */
+int process_fork(void) {
+    struct process *child = kmalloc(sizeof(*child));
+    *child = *current; /* copy all PCB fields */
+    child->pid        = next_pid++;
+    child->parent_pid = current->pid;
+    child->state      = PROC_READY;
+    child->stack      = kmalloc(STACK_SIZE);
+    child->kernel_stack_top = (uint32_t)child->stack + STACK_SIZE;
+
+    /* Deep-copy the address space */
+    child->cr3 = paging_clone_address_space(current->cr3);
+
+    /* Build child's kernel stack so it "returns" from fork with EAX=0 */
+    /* Copy current interrupt frame to child's kernel stack,
+       then set child_frame->eax = 0  (fork returns 0 in child) */
+    struct interrupt_frame *cf = copy_frame_to_child(child);
+    cf->eax = 0;
+
+    /* Parent's fork() will return child->pid via the syscall return path */
+    enqueue(child);
+    return child->pid;
+}</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">The famous "fork returns twice"</div>
+      <p>Fork returns <strong>once in the parent</strong> (returns child PID) and <strong>once in the child</strong> (returns 0). How? The child's kernel stack is set up to look like it just returned from a syscall with EAX=0. When the scheduler runs the child, it pops that frame and "returns" from the syscall into user space — as if the child had called fork() itself and got 0 back.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — exec: Replace the Image</h2>
+    <pre><code>/* syscall.c — SYS_EXEC handler */
+int do_exec(const char *filename) {
+    uint32_t new_cr3;
+    uint32_t entry = elf_load(filename, &new_cr3);
+    if (!entry) return -1;
+
+    /* Free old address space */
+    uint32_t old_cr3 = current->cr3;
+    current->cr3 = new_cr3;
+    paging_switch(new_cr3);             /* switch NOW before freeing old */
+    paging_free_address_space(old_cr3); /* safe: we're no longer using it */
+
+    /* Reset user stack */
+    uint32_t user_stack = 0x800000;
+    /* map user stack pages into new_cr3... */
+
+    /* Jump to new entry point at ring 3 */
+    jump_to_usermode(entry, user_stack);
+    /* never returns */
+    return 0;
+}</code></pre>
+    <div class="callout red">
+      <div class="label">Switch CR3 BEFORE freeing old one</div>
+      <p>You must call <code>paging_switch(new_cr3)</code> before <code>paging_free_address_space(old_cr3)</code>. If you free the old page directory while it's still in CR3, the very next memory access (including the code doing the freeing) uses a page directory you just freed — instant corruption or triple fault. Order matters enormously here.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — wait: Blocking Until Child Exits</h2>
+    <pre><code>/* process.c */
+int process_wait(uint32_t *esp) {
+    /* look for a zombie child */
+    struct process *z = find_zombie_child(current->pid);
+    if (z) {
+        int code = z->exit_code;
+        z->state = PROC_DEAD; /* reap it */
+        return code;
+    }
+    /* no zombie yet — block */
+    current->state = PROC_WAITING;
+    scheduler_yield(esp);    /* give up CPU */
+    /* when we wake up (zombify woke us), a zombie child is ready */
+    z = find_zombie_child(current->pid);
+    int code = z->exit_code;
+    z->state = PROC_DEAD;
+    return code;
+}
+
+/* In process_exit: if parent is PROC_WAITING, wake it */
+static void zombify(struct process *p, int code) {
+    p->state     = PROC_ZOMBIE;
+    p->exit_code = code;
+    struct process *parent = find_pid(p->parent_pid);
+    if (parent && parent->state == PROC_WAITING)
+        parent->state = PROC_READY; /* wake parent */
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 17 — fork &amp; exec</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\17_fork_exec
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[BobOS] Module 17 -- fork &amp; exec
+  [parent PID=1] calling fork()...
+  [parent PID=1] fork returned child_pid=2
+  [child  PID=2] fork returned 0
+  [child  PID=2] calling exec("hello.elf")...
+  [ring-3 PID=2] Hello from hello.elf! I replaced the child.
+  [child  PID=2] exiting with code 42
+  [parent PID=1] wait() returned exit_code=42
+  fork/exec/wait: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> <code>paging_clone_address_space</code> does a <em>deep copy</em> — it allocates new physical frames and copies every page. If a process has 4MB of user data, fork copies 4MB. That's slow and wasteful if the child immediately calls exec.</p>
+      <p style="margin-top:14px;color:var(--muted);">This is exactly the problem Copy-on-Write (Module 21) solves. How would CoW make fork faster? What does it do instead of copying pages immediately?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why does Unix use fork+exec instead of just "create process from file"?</div>
+      <div class="a">The separation gives flexibility: between fork() and exec(), the child can set up file descriptors (pipes, redirections), change its working directory, set environment variables, adjust signal handlers — all before the new program starts. A single "create process" call would need parameters for all of this. Fork+exec is more composable. Windows has CreateProcess() which does it in one call with many parameters — a different design tradeoff.</div>
+      <div class="q">Q: What happens if the child never calls exec and just exits?</div>
+      <div class="a">Perfectly fine — the child runs as a copy of the parent's code, exits normally, becomes a zombie, and the parent's wait() reaps it. This is how a shell runs a built-in command: fork, child runs the built-in function, child exits, parent waits. No exec needed.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 18 — Signals</div>
+      <p>Phase 3 completes with signals — the asynchronous notification mechanism. SYS_KILL sends a signal to any process by PID. SYS_SIGNAL registers a user-space handler. The scheduler delivers pending signals when returning to ring 3. SIGKILL can't be caught; SIGSEGV can.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>process.c</code> (fork/wait) · <code>syscall.c</code> (exec) · <code>paging.c</code> (clone/free)</p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 17 of 42 &nbsp;|&nbsp; <a href="../16_elf_loader/tutorial.html">← Module 16</a> &nbsp;·&nbsp; <a href="../18_signals/tutorial.html">Module 18 →</a></footer>
+</body>
+</html>
