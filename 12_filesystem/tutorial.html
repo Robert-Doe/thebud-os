@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 12 — BobFS | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#fb923c;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(251,146,60,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(251,146,60,0.08),rgba(245,200,66,0.08));border:1px solid rgba(251,146,60,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--orange);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .disk-layout{margin:20px 0;}
+  .disk-row{display:flex;gap:2px;margin-bottom:2px;}
+  .disk-row .cell{flex:1;padding:10px 8px;border-radius:4px;text-align:center;font-family:'Source Code Pro',monospace;font-size:12px;font-weight:700;}
+  .cell.super{background:rgba(245,200,66,0.15);border:1px solid var(--gold);color:var(--gold);}
+  .cell.inode{background:rgba(56,189,248,0.15);border:1px solid var(--cyan);color:var(--cyan);}
+  .cell.data{background:rgba(74,222,128,0.15);border:1px solid var(--green);color:var(--green);}
+  .cell.free{background:rgba(30,58,95,0.5);border:1px solid var(--border);color:var(--muted);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 12 — PHASE 2</div>
+  <h1>File System <span>(BobFS)</span></h1>
+  <p class="tagline">RAM disappears at reboot. BobFS writes to a raw disk image using ATA PIO — a flat, simple filesystem with a superblock, fixed-size inodes, and raw data blocks. Programs and files now persist.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">ATA PIO</div><div class="label">disk access method (polling, no DMA)</div></div>
+    <div class="hero-stat"><div class="num">32</div><div class="label">max files in BobFS</div></div>
+    <div class="hero-stat"><div class="num">64 KB</div><div class="label">max file size</div></div>
+    <div class="hero-stat"><div class="num">512B</div><div class="label">one disk sector</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-numbers">Number Systems</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-io">Port I/O</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of BobFS like a filing cabinet with exactly 32 labeled folders. Each folder (inode) has a name tag and a note saying which drawer (data block) holds the actual papers. The first drawer in the cabinet is the index card listing all folders (superblock). To find a file: read the index card, find the folder name, go to that drawer.</p>
+      <p style="margin-top:10px;">No trees, no directories, no symbolic links. Just a flat list of files. It's the simplest possible thing that deserves the name "filesystem."</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Disk Layout</h2>
+    <div class="disk-layout">
+      <div class="disk-row">
+        <div class="cell super">Superblock<br><span style="font-size:10px;font-weight:400;">sector 0 — magic, file count</span></div>
+        <div class="cell inode">Inode 0<br><span style="font-size:10px;font-weight:400;">name, size, start_sector</span></div>
+        <div class="cell inode">Inode 1</div>
+        <div class="cell inode">Inode 2</div>
+        <div class="cell inode">Inode 3</div>
+      </div>
+      <div class="disk-row">
+        <div class="cell inode">Inodes 4–31<br><span style="font-size:10px;font-weight:400;">(up to 32 files)</span></div>
+        <div class="cell data">File 0 data<br><span style="font-size:10px;font-weight:400;">raw bytes, N sectors</span></div>
+        <div class="cell data">File 1 data</div>
+        <div class="cell data">File 2 data</div>
+        <div class="cell free">free…</div>
+      </div>
+    </div>
+    <pre><code>/* Inode: fixed-size metadata for one file */
+typedef struct {
+    char     name[32];    /* filename */
+    uint32_t size;        /* file size in bytes */
+    uint32_t start_lba;   /* first disk sector of file data */
+    uint8_t  valid;       /* 1 = slot occupied */
+} bobfs_inode_t;
+
+/* Superblock: sits at sector 0 */
+typedef struct {
+    uint32_t magic;       /* 0xB0B0F5 — "BobFS" */
+    uint32_t file_count;
+    bobfs_inode_t inodes[32];
+} bobfs_super_t;</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — ATA PIO: Reading from Disk</h2>
+    <p>ATA PIO (Programmed I/O) is the oldest, simplest way to talk to an IDE disk. No DMA, no interrupts — just port I/O: write the sector number to ports, wait for the drive to be ready, read 256 words of data.</p>
+    <pre><code>/* disk.c — read one 512-byte sector from LBA address */
+void disk_read_sector(uint32_t lba, uint8_t *buf) {
+    outb(0x1F6, 0xE0 | ((lba >> 24) & 0x0F)); /* drive + LBA bits 27-24 */
+    outb(0x1F2, 1);                             /* sector count = 1 */
+    outb(0x1F3, lba & 0xFF);                   /* LBA low */
+    outb(0x1F4, (lba >> 8)  & 0xFF);           /* LBA mid */
+    outb(0x1F5, (lba >> 16) & 0xFF);           /* LBA high */
+    outb(0x1F7, 0x20);                          /* command: READ SECTORS */
+
+    /* poll until DRQ (data ready) bit is set */
+    while (!(inb(0x1F7) & 0x08));
+
+    /* read 256 16-bit words = 512 bytes */
+    for (int i = 0; i < 256; i++)
+        ((uint16_t*)buf)[i] = inw(0x1F0);
+}</code></pre>
+    <div class="callout orange">
+      <div class="label">Why PIO and Not DMA?</div>
+      <p>DMA (Direct Memory Access) lets the disk controller write data directly to RAM without CPU involvement — much faster for large transfers. But it requires setting up a DMA controller, physical addresses, and bus mastering — hundreds of extra lines of code. ATA PIO is 30 lines and works in QEMU perfectly. We're learning filesystem concepts, not disk controller optimization.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The Three Key FS Functions</h2>
+    <pre><code>/* fs.c */
+
+/* Read a file by name into buf (up to 'size' bytes) */
+int fs_read(const char *name, char *buf, int size) {
+    for (int i = 0; i < 32; i++) {
+        if (!super.inodes[i].valid) continue;
+        if (strcmp(super.inodes[i].name, name) != 0) continue;
+        /* found it — read its sectors */
+        uint32_t lba = super.inodes[i].start_lba;
+        int to_read = MIN(size, super.inodes[i].size);
+        /* ... read sectors into buf ... */
+        return to_read;
+    }
+    return -1; /* not found */
+}
+
+/* Create a file from a memory buffer */
+int fs_create(const char *name, const char *data, int size);
+
+/* Delete a file (marks inode invalid, reclaims nothing — flat FS) */
+int fs_delete(const char *name);</code></pre>
+    <div class="callout cyan">
+      <div class="label">Module 16 depends on this directly</div>
+      <p>The ELF loader (Module 16) calls <code>fs_read("hello.elf", buf, size)</code> to load a user program from disk. BobFS is the reason user programs can live on disk instead of being compiled into the kernel image. Every <code>sys_exec()</code> in Modules 16–24 calls <code>fs_read</code> under the hood.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 12 — BobFS</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\12_filesystem
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output — creates files, reads them back, survives reboot:</div>
+      <pre><code>[BobOS] Module 12 -- BobFS
+  Disk: ATA PIO detected
+  BobFS: formatted (magic 0xB0B0F5)
+  fs_create("hello.txt", "Hello, BobOS!", 13) → OK
+  fs_create("data.bin", ..., 512) → OK
+  fs_read("hello.txt") → "Hello, BobOS!" OK
+  fs_read("missing") → -1 (not found) OK
+  fs_delete("hello.txt") → OK
+  fs_read("hello.txt") → -1 OK
+  BobFS OK</code></pre></div>
+    </div>
+    <div class="callout red">
+      <div class="label">disk.img must exist</div>
+      <p><code>make run</code> depends on <code>disk.img</code> — the virtual hard disk QEMU uses. <code>make disk.img</code> creates it with <code>dd</code> via WSL (2MB of zeros). Without it, QEMU starts but the ATA driver finds no disk and <code>disk_present()</code> returns false.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> BobFS stores all inodes in the superblock (in RAM after <code>fs_init()</code>). When you create a file and call <code>fs_create()</code>, does BobFS immediately write the updated superblock back to disk?</p>
+      <p style="margin-top:14px;color:var(--muted);">If the kernel panics between <code>fs_create()</code> and the superblock write-back, what happens to the file on the next boot? This is the classic filesystem consistency problem — how do real filesystems (ext4, NTFS) solve it?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why not use FAT or ext2 instead of inventing BobFS?</div>
+      <div class="a">Implementing FAT or ext2 correctly requires handling clusters, FAT chains, directory entries, timestamps, permissions, and journaling — thousands of lines. BobFS has 32 inodes and no directories. The point of this module is to understand disk I/O and filesystem concepts, not to implement a production FS. Once you understand BobFS, reading the ext2 spec is much easier.</div>
+      <div class="q">Q: How does the kernel know where free disk space starts?</div>
+      <div class="a">BobFS tracks the "next available LBA" in the superblock. When creating a file, it appends data after all existing files. There's no space reclamation when files are deleted — deleted file space is wasted. A real FS would use a free-block bitmap like our PMM does for RAM.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 13 — Shell</div>
+      <p>With a filesystem, keyboard, VGA output, and syscalls, you have everything needed for a real interactive shell. Module 13 builds a command-line process that reads input, parses commands, and can list files, print content, and spawn new processes.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>disk.c</code> · <code>fs.c</code> · <code>fs.h</code></p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 12 of 42 &nbsp;|&nbsp; <a href="../11_syscalls/tutorial.html">← Module 11</a> &nbsp;·&nbsp; <a href="../13_shell/tutorial.html">Module 13 →</a></footer>
+</body>
+</html>
