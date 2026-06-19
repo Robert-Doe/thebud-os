@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 13 — Shell | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#4ade80;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(74,222,128,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(56,189,248,0.08));border:1px solid rgba(74,222,128,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .cmd-row{display:flex;gap:12px;align-items:baseline;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin:6px 0;}
+  .cmd-row .cmd{font-family:'Source Code Pro',monospace;font-size:14px;color:var(--green);min-width:80px;}
+  .cmd-row .desc{color:var(--text);font-size:15px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 13 — PHASE 2</div>
+  <h1>The <span>Shell</span></h1>
+  <p class="tagline">The shell is the glue that ties everything together — keyboard input, VGA output, the filesystem, and the process scheduler. It's just a process that reads commands and acts on them. But psychologically, it's the moment BobOS feels like a real OS.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">BobSH&gt;</div><div class="label">your custom shell prompt</div></div>
+    <div class="hero-stat"><div class="num">4</div><div class="label">built-in commands</div></div>
+    <div class="hero-stat"><div class="num">read-parse-execute</div><div class="label">the shell loop</div></div>
+    <div class="hero-stat"><div class="num">one process</div><div class="label">the shell is just another process</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-stack">The Stack</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>A shell is like a hotel concierge. Guests (you) walk up and say "I want to see a list of files" or "run this program." The concierge (shell) listens, figures out what you mean, calls the right department (filesystem, process scheduler, VGA driver), and reports back. The concierge doesn't do the work — it just coordinates.</p>
+      <p style="margin-top:10px;">Your shell is just a C function that loops: read a line from the keyboard → split it into tokens → match the first token to a known command → call the right kernel function → print the result → repeat.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Shell Loop</h2>
+    <pre><code>/* shell.c — the entire shell in one function */
+void shell_main(void) {
+    char line[256];
+    char *argv[16];
+
+    for (;;) {
+        kprintf("BobSH> ");
+        readline(line, sizeof(line));   /* keyboard_getchar loop */
+        if (line[0] == '\0') continue;
+
+        int argc = tokenize(line, argv, 16); /* split on spaces */
+        if (argc == 0) continue;
+
+        if      (strcmp(argv[0], "help") == 0) cmd_help();
+        else if (strcmp(argv[0], "ls")   == 0) cmd_ls();
+        else if (strcmp(argv[0], "cat")  == 0) cmd_cat(argv[1]);
+        else if (strcmp(argv[0], "run")  == 0) cmd_run(argv[1]);
+        else kprintf("Unknown command: %s\n", argv[0]);
+    }
+}</code></pre>
+    <div class="callout cyan">
+      <div class="label">readline() uses keyboard_getchar()</div>
+      <p><code>readline()</code> calls <code>keyboard_getchar()</code> (Module 9) in a loop, echoing each character to the VGA driver, handling backspace, and stopping at newline. It's only about 20 lines — but it's the moment keyboard input and VGA output are wired together into something interactive.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — The Built-in Commands</h2>
+    <div class="cmd-row"><div class="cmd">help</div><div class="desc">List available commands and what they do</div></div>
+    <div class="cmd-row"><div class="cmd">ls</div><div class="desc">List all files in BobFS (name + size for each inode)</div></div>
+    <div class="cmd-row"><div class="cmd">cat &lt;file&gt;</div><div class="desc">Read a file from BobFS and print its bytes to the screen</div></div>
+    <div class="cmd-row"><div class="cmd">run &lt;file&gt;</div><div class="desc">Load and run a program from BobFS as a new process (Module 16+)</div></div>
+
+    <pre><code>/* cmd_ls: iterate BobFS inodes and print names/sizes */
+static void cmd_ls(void) {
+    for (int i = 0; i < 32; i++) {
+        if (!super.inodes[i].valid) continue;
+        kprintf("  %-20s %u bytes\n",
+                super.inodes[i].name,
+                super.inodes[i].size);
+    }
+}
+
+/* cmd_cat: read file into temp buf, print it */
+static void cmd_cat(const char *name) {
+    char buf[4096];
+    int n = fs_read(name, buf, sizeof(buf) - 1);
+    if (n < 0) { kprintf("cat: file not found\n"); return; }
+    buf[n] = '\0';
+    kprintf("%s\n", buf);
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>04 — The Tokenizer</h2>
+    <pre><code>/* Split "cat hello.txt" into argv = ["cat", "hello.txt", NULL] */
+static int tokenize(char *line, char **argv, int max) {
+    int argc = 0;
+    char *p = line;
+    while (*p && argc < max - 1) {
+        while (*p == ' ') p++;    /* skip spaces */
+        if (!*p) break;
+        argv[argc++] = p;         /* token starts here */
+        while (*p && *p != ' ') p++;  /* find end of token */
+        if (*p) *p++ = '\0';      /* null-terminate the token */
+    }
+    argv[argc] = NULL;
+    return argc;
+}</code></pre>
+    <div class="callout orange">
+      <div class="label">Why Not strtok?</div>
+      <p>Our kernel has no C standard library — no <code>string.h</code>, no <code>strtok</code>. We write everything ourselves. That's the point. Once you've written a tokenizer and a <code>strcmp</code> from scratch, you understand exactly what those library functions do internally.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 13 — Shell</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\13_shell
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">In the QEMU window — click inside it, then type commands:</div>
+      <pre><code>[BobOS] Module 13 -- Shell
+BobSH&gt; help
+  help  — show this message
+  ls    — list files
+  cat   — print a file
+  run   — run a program
+BobSH&gt; ls
+  welcome.txt          26 bytes
+BobSH&gt; cat welcome.txt
+  Welcome to BobOS!
+BobSH&gt; _</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> The shell is a process that calls <code>keyboard_getchar()</code>, which spins (<code>hlt</code>) until a key arrives. While the shell is waiting for input, what are the other processes doing?</p>
+      <p style="margin-top:14px;color:var(--muted);">Think about the scheduler. The shell is blocked in <code>hlt</code> inside its IRQ handler. When the timer IRQ fires, does it preempt the shell? What state should the shell be in while it's waiting for keyboard input — RUNNING or WAITING?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Is our shell a "real" shell like bash?</div>
+      <div class="a">Structurally, yes — it's the same read-parse-execute loop. What it lacks: pipes (<code>ls | grep</code> — Module 20), redirection (<code>&gt;</code> / <code>&lt;</code>), environment variables, job control (background processes), and a real PATH. Each of those is a module's worth of work. But the core loop is identical to bash's.</div>
+      <div class="q">Q: What happens if I type more than 256 characters?</div>
+      <div class="a">Buffer overflow. <code>readline()</code> should stop at 255 characters and null-terminate — check that the implementation has that bound check. A kernel shell doesn't have to be hardened (only the kernel itself can type into it), but it's still good practice.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 14 — User Mode (Ring 3)</div>
+      <p>Right now, all processes run in ring 0 — kernel privilege. Module 14 builds the TSS properly, creates user-mode GDT entries, and launches the first ring-3 process. After this, user code genuinely cannot access kernel memory — the CPU enforces it.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>shell.c</code> (or embedded in <code>kernel.c</code>)</p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 13 of 42 &nbsp;|&nbsp; <a href="../12_filesystem/tutorial.html">← Module 12</a> &nbsp;·&nbsp; <a href="../14_usermode/tutorial.html">Module 14 →</a></footer>
+</body>
+</html>
