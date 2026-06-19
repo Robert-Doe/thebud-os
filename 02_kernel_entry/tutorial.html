@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 02 — Kernel Entry | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(167,139,250,0.07) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--purple); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2.2rem,5vw,3.4rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--purple); }
+  .hero .tagline { font-size:1.15rem; color:var(--muted); max-width:620px; margin:0 auto 28px; }
+  .hero-grid { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+  .hero-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 28px; text-align:center; }
+  .hero-stat .num { font-family:'Playfair Display',serif; font-size:2rem; color:var(--purple); font-weight:700; }
+  .hero-stat .label { font-size:13px; color:var(--muted); margin-top:2px; }
+
+  .container { max-width:820px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.75rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--purple); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold   { background:rgba(245,200,66,0.07);  border-color:var(--gold); }
+  .callout.cyan   { background:rgba(56,189,248,0.07);  border-color:var(--cyan); }
+  .callout.green  { background:rgba(74,222,128,0.07);  border-color:var(--green); }
+  .callout.red    { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple { background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.orange { background:rgba(251,146,60,0.07);  border-color:var(--orange); }
+  .callout.teal   { background:rgba(13,148,136,0.07);  border-color:var(--teal); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold   .label { color:var(--gold); }
+  .callout.cyan   .label { color:var(--cyan); }
+  .callout.green  .label { color:var(--green); }
+  .callout.red    .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.orange .label { color:var(--orange); }
+  .callout.teal   .label { color:var(--teal); }
+  .callout p { margin-bottom:0; }
+
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:20px 22px; overflow-x:auto; margin:20px 0; }
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  pre code { color:#c4deff; }
+
+  .steps { list-style:none; counter-reset:step; margin:20px 0; }
+  .steps li { counter-increment:step; display:flex; gap:16px; margin-bottom:20px; align-items:flex-start; }
+  .steps li::before { content:counter(step); background:var(--purple); color:#0b0f1a; font-weight:700; font-size:13px; min-width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+  .compare-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .compare-box h4 { font-size:13px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; }
+  .compare-box.bad  h4 { color:var(--red); }
+  .compare-box.good h4 { color:var(--green); }
+
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+
+  .brain { background:linear-gradient(135deg, rgba(167,139,250,0.08), rgba(56,189,248,0.08)); border:1px solid rgba(167,139,250,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--purple); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+
+  .map-row { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--card); border:1px solid var(--border); border-radius:8px; margin:6px 0; font-size:15px; }
+  .map-row .addr { font-family:'Source Code Pro',monospace; font-size:13px; color:var(--purple); min-width:100px; }
+  .map-row .what { color:var(--text); }
+  .map-row .note { color:var(--muted); font-size:13px; margin-left:auto; }
+
+  .win-box { background:var(--code-bg); border:2px solid var(--teal); border-radius:10px; padding:22px 24px; margin:24px 0; }
+  .win-box h4 { color:var(--teal); font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .win-box .step { margin-bottom:12px; }
+  .win-box .step .desc { color:var(--muted); font-size:13px; margin-bottom:4px; }
+  .win-box pre { margin:0; background:transparent; border:1px solid rgba(13,148,136,0.3); padding:10px 14px; }
+
+  .timeline { margin:24px 0; }
+  .tl-item { display:flex; gap:16px; margin-bottom:0; }
+  .tl-item .tl-dot { display:flex; flex-direction:column; align-items:center; }
+  .tl-item .tl-dot .dot { width:14px; height:14px; border-radius:50%; background:var(--purple); flex-shrink:0; margin-top:5px; }
+  .tl-item .tl-dot .line { width:2px; background:var(--border); flex:1; margin-top:4px; }
+  .tl-item:last-child .tl-dot .line { display:none; }
+  .tl-item .tl-body { padding-bottom:22px; }
+  .tl-item .tl-title { font-weight:700; color:#fff; margin-bottom:4px; }
+  .tl-item .tl-desc { color:var(--muted); font-size:15px; }
+  .tl-item .tl-code { font-family:'Source Code Pro',monospace; font-size:13px; color:var(--cyan); background:var(--code-bg); border:1px solid var(--border); border-radius:4px; padding:2px 8px; display:inline-block; margin-top:4px; }
+
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">MODULE 02 — PHASE 1</div>
+  <h1>Kernel <span>Entry</span></h1>
+  <p class="tagline">The bootloader jumped to 0x1000. Now the real work begins: escape 16-bit Real Mode, build a proper C environment, and hand control to <code>kernel_main()</code>.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">16→32</div><div class="label">bit mode switch</div></div>
+    <div class="hero-stat"><div class="num">0x1000</div><div class="label">kernel starts here</div></div>
+    <div class="hero-stat"><div class="num">4 GB</div><div class="label">addressable after switch</div></div>
+    <div class="hero-stat"><div class="num">CR0</div><div class="label">the register that changes everything</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-cpu">The CPU</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-rings">CPU Rings</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-asm">Assembly</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-build">Build Pipeline</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of Real Mode like waking up from a coma in 1978. You're conscious, but your surroundings are tiny — only 1MB of RAM, 16-bit registers, no protection from anything. Kernel Entry is the moment you take your medication, fully wake up, and step into the modern world. You flip a single bit in a special register called <strong>CR0</strong>, and suddenly you have 4GB of address space, memory protection, and everything a modern OS needs. That transition is what this module is about.</p>
+    </div>
+    <p>Before <code>kernel_main()</code> can run, three things must exist that don't exist yet: a <strong>stack</strong> (C needs one to call functions), a <strong>BSS segment</strong> zeroed out (C assumes global variables start as zero), and a <strong>32-bit execution environment</strong>. <code>kernel_entry.asm</code> builds all three.</p>
+  </section>
+
+  <section>
+    <h2>02 — The Protected Mode Switch</h2>
+    <p>The switch from 16-bit to 32-bit happens in exactly three steps, in this order. Mess up the order and the CPU triple-faults (crashes so hard it resets).</p>
+
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot"><div class="dot"></div><div class="line"></div></div>
+        <div class="tl-body">
+          <div class="tl-title">1. Load the GDT</div>
+          <div class="tl-desc">The CPU needs to know about memory segments before entering Protected Mode. A temporary GDT (Global Descriptor Table) is loaded with <code>lgdt</code>. Don't worry about the details yet — Module 4 builds the real one.</div>
+          <div class="tl-code">lgdt [gdt_descriptor]</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"><div class="dot"></div><div class="line"></div></div>
+        <div class="tl-body">
+          <div class="tl-title">2. Set the PE bit in CR0</div>
+          <div class="tl-desc">CR0 is the "mode control" register. Bit 0 is the Protected Mode Enable (PE) bit. Set it and the CPU instantly switches modes.</div>
+          <div class="tl-code">mov eax, cr0 &nbsp;|&nbsp; or eax, 1 &nbsp;|&nbsp; mov cr0, eax</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"><div class="dot"></div><div class="line"></div></div>
+        <div class="tl-body">
+          <div class="tl-title">3. Far jump to flush the pipeline</div>
+          <div class="tl-desc">The CPU has already fetched some 16-bit instructions into its pipeline. A far jump forces the CPU to discard them and start fetching 32-bit instructions. Without this, the CPU executes garbage.</div>
+          <div class="tl-code">jmp 0x08:protected_mode_start</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"><div class="dot"></div><div class="line"></div></div>
+        <div class="tl-body">
+          <div class="tl-title">4. Set up segment registers</div>
+          <div class="tl-desc">In Protected Mode, segment registers hold selectors (indices into the GDT), not raw addresses. All data segments get selector 0x10.</div>
+          <div class="tl-code">mov ax, 0x10 &nbsp;|&nbsp; mov ds, ax &nbsp;|&nbsp; mov es, ax &nbsp;|&nbsp; mov ss, ax</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"><div class="dot"></div><div class="line"></div></div>
+        <div class="tl-body">
+          <div class="tl-title">5. Set up the stack and call kernel_main</div>
+          <div class="tl-desc">ESP is pointed at the top of a 16KB block of RAM. Then BSS is zeroed. Then <code>call kernel_main</code>. If kernel_main ever returns (it shouldn't), we halt forever.</div>
+          <div class="tl-code">mov esp, stack_top &nbsp;|&nbsp; call kernel_main &nbsp;|&nbsp; hlt</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout orange">
+      <div class="label">What Is a Triple Fault?</div>
+      <p>If the CPU gets an exception while handling an exception while handling an exception, it gives up entirely and resets. In QEMU you'll see it as the window going blank and "rebooting." The most common cause: forgetting the far jump after setting PE=1, or having a corrupt GDT descriptor. Always check CR0 and GDT first when debugging a blank-screen crash.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — Real Mode vs Protected Mode Side-by-Side</h2>
+    <div class="compare">
+      <div class="compare-box bad">
+        <h4>Real Mode (where we started)</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text); font-size:15px;">
+          <li>16-bit registers (AX, BX…)</li>
+          <li>Max 1 MB addressable RAM</li>
+          <li>Segment:Offset addressing</li>
+          <li>No privilege levels (ring 0–3)</li>
+          <li>No memory protection at all</li>
+          <li>BIOS calls via <code>int</code> instructions</li>
+          <li>x86 from 1978 compatibility</li>
+        </ul>
+      </div>
+      <div class="compare-box good">
+        <h4>Protected Mode (where we go)</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text); font-size:15px;">
+          <li>32-bit registers (EAX, EBX…)</li>
+          <li>Up to 4 GB addressable RAM</li>
+          <li>Segment selectors → GDT descriptors</li>
+          <li>Ring 0 (kernel) vs Ring 3 (user)</li>
+          <li>MMU enforces access rights per page</li>
+          <li>No BIOS — we write our own drivers</li>
+          <li>Everything we build from here</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The C Environment Bootstrap</h2>
+    <p>C looks simple but it secretly requires a lot of setup before <code>main()</code> can run. Here's what <code>kernel_entry.asm</code> does before calling <code>kernel_main</code>:</p>
+
+    <h3>Zero the BSS segment</h3>
+    <pre><code>; BSS = Block Started by Symbol = uninitialized global variables
+; The C standard says they start at zero. The linker doesn't zero them.
+; We do it ourselves.
+xor eax, eax          ; value to write: 0
+mov edi, bss_start    ; start of BSS (from linker script)
+mov ecx, bss_end
+sub ecx, edi          ; length in bytes
+rep stosd             ; write EAX (0) into [EDI] ecx/4 times</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">Why Does This Matter?</div>
+      <p>If you forget to zero BSS, global variables have random values — whatever bytes happened to be in RAM. This causes incredibly hard-to-debug bugs where a global counter "starts at 37" or a pointer "starts as non-null." Zero BSS once at boot and you never think about it again.</p>
+    </div>
+
+    <h3>The linker script sets the memory layout</h3>
+    <pre><code>/* linker.ld */
+OUTPUT_FORMAT(binary)    /* flat binary, no ELF headers */
+ENTRY(kernel_entry)
+
+SECTIONS {
+    . = 0x1000;          /* kernel loads at 0x1000 */
+    .text   : { *(.text) }
+    .rodata : { *(.rodata) }
+    .data   : { *(.data) }
+    bss_start = .;
+    .bss    : { *(.bss) ALIGN(4) }
+    bss_end = .;
+    kernel_end = .;      /* exported symbol: where kernel ends in RAM */
+}</code></pre>
+
+    <div class="callout green">
+      <div class="label">The kernel_end Symbol</div>
+      <p>Notice <code>kernel_end</code> — future modules use this to know where free RAM starts. The PMM (Module 6) calls <code>&amp;kernel_end</code> to find the first safe page to hand out. The linker fills in this address automatically.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — File Map</h2>
+    <div class="map-row"><div class="addr">kernel_entry.asm</div><div class="what">The assembly bridge: Real → Protected Mode, BSS zero, call kernel_main</div><div class="note">NASM, ~80 lines</div></div>
+    <div class="map-row"><div class="addr">kernel.c</div><div class="what">kernel_main() — currently just prints "Hello from C!" and halts</div><div class="note">C, ~10 lines</div></div>
+    <div class="map-row"><div class="addr">linker.ld</div><div class="what">Tells the linker where to place each section in RAM</div><div class="note">Linker script</div></div>
+    <div class="map-row"><div class="addr">boot.asm</div><div class="what">Same bootloader from Module 01 — unchanged</div><div class="note">NASM, 512 bytes</div></div>
+    <div class="map-row"><div class="addr">Makefile</div><div class="what">Builds boot.bin + kernel.bin, cats them into os.img, runs QEMU</div><div class="note">GNU Make</div></div>
+  </section>
+
+  <section>
+    <h2>06 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 02 — Kernel Entry</h4>
+      <div class="step">
+        <div class="desc">Open Command Prompt or PowerShell, navigate to the module folder:</div>
+        <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\02_kernel_entry</code></pre>
+      </div>
+      <div class="step">
+        <div class="desc">Create the virtual hard disk (first time only):</div>
+        <pre><code>make disk.img</code></pre>
+      </div>
+      <div class="step">
+        <div class="desc">Build everything and launch QEMU:</div>
+        <pre><code>make run</code></pre>
+      </div>
+      <div class="step">
+        <div class="desc">Expected QEMU output — you should see this on the black screen:</div>
+        <pre><code>BobOS Bootloader...
+[BobOS] Module 02 -- Kernel Entry
+  Protected Mode: active
+  BSS: zeroed
+  Stack: ready
+kernel_main() reached — C environment is live!</code></pre>
+      </div>
+    </div>
+
+    <div class="callout red">
+      <div class="label">Common Issue: WSL can't find the files</div>
+      <p>The Makefile uses <code>wsl -d Ubuntu --</code> to run GCC. The path it passes is the Windows path converted to a WSL mount path (e.g. <code>/mnt/c/Users/...</code>). If you get "No such file or directory" from GCC, verify WSL 2 is the default: run <code>wsl --set-default-version 2</code> in PowerShell, then <code>wsl --set-default Ubuntu</code>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> What happens if you forget to do the far jump (<code>jmp 0x08:protected_mode_start</code>) immediately after setting PE=1 in CR0?</p>
+      <p style="margin-top:14px; color:var(--muted);">Hint: the CPU has already fetched several instructions ahead of the one that set PE=1. Those pre-fetched instructions are 16-bit encoded. What does the CPU do when it tries to decode 16-bit instructions in 32-bit mode?</p>
+    </div>
+
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why can't we just stay in Real Mode? It was working fine.</div>
+      <div class="a">Real Mode gives you a max of 1 MB of RAM and zero protection between programs. You can't have multiple processes (they'd overwrite each other), you can't have user/kernel separation, and you can't use more than 640KB for anything useful. Everything from Module 4 onward requires Protected Mode.</div>
+      <div class="q">Q: What's a "selector" vs a raw address?</div>
+      <div class="a">In Protected Mode, segment registers (CS, DS, SS…) don't hold raw addresses anymore. They hold an index (the "selector") into the GDT table — e.g. 0x08 means "entry 1 in the GDT." The CPU looks up that entry to find base address, limit, and permissions. Module 4 builds the full GDT.</div>
+      <div class="q">Q: What if kernel_main() returns?</div>
+      <div class="a">The code after <code>call kernel_main</code> is an infinite <code>hlt</code> loop. <code>hlt</code> stops the CPU until the next interrupt. This is fine — it just means the OS died gracefully instead of executing random bytes after kernel_main's stack frame.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 03 — VGA Text Driver</div>
+      <p>You're in Protected Mode and <code>kernel_main()</code> is running. But right now it has no way to print anything — the BIOS <code>int 0x10</code> print calls don't work in Protected Mode. Module 3 writes directly to the VGA framebuffer at <code>0xB8000</code> to put characters on screen. After Module 3, every future module gets <code>kprintf()</code>.</p>
+    </div>
+    <p style="color:var(--muted); font-size:15px;">Key files in this module: <code>kernel_entry.asm</code> · <code>linker.ld</code> · <code>kernel.c</code> · <code>Makefile</code></p>
+  </section>
+
+</div>
+
+<footer>
+  BobOS Tutorial — Module 02 of 42 &nbsp;|&nbsp;
+  <a href="../01_bootloader/tutorial.html">← Module 01</a> &nbsp;·&nbsp;
+  <a href="../03_vga_driver/tutorial.html">Module 03 →</a>
+</footer>
+
+</body>
+</html>
