@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 06 — Physical Memory Manager | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#4ade80;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(74,222,128,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(13,148,136,0.08));border:1px solid rgba(74,222,128,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .bitmap-vis{display:flex;flex-wrap:wrap;gap:3px;margin:16px 0;}
+  .bitmap-vis .bit{width:22px;height:22px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:'Source Code Pro',monospace;font-size:10px;font-weight:700;}
+  .bit.free{background:rgba(74,222,128,0.15);border:1px solid var(--green);color:var(--green);}
+  .bit.used{background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);}
+  .bit.kern{background:rgba(245,200,66,0.15);border:1px solid var(--gold);color:var(--gold);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 06 — PHASE 1</div>
+  <h1>Physical Memory <span>Manager</span></h1>
+  <p class="tagline">Before you can allocate anything — heap blocks, page tables, process stacks — you need to know which 4KB chunks of RAM are free. The PMM is a single bitmap that answers that question in O(1).</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">4 KB</div><div class="label">per physical page frame</div></div>
+    <div class="hero-stat"><div class="num">16384</div><div class="label">frames in 64 MB RAM</div></div>
+    <div class="hero-stat"><div class="num">1 bit</div><div class="label">tracks each frame (0=free)</div></div>
+    <div class="hero-stat"><div class="num">2 KB</div><div class="label">total bitmap size for 64 MB</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-numbers">Number Systems</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine a hotel with 16,384 rooms. The receptionist keeps a clipboard with one checkbox per room: checked = occupied, unchecked = free. When a guest arrives, the receptionist scans the clipboard top-to-bottom, finds the first unchecked box, marks it, and hands over that room key. When the guest leaves, the box gets unchecked again.</p>
+      <p style="margin-top:10px;">That clipboard is your PMM. Each checkbox is one bit. Each room is one 4KB physical page frame. The whole "clipboard" is only 2KB of RAM for a 64MB system.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Bitmap</h2>
+    <p>The bitmap is a flat array of <code>uint32_t</code> words. Each bit represents one 4KB frame. Bit = 0 means free, bit = 1 means allocated.</p>
+    <pre><code>#define PAGE_SIZE    4096
+#define MAX_FRAMES   16384          /* 64 MB / 4 KB */
+
+static uint32_t bitmap[MAX_FRAMES / 32]; /* 512 uint32_t = 2 KB */
+
+/* Mark frame as used */
+static void set_bit(uint32_t frame) {
+    bitmap[frame / 32] |=  (1u << (frame % 32));
+}
+/* Mark frame as free */
+static void clear_bit(uint32_t frame) {
+    bitmap[frame / 32] &= ~(1u << (frame % 32));
+}
+/* Test if frame is used */
+static int test_bit(uint32_t frame) {
+    return !!(bitmap[frame / 32] & (1u << (frame % 32)));
+}</code></pre>
+
+    <p>Here's what a tiny slice of the bitmap looks like at boot (K=kernel, 1=used, 0=free):</p>
+    <div class="bitmap-vis">
+      <div class="bit kern">K</div><div class="bit kern">K</div><div class="bit kern">K</div><div class="bit kern">K</div>
+      <div class="bit kern">K</div><div class="bit kern">K</div><div class="bit kern">K</div><div class="bit kern">K</div>
+      <div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div>
+      <div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div>
+      <div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div>
+      <div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div><div class="bit free">0</div>
+    </div>
+    <p style="font-size:14px;color:var(--muted);">Gold = kernel pages (pre-marked used at init). Green = free pages available to allocate.</p>
+  </section>
+
+  <section>
+    <h2>03 — The Three Key Functions</h2>
+    <pre><code>void pmm_init(uint32_t total_mem, uint32_t kernel_end_phys) {
+    total_frames = total_mem / PAGE_SIZE;
+    /* mark everything used (safe default) */
+    memset(bitmap, 0xFF, sizeof(bitmap));
+    /* free frames above the kernel */
+    uint32_t first_free = (kernel_end_phys + PAGE_SIZE - 1) / PAGE_SIZE;
+    for (uint32_t i = first_free; i < total_frames; i++)
+        clear_bit(i);
+}
+
+uint32_t pmm_alloc_page(void) {
+    for (uint32_t i = 0; i < total_frames; i++) {
+        if (!test_bit(i)) { set_bit(i); return i * PAGE_SIZE; }
+    }
+    return 0; /* OOM */
+}
+
+void pmm_free_page(uint32_t phys_addr) {
+    clear_bit(phys_addr / PAGE_SIZE);
+}</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">The kernel_end trick</div>
+      <p><code>kernel_end_phys</code> comes from the linker symbol <code>&amp;kernel_end</code> set in <code>linker.ld</code> (Module 2). Everything below that address is kernel code/data — mark it used. Everything above is yours to give out. This is why the linker symbol matters so much.</p>
+    </div>
+
+    <div class="callout orange">
+      <div class="label">Module 21 adds refcounts</div>
+      <p>In Module 21 (Copy-on-Write), we add <code>pmm_refcounts[MAX_FRAMES]</code> and <code>pmm_incref()</code> / <code>pmm_decref()</code>. Multiple page tables can point to the same physical frame; the frame is only freed when its refcount drops to zero. The bitmap stays — refcounts sit alongside it.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Why Not Just Use malloc?</h2>
+    <div class="callout red">
+      <div class="label">The Chicken-and-Egg Problem</div>
+      <p><code>malloc</code> (or our kernel's <code>kmalloc</code>) needs to carve blocks out of a heap. But the heap itself needs physical pages to live on. The PMM is the bottom of the stack — it allocates the raw physical pages that the heap (Module 8) then subdivides into smaller chunks. You can't have <code>kmalloc</code> without the PMM.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 06 — PMM</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\06_pmm
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[BobOS] Module 06 -- Physical Memory Manager
+  PMM: 64 MB total, 16384 frames
+  PMM: kernel uses frames 0..N, first free = 0x...
+  PMM: 16200 pages free
+  alloc #1 → 0x...000
+  alloc #2 → 0x...000
+  free  #1
+  alloc #3 → same addr as #1 (reused!)
+  PMM OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> <code>pmm_alloc_page()</code> scans the bitmap from bit 0 every time. What's the worst-case time complexity? If you have 16,384 frames and 16,383 are allocated, how many bit-tests does a single allocation take?</p>
+      <p style="margin-top:14px;color:var(--muted);">Bonus: How would you speed this up? (Hint: keep a "next free hint" index, or use a <code>bsf</code> — Bit Scan Forward — CPU instruction to find the first zero bit in a word in O(1).)</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why 4KB pages? Why not 1KB or 1MB?</div>
+      <div class="a">4KB is the granularity the x86 MMU uses for its two-level page tables. You could use 4MB "huge pages" (the PSE flag), but they waste memory for small allocations. 4KB is the sweet spot that hardware enforces and that Linux/Windows both use.</div>
+      <div class="q">Q: What happens if pmm_alloc_page returns 0?</div>
+      <div class="a">Physical address 0 is the zero page — used by the BIOS interrupt vector table. We pre-mark it as used in pmm_init, so returning 0 unambiguously means "out of memory." Callers check for 0 and panic or return an error up the chain.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 07 — Virtual Memory / Paging</div>
+      <p>You can now allocate physical frames. Module 7 builds the page tables that map virtual addresses to those frames, turning on the MMU so the CPU translates every memory access. After Module 7, each process can have its own virtual address space — even if they both "think" they own address 0x400000.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>pmm.c</code> · <code>pmm.h</code></p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 06 of 42 &nbsp;|&nbsp; <a href="../05_idt_interrupts/tutorial.html">← Module 05</a> &nbsp;·&nbsp; <a href="../07_paging/tutorial.html">Module 07 →</a></footer>
+</body>
+</html>
