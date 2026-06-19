@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 15 — Per-Process Address Spaces | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#0d9488;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(13,148,136,0.08) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--teal);color:#fff;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--teal);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--teal);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--teal);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(13,148,136,0.08),rgba(56,189,248,0.08));border:1px solid rgba(13,148,136,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--teal);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .as-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;}
+  .as-box{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .as-box .as-title{background:var(--bg3);padding:10px 16px;font-family:'Source Code Pro',monospace;font-size:13px;font-weight:700;border-bottom:1px solid var(--border);}
+  .as-row{display:flex;align-items:center;padding:7px 16px;border-bottom:1px solid rgba(30,58,95,0.5);font-size:14px;}
+  .as-row:last-child{border-bottom:none;}
+  .as-row .va{font-family:'Source Code Pro',monospace;font-size:12px;color:var(--muted);min-width:90px;}
+  .as-row .seg{flex:1;font-size:13px;}
+  .seg.kern{color:var(--red);}
+  .seg.user{color:var(--green);}
+  .seg.shared{color:var(--cyan);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 15 — PHASE 2</div>
+  <h1>Per-Process <span>Address Spaces</span></h1>
+  <p class="tagline">Two processes. Same virtual address 0x400000. Completely different physical memory. Module 15 gives every process its own CR3 — its own page directory — so they live in isolated universes the MMU enforces in hardware.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">CR3</div><div class="label">one per process — switched on context switch</div></div>
+    <div class="hero-stat"><div class="num">0x400000</div><div class="label">user code — same virtual, different physical</div></div>
+    <div class="hero-stat"><div class="num">kernel</div><div class="label">mapped in every address space</div></div>
+    <div class="hero-stat"><div class="num">#PF → kill</div><div class="label">bad access kills only that process</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine every employee in a company has their own filing cabinet with identical drawer labels: "Inbox," "Projects," "Personal." Two employees both reach into their "Projects" drawer — but they pull out completely different folders because each cabinet is physically separate. The label is the same (virtual address); the physical location differs.</p>
+      <p style="margin-top:10px;">That's per-process address spaces. Process A writes to virtual address 0x400000; process B reads from virtual address 0x400000 — and sees its own data, not A's. The MMU's CR3 register points each process to its own "filing cabinet" (page directory).</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Address Space Layout</h2>
+    <p>Every process has this virtual address space layout — but the physical frames behind it are unique to each process:</p>
+    <div class="as-grid">
+      <div class="as-box">
+        <div class="as-title" style="color:var(--cyan);">Process A — CR3 = 0x200000</div>
+        <div class="as-row"><div class="va">0x000000</div><div class="seg kern">kernel (shared phys)</div></div>
+        <div class="as-row"><div class="va">0x400000</div><div class="seg user">user code (phys A1)</div></div>
+        <div class="as-row"><div class="va">0x800000</div><div class="seg user">user stack (phys A2)</div></div>
+      </div>
+      <div class="as-box">
+        <div class="as-title" style="color:var(--purple);">Process B — CR3 = 0x201000</div>
+        <div class="as-row"><div class="va">0x000000</div><div class="seg kern">kernel (same phys!)</div></div>
+        <div class="as-row"><div class="va">0x400000</div><div class="seg user">user code (phys B1)</div></div>
+        <div class="as-row"><div class="va">0x800000</div><div class="seg user">user stack (phys B2)</div></div>
+      </div>
+    </div>
+    <div class="callout cyan">
+      <div class="label">The Kernel Is Everywhere</div>
+      <p>The kernel is mapped into every process's address space at the same virtual addresses. This is necessary so that syscalls (which run in ring 0) can access kernel data and code without switching page directories. The kernel pages are NOT marked PAGE_USER — ring-3 code gets a #PF if it tries to read them.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — Creating a New Address Space</h2>
+    <pre><code>/* paging.c */
+uint32_t paging_create_address_space(void) {
+    uint32_t pd_phys = pmm_alloc_page();
+    uint32_t *pd = (uint32_t*)pd_phys;
+    memset(pd, 0, PAGE_SIZE);
+
+    /* Copy kernel mappings (PDE[0] — first 4MB identity map) into new PD.
+       User PDE entries stay zero = not present. */
+    uint32_t *kernel_pd = (uint32_t*)paging_kernel_cr3();
+    for (int i = 0; i < 256; i++)      /* first 1GB = kernel region */
+        pd[i] = kernel_pd[i];          /* share physical page tables */
+
+    return pd_phys;  /* this becomes the new process's PCB.cr3 */
+}
+
+/* Switch to a process's address space */
+void paging_switch(uint32_t cr3) {
+    __asm__ volatile ("mov %0, %%cr3" : : "r"(cr3) : "memory");
+}</code></pre>
+    <div class="callout orange">
+      <div class="label">Sharing kernel PTEs is safe</div>
+      <p>We copy the kernel's PDE entries into every new page directory. This means all processes share the same physical page tables for kernel memory — any kernel mapping change is instantly visible to all processes. That's intentional: the kernel is one entity mapped into all address spaces, not duplicated.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Switching Address Spaces</h2>
+    <pre><code>/* process.c — scheduler_tick, updated for address spaces */
+uint32_t scheduler_tick(uint32_t current_esp) {
+    if (current) current->esp = current_esp;
+
+    struct process *next = pick_next();
+    if (!next) return current_esp;
+
+    current = next;
+    current->state = PROC_RUNNING;
+
+    /* Update TSS so ring-3→0 transitions use the right kernel stack */
+    tss_set_kernel_stack(current->kernel_stack_top);
+
+    /* Switch page directory — invalidates TLB for user pages */
+    paging_switch(current->cr3);
+
+    return current->esp;
+}</code></pre>
+    <div class="callout green">
+      <div class="label">TLB flush on CR3 write</div>
+      <p>Writing to CR3 automatically flushes the entire TLB (except global pages). This is necessary because the new process's virtual addresses map to different physical frames than the old process's. Without the flush, the CPU would use stale translations from the previous process — a serious security bug where process A could read process B's data.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Graceful #PF Handling</h2>
+    <pre><code>/* isr.c — page fault handler for ring-3 processes */
+void page_fault_handler(struct interrupt_frame *f) {
+    uint32_t fault_addr;
+    __asm__ volatile ("mov %%cr2, %0" : "=r"(fault_addr));
+
+    int is_user = (f->err_code & 0x4); /* U/S bit in error code */
+
+    if (is_user) {
+        kprintf("[#PF] User process %u accessed 0x%x — killed\n",
+                current->pid, fault_addr);
+        process_exit(); /* only THIS process dies, kernel keeps running */
+        return;
+    }
+    /* Kernel #PF = kernel bug = panic */
+    kprintf("KERNEL PANIC: #PF at 0x%x EIP=0x%x\n", fault_addr, f->eip);
+    for(;;) __asm__("hlt");
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>06 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 15 — Address Spaces</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\15_address_spaces
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Two processes run with isolated address spaces:</div>
+      <pre><code>[BobOS] Module 15 -- Per-Process Address Spaces
+  Process A: CR3=0x201000  writing to 0x400100...
+  Process B: CR3=0x202000  reading  0x400100 → own data (not A's!)
+  Process A: touching kernel addr 0x1000...
+  [#PF] User process 1 accessed 0x1000 — killed
+  Process B: still running after A's fault
+  Isolation: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> When process A exits and we free its address space with <code>paging_free_address_space(A->cr3)</code>, we free all the physical frames backing A's user pages. But the PDE entries for the kernel region point to the same page tables as the kernel's own page directory.</p>
+      <p style="margin-top:14px;color:var(--muted);">If we blindly walk A's page directory and free every page table, what happens to the shared kernel page tables? How do we know which PTEs are A's private frames vs shared kernel frames?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: How does the kernel access user memory in syscalls after this module?</div>
+      <div class="a">The kernel runs in ring 0, which can access any mapped page regardless of the U/S bit (as long as CR0.WP isn't set — we don't set it). After the context switch, the current process's CR3 is active, so user virtual addresses are valid from the kernel's perspective too. The kernel just dereferences user pointers directly. In production kernels with SMAP (Supervisor Mode Access Prevention), you'd need explicit <code>stac</code>/<code>clac</code> instructions around user memory accesses.</div>
+      <div class="q">Q: What's ASLR and why don't we have it?</div>
+      <div class="a">Address Space Layout Randomization randomizes where the stack, heap, and libraries are loaded each run — making exploit offsets unpredictable. We load everything at fixed addresses (code at 0x400000, stack at 0x800000) for simplicity. Adding ASLR would mean picking random base addresses at process creation time, which is straightforward once you have per-process address spaces.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 16 — ELF Loader</div>
+      <p>Right now user programs are compiled directly into the kernel image as blobs. Module 16 changes that: user programs are real ELF32 binaries stored on BobFS, and the kernel parses their ELF headers to load segments into fresh address spaces. After this, <code>sys_exec("program.elf")</code> works.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>paging.c</code> (updated) · <code>process.c</code> (updated)</p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 15 of 42 &nbsp;|&nbsp; <a href="../14_usermode/tutorial.html">← Module 14</a> &nbsp;·&nbsp; <a href="../16_elf_loader/tutorial.html">Module 16 →</a></footer>
+</body>
+</html>
