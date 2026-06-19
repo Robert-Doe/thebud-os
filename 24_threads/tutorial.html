@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 24 — Threads | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source Code Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#f5c842;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(245,200,66,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--gold);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--gold);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--gold);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(245,200,66,0.08),rgba(251,146,60,0.08));border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .thread-vis{display:flex;gap:16px;margin:24px 0;flex-wrap:wrap;}
+  .thread-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;flex:1;min-width:160px;}
+  .thread-box h4{font-family:'Source Code Pro',monospace;font-size:12px;margin-bottom:10px;}
+  .thread-box h4.main{color:var(--cyan);}
+  .thread-box h4.t1{color:var(--gold);}
+  .thread-box h4.t2{color:var(--orange);}
+  .thread-row{font-family:'Source Code Pro',monospace;font-size:12px;display:flex;justify-content:space-between;padding:5px 8px;border-radius:4px;margin:3px 0;}
+  .thread-row.shared{background:rgba(74,222,128,0.08);color:var(--green);}
+  .thread-row.own{background:rgba(56,189,248,0.08);color:var(--cyan);}
+  .shared-badge{font-size:10px;background:rgba(74,222,128,0.2);color:var(--green);padding:1px 6px;border-radius:3px;}
+  .own-badge{font-size:10px;background:rgba(56,189,248,0.2);color:var(--cyan);padding:1px 6px;border-radius:3px;}
+  .completion-badge{display:inline-block;background:var(--gold);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:700;font-size:14px;padding:8px 22px;border-radius:8px;margin:16px 0;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 24 — PHASE 4 FINALE</div>
+  <h1>Threads</h1>
+  <p class="tagline">Lightweight execution units that share everything with the parent: same address space (CR3), same file descriptors, same globals. Each thread gets its own registers, its own kernel stack, and its own entry point. This is the last OS module.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">shared CR3</div><div class="label">threads live in same address space</div></div>
+    <div class="hero-stat"><div class="num">own stack</div><div class="label">each thread gets a private kernel stack</div></div>
+    <div class="hero-stat"><div class="num">is_thread</div><div class="label">flag distinguishes thread from process</div></div>
+    <div class="hero-stat"><div class="num">SYS_THREAD</div><div class="label">create + exit syscalls #17 and #18</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-stack">The Stack</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>A process is like a self-contained office: its own building (address space), its own filing cabinets (heap, globals), its own phone extension (file descriptors). A thread is like a new desk in that same office — same building, same cabinets, same phone — but a different person sitting there doing different work simultaneously.</p>
+      <p style="margin-top:10px;">Fork creates a new building. Thread create adds a new desk. One is expensive and isolated; the other is cheap and shared. The tradeoff: sharing means you can stomp on each other's work without synchronization.</p>
+    </div>
+
+    <div class="thread-vis">
+      <div class="thread-box">
+        <h4 class="main">Main Thread (TID 1)</h4>
+        <div class="thread-row shared">CR3 = 0x1000 <span class="shared-badge">shared</span></div>
+        <div class="thread-row shared">fd_table <span class="shared-badge">shared</span></div>
+        <div class="thread-row shared">heap/globals <span class="shared-badge">shared</span></div>
+        <div class="thread-row own">ESP = 0xBFFFF000 <span class="own-badge">own</span></div>
+        <div class="thread-row own">EIP (regs) <span class="own-badge">own</span></div>
+      </div>
+      <div class="thread-box">
+        <h4 class="t1">Thread 1 (TID 2)</h4>
+        <div class="thread-row shared">CR3 = 0x1000 <span class="shared-badge">shared</span></div>
+        <div class="thread-row shared">fd_table <span class="shared-badge">shared</span></div>
+        <div class="thread-row shared">heap/globals <span class="shared-badge">shared</span></div>
+        <div class="thread-row own">ESP = 0xBEFFF000 <span class="own-badge">own</span></div>
+        <div class="thread-row own">EIP (regs) <span class="own-badge">own</span></div>
+      </div>
+      <div class="thread-box">
+        <h4 class="t2">Thread 2 (TID 3)</h4>
+        <div class="thread-row shared">CR3 = 0x1000 <span class="shared-badge">shared</span></div>
+        <div class="thread-row shared">fd_table <span class="shared-badge">shared</span></div>
+        <div class="thread-row shared">heap/globals <span class="shared-badge">shared</span></div>
+        <div class="thread-row own">ESP = 0xBDFFF000 <span class="own-badge">own</span></div>
+        <div class="thread-row own">EIP (regs) <span class="own-badge">own</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — PCB Gets the is_thread Flag</h2>
+    <pre><code>/* process.h — additions for threads */
+struct process {
+    /* existing fields ... */
+    uint32_t cr3;
+    int      pid;
+    int      state;
+
+    /* NEW: thread support */
+    int      is_thread;           /* 1 = thread, shares cr3 with parent */
+    int      owner_pid;           /* PID of the owning process */
+    uint32_t user_stack_top;      /* each thread's own user stack VA */
+
+    /* kernel stack is already per-PCB (always was) */
+    uint32_t kernel_stack[KSTACK_SIZE];
+    uint32_t kernel_esp;
+
+    /* threads don't get their own fd_table or vm_regions —
+       they point back to the owner's */
+    struct file_descriptor *fd_table;   /* pointer (shared) */
+    struct vm_region       *vm_regions; /* pointer (shared) */
+};</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">Pointer Sharing, Not Copying</div>
+      <p>Instead of copying the fd_table and vm_regions arrays into each thread's PCB, we store a pointer to the owner's arrays. All threads of a process read and write the same fd_table, so <code>open()</code> in thread 1 is immediately visible to thread 2. This is the core of what makes threads "lightweight" — almost no state is duplicated.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — thread_create: A Fork That Shares</h2>
+    <pre><code>/* SYS_THREAD_CREATE = 17 */
+int sys_thread_create(void (*fn)(void*), void *arg,
+                      uint32_t stack_size) {
+    struct process *t = alloc_process();
+
+    /* SHARE the address space — same CR3, no copy */
+    t->cr3       = current->cr3;
+    t->is_thread = 1;
+    t->owner_pid = current->pid;
+
+    /* SHARE fd_table and vm_regions (pointer copy) */
+    t->fd_table   = current->fd_table;
+    t->vm_regions = current->vm_regions;
+
+    /* Allocate a NEW user stack for this thread */
+    uint32_t stack_va = find_free_va_range(current, 0, stack_size);
+    for (uint32_t off = 0; off < stack_size; off += PAGE_SIZE) {
+        uint32_t phys = pmm_alloc_page();
+        paging_map(t->cr3, stack_va + off, phys,
+                   PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+    }
+    t->user_stack_top = stack_va + stack_size;
+
+    /* Set up the fake iret frame: fn(arg) in ring 3 */
+    uint32_t *ustack = (uint32_t*)t->user_stack_top;
+    *--ustack = (uint32_t)arg;    /* argument */
+    *--ustack = 0;                /* fake return address */
+    setup_iret_frame(t, (uint32_t)fn, (uint32_t)ustack);
+
+    t->state = PROC_READY;
+    return t->pid;   /* thread ID */
+}
+
+/* SYS_THREAD_EXIT = 18 */
+void sys_thread_exit(void) {
+    /* threads don't zombify — just free and disappear */
+    current->state = PROC_DEAD;
+    /* do NOT free CR3 — other threads/process still own it */
+    scheduler_yield_current();
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>04 — The Scheduler Doesn't Care</h2>
+    <pre><code>/* The round-robin scheduler treats threads and processes
+   identically — both are PCB entries in the run queue */
+void scheduler_tick(void) {
+    struct process *next = run_queue_next();
+    if (!next || next == current) return;
+
+    /* context switch: save current ESP, load next */
+    current->kernel_esp = read_esp();
+
+    /* CR3 only changes if the next entry is a DIFFERENT process */
+    if (next->cr3 != current->cr3) {
+        asm volatile("mov %0, %%cr3" :: "r"(next->cr3));
+        /* TLB auto-flushed on CR3 write */
+    }
+    /* else: same address space — no TLB flush needed! */
+
+    current = next;
+    write_esp(next->kernel_esp);
+    /* TSS esp0 updated for ring-3 → ring-0 transitions */
+    tss.esp0 = (uint32_t)(next->kernel_stack + KSTACK_SIZE);
+}</code></pre>
+
+    <div class="callout green">
+      <div class="label">Switching Between Threads Is Faster</div>
+      <p>When the scheduler switches between two threads of the same process, <code>next->cr3 == current->cr3</code>, so we skip the CR3 write. No CR3 write means no TLB flush — the entire TLB is still valid. This is the performance win of threads over processes: intra-process context switches are significantly cheaper.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 24 — Threads</h4>
+      <div class="step"><div class="desc">Build and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\24_threads
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[BobOS] Module 24 -- Threads
+  main: spawning 2 threads
+  [TID 2] thread_fn running, incrementing shared counter
+  [TID 3] thread_fn running, incrementing shared counter
+  [TID 2] done
+  [TID 3] done
+  main: shared counter = 2000  (2x 1000 increments)
+  Threads: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>The demo above says "shared counter = 2000" but with real concurrent threads it'll often be less — say, 1847. Why? Both threads read <code>counter</code>, both add 1, both write back. If they interleave, one increment is lost. This is a data race.</p>
+      <p style="margin-top:14px;color:var(--muted);">Fix it using the spinlock from Module 23 (<code>__sync_lock_test_and_set</code>). Then try replacing the spinlock with <code>__sync_fetch_and_add(&counter, 1)</code> — a single atomic instruction. Which is faster for this use case, and why?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: If threads share the address space, what happens when a thread segfaults?</div>
+      <div class="a">A segfault triggers SIGSEGV. Our signal handler (Module 18) delivers it to the faulting thread. If unhandled, sys_thread_exit is called — but since is_thread=1, we only kill that thread, not the entire process. Real implementations send SIGSEGV to the whole thread group (all threads of that process), because a segfault usually means the address space is corrupt for everyone.</div>
+      <div class="q">Q: What's Thread-Local Storage (TLS)?</div>
+      <div class="a">Some data needs to be per-thread even though threads share the address space — for example, errno. TLS gives each thread its own copy of designated variables. On x86 this is typically implemented via the FS or GS segment register pointing at a per-thread block. glibc's pthreads uses this extensively. It's a natural next step beyond what we built here.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — OS Track Complete!</h2>
+    <div class="callout gold">
+      <div class="label">🎉 Phase 4 — Modules 20–24 Complete</div>
+      <p>You have built a complete preemptive multitasking OS from scratch: bootloader → protected mode → paging → heap → keyboard → processes → syscalls → filesystem → shell → user mode → address spaces → ELF loader → fork/exec → signals → VFS → pipes → copy-on-write → demand paging → shared memory → threads.</p>
+      <p style="margin-top:10px;">That's 24 modules covering every layer of a real operating system. What started as 512 bytes of boot code is now a Unix-like kernel. The browser track (B01–B18) explores how a modern web browser is built and attacked — a completely different stack, same depth.</p>
+    </div>
+    <div style="text-align:center;margin:32px 0;">
+      <div class="completion-badge">OS TRACK: 24 / 24 COMPLETE</div>
+    </div>
+    <div class="callout teal">
+      <div class="label">Next: Browser Track — B01 Process Model</div>
+      <p>The browser track starts with the same question the OS track started with: how do you isolate untrusted code? Browsers run JavaScript from millions of unknown websites. The answer is a multi-process architecture — one renderer process per site, sandboxed at the OS level. Sound familiar?</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>thread.c</code> · <code>process.h</code> (<code>is_thread</code> flag) · <code>scheduler.c</code> (CR3 optimization) · <code>syscall.c</code> (SYS_THREAD_CREATE=17, SYS_THREAD_EXIT=18)</p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 24 of 42 (OS Track Complete!) &nbsp;|&nbsp; <a href="../23_shared_memory/tutorial.html">← Module 23</a> &nbsp;·&nbsp; <a href="../browser/B01_process_model/tutorial.html">Browser B01 →</a></footer>
+</body>
+</html>
