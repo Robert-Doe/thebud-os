@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 21 — Copy-on-Write Fork | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#fb923c;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(251,146,60,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--orange);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--orange);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--orange);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--orange);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(251,146,60,0.08),rgba(245,200,66,0.08));border:1px solid rgba(251,146,60,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--orange);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .cow-vis{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;}
+  .cow-col{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;}
+  .cow-col h4{font-family:'Source Code Pro',monospace;font-size:13px;margin-bottom:12px;}
+  .cow-col h4.parent{color:var(--cyan);}
+  .cow-col h4.child{color:var(--orange);}
+  .cow-page{background:var(--bg3);border-radius:6px;padding:8px 12px;margin:6px 0;font-family:'Source Code Pro',monospace;font-size:12px;display:flex;justify-content:space-between;align-items:center;}
+  .cow-page .addr{color:var(--muted);}
+  .cow-page .flag{font-size:11px;padding:2px 7px;border-radius:4px;}
+  .flag-ro{background:rgba(248,113,113,0.15);color:var(--red);}
+  .flag-rw{background:rgba(74,222,128,0.15);color:var(--green);}
+  .cow-phys{background:var(--bg2);border:1px dashed var(--border);border-radius:10px;padding:12px 16px;margin:16px 0;font-family:'Source Code Pro',monospace;font-size:12px;color:var(--muted);text-align:center;}
+  .cow-phys .phys-page{display:inline-block;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px 14px;margin:4px;color:var(--text);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 21 — PHASE 4</div>
+  <h1>Copy-on-Write <span>Fork</span></h1>
+  <p class="tagline">Why copy the entire address space when the child might just call exec? CoW turns fork from an O(pages) operation into an O(1) operation. Pages are shared until someone writes — only then does a copy happen.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">O(1)</div><div class="label">fork cost with CoW</div></div>
+    <div class="hero-stat"><div class="num">refcount</div><div class="label">per physical frame in PMM</div></div>
+    <div class="hero-stat"><div class="num">#PF write</div><div class="label">triggers the actual copy</div></div>
+    <div class="hero-stat"><div class="num">decref</div><div class="label">frees frame only when count hits 0</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine you inherit a recipe book from a parent. Instead of photocopying every page immediately, you just share the original. If you want to modify a recipe, <em>then</em> you photocopy that one page. This is Copy-on-Write: share first, copy only when forced. You might never modify most pages — why pay to copy them upfront?</p>
+      <p style="margin-top:10px;">For fork + exec, the child immediately throws away its address space to load a new program. Without CoW it paid to copy all of the parent's pages for nothing. With CoW, fork costs almost nothing.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — PMM Gets Reference Counts</h2>
+    <pre><code>/* pmm.h — physical memory manager gains refcounts */
+extern uint8_t pmm_refcounts[TOTAL_FRAMES];
+
+static inline void pmm_incref(uint32_t frame) {
+    pmm_refcounts[frame]++;
+}
+
+/* returns 1 if frame was freed */
+static inline int pmm_decref(uint32_t frame) {
+    if (--pmm_refcounts[frame] == 0) {
+        pmm_free_page(frame * PAGE_SIZE);
+        return 1;
+    }
+    return 0;
+}
+
+/* pmm_alloc_page now initialises refcount = 1 */
+uint32_t pmm_alloc_page(void) {
+    uint32_t addr = _pmm_alloc_inner();
+    pmm_refcounts[addr / PAGE_SIZE] = 1;
+    return addr;
+}</code></pre>
+
+    <div class="callout orange">
+      <div class="label">Why uint8_t?</div>
+      <p>A single physical frame is rarely shared by more than 255 processes at once. Using a full 32-bit int would waste 4× the memory. If you actually need more than 255 sharers (think huge shared libraries), bump it to uint16_t. For BobOS, uint8_t is fine.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — Fork: Mark Pages RO Instead of Copying</h2>
+    <pre><code>/* Old fork: deep-copied every page — expensive */
+/* New CoW fork: mark both parent and child pages read-only */
+
+int process_fork_cow(void) {
+    struct process *child = alloc_process();
+    child->cr3 = paging_create_empty();
+
+    /* walk parent's page directory */
+    uint32_t *parent_pd = (uint32_t*)current->cr3;
+    for (int pdi = 0; pdi < 1024; pdi++) {
+        if (!(parent_pd[pdi] & PAGE_PRESENT)) continue;
+        if (pdi >= KERNEL_PD_START) {
+            /* kernel region: share directly, no CoW */
+            child_pd[pdi] = parent_pd[pdi];
+            continue;
+        }
+        uint32_t *pt = (uint32_t*)(parent_pd[pdi] & ~0xFFF);
+        uint32_t *child_pt = alloc_page_table();
+        for (int pti = 0; pti < 1024; pti++) {
+            if (!(pt[pti] & PAGE_PRESENT)) continue;
+            uint32_t frame = pt[pti] >> 12;
+            /* mark BOTH parent and child entries read-only */
+            pt[pti]       &= ~PAGE_WRITE;
+            pt[pti]       |= PAGE_COW;   /* custom bit 9 */
+            child_pt[pti]  = pt[pti];    /* copy the PTE (same phys frame) */
+            pmm_incref(frame);            /* now two owners */
+        }
+        child_pd[pdi] = (uint32_t)child_pt | PAGE_PRESENT | PAGE_USER;
+    }
+    flush_tlb_full();   /* must invalidate parent's RO entries */
+    /* set up child's fake iret frame with EAX=0 */
+    setup_child_frame(child, 0);
+    return child->pid;
+}</code></pre>
+
+    <div class="cow-vis">
+      <div class="cow-col">
+        <h4 class="parent">Parent PD</h4>
+        <div class="cow-page"><span class="addr">0x1000</span><span class="flag flag-ro">RO+CoW</span></div>
+        <div class="cow-page"><span class="addr">0x2000</span><span class="flag flag-ro">RO+CoW</span></div>
+        <div class="cow-page"><span class="addr">0x3000</span><span class="flag flag-rw">RW (kernel)</span></div>
+      </div>
+      <div class="cow-col">
+        <h4 class="child">Child PD</h4>
+        <div class="cow-page"><span class="addr">0x1000</span><span class="flag flag-ro">RO+CoW</span></div>
+        <div class="cow-page"><span class="addr">0x2000</span><span class="flag flag-ro">RO+CoW</span></div>
+        <div class="cow-page"><span class="addr">0x3000</span><span class="flag flag-rw">RW (kernel)</span></div>
+      </div>
+    </div>
+    <div class="cow-phys">
+      <strong style="color:var(--muted);">Physical frames (shared, refcount=2)</strong><br>
+      <span class="phys-page">frame 0x100</span>
+      <span class="phys-page">frame 0x200</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The Write Fault: Doing the Actual Copy</h2>
+    <pre><code>/* page_fault_handler — now checks for CoW fault */
+void page_fault_handler(struct interrupt_frame *f, uint32_t err) {
+    uint32_t fault_addr;
+    asm volatile("mov %%cr2, %0" : "=r"(fault_addr));
+
+    /* bit 1 = write fault, bit 0 = present */
+    int write_fault  = err & 0x2;
+    int present      = err & 0x1;
+
+    if (present && write_fault) {
+        /* page is present but read-only — check CoW bit */
+        uint32_t *pte = paging_get_pte(current->cr3, fault_addr);
+        if (*pte & PAGE_COW) {
+            cow_copy_page(pte);
+            return;   /* retry the faulting instruction */
+        }
+    }
+    /* not a CoW fault → real fault, kill or panic */
+    kill_process_or_panic(current, fault_addr, err);
+}
+
+void cow_copy_page(uint32_t *pte) {
+    uint32_t old_frame = (*pte) >> 12;
+    /* allocate fresh frame, copy content */
+    uint32_t new_phys = pmm_alloc_page();   /* refcount=1 */
+    memcpy((void*)new_phys, (void*)(old_frame * PAGE_SIZE), PAGE_SIZE);
+    /* decrement old frame's refcount */
+    pmm_decref(old_frame);
+    /* rewrite PTE: new frame, writable, clear CoW bit */
+    *pte = (new_phys) | PAGE_PRESENT | PAGE_WRITE | PAGE_USER;
+    flush_tlb_page(new_phys);
+}</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">The Retry Is Automatic</div>
+      <p>After the fault handler returns, the CPU retries the faulting instruction. The PTE now points to a private writable copy, so the write succeeds — the user process never knows a fault happened. This is the magic of page-fault-based CoW: zero intrusion into user code.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 21 — Copy-on-Write Fork</h4>
+      <div class="step"><div class="desc">Build and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\21_cow
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[BobOS] Module 21 -- Copy-on-Write Fork
+  fork() -- no page copy at fork time
+  [parent] x = 42
+  [child]  writing to x → CoW fault triggered
+  [child]  x = 99  (private copy)
+  [parent] x = 42  (unchanged)
+  CoW: OK  | PMM refcounts: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>After a CoW fork, the parent still has its stack pages marked RO+CoW. The parent's <em>very next function call</em> pushes a return address onto the stack — triggering a CoW fault on its own stack page. Is that a problem? How do real kernels avoid redundant CoW on a page that has only one owner (refcount=1)?</p>
+      <p style="margin-top:14px;color:var(--muted);">Hint: check the refcount inside <code>cow_copy_page</code>. If it's already 1, you can skip the copy and just make the page writable again. Why is this safe?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: What's PAGE_COW? Is that a real CPU bit?</div>
+      <div class="a">No — x86 PTEs have some "available" bits (bits 9–11) that the CPU ignores. We hijack bit 9 as our CoW marker. The CPU only looks at the standard bits (P, R/W, U/S, etc.) — our custom bit is invisible to it. The kernel reads it during page fault handling to distinguish CoW faults from real access violations.</div>
+      <div class="q">Q: What about the TLB? Won't the old writable mapping be cached?</div>
+      <div class="a">Yes — after marking parent pages RO during fork, we flush the entire TLB with a CR3 reload (or INVLPG per page). If we don't, the CPU might serve a write from its cached RW entry, bypassing the fault entirely. TLB flush is non-negotiable after changing page protections.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 22 — Demand Paging</div>
+      <p>CoW defers copying; demand paging defers <em>allocation</em>. When a process calls mmap, no physical pages are allocated yet — the kernel just records the mapping in a <code>vm_region</code> table. Pages are faulted in one at a time, on first access. This is how modern OSes handle multi-gigabyte virtual address spaces on limited RAM.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>pmm.c</code> (refcounts) · <code>fork.c</code> (CoW fork) · <code>paging.c</code> (fault handler CoW branch)</p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 21 of 42 &nbsp;|&nbsp; <a href="../20_pipes/tutorial.html">← Module 20</a> &nbsp;·&nbsp; <a href="../22_demand_paging/tutorial.html">Module 22 →</a></footer>
+</body>
+</html>
