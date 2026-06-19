@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 05 — IDT & Interrupts | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#f87171;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(248,113,113,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:620px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);}  .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .steps{list-style:none;counter-reset:step;margin:20px 0;}
+  .steps li{counter-increment:step;display:flex;gap:16px;margin-bottom:20px;align-items:flex-start;}
+  .steps li::before{content:counter(step);background:var(--accent);color:#0b0f1a;font-weight:700;font-size:13px;min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+  .map-row{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin:6px 0;font-size:15px;}
+  .map-row .addr{font-family:'Source Code Pro',monospace;font-size:13px;color:var(--accent);min-width:80px;}
+  .map-row .what{color:var(--text);flex:1;}
+  .map-row .note{color:var(--muted);font-size:13px;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(248,113,113,0.08),rgba(251,146,60,0.08));border:1px solid rgba(248,113,113,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--red);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 05 — PHASE 1</div>
+  <h1>IDT <span>&amp; Interrupts</span></h1>
+  <p class="tagline">The IDT is your OS's emergency contact list. When the CPU divides by zero, accesses bad memory, or the keyboard fires — it looks up the IDT and calls your handler. Without this, any exception silently resets the machine.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">256</div><div class="label">possible interrupt vectors</div></div>
+    <div class="hero-stat"><div class="num">0–31</div><div class="label">CPU exceptions (fixed)</div></div>
+    <div class="hero-stat"><div class="num">32–47</div><div class="label">hardware IRQs (remapped)</div></div>
+    <div class="hero-stat"><div class="num">0x80</div><div class="label">our syscall vector (Module 11)</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-interrupts">Interrupts</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-asm">Assembly</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-build">Build Pipeline</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of the IDT as a 256-entry phone directory nailed to the CPU's wall. When something urgent happens — a divide-by-zero, a page fault, a key press — the CPU looks up the vector number, finds the phone number (the handler address) in the directory, and calls it. Without a directory, it has no idea who to call, so it panics and reboots.</p>
+      <p style="margin-top:10px;">You build that phone directory. You decide what happens when the CPU divides by zero (print an error and kill the process). You decide what happens on IRQ1 (read the keyboard). You are the operator.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Two Things This Module Builds</h2>
+    <div class="callout cyan">
+      <div class="label">Part 1: The IDT</div>
+      <p>A table of 256 gate descriptors. Each one says: "when interrupt N fires, jump to this address at this privilege level." We fill entries 0–31 with CPU exception handlers, 32–47 with IRQ handlers, and leave the rest empty for now (0x80 comes in Module 11).</p>
+    </div>
+    <div class="callout purple">
+      <div class="label">Part 2: The PIC</div>
+      <p>The 8259A Programmable Interrupt Controller sits between the hardware (keyboard, timer, disk) and the CPU. By default, hardware IRQs conflict with CPU exceptions (both use vectors 0–15). We reprogram the PIC to remap IRQs to vectors 32–47, where they don't collide.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — The ISR Assembly Stubs</h2>
+    <p>Here's a critical detail: when the CPU calls your interrupt handler, the C calling convention doesn't apply. The CPU pushes its own state onto the stack (EIP, CS, EFLAGS, and for some exceptions an error code). You need assembly "stubs" that capture all of this, then call your C handler.</p>
+    <pre><code>; isr.asm — one stub per interrupt vector
+; ISR 0: divide by zero (no error code)
+isr0:
+    push dword 0    ; fake error code (CPU doesn't push one for #DE)
+    push dword 0    ; interrupt number
+    jmp isr_common_stub
+
+; ISR 14: page fault (CPU DOES push an error code)
+isr14:
+    push dword 14   ; interrupt number
+    jmp isr_common_stub
+
+isr_common_stub:
+    pusha                   ; save EAX,ECX,EDX,EBX,ESP,EBP,ESI,EDI
+    push ds
+    push es
+    mov ax, 0x10            ; switch to kernel data segment
+    mov ds, ax
+    mov es, ax
+    push esp                ; pass pointer to stack frame as argument
+    call isr_handler        ; the C function
+    add esp, 4
+    pop es
+    pop ds
+    popa
+    add esp, 8              ; discard error code + vector number
+    iret                    ; restore EIP, CS, EFLAGS</code></pre>
+
+    <div class="callout orange">
+      <div class="label">Why the fake error code?</div>
+      <p>Some CPU exceptions (like #PF page fault) push an error code; others (like #DE divide error) don't. If you handle both cases with one <code>isr_common_stub</code>, your stack frame must be uniform. So for exceptions that don't push an error code, you push a fake zero yourself — then every handler sees the same <code>interrupt_frame</code> struct layout.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The interrupt_frame Struct</h2>
+    <pre><code>struct interrupt_frame {
+    /* pushed by isr_common_stub (in reverse order of pusha) */
+    uint32_t edi, esi, ebp, esp_dummy;
+    uint32_t ebx, edx, ecx, eax;
+    uint32_t ds, es;
+    /* pushed by individual stubs */
+    uint32_t int_no, err_code;
+    /* pushed by the CPU automatically */
+    uint32_t eip, cs, eflags;
+    /* only present when crossing privilege levels (ring 3 → 0): */
+    uint32_t user_esp, user_ss;
+};</code></pre>
+    <p>Your C handler receives a pointer to this struct. You can read any register value, inspect the faulting instruction (<code>eip</code>), and even modify them — whatever you write back gets restored by <code>iret</code>.</p>
+  </section>
+
+  <section>
+    <h2>05 — PIC Remapping</h2>
+    <pre><code>/* pic.c — reprogram both PIC chips */
+void pic_init(void) {
+    /* ICW1: start init sequence */
+    outb(0x20, 0x11);   /* master PIC command */
+    outb(0xA0, 0x11);   /* slave PIC command */
+    /* ICW2: vector offsets */
+    outb(0x21, 0x20);   /* master IRQs → vectors 32–39 */
+    outb(0xA1, 0x28);   /* slave IRQs  → vectors 40–47 */
+    /* ICW3: cascade wiring */
+    outb(0x21, 0x04);   /* master: slave on IRQ2 */
+    outb(0xA1, 0x02);
+    /* ICW4: 8086 mode */
+    outb(0x21, 0x01);
+    outb(0xA1, 0x01);
+    /* mask all IRQs initially */
+    outb(0x21, 0xFF);
+    outb(0xA1, 0xFF);
+}</code></pre>
+    <div class="callout green">
+      <div class="label">Unmasking IRQs</div>
+      <p>After PIC init, all IRQs are masked (disabled). To enable the timer (IRQ0): <code>pic_clear_mask(0)</code>. Keyboard (IRQ1): <code>pic_clear_mask(1)</code>. Each <code>pic_clear_mask</code> call clears one bit in the PIC's Interrupt Mask Register. At the end of every IRQ handler, you must send an EOI (End of Interrupt) to the PIC: <code>outb(0x20, 0x20)</code>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Key Exception Vectors</h2>
+    <div class="map-row"><div class="addr">#0 — #DE</div><div class="what">Divide Error — division by zero or overflow</div><div class="note">no error code</div></div>
+    <div class="map-row"><div class="addr">#8 — #DF</div><div class="what">Double Fault — exception while handling exception</div><div class="note">error code = 0</div></div>
+    <div class="map-row"><div class="addr">#13 — #GP</div><div class="what">General Protection Fault — bad selector, ring violation</div><div class="note">has error code</div></div>
+    <div class="map-row"><div class="addr">#14 — #PF</div><div class="what">Page Fault — access to unmapped or protected page</div><div class="note">CR2 = fault addr</div></div>
+    <div class="map-row"><div class="addr">IRQ0 (32)</div><div class="what">Timer — fires ~100× per second, drives the scheduler</div><div class="note">Module 10</div></div>
+    <div class="map-row"><div class="addr">IRQ1 (33)</div><div class="what">Keyboard — fires on each key press/release</div><div class="note">Module 9</div></div>
+  </section>
+
+  <section>
+    <h2>07 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 05 — IDT &amp; Interrupts</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\05_idt_interrupts
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output — the demo fires a divide-by-zero and survives:</div>
+      <pre><code>[BobOS] Module 05 -- IDT &amp; Interrupts
+  GDT, PIC, IDT loaded
+  Firing divide-by-zero...
+  [ISR] Exception #0: Divide Error at EIP=0x...
+  Survived! Timer IRQ firing every ~10ms.</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> Page faults (#14) push the faulting virtual address into the <code>CR2</code> register. Your page fault handler needs to read <code>CR2</code>. But <code>CR2</code> is a control register — you can't read it from C directly. How do you get its value into a C variable?</p>
+      <p style="margin-top:14px;color:var(--muted);">Hint: inline assembly. What GCC syntax lets you move a control register into a C variable? (Module 7's page fault handler does exactly this.)</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: What happens if I don't send EOI at the end of an IRQ handler?</div>
+      <div class="a">The PIC thinks you're still handling the interrupt. It won't send any more IRQs from that IRQ line (or any lower-priority IRQs) until it gets EOI. Your timer stops ticking, your keyboard goes dead, and the OS hangs. EOI is the single most common IRQ handler bug.</div>
+      <div class="q">Q: What's the difference between an interrupt and an exception?</div>
+      <div class="a">Exceptions are <em>synchronous</em> — they happen because of something the CPU just tried to do (divide by zero, bad memory access). Interrupts are <em>asynchronous</em> — they happen at any time because external hardware (keyboard, timer) signaled the CPU. Both use the same IDT mechanism; the difference is in who triggers them.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>09 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 06 — Physical Memory Manager</div>
+      <p>Now that exceptions work, you can safely take a page fault. Module 6 builds the bitmap allocator that tracks which 4KB physical pages are free — the foundation for everything that allocates memory: paging, the heap, process address spaces.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>idt.c</code> · <code>isr.asm</code> · <code>isr.c</code> · <code>pic.c</code></p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 05 of 42 &nbsp;|&nbsp; <a href="../04_gdt/tutorial.html">← Module 04</a> &nbsp;·&nbsp; <a href="../06_pmm/tutorial.html">Module 06 →</a></footer>
+</body>
+</html>
