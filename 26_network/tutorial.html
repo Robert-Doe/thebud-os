@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 26 — Network Stack | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(56,189,248,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--cyan);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--cyan);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--cyan);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--cyan);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(56,189,248,0.08),rgba(167,139,250,0.08));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .prereq-bar{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+  .prereq-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:13px;padding:5px 14px;border-radius:20px;text-decoration:none;transition:border-color .2s;}
+  .prereq-tag:hover{border-color:var(--cyan);}
+  /* Layer stack vis */
+  .layer-stack{display:flex;flex-direction:column;gap:4px;margin:24px 0;}
+  .layer{display:flex;align-items:center;gap:16px;padding:12px 18px;border-radius:8px;border:1px solid;}
+  .layer.app{background:rgba(74,222,128,0.08);border-color:var(--green);color:var(--green);}
+  .layer.udp{background:rgba(245,200,66,0.08);border-color:var(--gold);color:var(--gold);}
+  .layer.ip{background:rgba(56,189,248,0.08);border-color:var(--cyan);color:var(--cyan);}
+  .layer.eth{background:rgba(167,139,250,0.08);border-color:var(--purple);color:var(--purple);}
+  .layer.nic{background:rgba(251,146,60,0.08);border-color:var(--orange);color:var(--orange);}
+  .layer-name{font-family:'Source Code Pro',monospace;font-size:13px;font-weight:600;width:80px;}
+  .layer-file{font-family:'Source Code Pro',monospace;font-size:12px;color:var(--muted);}
+  .layer-desc{font-size:14px;flex:1;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 26 — PHASE 5</div>
+  <h1><span>Network</span> Stack</h1>
+  <p class="tagline">A packet leaves a remote machine, crosses the wire, enters the NIC's ring buffer, wakes your kernel, travels up through IP and UDP, and lands in a user-space buffer. You're about to build every layer of that journey from scratch.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">NE2000</div><div class="label">ISA NIC driver — ring buffer DMA</div></div>
+    <div class="hero-stat"><div class="num">IPv4</div><div class="label">checksum · routing · fragmentation ID</div></div>
+    <div class="hero-stat"><div class="num">UDP</div><div class="label">datagram sockets · bind · recvfrom</div></div>
+    <div class="hero-stat"><div class="num">SYS 21–23</div><div class="label">socket · sendto · recvfrom</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — what you must already own</div>
+      <div class="prereq-bar">
+        <a class="prereq-tag" href="../25_scheduler/tutorial.html">Module 25 — Scheduler</a>
+        <a class="prereq-tag" href="../05_idt_interrupts/tutorial.html">Module 05 — IDT / Interrupts</a>
+        <a class="prereq-tag" href="../03_vga_driver/tutorial.html">Module 03 — I/O ports (inb/outb)</a>
+      </div>
+    </div>
+    <div class="callout gold">
+      <div class="label">What to be comfortable with before opening ne2000.c</div>
+      <p>You need to understand <code>inb()</code> / <code>outb()</code> — the CPU I/O port instructions that talk to ISA hardware. The NE2000 is entirely port-mapped: no memory-mapped registers, just reads and writes to I/O addresses 0x300–0x31F. You also need the scheduler from Module 25, because <code>net_poll()</code> is driven by the kernel timer tick.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>A network stack is like a postal system with five floors in a building. The mailroom (NIC) receives physical letters. The courier (Ethernet) carries envelopes within the building. The address department (IP) reads the ZIP code and decides which office to deliver to. The department secretary (UDP) sorts by desk number (port). The employee (your app) reads the letter.</p>
+      <p style="margin-top:10px;">Every incoming packet climbs all five floors — NIC → Ethernet → IP → UDP → socket buffer. Every outgoing packet descends all five floors. Each layer adds or strips its own header. That's it. There's no magic.</p>
+    </div>
+
+    <div class="layer-stack">
+      <div class="layer app">
+        <div class="layer-name">APP</div>
+        <div class="layer-file">user_prog.c</div>
+        <div class="layer-desc">calls sys_recvfrom / sys_sendto — reads/writes raw bytes</div>
+      </div>
+      <div class="layer udp">
+        <div class="layer-name">UDP</div>
+        <div class="layer-file">udp.c</div>
+        <div class="layer-desc">adds src/dst port, length, zero checksum</div>
+      </div>
+      <div class="layer ip">
+        <div class="layer-name">IP</div>
+        <div class="layer-file">ip.c</div>
+        <div class="layer-desc">adds src/dst IP, TTL, protocol, IP checksum</div>
+      </div>
+      <div class="layer eth">
+        <div class="layer-name">ETHERNET</div>
+        <div class="layer-file">ip.c (tx)</div>
+        <div class="layer-desc">adds src/dst MAC (broadcast for now), ethertype=0x0800</div>
+      </div>
+      <div class="layer nic">
+        <div class="layer-name">NE2000</div>
+        <div class="layer-file">ne2000.c</div>
+        <div class="layer-desc">DMA-writes frame to ring buffer, issues TX command</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The NE2000 Ring Buffer</h2>
+    <div class="callout orange">
+      <div class="label">The NIC Has Its Own Memory</div>
+      <p>The NE2000 has 16 KB of on-chip SRAM. Your CPU cannot read it directly — you must use Remote DMA (RDMA): set up a source address and byte count in the NIC registers, then read/write 16-bit words through the DATA port. Think of it as a slow serial transfer rather than a memcpy.</p>
+    </div>
+
+    <pre><code>/* ne2000.c — Remote DMA read: copy len bytes from NIC memory at addr */
+static void ne_remote_read(uint16_t addr, void *buf, uint16_t len) {
+    outb(NE_CR,    NE_CR_PAGE0 | NE_CR_RD2 | NE_CR_START);
+    outb(NE_RBCR0, len &amp; 0xFF);   /* byte count low  */
+    outb(NE_RBCR1, len &gt;&gt; 8);    /* byte count high */
+    outb(NE_RSAR0, addr &amp; 0xFF); /* source addr low  */
+    outb(NE_RSAR1, addr &gt;&gt; 8);   /* source addr high */
+    outb(NE_CR,    NE_CR_PAGE0 | NE_CR_RD0 | NE_CR_START);
+
+    uint16_t *p = (uint16_t *)buf;
+    for (uint16_t i = 0; i &lt; (len + 1) / 2; i++)
+        p[i] = inw(NE_DATA);  /* read one 16-bit word at a time */
+}</code></pre>
+
+    <h3>The RX Ring Buffer</h3>
+    <pre><code>/* NIC ring buffer layout (256-byte pages):
+ *
+ *  Page 0x40-0x45  TX buffer (for transmit)
+ *  Page 0x46-0x7F  RX ring  (for receive)
+ *
+ * BNRY: last page the CPU has finished reading (boundary pointer)
+ * CURR: page the NIC is currently writing received packets to
+ *
+ * A packet is available when: (BNRY + 1) != CURR
+ *
+ * Each received packet is prepended with a 4-byte header:
+ *   [status][next_page][len_lo][len_hi]
+ */
+
+struct ne_rx_hdr {
+    uint8_t  status;      /* 0x01 = received OK */
+    uint8_t  next_page;   /* page after this packet */
+    uint16_t len;         /* total length including this header */
+} __attribute__((packed));</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — IPv4: The IP Header in 20 Bytes</h2>
+    <pre><code>/* ip.h — the complete IPv4 header */
+struct ip_hdr {
+    uint8_t  ver_ihl;    /* high nibble=4 (IPv4), low nibble=5 (20 bytes) */
+    uint8_t  tos;        /* type of service — we always send 0 */
+    uint16_t total_len;  /* IP header + payload, big-endian */
+    uint16_t id;         /* fragment ID — we increment per packet */
+    uint16_t frag_off;   /* fragment offset — always 0 (no fragmentation) */
+    uint8_t  ttl;        /* time to live — we send 64 */
+    uint8_t  proto;      /* 17=UDP, 1=ICMP, 6=TCP */
+    uint16_t checksum;   /* one's complement checksum of header only */
+    uint32_t src;        /* source IP, big-endian */
+    uint32_t dst;        /* destination IP, big-endian */
+} __attribute__((packed));   /* 20 bytes exact — no padding allowed */</code></pre>
+
+    <div class="callout purple">
+      <div class="label">Why __attribute__((packed))?</div>
+      <p>The compiler is allowed to insert padding between struct fields to align them for fast CPU access. For example, it might put 2 bytes of padding after <code>uint8_t proto</code> to align <code>uint32_t src</code> on a 4-byte boundary. That padding would corrupt the packet — the network expects exact byte positions. <code>packed</code> disables all padding. Every network protocol struct in a real OS uses it.</p>
+    </div>
+
+    <h3>The IP Checksum — One's Complement Sum</h3>
+    <pre><code>uint16_t ip_checksum(const void *data, uint16_t len) {
+    const uint16_t *p = (const uint16_t *)data;
+    uint32_t sum = 0;
+
+    while (len &gt; 1) { sum += *p++; len -= 2; }
+    if (len) sum += *(const uint8_t *)p;  /* odd byte */
+
+    /* Fold 32-bit sum into 16 bits by adding the carry */
+    while (sum &gt;&gt; 16) sum = (sum &amp; 0xFFFF) + (sum &gt;&gt; 16);
+
+    return (uint16_t)(~sum);  /* one's complement */
+}</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">How to Verify: Checksum of a Valid Packet Should be 0xFFFF</div>
+      <p>If you compute <code>ip_checksum()</code> over a received IP header (including the checksum field itself), the result should be <code>0xFFFF</code> (all ones). That's the one's complement identity: when you sum a number and its complement, you get all ones. RFC 791 mandates this. If the result is anything else, the packet is corrupt — drop it.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — UDP: The Simplest Transport Protocol</h2>
+    <pre><code>/* udp.h — 8-byte UDP header */
+struct udp_hdr {
+    uint16_t src_port;
+    uint16_t dst_port;
+    uint16_t length;    /* UDP header (8 bytes) + data */
+    uint16_t checksum;  /* 0 = checksum disabled (legal for UDP over IPv4) */
+} __attribute__((packed));</code></pre>
+
+    <pre><code>/* udp.c — receiving a datagram */
+void udp_input(const uint8_t *seg, uint16_t len, uint32_t src_ip) {
+    const struct udp_hdr *udp = (const struct udp_hdr *)seg;
+    uint16_t dst_port = ntohs(udp-&gt;dst_port);
+
+    /* Find the socket bound to this port */
+    for (int i = 0; i &lt; UDP_MAX_SOCKETS; i++) {
+        if (sockets[i].bound &amp;&amp; sockets[i].port == dst_port) {
+            /* Copy data into the socket's single receive slot */
+            struct udp_rx_entry *rx = &amp;sockets[i].rx;
+            rx-&gt;src_ip   = src_ip;
+            rx-&gt;src_port = ntohs(udp-&gt;src_port);
+            rx-&gt;data_len = ntohs(udp-&gt;length) - sizeof(struct udp_hdr);
+            /* memcpy the payload */
+            for (uint16_t j = 0; j &lt; rx-&gt;data_len; j++)
+                rx-&gt;data[j] = seg[sizeof(struct udp_hdr) + j];
+            rx-&gt;valid = 1;
+            return;
+        }
+    }
+    /* No socket bound to this port — silently discard */
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — Byte Order: The Silent Bug Waiting to Happen</h2>
+    <div class="callout red">
+      <div class="label">Big-Endian vs. Little-Endian — This Will Bite You</div>
+      <p>x86 is little-endian: the number <code>0x0800</code> is stored in memory as <code>[00][08]</code>. The network is big-endian: the same number is transmitted as <code>[08][00]</code>. Every multi-byte field in an IP or UDP header must be converted when reading or writing.</p>
+    </div>
+    <pre><code>/* net.h — byte-order conversion (no libc needed) */
+static inline uint16_t htons(uint16_t v) {
+    return (uint16_t)((v &gt;&gt; 8) | (v &lt;&lt; 8));
+}
+static inline uint32_t htonl(uint32_t v) {
+    return ((v &amp; 0xFF000000u) &gt;&gt; 24) | ((v &amp; 0x00FF0000u) &gt;&gt; 8)
+         | ((v &amp; 0x0000FF00u) &lt;&lt;  8) | ((v &amp; 0x000000FFu) &lt;&lt; 24);
+}
+/* ntohs / ntohl are the same operation */
+static inline uint16_t ntohs(uint16_t v) { return htons(v); }
+static inline uint32_t ntohl(uint32_t v) { return htonl(v); }</code></pre>
+
+    <div class="callout green">
+      <div class="label">The Rule: Every Network Multi-Byte Field Needs htons/htonl on Write, ntohs/ntohl on Read</div>
+      <p>If you forget one, the packet silently has the wrong port or wrong IP address. Wireshark will show you "destination port: 8704" when you meant 34. The fix is always the same: add the missing conversion. This is by far the most common networking bug in first-time drivers.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — User-Space Echo Server</h2>
+    <pre><code>/* user_prog.c — UDP echo server on port 7 */
+#include "syscall.h"
+
+void user_main(void) {
+    /* Bind a socket to port 7 (well-known echo port) */
+    int sock = syscall(SYS_SOCKET, 7, 0, 0);
+    if (sock &lt; 0) { vga_print("bind failed\n"); sys_exit(1); }
+
+    vga_print("[echo] listening on UDP port 7\n");
+
+    uint8_t buf[256];
+    uint32_t src_ip;
+    uint16_t src_port;
+
+    while (1) {
+        /* Poll for a packet — blocks by yielding until one arrives */
+        int n;
+        while ((n = syscall(SYS_RECVFROM, sock, (int)buf, (int)&amp;src_ip)) == 0)
+            sys_yield();
+
+        /* Echo it back */
+        vga_print("[echo] got "); vga_printint(n); vga_print(" bytes\n");
+        syscall(SYS_SENDTO, (int)src_ip, (int)(7 | ((uint32_t)src_port&lt;&lt;16)), (int)buf);
+    }
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>07 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 26 — Network Stack</h4>
+      <div class="step"><div class="desc">Build and run (QEMU includes the NE2000 NIC flag):</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\26_network
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">From WSL or another terminal, send a UDP packet to test:</div>
+      <pre><code>wsl -- bash -c "echo hello | nc -u 127.0.0.1 7"</code></pre></div>
+      <div class="step"><div class="desc">Expected QEMU VGA output:</div>
+      <pre><code>[NE2000] init OK, MAC: 52:54:00:12:34:56
+[NET] stack ready  IP=10.0.0.1
+[echo] listening on UDP port 7
+[echo] got 6 bytes
+Network Stack: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>You send a UDP packet with <code>src_port=1234</code>, <code>dst_port=7</code>, payload "hello\n" (6 bytes). Draw the complete byte layout of what hits the wire — Ethernet header (14 bytes) + IP header (20 bytes) + UDP header (8 bytes) + payload (6 bytes) = 48 bytes total. What is the value at byte offset 36 (0-indexed)? Write it before scrolling.</p>
+      <p style="margin-top:14px;color:var(--muted);">Answer: byte 36 is the start of the UDP header's <code>src_port</code> field. In big-endian, port 1234 = 0x04D2, so byte 36 = 0x04 and byte 37 = 0xD2. If you got this right, you can now read a Wireshark hex dump without needing the column labels.</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why is ARP skipped? Don't we need it to send to an IP address?</div>
+      <div class="a">ARP resolves an IP address to a MAC address by broadcasting "who has IP X?" and waiting for the reply. We skip it by sending to the broadcast MAC (FF:FF:FF:FF:FF:FF) instead. Switches and routers on a real LAN would see this as excessive broadcast traffic, but QEMU's user-mode networking accepts it fine because the "network" is entirely virtual inside QEMU.</div>
+      <div class="q">Q: Why no TCP? Couldn't we add it?</div>
+      <div class="a">TCP requires: connection state (CLOSED, SYN_SENT, ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, TIME_WAIT, CLOSE_WAIT, LAST_ACK — 11 states), sequence numbers, ACK tracking, retransmission timers, window sizing, and congestion control. Each of those is a module by itself. UDP first is the right order — you learn IP framing without state machine overhead, then add TCP state on top.</div>
+      <div class="q">Q: What does polled I/O mean vs interrupt-driven?</div>
+      <div class="a">Polled: the CPU repeatedly asks "any packets yet?" on every timer tick regardless of NIC activity. Interrupt-driven: the NIC asserts IRQ only when a packet arrives; the CPU handles it, then goes back to other work. Polled is simpler but wastes CPU cycles checking an empty queue. Linux's NAPI is hybrid: interrupt-driven to wake, then polled in a budget loop to drain the queue before going back to sleep.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>09 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Module 27 — Device Driver Framework</div>
+      <p>Right now the NE2000 is hardcoded into the kernel. Module 27 introduces a driver registration table: <code>driver_register(&amp;ne2000_driver)</code>. The kernel calls <code>driver_probe()</code> for each registered driver, and drivers expose themselves through the VFS as <code>/dev/eth0</code>. This is how Linux's driver model works — and it's why you can run the same kernel binary on machines with completely different hardware.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>ne2000.c</code> · <code>ne2000.h</code> · <code>ip.c</code> · <code>ip.h</code> · <code>udp.c</code> · <code>udp.h</code> · <code>net.c</code> · <code>net.h</code> · <code>syscall.h</code> (SYS_SOCKET=21, SYS_SENDTO=22, SYS_RECVFROM=23)</p>
+  </section>
+
+</div>
+<footer>BobOS Tutorial — Module 26 of 28 &nbsp;|&nbsp; <a href="../25_scheduler/tutorial.html">← Module 25 — Scheduler</a> &nbsp;·&nbsp; <a href="../27_drivers/tutorial.html">Module 27 — Device Drivers →</a></footer>
+</body>
+</html>
