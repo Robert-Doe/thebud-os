@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 28 — POSIX Compliance | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(74,222,128,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--green);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--green);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--green);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--green);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);}.callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);}.callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);}.callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--green);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(13,148,136,0.08));border:1px solid rgba(74,222,128,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .prereq-bar{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
+  .prereq-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:13px;padding:5px 14px;border-radius:20px;text-decoration:none;transition:border-color .2s;}
+  .prereq-tag:hover{border-color:var(--cyan);}
+  /* Compat table */
+  .compat-table{width:100%;border-collapse:collapse;margin:24px 0;font-size:14px;}
+  .compat-table th{background:var(--bg3);color:var(--muted);font-weight:700;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);}
+  .compat-table td{padding:10px 14px;border-bottom:1px solid rgba(30,58,95,0.4);vertical-align:top;}
+  .compat-table tr:hover td{background:rgba(255,255,255,0.02);}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;}
+  .badge.yes{background:rgba(74,222,128,0.15);color:var(--green);}
+  .badge.partial{background:rgba(245,200,66,0.15);color:var(--gold);}
+  .badge.no{background:rgba(248,113,113,0.15);color:var(--red);}
+  .completion-badge{display:inline-block;background:var(--green);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:700;font-size:14px;padding:8px 22px;border-radius:8px;margin:16px 0;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 28 — PHASE 5 FINALE</div>
+  <h1><span>POSIX</span> Compliance</h1>
+  <p class="tagline">You've built every kernel subsystem from scratch. Now make it speak the language the rest of the world expects: POSIX. Add errno, standardize the error model, wrap sockets in BSD semantics, and add select(), stat(), and lseek() — the last 3 syscalls that close the gap to a real Unix ABI.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">errno</div><div class="label">per-process error variable</div></div>
+    <div class="hero-stat"><div class="num">27</div><div class="label">total syscalls in BobOS ABI</div></div>
+    <div class="hero-stat"><div class="num">select()</div><div class="label">multiplexed I/O wait on fd sets</div></div>
+    <div class="hero-stat"><div class="num">POSIX.1</div><div class="label">socket · stat · lseek compatible</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — the full stack under this module</div>
+      <div class="prereq-bar">
+        <a class="prereq-tag" href="../27_drivers/tutorial.html">Module 27 — Device Drivers</a>
+        <a class="prereq-tag" href="../26_network/tutorial.html">Module 26 — Network Stack</a>
+        <a class="prereq-tag" href="../11_syscalls/tutorial.html">Module 11 — Syscalls</a>
+      </div>
+    </div>
+    <div class="callout gold">
+      <div class="label">The single question that motivates this module</div>
+      <p>You've been writing <code>sys_open()</code>, <code>sys_write()</code>, <code>sys_fork()</code> — BobOS-specific wrappers. But every real C program uses <code>open()</code>, <code>write()</code>, <code>fork()</code> and sets <code>errno</code> on failure. POSIX compliance means your kernel can run programs written for any Unix without changing the program. Module 28 adds the translation layer that makes that possible.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of POSIX as a wall socket standard. Every device (kernel) and every appliance (program) agrees on the shape of the plug and the voltage. A toaster built in France and a toaster built in Japan both work in a US socket if they follow the standard. POSIX is that standard for operating systems and programs. When BobOS speaks POSIX, programs written for Linux, macOS, or FreeBSD can be cross-compiled for BobOS with no source changes.</p>
+      <p style="margin-top:10px;">The posix.c wrapper layer is the adapter plug. It converts BobOS's internal error codes and calling conventions into the POSIX-standard shape: <code>return -1</code> on error, set <code>errno</code> to the standard code.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — errno: The Contract</h2>
+    <div class="callout red">
+      <div class="label">The Golden Rule of POSIX Error Handling</div>
+      <p>Every POSIX function that can fail returns <code>-1</code> (for int-returning) or <code>NULL</code> (for pointer-returning) on error, AND sets <code>errno</code> to a standard error code. You must check <strong>both</strong>. Checking only the return value tells you something went wrong. Checking only <code>errno</code> is unreliable (it's not reset on success). Check return value first, then errno.</p>
+    </div>
+
+    <pre><code>/* errno.h — standard error codes (POSIX values) */
+extern int errno;
+
+#define ENOENT   2   /* No such file or directory */
+#define EBADF    9   /* Bad file descriptor       */
+#define ENOMEM  12   /* Out of memory             */
+#define EINVAL  22   /* Invalid argument          */
+#define EAGAIN  11   /* Try again (would block)   */
+#define ENOSYS  38   /* Function not implemented  */
+/* ... 20 more ... */</code></pre>
+
+    <h3>The translation layer in posix.c</h3>
+    <pre><code>/* Every POSIX wrapper follows this exact pattern */
+static int ret_or_errno(int bobos_rc) {
+    if (bobos_rc &lt; 0) {
+        errno = map_err(bobos_rc);  /* translate BobOS code to POSIX code */
+        return -1;                  /* POSIX always returns -1 on error   */
+    }
+    errno = 0;          /* POSIX: reset errno to 0 on success */
+    return bobos_rc;
+}
+
+/* Example: the POSIX open() wrapper */
+int open(const char *path, int flags) {
+    return ret_or_errno(sys_open(path, flags));
+    /* sys_open returns fd on success, SYSCALL_ENOENT (-4) etc. on fail */
+    /* open() returns fd on success, -1 on fail with errno set         */
+}</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">Why Does errno Reset to 0 on Success?</div>
+      <p>A common bug: call a function that succeeds, then check errno and see a non-zero leftover from a previous failed call — and conclude the current call failed. POSIX says "the value of errno shall be defined only after a call for which it is explicitly stated to be set." Resetting to 0 on success is a defensive best practice. glibc does it in every wrapper.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — BSD Sockets Over UDP</h2>
+    <pre><code>/* Classic POSIX UDP echo server — works on BobOS too */
+#include "posix.h"
+
+void user_main(void) {
+    /* Step 1: create a UDP socket */
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd &lt; 0) { write(1, "socket: ", 8); exit(1); }
+
+    /* Step 2: bind to port 7 */
+    struct sockaddr_in addr = {
+        .sin_family = AF_INET,
+        .sin_port   = htons(7),
+        .sin_addr   = 0,          /* INADDR_ANY */
+    };
+    if (bind(fd, &amp;addr, sizeof(addr)) &lt; 0) { exit(1); }
+
+    char buf[256];
+    struct sockaddr_in peer;
+    uint32_t plen = sizeof(peer);
+
+    while (1) {
+        /* Step 3: receive */
+        ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, &amp;peer, &amp;plen);
+        if (n &lt; 0 &amp;&amp; errno == EAGAIN) { sys_yield(); continue; }
+        if (n &lt; 0) break;
+
+        /* Step 4: echo back */
+        sendto(fd, buf, (size_t)n, 0, &amp;peer, sizeof(peer));
+    }
+    exit(0);
+}</code></pre>
+
+    <div class="callout green">
+      <div class="label">This Is Real POSIX Code</div>
+      <p>The above is the standard BSD socket UDP echo server. The only non-standard line is <code>sys_yield()</code> in the EAGAIN loop (real POSIX programs would use <code>select()</code> or blocking sockets). Every other line compiles on Linux unchanged. That's the goal of POSIX compliance.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — select(): Waiting on Multiple File Descriptors</h2>
+    <pre><code>/* posix.h — fd_set is a 32-bit bitmask (supports fds 0–31) */
+typedef struct { uint32_t bits; } fd_set;
+#define FD_ZERO(s)     ((s)-&gt;bits = 0)
+#define FD_SET(fd,s)   ((s)-&gt;bits |=  (1u &lt;&lt; (fd)))
+#define FD_ISSET(fd,s) (((s)-&gt;bits &gt;&gt; (fd)) &amp; 1u)</code></pre>
+
+    <pre><code>/* Waiting for keyboard OR network socket — POSIX select() */
+int kbd_fd  = open("/dev/kbd", O_RDONLY);
+int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+fd_set rfds;
+FD_ZERO(&amp;rfds);
+FD_SET(kbd_fd,  &amp;rfds);
+FD_SET(sock_fd, &amp;rfds);
+
+int ready = select(sock_fd + 1, &amp;rfds, NULL, NULL, NULL);
+if (ready &gt; 0) {
+    if (FD_ISSET(kbd_fd, &amp;rfds))  handle_keyboard();
+    if (FD_ISSET(sock_fd, &amp;rfds)) handle_network();
+}</code></pre>
+
+    <div class="callout orange">
+      <div class="label">select() Is the Original Multiplexed I/O Primitive</div>
+      <p>Before epoll (Linux 2.6), select() was how every server handled thousands of connections. You give it a bitmask of fds you're interested in; it tells you which ones are ready. BobOS's select() polls (busy-checks) rather than blocking, but the interface is identical. Programs written against our select() will run on Linux with blocking behavior as a bonus.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — stat() and lseek(): The Last Two Syscalls</h2>
+    <pre><code>/* SYS_STAT = 26 — get file metadata */
+int fstat(int fd, struct stat *st) {
+    int rc = syscall(SYS_STAT, fd, (int)st, 0);
+    return ret_or_errno(rc);
+}
+
+/* Usage: check if fd is a regular file or a device */
+struct stat s;
+fstat(fd, &amp;s);
+if (S_ISREG(s.st_mode))  vga_print("regular file\n");
+if (S_ISCHR(s.st_mode))  vga_print("character device\n");
+vga_print("size: "); vga_printint(s.st_size); vga_print(" bytes\n");</code></pre>
+
+    <pre><code>/* SYS_LSEEK = 27 — seek within a file */
+off_t lseek(int fd, off_t offset, int whence) {
+    return (off_t)ret_or_errno(syscall(SYS_LSEEK, fd, (int)offset, whence));
+}
+
+/* Usage: jump to byte 100, read 10 bytes, then rewind */
+lseek(fd, 100, SEEK_SET);
+read(fd, buf, 10);
+lseek(fd, 0, SEEK_SET);   /* rewind to beginning */
+
+/* Or: find the file size */
+off_t size = lseek(fd, 0, SEEK_END);
+lseek(fd, 0, SEEK_SET);   /* rewind after sizing */</code></pre>
+  </section>
+
+  <section>
+    <h2>06 — POSIX Compatibility Matrix</h2>
+    <table class="compat-table">
+      <tr><th>Function</th><th>BobOS</th><th>Notes</th></tr>
+      <tr><td><code>open / read / write / close</code></td><td><span class="badge yes">YES</span></td><td>Full errno support</td></tr>
+      <tr><td><code>fork / waitpid / exit / getpid</code></td><td><span class="badge yes">YES</span></td><td>POSIX semantics</td></tr>
+      <tr><td><code>signal / kill</code></td><td><span class="badge yes">YES</span></td><td>SIGUSR1/SIGTERM/SIGKILL</td></tr>
+      <tr><td><code>socket / bind / sendto / recvfrom</code></td><td><span class="badge yes">YES</span></td><td>UDP/AF_INET only</td></tr>
+      <tr><td><code>select</code></td><td><span class="badge partial">PARTIAL</span></td><td>Polls, doesn't block</td></tr>
+      <tr><td><code>fstat</code></td><td><span class="badge partial">PARTIAL</span></td><td>No timestamps/perms</td></tr>
+      <tr><td><code>lseek</code></td><td><span class="badge yes">YES</span></td><td>SEEK_SET/CUR/END</td></tr>
+      <tr><td><code>errno</code></td><td><span class="badge partial">PARTIAL</span></td><td>Global, not thread-local</td></tr>
+      <tr><td><code>malloc / free</code></td><td><span class="badge yes">YES</span></td><td>Wrappers over kmalloc/kfree</td></tr>
+      <tr><td><code>pthread_create</code></td><td><span class="badge no">NO</span></td><td>Use sys_thread_create directly</td></tr>
+      <tr><td><code>TCP / connect / accept</code></td><td><span class="badge no">NO</span></td><td>UDP only — next project</td></tr>
+      <tr><td><code>mmap (file-backed)</code></td><td><span class="badge no">NO</span></td><td>Anonymous mmap only (Module 14)</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>07 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 28 — POSIX Compliance</h4>
+      <div class="step"><div class="desc">Build and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\28_posix
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output — standard POSIX calls working end-to-end:</div>
+      <pre><code>[BobOS] Module 28 -- POSIX Compliance
+[posix] POSIX layer ready
+[test] open("/boot/test.txt") = 3
+[test] fstat: size=12 type=REG
+[test] lseek(3, 6, SEEK_SET) = 6
+[test] read 6 bytes: "World\n"
+[test] socket(AF_INET, SOCK_DGRAM) = 10
+[test] bind(port 7) = 0
+[echo] waiting for UDP...
+[echo] got 5 bytes, echoing back
+POSIX: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>A program calls <code>open("/dev/kbd", O_RDONLY)</code>. Trace every function call from user space all the way to the hardware, listing the exact functions in order. How many layers does it cross?</p>
+      <p style="margin-top:14px;color:var(--muted);">Answer: open() [posix.c] → sys_open() [syscall.h inline] → int 0x80 → syscall_dispatch() [syscall.c] → vfs_open() [vfs.c] → devfs_open() [devfs.c] → driver_find("kbd") [driver.c] → stores kbd_driver ops pointer in fd_table. 7 function calls, 5 source files, crossing user/kernel boundary once (at int 0x80). That's the full stack.</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why is errno not thread-local in our implementation?</div>
+      <div class="a">Thread-local storage on x86 uses the FS or GS segment register to point at a per-thread data block. Each context switch must save/restore that segment register and update the TLS pointer. POSIX mandates this — C11 added _Thread_local for exactly this reason. Our errno is a single global int. It's wrong under concurrent access from multiple threads, but correct for single-threaded processes. The fix: store errno in the PCB and expose it via a pointer through the FS segment, exactly as glibc's __errno_location() does.</div>
+      <div class="q">Q: What does EAGAIN mean? Why does select() return it?</div>
+      <div class="a">EAGAIN ("try again") means "this would have blocked, but the call was non-blocking." Our select() polls once and returns EAGAIN if no fds are ready — this is what O_NONBLOCK does on a real OS for individual reads. True blocking select() sleeps the process (PROC_WAITING) and wakes it when any watched fd becomes readable. Our yield-loop workaround (while EAGAIN, sys_yield) is functionally equivalent but burns more CPU than a sleeping process would.</div>
+      <div class="q">Q: Is BobOS now a real Unix?</div>
+      <div class="a">Almost. Real Unix certification requires: a full POSIX.1-2017 test suite pass (thousands of tests), virtual memory with demand paging to /swap (Module 22 gets close), a fully blocking scheduler, a complete VFS with hard links, directory traversal, and permissions, plus a working C standard library. BobOS passes the conceptual test: you built every major subsystem from scratch and understand what every line does. That's more valuable than certification.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>09 — BobOS Track Complete!</h2>
+    <div class="callout green">
+      <div class="label">Phase 5 — Modules 25–28 Complete</div>
+      <p>You've now built a priority preemptive scheduler, a working UDP network stack with a real NIC driver, a generalized device driver framework with /dev mounting, and a POSIX-compatible syscall interface. On top of the 24 modules before this, BobOS is now a complete educational Unix-like operating system.</p>
+      <p style="margin-top:10px;">What started as 512 bytes of boot code is now a kernel that boots in protected mode, manages virtual memory, runs multiple processes in user space, handles signals, supports a filesystem, speaks UDP over a real NIC, and presents a POSIX API. <strong>You built all of it.</strong></p>
+    </div>
+    <div style="text-align:center;margin:32px 0;">
+      <div class="completion-badge">BOBOS TRACK: 28 / 28 COMPLETE</div>
+    </div>
+    <div class="callout teal">
+      <div class="label">What to Build Next</div>
+      <p>If you want to keep going: add TCP (the state machine is a full project), implement a blocking select() with proper wait queues, port a minimal libc (musl is a good target — 80,000 lines but mostly portable C), or try replacing BobFS with an ext2-compatible filesystem so you can mount real disk images. Each of those is a project as large as one phase of BobOS.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>posix.c</code> · <code>posix.h</code> · <code>errno.h</code> · <code>syscall.h</code> (SYS_SELECT=25, SYS_STAT=26, SYS_LSEEK=27)</p>
+  </section>
+
+</div>
+<footer>BobOS Tutorial — Module 28 of 28 — The End &nbsp;|&nbsp; <a href="../27_drivers/tutorial.html">← Module 27 — Device Drivers</a> &nbsp;·&nbsp; <a href="../browser/B01_process_model/tutorial.html">Browser Track →</a></footer>
+</body>
+</html>
