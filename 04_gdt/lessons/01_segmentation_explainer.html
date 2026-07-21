@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Segmentation in Hardware — Selectors, Registers &amp; Descriptors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)} h2 .accent.g{color:var(--gold)} h2 .accent.c{color:var(--cyan)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.7rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .5rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+/* bitfield diagram */
+.bitfield{display:flex;border:1.5px solid var(--gold2);border-radius:8px;overflow:hidden;margin:1.8rem 0;font-family:'Source Code Pro',monospace;}
+.bitfield .bf-seg{padding:1.2rem .5rem;text-align:center;border-right:1px solid var(--border);}
+.bitfield .bf-seg:last-child{border-right:none}
+.bitfield .bf-name{font-size:.85rem;font-weight:700;margin-bottom:.3rem;}
+.bitfield .bf-bits{font-size:.68rem;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#selector" title="Segment Selector"></a>
+  <a class="toc-dot" href="#registers" title="Segmentation Registers"></a>
+  <a class="toc-dot" href="#cpl" title="CPL & Rings"></a>
+  <a class="toc-dot" href="#descriptor" title="Segment Descriptors"></a>
+  <a class="toc-dot" href="#types" title="Descriptor Types"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Chapter 2 · Segmentation in Hardware</div>
+    <h1>The Segment's<br><span>ID Card</span></h1>
+    <p class="hero-sub">You already know a logical address is a segment + an offset. But how does the CPU know which segment you mean, and what that segment is even allowed to do? Through a tiny 16-bit "ID card" called a segment selector, six special-purpose registers built to hold one, and a much richer "full record" called a segment descriptor that the ID card ultimately points to.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">16-bit</div><div class="lbl">Segment Selector</div></div>
+      <div class="hero-stat"><div class="num">6</div><div class="lbl">Segmentation Registers</div></div>
+      <div class="hero-stat"><div class="num">8-byte</div><div class="lbl">Segment Descriptor</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Privilege Levels Linux Uses</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="selector">
+<div class="container">
+  <div class="section-num">01 — The 16-Bit ID Card</div>
+  <h2>The <span class="accent">Segment Selector</span></h2>
+  <p class="reveal">A logical address's "segment" half isn't the segment's actual data — it's a compact 16-bit pointer to a description of the segment, called a <strong>Segment Selector</strong>. Three fields are packed into those 16 bits.</p>
+
+  <div class="bitfield reveal">
+    <div class="bf-seg" style="flex:11;background:rgba(56,189,248,.08)"><div class="bf-name" style="color:var(--cyan)">index</div><div class="bf-bits">bits 15–3 (13 bits)</div></div>
+    <div class="bf-seg" style="flex:1;background:rgba(245,200,66,.1)"><div class="bf-name" style="color:var(--gold)">TI</div><div class="bf-bits">bit 2</div></div>
+    <div class="bf-seg" style="flex:2;background:rgba(248,113,113,.1)"><div class="bf-name" style="color:var(--red)">RPL</div><div class="bf-bits">bits 1–0</div></div>
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">index</span><span class="fam-count">13 bits</span></div><div class="fam-desc">Which numbered slot to look up in the descriptor table — this is literally "row number" into an array of Segment Descriptors. This is the star of the dedicated GDT article coming next.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">TI (Table Indicator)</span><span class="fam-count">1 bit</span></div><div class="fam-desc">Which <em>table</em> to search: 0 means the GDT (the shared, global catalog), 1 means the LDT (a process's own private catalog).</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">RPL (Requestor Privilege Level)</span><span class="fam-count">2 bits</span></div><div class="fam-desc">The privilege level being <em>requested</em> for this particular access — checked against the descriptor's own minimum privilege before access is allowed.</div></div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Aha Moment</div>
+    A segment selector doesn't carry any actual segment information itself — no base address, no size, no permissions. It's purely an <strong>address of an address</strong>: "go look at slot <code>index</code> in table <code>TI</code>, and treat this access as happening at privilege level <code>RPL</code>." All the real substance lives in the Segment Descriptor it points to.
+  </div>
+</div>
+</section>
+
+<section id="registers">
+<div class="container">
+  <div class="section-num">02 — Where Selectors Actually Live</div>
+  <h2>The Six <span class="accent">Segmentation Registers</span></h2>
+  <p class="reveal">To avoid re-fetching a selector from memory on every single instruction, the CPU keeps six dedicated registers whose only job is to hold a currently active Segment Selector: <code>cs</code>, <code>ss</code>, <code>ds</code>, <code>es</code>, <code>fs</code>, <code>gs</code>. A program can reuse the same register for different purposes over time by saving its value and restoring it later — but three of the six have fixed, specific jobs.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Register</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">cs</td><td>Code segment register — points to the segment holding the currently executing instructions.</td></tr>
+        <tr><td class="hl">ss</td><td>Stack segment register — points to the segment holding the current program's stack.</td></tr>
+        <tr><td class="hl">ds</td><td>Data segment register — points to the segment holding global and static data.</td></tr>
+        <tr><td>es, fs, gs</td><td>General purpose — free for the program or OS to point at arbitrary data segments.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 cs Is Doing Double Duty</div>
+    The <code>cs</code> register carries a secret extra passenger: a 2-bit field specifying the CPU's <strong>Current Privilege Level (CPL)</strong> — the actual live privilege the CPU is running at right now. This is not a separate lookup; it's baked directly into whichever code segment is currently active. Wherever <code>cs</code> points, that's your current ring.
+  </div>
+</div>
+</section>
+
+<section id="cpl">
+<div class="container">
+  <div class="section-num">03 — The Callback You Were Waiting For</div>
+  <h2><span class="accent c">CPL</span>: Rings, Made Concrete</h2>
+  <p class="reveal">Remember Ring 0 and Ring 3 from the very first article in this series? Here's exactly where that abstraction becomes a real, physical 2-bit field. The CPL uses value <strong>0</strong> for the highest privilege level and <strong>3</strong> for the lowest. Linux — like almost every general-purpose OS — uses only these two extremes, and gives them names you already know:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad"><h4>CPL = 0</h4>Called <strong>Kernel Mode</strong> in Linux. Full privilege — this is Ring 0, restated in the exact hardware field that enforces it.</div>
+    <div class="compare-card good"><h4>CPL = 3</h4>Called <strong>User Mode</strong> in Linux. Restricted privilege — this is Ring 3, restated the same way.</div>
+  </div>
+
+  <p class="reveal">So when the earlier articles said "the CPU checks a privilege flag before running dangerous instructions," this 2-bit field inside <code>cs</code> <em>is</em> that flag, made concrete. Changing CPL isn't something ordinary code does directly — it happens exactly at the moments you already know about: booting into Ring 0, executing a trap instruction like <code>syscall</code>, or handling a hardware interrupt.</p>
+</div>
+</section>
+
+<section id="descriptor">
+<div class="container">
+  <div class="section-num">04 — The Full Record</div>
+  <h2>The <span class="accent">Segment Descriptor</span></h2>
+  <p class="reveal">Every segment is described by an 8-byte <strong>Segment Descriptor</strong> — the "full record card" a selector's index field points to. This is where the actual substance lives: where the segment starts, how big it is, what it's for, and who's allowed to use it.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field</th><th>What It Holds</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Base</td><td>The linear address of the segment's first byte — this is exactly the "Segment Base Address" from the translation formula in the previous article.</td></tr>
+        <tr><td class="hl">Limit</td><td>The offset of the segment's last byte, bounding its length: up to 1MB (byte granularity) or up to 4GB (4KB granularity, via the G flag).</td></tr>
+        <tr><td class="hl">G</td><td>Granularity flag — 0 means Limit is in bytes, 1 means Limit is in 4096-byte units.</td></tr>
+        <tr><td class="hl">S</td><td>System flag — cleared (0) for system segments like the LDT or a TSS; set (1) for ordinary code/data segments.</td></tr>
+        <tr><td class="hl">Type</td><td>The segment's type and access rights (code? data? readable? writable? more below).</td></tr>
+        <tr><td class="hl">DPL</td><td>Descriptor Privilege Level — the <em>minimum</em> CPL required to access this segment. DPL 0 = Kernel-Mode-only; DPL 3 = accessible at any CPL.</td></tr>
+        <tr><td class="hl">P</td><td>Segment-Present flag — whether the segment is currently in memory. Linux always sets this to 1; it never swaps out whole segments.</td></tr>
+        <tr><td class="hl">D/B</td><td>Set if offsets in this segment are 32 bits wide, cleared if 16 bits.</td></tr>
+        <tr><td>AVL</td><td>Available for OS use — ignored entirely by Linux.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 DPL vs RPL — Don't Mix These Up</div>
+    <strong>DPL</strong> lives in the descriptor and is fixed: "the minimum privilege anyone needs to touch this segment." <strong>RPL</strong> lives in the selector and changes per access: "the privilege level this particular access claims to be happening at." The CPU checks both against the live CPL before allowing access — DPL is the lock, RPL and CPL are what gets compared against the key.
+  </div>
+</div>
+</section>
+
+<section id="types">
+<div class="container">
+  <div class="section-num">05 — Three Flavors</div>
+  <h2>Kinds of <span class="accent">Segment Descriptor</span></h2>
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Code Segment Descriptor</span></div><div class="fam-desc">S flag set (non-system). Describes a segment holding executable instructions. Can live in the GDT or an LDT.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--green)">Data Segment Descriptor</span></div><div class="fam-desc">S flag set. Describes ordinary data. Stack segments are actually implemented as regular data segments — there's no separate "stack descriptor" type.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">Task State Segment Descriptor (TSSD)</span></div><div class="fam-desc">S flag cleared (system segment). Describes a Task State Segment — a region used to save processor register contents. Can only appear in the GDT, never an LDT.</div></div>
+  </div>
+  <p class="reveal">Notice the pattern already forming: some descriptors go in a table every process can see (the GDT), while others can optionally live in a table private to one process (the LDT). What those two tables actually are, how the CPU finds them, and exactly how a selector's index turns into a real memory address — that's the entire subject of the next article, dedicated fully to the GDT.</p>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Segment Selector</div><div class="glossary-def">16-bit value (index + TI + RPL) that identifies which Segment Descriptor to use — held in a segmentation register.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TI (Table Indicator)</div><div class="glossary-def">1-bit field in a selector choosing between the GDT (0) and the current LDT (1).</div></div>
+    <div class="glossary-card"><div class="glossary-term">RPL (Requestor Privilege Level)</div><div class="glossary-def">2-bit field in a selector stating the privilege level this access is being made at.</div></div>
+    <div class="glossary-card"><div class="glossary-term">cs, ss, ds, es, fs, gs</div><div class="glossary-def">The six segmentation registers; cs and ss have fixed roles (code, stack), ds is conventionally data, the rest are general purpose.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CPL (Current Privilege Level)</div><div class="glossary-def">2-bit field inside cs giving the CPU's live privilege level right now — 0 (Kernel Mode) or 3 (User Mode) on Linux.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segment Descriptor</div><div class="glossary-def">8-byte record describing one segment: Base, Limit, G, S, Type, DPL, P, D/B, AVL.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DPL (Descriptor Privilege Level)</div><div class="glossary-def">Minimum CPL required to access a given segment, fixed inside its descriptor.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TSS / TSSD</div><div class="glossary-def">Task State Segment — stores saved processor register contents; described by a system-type descriptor found only in the GDT.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Segmentation in Hardware · Memory Addressing Series, Part 2</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: a whole article, just for the GDT.</p>
+</footer>
+
+<script>
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+</script>
+</body>
+</html>

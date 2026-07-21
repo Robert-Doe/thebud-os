@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The IDT — The GDT's Cousin for Dispatching Traps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)} h2 .accent.c{color:var(--cyan)} h2 .accent.g{color:var(--green)} h2 .accent.gold{color:var(--gold)} h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;background:rgba(167,139,250,.1);padding:.1rem .4rem;border-radius:4px;color:var(--purple);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout code{background:rgba(0,0,0,.2)}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)} td.pur{color:var(--purple);font-weight:600}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.68rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.family-card.hot{border-color:var(--gold2)}
+.family-card.hot .fam-count{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: gate-field strip, an anatomy diagram of one gate descriptor */
+.gate-anatomy{display:flex;flex-wrap:wrap;border:1.5px solid var(--purple);border-radius:10px;overflow:hidden;margin:1.8rem 0;background:var(--code-bg);}
+.gate-field{flex:1;min-width:120px;padding:1rem .9rem;border-right:1px solid var(--border);text-align:center;}
+.gate-field:last-child{border-right:none}
+.gate-field .gf-name{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--purple);margin-bottom:.4rem;}
+.gate-field .gf-val{font-family:'Source Code Pro',monospace;font-size:.82rem;color:var(--text);margin-bottom:.3rem;}
+.gate-field .gf-desc{font-size:.72rem;color:var(--muted);line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#bigidea" title="The Big Idea"></a>
+  <a class="toc-dot" href="#vectors" title="Vector Numbers"></a>
+  <a class="toc-dot" href="#idtr" title="idtr"></a>
+  <a class="toc-dot" href="#gates" title="Gate Descriptors"></a>
+  <a class="toc-dot" href="#math" title="The Arithmetic"></a>
+  <a class="toc-dot" href="#dispatch" title="Watch a Dispatch"></a>
+  <a class="toc-dot" href="#worked" title="Worked Example"></a>
+  <a class="toc-dot" href="#syscall" title="int 0x80"></a>
+  <a class="toc-dot" href="#compare" title="GDT vs IDT"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Control Structures · Companion Deep Dive · A Sibling to the GDT</div>
+    <h1>The IDT: The GDT's<br><span>Cousin for Traps</span></h1>
+    <p class="hero-sub">You already know the GDT: an array of 8-byte Segment Descriptors, found through <code>gdtr</code>, indexed by a selector's <code>index</code> field. You also already know there are three doors into the kernel — syscall, exception, interrupt — and that a trap frame gets pushed the instant any of them fires. What you don't know yet is the missing link: how the CPU decides, in the space of a few nanoseconds, <em>which exact function</em> to run once a trap fires. That's the Interrupt Descriptor Table's entire job, and it turns out to be the GDT's structural twin.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">256</div><div class="lbl">Possible Vector Numbers</div></div>
+      <div class="hero-stat"><div class="num">idtr</div><div class="lbl">The Register That Finds It</div></div>
+      <div class="hero-stat"><div class="num">16-byte</div><div class="lbl">Per Gate Descriptor (64-bit)</div></div>
+      <div class="hero-stat"><div class="num">×16</div><div class="lbl">Index Multiplier</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Two Loose Threads, <span class="accent">Left Dangling On Purpose</span></h2>
+  <p class="reveal">Two earlier pieces of this series each left you with an unfinished sentence. The GDT article told you, almost in passing, that the CPU consults a whole separate table to dispatch interrupts — "more on that elsewhere." The PCB/threads article told you there are three doors into Ring 0 — system call, exception, hardware interrupt — and that the instant any of them fires, the CPU pushes a small trap frame onto the kernel stack and jumps into a handler. It never told you <em>how the CPU picks the handler</em>. It just said a handler runs.</p>
+  <p class="reveal">Both loose threads tie off in the same place. That place is the <strong>Interrupt Descriptor Table (IDT)</strong> — and once you see it, you'll realize you already know 90% of how it works, because you learned the shape of this exact mechanism when you learned the GDT.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📎 Quick Refresher, In One Line Each</div>
+    <strong>GDT:</strong> array of 8-byte Segment Descriptors, base found via <code>gdtr</code>, indexed as <code>gdtr.base + index × 8</code>. <strong>Trap frame:</strong> the minimal PC/flags/registers bundle the CPU pushes to the kernel stack on <em>every</em> trip into Ring 0, regardless of which of the three doors was used. Keep both in your other hand — you'll need them in a minute.
+  </div>
+</div>
+</section>
+
+<!-- BIG IDEA -->
+<section id="bigidea">
+<div class="container">
+  <div class="section-num">01 — The Spine of This Whole Page</div>
+  <h2>The <span class="accent">Exact Same Shape</span>, One Field Different</h2>
+  <p class="reveal">Here's the parallel, stated as bluntly as possible, because everything below is just this sentence unpacked in more and more detail:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📖 GDT answers</h4>
+      "Which memory <em>segment</em> does this selector mean?" Found via <code>gdtr</code>. Indexed by a selector's <code>index</code> field — an arbitrary slot number chosen by whoever set up that segment.
+    </div>
+    <div class="compare-card bad">
+      <h4>📟 IDT answers</h4>
+      "Which <em>handler function</em> does this interrupt/exception/syscall number mean?" Found via <code>idtr</code> — <code>gdtr</code>'s sibling register. Indexed directly by a small integer called a <strong>vector number</strong>, 0–255.
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A GDT selector's <code>index</code> is a drawer number in the segment catalog — the CPU doesn't know or care what's in drawer 15 until it opens it. A <strong>vector number</strong> is a drawer number in an entirely different catalog: the CPU doesn't know or care what code runs for vector 14 until it opens <em>that</em> drawer. Same filing-cabinet idea, same "base register + index × entry-size" arithmetic, completely different cabinet, completely different thing being filed.
+  </div>
+
+  <p class="reveal">Think of the IDT as an emergency-services switchboard. You don't dial the fire department's direct line, the ambulance's direct line, and the police direct line separately — you dial one number, <strong>911</strong>, and the switchboard looks up exactly which responder to dispatch based on what you tell it. A vector number is the "911" the CPU dials. The IDT is the switchboard. The gate descriptor it looks up is the dispatch slip telling the CPU precisely which responder — which handler function — to send.</p>
+</div>
+</section>
+
+<!-- VECTOR NUMBERS -->
+<section id="vectors">
+<div class="container">
+  <div class="section-num">02 — The Index Into This Table</div>
+  <h2>What Exactly <span class="accent c">Is</span> a Vector Number?</h2>
+  <p class="reveal">A vector number is nothing mystical — it's just an integer from 0 to 255, because the IDT has exactly 256 possible slots. But unlike a GDT index (which the kernel assigns however it likes), the low end of vector-number space is <em>not up for grabs</em>: Intel reserved it, by hardware convention, for a fixed set of CPU-defined conditions.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">Vectors 0 – 31</span><span class="fam-count">Intel-reserved</span></div>
+      <div class="fam-desc">CPU-defined exceptions — the same on every x86 chip, not configurable by the OS. Faults, traps, and aborts the hardware itself decides to raise while executing an instruction.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Vectors 32 – 255</span><span class="fam-count">OS/hardware-assignable</span></div>
+      <div class="fam-desc">Free for the operating system to wire up however it wants — hardware interrupts (timer, keyboard, disk, network card) and software-triggered interrupts (like the legacy <code>int 0x80</code> Linux syscall vector).</div>
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Vector</th><th>Name</th><th>Kind</th><th>Fired By</th></tr></thead>
+      <tbody>
+        <tr><td class="pur">0</td><td>#DE — Divide Error</td><td class="neg">CPU exception</td><td><code>idiv</code> by zero, or overflow</td></tr>
+        <tr><td class="pur">3</td><td>#BP — Breakpoint</td><td class="neg">CPU exception</td><td><code>int3</code>, planted by debuggers</td></tr>
+        <tr><td class="pur">6</td><td>#UD — Invalid Opcode</td><td class="neg">CPU exception</td><td>CPU decodes bytes that aren't a real instruction</td></tr>
+        <tr><td class="pur">8</td><td>#DF — Double Fault</td><td class="neg">CPU exception</td><td>A fault occurs while handling another fault</td></tr>
+        <tr><td class="pur">13</td><td>#GP — General Protection Fault</td><td class="neg">CPU exception</td><td>Any of dozens of protection violations — bad selector, DPL mismatch, non-canonical address</td></tr>
+        <tr><td class="pur">14</td><td>#PF — Page Fault</td><td class="neg">CPU exception</td><td>Paging unit can't complete a memory access as requested</td></tr>
+        <tr><td class="hl">32</td><td>IRQ0 — Timer</td><td class="pos">Hardware interrupt</td><td>Programmable interval timer, remapped from legacy IRQ0</td></tr>
+        <tr><td class="hl">33</td><td>IRQ1 — Keyboard</td><td class="pos">Hardware interrupt</td><td>Keyboard controller, remapped from legacy IRQ1</td></tr>
+        <tr><td class="gold">128 (0x80)</td><td>Legacy Linux syscall gate</td><td class="gold">Software interrupt</td><td>User-mode <code>int 0x80</code> instruction, deliberately</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why 32?</b> The legacy 8259 PIC (Programmable Interrupt Controller) originally fired hardware IRQ0–IRQ15 straight onto vectors 0–15 — which collided head-on with Intel's own exception vectors once Intel later reserved 0–31 for itself. The now-standard fix, which every mainstream x86 OS performs at boot, is to <em>remap</em> the PIC (or configure the APIC) so hardware IRQs land on vectors 32 and up instead, safely clear of the reserved range.
+  </div>
+
+  <h3>Where the Word "Vector" Actually Comes From</h3>
+  <p class="reveal">It's not a marketing term. Back on the original 8086, running purely in real mode with no protection at all, the CPU didn't have an IDT — it had an <strong>Interrupt Vector Table (IVT)</strong>, hard-wired to always live at physical address 0. Each of its 256 entries was literally a 4-byte far pointer — a <em>vector</em>, in the mathematical sense of "a value that points somewhere" — straight to an interrupt handler, no descriptor, no privilege check, no protection whatsoever. The IDT is the protected-mode descendant of that idea: same 256-slot indexing scheme, same name for the index, but every entry upgraded from a bare pointer into a full gate descriptor with a selector, a type, and a DPL standing guard in front of it.</p>
+
+  <h3>Who Actually Writes These 256 Entries?</h3>
+  <p class="reveal">The IDT doesn't arrive pre-filled — it's just reserved memory until the kernel populates it, early in boot, before interrupts are ever turned on. Linux does this in its trap-and-interrupt initialization path (historically <code>trap_init()</code>, walking through <code>arch/x86/kernel/idt.c</code> today), calling helper functions with names like <code>set_intr_gate()</code> and <code>set_system_intr_gate()</code> once per vector — one call to wire vector 14 to <code>do_page_fault</code>, one to wire vector 0 to the divide-error handler, one (with DPL forced to 3) to wire vector 0x80 to the legacy syscall entry point, and so on, all before <code>lidt</code> ever runs to make the table live.</p>
+
+  <h3>One Layer Below the Vector: Who Assigns Hardware Interrupts a Number At All?</h3>
+  <p class="reveal">The "PIC remap" sidenote above skated past a real question: how does a physical keyboard controller end up tied to vector 33 specifically, rather than any other free slot? That's the job of the interrupt controller sitting between devices and the CPU — and which controller you have changes how that assignment happens.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">8259 PIC</span><span class="fam-count">legacy, single-core era</span></div>
+      <div class="fam-desc">A pair of chained chips offering 15 usable interrupt lines, each remapped to one fixed vector by the OS at boot. Simple, but has no real concept of "which CPU core should handle this" — awkward on multiprocessor hardware.</div>
+    </div>
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">APIC (Local + I/O)</span><span class="fam-count">modern standard</span></div>
+      <div class="fam-desc">The I/O APIC routes external device lines to a chosen vector <em>and</em> a chosen CPU core's Local APIC, which is what actually delivers the interrupt into that core's IDT dispatch. This is also how cores signal each other directly — an Inter-Processor Interrupt (IPI), the mechanism a scheduler uses to force a different core to reschedule right now — itself just another vector dispatched through that core's IDT.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- IDTR -->
+<section id="idtr">
+<div class="container">
+  <div class="section-num">03 — Finding the Table Itself</div>
+  <h2>The <span class="accent">idtr</span> Register</h2>
+  <p class="reveal">Exactly like the GDT, the IDT is just an array sitting somewhere in ordinary kernel RAM — and exactly like the GDT, the CPU needs a dedicated register to know where that array starts and how big it is. That register is <strong>idtr</strong>, and it is deliberately <code>gdtr</code>'s sibling in every structural sense: same job, same privilege requirements, different table.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">What idtr actually stores</span>
+    idtr = { base address of the IDT in RAM, size of the IDT in bytes }
+    <span class="sub">Loaded once, typically at boot, via the privileged <code>lidt</code> instruction — the direct counterpart to <code>lgdt</code> for the GDT.</span>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why idtr Is Locked Down Exactly Like gdtr</div>
+    If user-mode code could repoint <code>idtr</code> at memory of its own choosing, it could fabricate a gate descriptor for, say, vector 14 (page fault) that jumps straight into attacker-controlled code running at Ring 0 — the instant any process anywhere on the machine faults. <code>lidt</code> is refused outside Ring 0 for the identical silicon-level reason <code>lgdt</code> is: whoever controls the dispatch table controls what "the kernel" even means.
+  </div>
+
+  <p class="reveal">There's an even more literal way in which <code>gdtr</code> and <code>idtr</code> are twins: the memory operand <code>lgdt</code> and <code>lidt</code> each read from is the exact same shape of structure, called a <strong>pseudo-descriptor</strong>. Both instructions expect a tiny packed record in RAM — not the table itself, just directions to it — and both interpret that record identically.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field</th><th>Size</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Limit</td><td>2 bytes</td><td>Size of the table in bytes, minus 1 — so 256 gate descriptors × 16 bytes gives a limit of 4095</td></tr>
+        <tr><td class="hl">Base Address</td><td>8 bytes (64-bit mode) / 4 bytes (32-bit mode)</td><td>The linear address of the table's very first byte</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Load a 10-byte pseudo-descriptor with <code>lidt</code>, and the CPU copies those two fields straight into the live <code>idtr</code> register. Load an identically-shaped pseudo-descriptor with <code>lgdt</code>, and it lands in <code>gdtr</code> instead. Same packing format, same instruction family, same privilege requirement — only the destination register differs.</p>
+</div>
+</section>
+
+<!-- GATES -->
+<section id="gates">
+<div class="container">
+  <div class="section-num">04 — What's Actually Sitting In Each Slot</div>
+  <h2>Gate Descriptors, Not <span class="accent">Segment Descriptors</span></h2>
+  <p class="reveal">Here's the one place the parallel bends slightly, and it's worth being precise about it. A GDT slot holds a <em>Segment Descriptor</em> — a description of a chunk of memory. An IDT slot holds something with a different name and a different job: a <strong>Gate Descriptor</strong> — a description of exactly one handler entry point, plus the rules for who's allowed to walk through that gate.</p>
+  <p class="reveal">Gate descriptors are 8 bytes wide in 32-bit mode — the same size as a Segment Descriptor, pure coincidence of history — but 16 bytes wide in 64-bit (long) mode, because a 64-bit handler address needs more room than an 8-byte slot can hold. They come in three flavors:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">Interrupt Gate</span><span class="fam-count">IF cleared</span></div>
+      <div class="fam-desc">Jumps to the handler and <strong>automatically clears the interrupt flag (IF)</strong> on entry — the CPU won't be interrupted again mid-handler unless that handler explicitly re-enables interrupts itself. The default choice for most hardware interrupt and exception handlers, where you don't want a second interrupt landing on top of the first before it's been dealt with.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Trap Gate</span><span class="fam-count">IF untouched</span></div>
+      <div class="fam-desc">Functionally almost identical — same selector+offset jump — but does <strong>not</strong> auto-clear IF. Interrupts stay enabled through the handler. More typically used for things like debug exceptions, where keeping interrupts live during the handler is actually desirable rather than dangerous.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Task Gate</span><span class="fam-count">mostly obsolete</span></div>
+      <div class="fam-desc">An older x86 mechanism that triggers a full hardware task switch (via a Task State Segment) instead of a plain jump. Almost no modern OS uses it — software-managed context switching, the kind covered in the PCB article, made this hardware feature redundant.</div>
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why the IF-Clearing Choice Actually Matters</div>
+    Picture a hardware interrupt handler that <em>didn't</em> clear IF on entry, servicing a device that keeps re-firing the same interrupt line before the handler finishes. Without the automatic clear, a second copy of the same handler could start before the first one returns — stacking up recursively, corrupting whatever shared state the handler touches, potentially never unwinding. That is exactly the failure mode Interrupt Gates exist to prevent by default. Trap Gates deliberately opt back into the risk only where it's actually safe — a debug exception handler, for instance, generally isn't going to re-trigger itself in a tight loop the way a busy device interrupt could.
+  </div>
+
+  <p class="reveal">Whichever flavor, every gate descriptor holds the same three load-bearing pieces of information:</p>
+
+  <div class="gate-anatomy reveal">
+    <div class="gate-field">
+      <div class="gf-name">Segment Selector</div>
+      <div class="gf-val">e.g. 0x08</div>
+      <div class="gf-desc">Points, via the GDT (yes — back through the very table from the previous article), at the code segment the handler lives in.</div>
+    </div>
+    <div class="gate-field">
+      <div class="gf-name">Offset</div>
+      <div class="gf-val">e.g. 0xffffffff81234560</div>
+      <div class="gf-desc">The handler's actual entry-point address within that code segment — split across a few sub-fields to make room for a full 64-bit address.</div>
+    </div>
+    <div class="gate-field">
+      <div class="gf-name">DPL</div>
+      <div class="gf-val">0, 1, 2, or 3</div>
+      <div class="gf-desc">Whether user-mode code is even allowed to <em>voluntarily</em> trigger this vector via a software interrupt instruction — the single field that decides who's allowed to dial this particular extension.</div>
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why DPL Lives on the Gate, Not Just the Handler</div>
+    A hardware interrupt or CPU exception doesn't ask permission — the timer fires, a page fault happens, and the CPU dispatches through the gate regardless of DPL. DPL only matters for <strong>software-triggered</strong> vectors, raised deliberately by an <code>int n</code> instruction from user code. There, DPL is the gatekeeper: attempt <code>int 14</code> from Ring 3 against a DPL-0 gate, and you get a general protection fault instead of a page-fault handler running on demand. This is precisely why one specific vector — the legacy Linux syscall gate — is set up differently, which the <a href="#syscall" style="color:var(--purple)">syscall section below</a> covers in full.
+  </div>
+
+  <h3>What's Actually Packed Into Those 16 Bytes</h3>
+  <p class="reveal">The "gate-field" boxes above are the conceptual version. The literal 64-bit-mode bit layout is a little more cramped, because a 64-bit offset has to be split into pieces to fit around the older, narrower fields that history left in place:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Bits</th><th>Field</th><th>What it holds</th></tr></thead>
+      <tbody>
+        <tr><td class="pur">0–15</td><td>Offset 15:0</td><td>Low 16 bits of the handler's entry-point address</td></tr>
+        <tr><td class="pur">16–31</td><td>Segment Selector</td><td>The GDT selector for the handler's code segment</td></tr>
+        <tr><td class="pur">32–34</td><td>IST</td><td>Interrupt Stack Table index (0 = use the normal stack-switch rules)</td></tr>
+        <tr><td class="pur">35–39</td><td>Reserved</td><td>Must be zero</td></tr>
+        <tr><td class="pur">40–43</td><td>Gate Type</td><td>0xE = Interrupt Gate, 0xF = Trap Gate</td></tr>
+        <tr><td class="pur">45–46</td><td>DPL</td><td>Privilege level allowed to reach this gate via software interrupt</td></tr>
+        <tr><td class="pur">47</td><td>Present (P)</td><td>1 if this gate is actually in use; 0 causes a #NP fault if dispatched</td></tr>
+        <tr><td class="pur">48–63</td><td>Offset 31:16</td><td>Middle 16 bits of the handler address</td></tr>
+        <tr><td class="pur">64–95</td><td>Offset 63:32</td><td>High 32 bits of the handler address</td></tr>
+        <tr><td class="pur">96–127</td><td>Reserved</td><td>Must be zero</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What's an IST?</b> The <strong>Interrupt Stack Table</strong> is a small x86-64 feature that lets a specific gate force the CPU onto one of a handful of pre-designated, always-known-good kernel stacks, instead of whatever stack happens to be live. It exists for exactly the vectors where you can't trust the current stack pointer at all — a double fault or an NMI arriving in the middle of an already-corrupted stack is precisely the scenario IST was built for. Most gates leave IST at 0 and use ordinary stack-switch rules; only a handful of the scariest vectors bother setting it.
+  </div>
+</div>
+</section>
+
+<!-- MATH -->
+<section id="math">
+<div class="container">
+  <div class="section-num">05 — The Arithmetic</div>
+  <h2>Turning a Vector Into a <span class="accent">Real Address</span></h2>
+  <p class="reveal">And here's where the GDT parallel stops being a metaphor and becomes literally the same formula, just with different numbers plugged in. Every gate descriptor is a fixed size, so finding gate number <code>vector</code> is, again, plain array indexing.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The IDT lookup formula (64-bit mode)</span>
+    Gate Descriptor Address = idtr.base + (vector × 16)
+    <span class="sub">In 32-bit mode this is idtr.base + (vector × 8) — same shape, smaller slot, because a 32-bit offset fits in less room.</span>
+  </div>
+
+  <p class="reveal">Set that next to the formula from the GDT article and the family resemblance is impossible to miss:</p>
+
+  <div class="formula gold reveal">
+    <span class="label">Side by side</span>
+    Descriptor Address = gdtr.base + (selector.index × 8)
+    Gate Address        = idtr.base  + (vector × 16)
+    <span class="sub">base register + index × fixed-entry-size. Same instruction shape in the CPU's microcode either way — only the register, the multiplier, and what's stored at the far end differ.</span>
+  </div>
+
+  <p class="reveal">Once the CPU has that gate descriptor in hand, it isn't computing a linear address the way a GDT lookup does — it's extracting a code selector and an offset, and preparing to <em>jump</em> there, not just read data from there. That's the next section.</p>
+
+  <p class="reveal">Worth running the numbers concretely, because "×16 instead of ×8" sounds like a footnote until you see how quickly it separates two vectors' storage in memory:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Vector</th><th>32-bit mode (×8)</th><th>64-bit mode (×16)</th></tr></thead>
+      <tbody>
+        <tr><td class="pur">0</td><td>base + 0</td><td>base + 0</td></tr>
+        <tr><td class="pur">14 (page fault)</td><td>base + 112</td><td>base + 224</td></tr>
+        <tr><td class="pur">32 (timer)</td><td>base + 256</td><td>base + 512</td></tr>
+        <tr><td class="gold">128 / 0x80 (syscall)</td><td>base + 1024</td><td>base + 2048</td></tr>
+        <tr><td class="pur">255 (last possible slot)</td><td>base + 2040</td><td>base + 4080</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- DISPATCH CANVAS -->
+<section id="dispatch">
+<div class="container">
+  <div class="section-num">06 — Watch It Happen</div>
+  <h2>A Live <span class="accent">Vector Dispatch</span></h2>
+  <p class="reveal">Pick a vector and watch the CPU walk from raw integer, to <code>idtr</code>, to gate descriptor, to a live jump into a specific handler function — the exact mechanism that was left unexplained back in the PCB/threads article.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="idtLabel">▶ Choose a vector to dispatch</div>
+    <canvas id="idtCanvas" height="400"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runIDT(14)">▶ Vector 14 — page fault</button>
+    <button class="ctrl-btn cyan" onclick="runIDT(32)">▶ Vector 32 — timer IRQ</button>
+    <button class="ctrl-btn" onclick="runIDT(128)">▶ Vector 128 (0x80) — legacy syscall</button>
+    <button class="ctrl-btn red" onclick="resetIDT()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- WORKED EXAMPLE -->
+<section id="worked">
+<div class="container">
+  <div class="section-num">07 — Play By Play</div>
+  <h2>A Worked <span class="accent">Example</span>: a Page Fault, Start to Finish</h2>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Something happens</strong>A running program dereferences a pointer into a page that isn't currently mapped. The paging unit can't complete the access, so the CPU raises hardware vector <strong>14</strong> — the page-fault exception.</div></li>
+    <li><div class="step-body"><strong>CPU consults idtr</strong>Before anything else, the CPU reads the IDT's base address straight out of the <code>idtr</code> register — say, for illustration, <code>0xfffffe0000000000</code>.</div></li>
+    <li><div class="step-body"><strong>Compute the gate descriptor's address</strong><code>0xfffffe0000000000 + (14 × 16) = 0xfffffe00000000e0</code>. Structurally the exact same "base + index × size" arithmetic as a GDT lookup — just idtr instead of gdtr, and a fixed 16-byte size instead of 8.</div></li>
+    <li><div class="step-body"><strong>CPU reads the gate descriptor</strong>It unpacks a code-segment selector and an offset — together, the entry point of whatever function the kernel registered for vector 14. On Linux, that's the page-fault handler.</div></li>
+    <li><div class="step-body"><strong>Ring-transition machinery runs</strong>Everything covered elsewhere in this series clicks in here: the CPU switches to the kernel stack (via the TSS, if a ring change is needed), pushes the trap frame — PC, flags, faulting stack pointer, a handful of registers — and only then jumps to the exact address the gate descriptor named.</div></li>
+    <li><div class="step-body"><strong>The specific handler runs</strong>The function Linux registered for vector 14 executes. It has access to <strong>CR2</strong> (a dedicated register the CPU also loads with the exact faulting address) and the error code pushed alongside the trap frame, and decides what to do — grow the stack, page something in from disk, or send the process a fatal <code>SIGSEGV</code> if the access was simply invalid.</div></li>
+  </ol>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Notice What Just Connected</div>
+    Step 5 is exactly the trap-frame push the PCB/threads article described as happening on "any of the three doors," without explaining how the CPU knew where to jump <em>to</em>. Steps 2–4 are that missing piece: the IDT dispatch is what runs <em>before</em> the trap frame finishes landing, and it's what decides which specific handler code the trap frame is even being built for.
+  </div>
+
+  <h3>What If Step 2 Itself Fails?</h3>
+  <p class="reveal">Worth asking, because it's exactly what the earlier IST sidenote was setting up: what happens if <code>idtr</code> points somewhere corrupted, or the current stack is already broken when a fault lands? The CPU doesn't just silently misbehave — it raises <strong>vector 8, the double fault</strong>, a dedicated exception that exists specifically to catch "a fault occurred while trying to service another fault." This is precisely the scenario a gate's IST field is built for: the double-fault gate is normally configured to force dispatch onto a small, always-clean, pre-reserved stack via IST, rather than trusting whatever stack pointer got the CPU into trouble in the first place. And if <em>that</em> fails too — a fault while already handling a double fault — there's nowhere left to go: the CPU gives up and triple-faults, which on real hardware means an immediate reset.</p>
+</div>
+</section>
+
+<!-- SYSCALL DPL -->
+<section id="syscall">
+<div class="container">
+  <div class="section-num">08 — One Vector, Deliberately Different</div>
+  <h2>Why <span class="accent gold">int 0x80</span> Is Allowed to Work</h2>
+  <p class="reveal">Page faults and timer ticks are involuntary — the CPU raises them on its own, and DPL is irrelevant because user code never asked for them. But there's a third category from the vector table above: <strong>software interrupts</strong>, deliberately triggered by user-mode code executing an <code>int n</code> instruction. And for those, DPL is the entire ballgame.</p>
+  <p class="reveal">Old-style Linux x86 syscalls work by having user-mode code load syscall arguments into registers and then execute <code>int 0x80</code> — vector 128, decimal. That instruction is, mechanically, no different from a stray, buggy <code>int 14</code>: it asks the CPU to dispatch through a specific IDT gate. The only reason it's allowed to succeed at all, instead of faulting immediately, is one field on that specific gate descriptor:</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">🔑 The One Fact That Makes int 0x80 Legal</div>
+    Vector 128's gate descriptor is deliberately configured with <code>DPL = 3</code>. That's it. That's the whole mechanism. Every other vector a user program might try to <code>int</code> into — including 14, including 32 — has a gate DPL of 0, so the CPU refuses the attempt with a general protection fault before the handler ever runs. Vector 128 is the one door in the whole 256-slot table the kernel deliberately propped open for Ring 3 to knock on.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why "legacy"?</b> Modern x86-64 Linux mostly uses a dedicated <code>syscall</code> instruction instead, paired with model-specific registers (not the IDT at all) to jump straight to the syscall entry point — faster than the full interrupt-dispatch path, because it skips a lot of the gate-lookup and privilege-check machinery. <code>int 0x80</code> still works today, kept alive mainly for 32-bit compatibility and old binaries, which is exactly why it's the version worth learning first: it's the one that actually goes through the IDT you just spent this whole page learning.
+  </div>
+
+  <p class="reveal">Once <code>int 0x80</code>'s gate has been located and its DPL check passed, everything downstream is identical to the page-fault walkthrough above: ring transition, trap frame push, jump to the registered handler — in this case, the kernel's central syscall dispatcher, which reads the syscall number out of a register and routes to the specific <code>read()</code>, <code>write()</code>, or <code>fork()</code> implementation the PCB article already introduced you to.</p>
+
+  <h3>The Faster Path That Skips the IDT Entirely</h3>
+  <p class="reveal">It's worth being precise about what the modern <code>syscall</code> instruction actually skips, since "faster" undersells it. It bypasses the IDT lookup, the gate-type check, and the DPL check completely — it was designed from the ground up to avoid exactly the machinery this whole page has been walking through.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐢 int 0x80 — through the IDT</h4>
+      Raises vector 128, which forces a real IDT lookup: <code>idtr.base + 128×16</code>, a gate-descriptor fetch, a DPL=3 check against CPL=3, <em>then</em> the ring transition and trap frame push. Every step from this page runs, in full, on every single legacy syscall.
+    </div>
+    <div class="compare-card good">
+      <h4>⚡ syscall — bypasses the IDT</h4>
+      The handler address isn't looked up in any table at boot-configured lookup time — it's read straight out of a Model-Specific Register, <code>IA32_LSTAR</code>, set once by the kernel at startup. No vector, no gate descriptor, no DPL check: the instruction itself is only usable from Ring 3 by definition, so there's nothing left to gate.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>So is the IDT irrelevant on a modern 64-bit Linux box?</b> Not remotely — exceptions and hardware interrupts still have nowhere else to go, so vectors 0–31 and 32+ still dispatch exactly as described on this page, every single time a page faults or a timer tick lands. It's specifically the syscall <em>entry path</em> that grew a shortcut; the fault and interrupt paths never did, because those can't be triggered by a cooperative instruction with known-fixed semantics the way a syscall can.
+  </div>
+</div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">09 — Side by Side, One Last Time</div>
+  <h2><span class="accent">GDT</span> vs <span class="accent gold">IDT</span></h2>
+  <p class="reveal">Everything above, condensed into one table you can actually keep in your head.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Question</th><th>GDT</th><th>IDT</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">What does it map?</td><td>Which memory segment a selector means</td><td>Which handler function a vector means</td></tr>
+        <tr><td class="hl">Found via which register?</td><td class="gold">gdtr</td><td class="pur">idtr</td></tr>
+        <tr><td class="hl">What is "index"?</td><td>An arbitrary slot number, assigned by the kernel</td><td>A vector number, 0–255, partly reserved by Intel</td></tr>
+        <tr><td class="hl">Entry size</td><td>8 bytes</td><td>8 bytes (32-bit) / 16 bytes (64-bit)</td></tr>
+        <tr><td class="hl">Entry type name</td><td>Segment Descriptor</td><td>Gate Descriptor (Interrupt / Trap / Task)</td></tr>
+        <tr><td class="hl">Lookup formula</td><td>gdtr.base + index × 8</td><td>idtr.base + vector × 16</td></tr>
+        <tr><td class="hl">Who can trigger a lookup?</td><td>Any instruction that loads or uses a segment register</td><td>The CPU itself (faults, IRQs) — plus user code, only for gates with DPL = 3</td></tr>
+        <tr><td class="hl">Loaded via</td><td><code>lgdt</code> (privileged)</td><td><code>lidt</code> (privileged)</td></tr>
+        <tr><td class="hl">Pseudo-descriptor format</td><td>2-byte limit + base</td><td>2-byte limit + base — identical shape</td></tr>
+        <tr><td class="hl">What a lookup produces</td><td>Base/Limit/Type/DPL for a memory segment</td><td>Selector/Offset/DPL for a code jump target</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📌 The One-Sentence Takeaway</div>
+    The GDT and the IDT are the same idea — a base register plus a fixed-size index into an array the kernel alone controls — pointed at two completely different problems: one describing <em>where memory lives</em>, the other describing <em>which code runs when something happens</em>.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">IDT (Interrupt Descriptor Table)</div><div class="glossary-def">The system-wide array of Gate Descriptors that vector numbers index into, dispatching syscalls, exceptions, and hardware interrupts to specific handler code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">idtr</div><div class="glossary-def">Control register holding the IDT's base address and size in RAM; loaded only via the privileged <code>lidt</code> instruction, gdtr's sibling.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Vector Number</div><div class="glossary-def">An integer 0–255 identifying which IDT slot to dispatch through — 0–31 reserved by Intel for CPU exceptions, 32–255 free for OS/hardware assignment.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Gate Descriptor</div><div class="glossary-def">An IDT entry (8 bytes in 32-bit mode, 16 in 64-bit mode) holding a code selector, an offset, and a DPL — the IDT's counterpart to a GDT Segment Descriptor.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt Gate</div><div class="glossary-def">A gate type that automatically clears the interrupt flag (IF) on entry, preventing nested interrupts unless the handler re-enables them explicitly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trap Gate</div><div class="glossary-def">A gate type functionally similar to an Interrupt Gate but that leaves IF untouched — interrupts stay enabled through the handler, typically used for debug exceptions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Task Gate</div><div class="glossary-def">A largely obsolete gate type that triggers a hardware task switch via a TSS instead of a plain jump; superseded by software-managed context switching.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DPL (on a gate)</div><div class="glossary-def">Controls whether user-mode code may voluntarily trigger this specific vector with a software interrupt instruction — the field that makes int 0x80 legal while int 14 is not.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CR2</div><div class="glossary-def">The control register the CPU loads with the faulting linear address whenever a page fault (vector 14) occurs, read by the page-fault handler.</div></div>
+    <div class="glossary-card"><div class="glossary-term">int 0x80</div><div class="glossary-def">The legacy Linux software-interrupt syscall mechanism — vector 128, whose gate descriptor is deliberately set to DPL 3 so Ring 3 code can trigger it on purpose.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Pseudo-Descriptor</div><div class="glossary-def">The small packed { limit, base } record that lgdt/lidt read from memory to load gdtr/idtr — same shape for both instructions, only the destination register differs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IST (Interrupt Stack Table)</div><div class="glossary-def">A per-gate field forcing dispatch onto one of a few pre-designated, always-known-good kernel stacks — used for vectors like double fault and NMI where the current stack can't be trusted.</div></div>
+    <div class="glossary-card"><div class="glossary-term">syscall / IA32_LSTAR</div><div class="glossary-def">The modern fast syscall path: a dedicated instruction that reads its handler address from a Model-Specific Register instead of performing an IDT lookup at all.</div></div>
+    <div class="glossary-card"><div class="glossary-term">APIC (Local + I/O)</div><div class="glossary-def">The modern successor to the 8259 PIC: the I/O APIC routes device lines to a chosen vector and CPU core; each core's Local APIC delivers the interrupt into that core's own IDT dispatch.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IPI (Inter-Processor Interrupt)</div><div class="glossary-def">An interrupt one CPU core sends directly to another via the Local APIC — commonly used to force a remote core to reschedule — dispatched through the IDT exactly like any other vector.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Double Fault (#DF, vector 8)</div><div class="glossary-def">The dedicated exception raised when a fault occurs while the CPU is already trying to service another fault; typically forced onto a dedicated IST stack since the current stack can't be trusted.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The IDT · A Companion Deep Dive to "The GDT," OS Sweet Stories Series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same catalog shape, one entirely different set of drawers.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0',teal:'#0d9488'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const IDT_PRESETS={
+  14:{name:'Page Fault (vector 14)',short:'#PF',kind:'CPU exception',selector:'0x08',offset:'0xffffffff81234560',gate:'Interrupt Gate',dpl:'0',handler:'do_page_fault()',note:'IF auto-cleared — no nested interrupts mid-handler. Handler reads CR2 for the faulting address.',range:0},
+  32:{name:'Timer IRQ (vector 32)',short:'IRQ0',kind:'Hardware interrupt',selector:'0x08',offset:'0xffffffff81045200',gate:'Interrupt Gate',dpl:'0',handler:'timer_interrupt()',note:'Hardware-raised; DPL=0 means user code could never trigger this on its own.',range:1},
+  128:{name:'Legacy syscall (vector 0x80)',short:'int80',kind:'Software interrupt',selector:'0x08',offset:'0xffffffff81a00010',gate:'Interrupt Gate',dpl:'3',handler:'system_call()',note:'DPL=3 is the ONE reason Ring 3 code is allowed to dispatch this vector on purpose.',range:1}
+};
+
+function vecToX(vec,x0,x1){
+  // 0..255 mapped across the bar, with a slight visual compression so 0-31 stays legible
+  return x0 + (x1-x0) * (vec/255);
+}
+
+function drawIDT(t,phase,vec){
+  const canvas=document.getElementById('idtCanvas');
+  const W=gW(canvas),H=400;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const p=IDT_PRESETS[vec]||IDT_PRESETS[14];
+
+  // VECTOR box
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(14,14,W*0.24,64);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(14,14,W*0.24,64);
+  ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('VECTOR',14+W*0.12,32);
+  ctx.font='11px Source Code Pro,monospace';
+  ctx.fillText('#'+vec+'  ('+p.short+')',14+W*0.12,50);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(p.kind,14+W*0.12,64);
+
+  // idtr box
+  ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(W*0.35,14,W*0.26,64);
+  ctx.strokeStyle=C.purple;ctx.strokeRect(W*0.35,14,W*0.26,64);
+  ctx.fillStyle=C.purple;ctx.font='bold 11px Source Code Pro,monospace';
+  ctx.fillText('idtr',W*0.35+W*0.13,32);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('base = 0xfffffe0000000000',W*0.35+W*0.13,50);
+  ctx.fillText('256 slots × 16 bytes',W*0.35+W*0.13,62);
+
+  // formula box
+  ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(W*0.64,14,W*0.34,64);
+  ctx.strokeStyle=C.gold;ctx.strokeRect(W*0.64,14,W*0.34,64);
+  ctx.fillStyle=C.gold;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('base + vector×16',W*0.64+W*0.17,32);
+  ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText('= base + '+(vec*16),W*0.64+W*0.17,50);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('(bytes into the table)',W*0.64+W*0.17,62);
+
+  // 0..255 vector-space bar
+  const barY=112, barH=26, x0=24, x1=W-24;
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('THE 256-SLOT VECTOR SPACE',x0,barY-8);
+  const split=vecToX(32,x0,x1);
+  ctx.fillStyle='rgba(248,113,113,.16)';ctx.fillRect(x0,barY,split-x0,barH);
+  ctx.fillStyle='rgba(13,148,136,.18)';ctx.fillRect(split,barY,x1-split,barH);
+  ctx.strokeStyle=C.border;ctx.strokeRect(x0,barY,x1-x0,barH);
+  ctx.strokeStyle=C.muted;ctx.beginPath();ctx.moveTo(split,barY);ctx.lineTo(split,barY+barH);ctx.stroke();
+  ctx.font='8px Source Code Pro,monospace';ctx.fillStyle=C.red;ctx.textAlign='left';
+  ctx.fillText('0–31 Intel-reserved',x0+4,barY+barH+12);
+  ctx.fillStyle=C.teal;ctx.textAlign='right';
+  ctx.fillText('32–255 OS-assignable',x1-4,barY+barH+12);
+
+  // marker on bar for current vector
+  const mx=vecToX(vec,x0,x1);
+  const hi=(phase==='step3'||phase==='step4'||t===0&&phase==='idle');
+  ctx.beginPath();ctx.moveTo(mx,barY-6);ctx.lineTo(mx-6,barY-16);ctx.lineTo(mx+6,barY-16);ctx.closePath();
+  ctx.fillStyle=C.gold;ctx.fill();
+  ctx.fillStyle=C.gold;ctx.font='bold 9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('vector '+vec,mx,barY-20);
+
+  // gate descriptor detail box
+  const gateY=barY+barH+34;
+  ctx.fillStyle='rgba(167,139,250,.09)';ctx.fillRect(W*0.12,gateY,W*0.76,92);
+  ctx.strokeStyle=C.purple;ctx.strokeRect(W*0.12,gateY,W*0.76,92);
+  ctx.fillStyle=C.purple;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('GATE DESCRIPTOR #'+vec+' ('+p.gate+')',W*0.5,gateY+20);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText('Selector='+p.selector+'   Offset='+p.offset,W*0.5,gateY+40);
+  ctx.fillText('DPL='+p.dpl,W*0.5,gateY+56);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  wrapText(ctx,p.note,W*0.5,gateY+74,W*0.68,11);
+
+  // handler box
+  const hY=gateY+92+30;
+  ctx.fillStyle='rgba(74,222,128,.09)';ctx.fillRect(W*0.22,hY,W*0.56,54);
+  ctx.strokeStyle=C.green;ctx.strokeRect(W*0.22,hY,W*0.56,54);
+  ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('HANDLER: '+p.handler,W*0.5,hY+24);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('CPU jumps here — trap frame already pushed',W*0.5,hY+40);
+
+  const captions={
+    idle:'Choose a vector above to run the dispatch',
+    step1:'Vector raised: #'+vec+' — '+p.name,
+    step2:'CPU reads idtr for the IDT’s base address',
+    step3:'Compute gate address: idtr.base + vector×16',
+    step4:'Locate that slot among the 256-entry table',
+    step5:'Fetch the Gate Descriptor — selector, offset, type, DPL',
+    step6:'Ring-transition + trap frame push, then jump to the handler'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+
+  if(phase==='step6'){
+    ctx.strokeStyle=C.green;ctx.setLineDash([4,3]);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(W*0.5,gateY+92);ctx.lineTo(W*0.5,hY);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='',lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxW && line){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  ctx.textAlign='center';
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,y+i*lh));
+}
+
+function runIDT(vec){
+  const phases=['step1','step2','step3','step4','step5','step6'];
+  const durations=[400,450,500,450,550,600];
+  let i=0,start=performance.now();
+  document.getElementById('idtLabel').textContent='▶ Dispatching '+(IDT_PRESETS[vec]?IDT_PRESETS[vec].name:'vector');
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[i]);
+    drawIDT(t,phases[i],vec);
+    if(t>=1){i++;if(i>=phases.length){document.getElementById('idtLabel').textContent='▶ Done — try another vector above';return;}start=now;}
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetIDT(){document.getElementById('idtLabel').textContent='▶ Choose a vector to dispatch';drawIDT(0,'idle',14);}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetIDT);
+window.addEventListener('resize',resetIDT);
+</script>
+</body>
+</html>

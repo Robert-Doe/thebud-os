@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crossing the Ring — The Full Anatomy of a Privilege Transition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:960px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)} h2 .accent.g{color:var(--gold)} h2 .accent.r{color:var(--red)} h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;background:rgba(56,189,248,.08);padding:.1rem .4rem;border-radius:4px;color:var(--cyan);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.7rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .5rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bitfield diagram (from Segmentation in Hardware module) */
+.bitfield{display:flex;border:1.5px solid var(--gold2);border-radius:8px;overflow:hidden;margin:1.8rem 0;font-family:'Source Code Pro',monospace;}
+.bitfield .bf-seg{padding:1.2rem .5rem;text-align:center;border-right:1px solid var(--border);}
+.bitfield .bf-seg:last-child{border-right:none}
+.bitfield .bf-name{font-size:.85rem;font-weight:700;margin-bottom:.3rem;}
+.bitfield .bf-bits{font-size:.68rem;color:var(--muted);}
+
+/* NEW bespoke component — stack-diagram: before/after the trap */
+.stack-diagram{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.stack-diagram{grid-template-columns:1fr}}
+.stack-col{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.stack-col .stack-head{padding:.7rem 1rem;font-family:'Source Code Pro',monospace;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);}
+.stack-col.user .stack-head{color:var(--purple);background:rgba(167,139,250,.08)}
+.stack-col.kernel .stack-head{color:var(--cyan);background:rgba(56,189,248,.08)}
+.stack-col .stack-body{padding:1rem;display:flex;flex-direction:column;gap:.4rem;}
+.stack-box{border:1px solid var(--border);border-radius:6px;padding:.5rem .8rem;font-family:'Source Code Pro',monospace;font-size:.82rem;display:flex;justify-content:space-between;align-items:center;background:var(--card);}
+.stack-box .sb-name{color:var(--text);font-weight:600;}
+.stack-box .sb-note{color:var(--muted);font-size:.72rem;text-align:right;}
+.stack-box.new{border-color:var(--cyan);background:rgba(56,189,248,.08);}
+.stack-box.errc{border-color:var(--red);background:rgba(248,113,113,.08);}
+.stack-box.esp0{border-color:var(--gold);background:rgba(245,200,66,.08);}
+.stack-arrow{text-align:center;color:var(--muted);font-size:.75rem;font-family:'Source Code Pro',monospace;padding:.3rem 0;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#why" title="Why a Stack Switch"></a>
+  <a class="toc-dot" href="#tss" title="The TSS"></a>
+  <a class="toc-dot" href="#trapframe" title="The Trap Frame, Concretely"></a>
+  <a class="toc-dot" href="#syscall" title="syscall / sysret"></a>
+  <a class="toc-dot" href="#roundtrip" title="The Full Round Trip"></a>
+  <a class="toc-dot" href="#gates" title="Call & Task Gates"></a>
+  <a class="toc-dot" href="#compare" title="Two Paths Compared"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Segmentation &amp; Privilege · Companion Deep-Dive · Crossing the Ring</div>
+    <h1>Crossing the<br><span>Ring</span></h1>
+    <p class="hero-sub">You know CPL lives inside <code>cs</code>. You know the trap frame gets saved on every trip into the kernel. This page is where those two facts collide: the exact, mechanical, register-by-register, byte-by-byte story of what the CPU does the instant a Ring 3 program asks the kernel for a favor — and how it undoes every bit of it on the way back out, leaving no trace the user program can see.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">5</div><div class="lbl">Values Pushed Automatically</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Hardware Transition Mechanisms</div></div>
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">MSRs Behind syscall</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Bytes the Kernel Trusts on the User Stack</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- WHY A STACK SWITCH -->
+<section id="why">
+<div class="container">
+  <div class="section-num">01 — The Problem Nobody Mentions</div>
+  <h2>Why a Ring Transition <span class="accent">Needs a New Stack</span></h2>
+
+  <p class="reveal">Here's a question that sounds pedantic until you actually think it through: when a Ring 3 program calls into the kernel, whose <strong>stack</strong> does the kernel code run on?</p>
+
+  <p class="reveal">Your gut answer is probably "the same one — why would it change?" And that gut answer is exactly the bug that would exist if CPUs didn't handle this specially. The user program's stack is pointed to by <code>ss:esp</code> (or <code>ss:rsp</code> in 64-bit mode) — an address the <em>user program itself</em> controls. It set that pointer. It can move it. It can hand the kernel a stack pointer that's deliberately garbage, or one that points into memory it doesn't even own, or one that's one push away from wrapping around into something sensitive.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Actually Matters</div>
+    If the kernel's privileged handler code kept using that same, attacker-controlled <code>esp</code> the moment CPL flipped to 0, then every local variable the kernel pushes, every saved register, every return address for its own internal function calls would be sitting in memory the untrusted process already controls. A malicious program could hand the kernel a stack pointer aimed at its own code, corrupt kernel locals on purpose, or engineer a stack overflow to smash something it has no business touching — all while the CPU thinks it's running at CPL 0 with full privilege. Privilege escalation would be a one-line exploit.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Make it concrete —</b> Say a process deliberately sets <code>esp</code> to point one byte below the end of its own address space right before making a syscall, with no stack-switch hardware in the picture. The very first <code>push</code> the kernel's handler performs would fault or wrap into unmapped or unrelated memory it never intended to touch. Or worse: the process points <code>esp</code> at a region it fully controls and has pre-filled with crafted data, hoping the kernel will <code>push</code> a saved register on top of it and then, later, <code>pop</code> something the process planted instead — quietly hijacking a return address while the CPU still believes it's running at CPL 0. Neither scenario is exotic; it's just what "the kernel trusted a pointer the user supplied" looks like once you follow it through.
+  </div>
+
+  <p class="reveal">So the rule has to be absolute: <strong>the instant the CPU's privilege level rises, the stack must change too</strong> — to a stack that lives in kernel memory, that the user process cannot read, write, or even locate. And critically, this can't be something the kernel's own handler code does as its first instruction, because between "CPL becomes 0" and "the kernel gets a chance to run any instruction at all," there's a gap — and during that gap the CPU is already privileged but hasn't done anything yet. That gap has to be zero-width. Which means the stack switch has to be done by <strong>hardware</strong>, atomically, as part of the transition itself, before a single instruction of kernel code executes.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The one-line rule</span>
+    No ring transition is ever "just" a jump to a new address. It is always: new stack, then jump.
+    <span class="sub">The CPU performs the stack switch as an inseparable part of the transition — not as something the handler remembers to do.</span>
+  </div>
+</div>
+</section>
+
+<!-- THE TSS -->
+<section id="tss">
+<div class="container">
+  <div class="section-num">02 — Where the New Stack Comes From</div>
+  <h2>The <span class="accent">TSS</span> Supplies the Trusted Address</h2>
+
+  <p class="reveal">Fine — the CPU needs a fresh, trusted <code>ss:esp</code> pair the instant it enters Ring 0. But where does it get one? It can't invent an address out of thin air, and it certainly can't ask the user program. The answer is a structure you've already met by name in the base segmentation article, when descriptor types were introduced: the <strong>Task State Segment (TSS)</strong>.</p>
+
+  <p class="reveal">Recall that a TSSD (Task State Segment Descriptor) is a <em>system</em> descriptor (S flag cleared) that can only live in the GDT. What actually sits at the address that descriptor points to is a block of memory — the TSS itself — and buried inside it are fields that exist for exactly this moment: a saved stack pointer for each privilege level the kernel is willing to be entered at.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>TSS Field</th><th>Holds</th><th>Used When</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">ss0 / esp0</td><td>Kernel stack segment selector + pointer for CPL 0</td><td>Any transition into Ring 0 — the field that matters for ordinary syscalls, faults, and interrupts</td></tr>
+        <tr><td>ss1 / esp1</td><td>Stack for CPL 1</td><td>Essentially unused by Linux and virtually every modern OS — CPL 1/2 go unused</td></tr>
+        <tr><td>ss2 / esp2</td><td>Stack for CPL 2</td><td>Same — unused in practice</td></tr>
+        <tr><td class="gold">rsp0 / rsp1 / rsp2</td><td>64-bit equivalents in the long-mode TSS layout</td><td>x86-64 kernels — same idea, wider pointers, no separate ss field needed since 64-bit mode uses flat addressing for the stack segment</td></tr>
+        <tr><td>IST1–IST7</td><td>Interrupt Stack Table — seven extra dedicated stack pointers</td><td>Specific, especially dangerous vectors (double fault, NMI) that get forced onto a known-good stack regardless of what esp0/rsp0 currently is</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">In practice, on Linux, only <strong>one</strong> of those fields is doing real work on every single syscall and interrupt: the CPL-0 stack pointer (<code>esp0</code> on 32-bit, <code>rsp0</code> in the long-mode TSS on 64-bit). The kernel maintains one TSS <em>per CPU core</em>, and before it ever lets a process run, it makes sure that core's TSS points <code>esp0</code>/<code>rsp0</code> at the top of that specific thread's kernel stack — the same kernel stack the trap frame from the PCB/threads article gets pushed onto.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Tying the Threads Together</div>
+    Remember the Task Register (<code>tr</code>) that quietly holds a selector pointing at the current TSS? This is the payoff. On a transition into Ring 0 via the classic interrupt-gate mechanism, the CPU doesn't search anywhere exotic for the new stack — it goes straight to <code>tr</code> → current TSS → <code>ss0:esp0</code>, copies that pair into the live <code>ss</code> and <code>esp</code> registers, and only <em>then</em> starts pushing the trap frame. The TSS descriptor type mentioned but not detailed in the base segmentation article turns out to be the single piece of hardware plumbing that makes a trustworthy ring transition possible at all.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Side note —</b> Linux doesn't use the TSS for its originally-intended purpose (hardware task switching, where the CPU itself swaps an entire register set via a task-gate — see later in this article). It repurposes the structure purely as a vehicle for <code>esp0</code>/<code>rsp0</code> and the I/O permission bitmap. One structure, one field that actually matters day to day, used billions of times a second across a fleet of machines.
+  </div>
+
+  <h3>The IST — a Stack You Can Trust Even When Trust Has Already Broken Down</h3>
+  <p class="reveal">Go back to the threat this whole article opened with: what if the thing that's broken is the stack pointer itself? A stack overflow in the kernel, or a fault that happens while <code>esp0</code>/<code>rsp0</code> is mid-update, could in principle mean the CPU tries to deliver a trap using a stack pointer that's already corrupt — which for something like a <strong>double fault</strong> (a fault that happens while handling another fault) would be catastrophic: no reliable stack means no reliable trap frame means no reliable recovery.</p>
+  <p class="reveal">This is exactly what the seven <strong>IST (Interrupt Stack Table)</strong> entries in the 64-bit TSS are for. A handful of especially dangerous vectors — double fault and NMI (non-maskable interrupt) chief among them — can be configured in the IDT to <em>always</em> use one specific, dedicated, known-good stack from the IST list, completely bypassing whatever <code>rsp0</code> currently happens to be. It's the same "never trust the stack you're handed" principle from section 01, applied one level deeper: even the kernel doesn't fully trust its own current stack pointer for the handful of faults that are most likely to occur precisely because something already went wrong with it.</p>
+</div>
+</section>
+
+<!-- THE TRAP FRAME, CONCRETELY -->
+<section id="trapframe">
+<div class="container">
+  <div class="section-num">03 — Concrete Stack Contents</div>
+  <h2>The Trap Frame, <span class="accent">Made Literal</span></h2>
+
+  <p class="reveal">The PCB/threads article told you traps push "a small, fixed bundle" onto the kernel stack and called it the <strong>trap frame</strong>, without showing you what's actually in the bundle. Here it is, concretely, for the classic legacy mechanism: a software interrupt like <code>int 0x80</code> (32-bit Linux's original syscall gate) or any hardware interrupt firing while the CPU is in Ring 3.</p>
+
+  <p class="reveal">The moment such a trap fires with a privilege-level change pending, the CPU performs this sequence, entirely in hardware, before any kernel instruction runs:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. Save the old ss:esp temporarily</strong>The CPU holds onto the current (user-mode) stack segment selector and stack pointer — it needs them in a moment, but not on the stack that's about to be abandoned.</div></li>
+    <li><div class="step-body"><strong>2. Load new ss:esp from the TSS</strong><code>ss</code> and <code>esp</code> are overwritten with the <code>ss0</code>/<code>esp0</code> values fetched from the current TSS, as covered above. The CPU is now, for the first time, pointed at the kernel stack.</div></li>
+    <li><div class="step-body"><strong>3. Push the old ss</strong>The <em>user-mode</em> stack segment selector — saved in step 1 — is pushed onto the brand-new kernel stack. This is the first byte of the trap frame.</div></li>
+    <li><div class="step-body"><strong>4. Push the old esp</strong>The user-mode stack pointer follows immediately. Together, these two values are the only reason the CPU will ever be able to find the user stack again.</div></li>
+    <li><div class="step-body"><strong>5. Push eflags</strong>The full flags register — condition codes, interrupt-enable flag, everything — captured exactly as it was at the moment of the trap.</div></li>
+    <li><div class="step-body"><strong>6. Push the old cs</strong>The code segment selector that was active in Ring 3, CPL and all, so the CPU knows exactly which privilege level and code segment to snap back to later.</div></li>
+    <li><div class="step-body"><strong>7. Push the old eip</strong>The address of the very next instruction the user program would have executed. This is the resume point — the literal definition of "pick up exactly where you left off."</div></li>
+    <li><div class="step-body"><strong>8. (Some vectors only) Push an error code</strong>A handful of exceptions — page fault, general protection fault, and a few others — push one extra 32-bit word describing <em>why</em> the fault happened (e.g., was it a read or a write, present or not-present page). Ordinary syscalls and most interrupts skip this; it's specific to certain fault vectors.</div></li>
+  </ol>
+
+  <p class="reveal">Only after all of that has landed on the kernel stack does the CPU finally set <strong>CPL = 0</strong> and load <code>cs:eip</code> from the interrupt/trap gate descriptor the vector pointed to — jumping into the kernel's registered handler. Here's that entire bundle laid out visually, as it actually sits in memory the instant the handler gets its first instruction:</p>
+
+  <div class="stack-diagram reveal">
+    <div class="stack-col user">
+      <div class="stack-head">User Stack (ss:esp) — before the trap</div>
+      <div class="stack-body">
+        <div class="stack-box"><span class="sb-name">… program's own data …</span><span class="sb-note">whatever the process pushed</span></div>
+        <div class="stack-box"><span class="sb-name">esp →</span><span class="sb-note">top of user stack at trap time</span></div>
+      </div>
+    </div>
+    <div class="stack-col kernel">
+      <div class="stack-head">Kernel Stack (new ss0:esp0) — right after the trap</div>
+      <div class="stack-body">
+        <div class="stack-box new"><span class="sb-name">esp0 (new) →  eip (old)</span><span class="sb-note">resume address — pushed last</span></div>
+        <div class="stack-box"><span class="sb-name">cs (old)</span><span class="sb-note">carries the old CPL = 3</span></div>
+        <div class="stack-box"><span class="sb-name">eflags</span><span class="sb-note">condition codes, IF, etc.</span></div>
+        <div class="stack-box"><span class="sb-name">esp (old)</span><span class="sb-note">user stack pointer, preserved</span></div>
+        <div class="stack-box"><span class="sb-name">ss (old)</span><span class="sb-note">user stack selector — pushed first</span></div>
+        <div class="stack-box errc"><span class="sb-name">error code (only some exceptions)</span><span class="sb-note">pushed after eip, when present</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 This <em>Is</em> the Trap Frame</div>
+    Everything the PCB/threads article called "the trap frame" is exactly this bundle: old <code>ss</code>, old <code>esp</code>, <code>eflags</code>, old <code>cs</code>, old <code>eip</code>, plus an optional error code. It's not a separate concept from the trap frame — it's the trap frame's literal byte layout, sitting on the kernel stack, for as long as the handler needs it. When the handler finishes and executes <code>iret</code>, it reads this exact bundle back off the stack to figure out how to resume — nothing about the return path is magic; it's just this same memory, read in reverse.
+  </div>
+</div>
+</section>
+
+<!-- SYSCALL / SYSRET -->
+<section id="syscall">
+<div class="container">
+  <div class="section-num">04 — The Fast Path</div>
+  <h2>Why <span class="accent">syscall</span> / <span class="accent">sysret</span> Exist</h2>
+
+  <p class="reveal">The mechanism above works, but notice how much it does: consult <code>tr</code>, walk to the TSS, read <code>esp0</code>, and — this is the expensive part — look up a gate descriptor in the <strong>IDT</strong> (Interrupt Descriptor Table) by vector number, which means a full descriptor fetch and a privilege check (comparing the gate's DPL against the caller's CPL) before the CPU even knows where to jump. For a hardware interrupt that fires rarely, that overhead is a rounding error. But for the single most common Ring 3 → Ring 0 crossing of all — "user program wants an ordinary kernel service," i.e., an actual system call — paying full descriptor-table overhead on every single call adds up fast, because programs make syscalls constantly.</p>
+
+  <p class="reveal">x86-64's answer is a purpose-built instruction pair: <code>syscall</code> to go in, <code>sysret</code> to come back. The entire idea is to skip the descriptor-table lookup completely for this one extremely common case, and instead read the destination straight out of a small, fixed set of <strong>Model-Specific Registers (MSRs)</strong> — registers the kernel configures once, at boot, and the CPU consults directly, with no memory access and no table walk.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>MSR</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">IA32_STAR</td><td>Packed selector values: the kernel <code>cs</code>/<code>ss</code> to load on entry, and the (offset) user <code>cs</code>/<code>ss</code> to restore on <code>sysret</code></td></tr>
+        <tr><td class="hl">IA32_LSTAR</td><td>The target <code>rip</code> for <code>syscall</code> when the calling code is in 64-bit (long) mode — this is the kernel's syscall entry point</td></tr>
+        <tr><td>IA32_CSTAR</td><td>The target <code>rip</code> for <code>syscall</code> issued from 32-bit compatibility mode under a 64-bit kernel</td></tr>
+        <tr><td>IA32_FMASK (SFMASK)</td><td>A bitmask applied to <code>rflags</code> on entry — bits set here are forcibly cleared, e.g. clearing the interrupt-enable flag automatically</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">On <code>syscall</code>: the current <code>rip</code> is saved into <code>rcx</code>, <code>rflags</code> is saved into <code>r11</code>, <code>rflags</code> is masked using <code>IA32_FMASK</code>, <code>cs</code>/<code>ss</code> are loaded from <code>IA32_STAR</code>, <code>rip</code> is loaded from <code>IA32_LSTAR</code>, and CPL becomes 0. On <code>sysret</code>, it runs in reverse: <code>rip</code> comes back from <code>rcx</code>, <code>rflags</code> comes back from <code>r11</code>, <code>cs</code>/<code>ss</code> are reloaded from the other half of <code>IA32_STAR</code>, and CPL returns to 3. No IDT, no gate descriptor, no privilege-check table walk — just register-to-register moves plus two MSR reads. That's the entire reason it's fast.</p>
+
+  <p class="reveal">Notice that <code>IA32_STAR</code> alone supplies <em>three</em> different selector values out of one 64-bit register, by packing them into separate bit ranges the CPU reads directly — the same "one register, several meaningful fields" idea as the segment selector's index/TI/RPL split from the base article, just applied to a whole different register:</p>
+
+  <div class="bitfield reveal">
+    <div class="bf-seg" style="flex:16;background:rgba(56,189,248,.08)"><div class="bf-name" style="color:var(--cyan)">SYSRET CS/SS base</div><div class="bf-bits">bits 63–48</div></div>
+    <div class="bf-seg" style="flex:16;background:rgba(245,200,66,.1)"><div class="bf-name" style="color:var(--gold)">SYSCALL CS/SS base</div><div class="bf-bits">bits 47–32</div></div>
+    <div class="bf-seg" style="flex:32;background:rgba(167,139,250,.1)"><div class="bf-name" style="color:var(--purple)">target EIP (compat mode only)</div><div class="bf-bits">bits 31–0</div></div>
+  </div>
+
+  <p class="reveal">The CPU doesn't store four independent selectors here — it stores two selector <em>bases</em> and derives the rest by fixed offsets (kernel <code>ss</code> is kernel <code>cs</code> + 8, for instance), because the GDT layout Linux uses places matching code/data pairs at predictable, adjacent slots. One packed register, read with zero memory access, is enough to fully describe where both the entry and the exit land.</p>
+
+  <h3>The rcx Problem: Why the Syscall ABI Uses r10, Not rcx</h3>
+  <p class="reveal">Here's a small but very real consequence of how <code>syscall</code> works, visible the moment you look at Linux's actual syscall calling convention. Ordinary x86-64 function calls pass their fourth argument in <code>rcx</code>. But <code>syscall</code> <em>overwrites</em> <code>rcx</code> with the return address the instant it executes — so if the syscall ABI also used <code>rcx</code> for an argument, the instruction would clobber its own input before the kernel ever got to read it.</p>
+  <p class="reveal">The fix is simple once you see the cause: the Linux syscall calling convention passes arguments in <code>rdi, rsi, rdx, r10, r8, r9</code> — identical to the normal C calling convention <em>except</em> the fourth argument moves from <code>rcx</code> to <code>r10</code>, specifically to dodge this exact collision. It's a small, permanent scar left on the userspace ABI by a hardware design decision made purely for speed.</p>
+
+  <div class="sidenote reveal">
+    <b>Side note —</b> AMD shipped <code>syscall</code>/<code>sysret</code> first, as part of its original x86-64 design. Intel's earlier fast-path answer, back in the 32-bit Pentium II era, was a different pair: <strong><code>sysenter</code></strong>/<code>sysexit</code>, configured through their own MSRs (<code>IA32_SYSENTER_CS/ESP/EIP</code>) rather than STAR/LSTAR. Both instruction pairs chase the identical goal — skip the IDT for the common syscall case — and modern 64-bit Intel chips support <code>syscall</code> too, so <code>sysenter</code> mostly survives today only in 32-bit compatibility paths and legacy <code>vsyscall</code>/vDSO code. Two vendors, two competing shortcuts, converging on the same idea.
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Catch — syscall Does NOT Auto-Switch the Stack</div>
+    Here's the detail that trips people up, because it breaks the pattern from section 03: unlike the interrupt-gate path, <strong><code>syscall</code> does not consult the TSS and does not automatically move <code>rsp</code> to a kernel stack.</strong> <code>rsp</code> is left exactly where the user program had it, even though CPL is now 0. Speed was the whole point, and an automatic stack switch through the TSS was part of what made the legacy path slower — so the fast path simply skips it and leaves the job to software.
+  </div>
+
+  <p class="reveal">So who does the stack switch instead? The kernel's own <code>syscall</code> entry code, in its very first few instructions, by hand. The standard trick (what Linux actually does) is <strong><code>swapgs</code></strong> — an instruction that swaps the <code>gs</code> base register with a value stashed in a kernel MSR, instantly giving the freshly-entered, still-on-the-user-stack code access to a per-CPU data area <em>without touching any general-purpose register</em>. From that per-CPU area, the entry code reads a saved kernel stack pointer, stows the incoming (user) <code>rsp</code> somewhere safe, and only then manually loads <code>rsp</code> with the kernel stack address — all before it dares push anything or call any further function. Only after that hand-rolled swap has happened is it actually safe to start using ordinary kernel C code.</p>
+
+  <div class="sidenote reveal">
+    <b>Side note —</b> This hand-rolled stack switch is exactly the kind of few dozen instructions of raw assembly every production kernel has somewhere near its syscall entry point (Linux keeps it in <code>entry_64.S</code>). It's also historically been a rich source of security bugs — get the ordering of <code>swapgs</code> wrong relative to a speculative execution boundary and you get exactly the kind of side channel that <em>Spectre</em>-family attacks went looking for. Trading hardware guarantees for software speed means the software has to get it exactly right, every time.
+  </div>
+</div>
+</section>
+
+<!-- THE FULL ROUND TRIP -->
+<section id="roundtrip">
+<div class="container">
+  <div class="section-num">05 — Watch It Happen</div>
+  <h2>The Full <span class="accent">Round Trip</span>, Step by Step</h2>
+
+  <p class="reveal">Time to put the whole thing together, start to finish, for both mechanisms. Pick a path below and watch exactly what moves — the stack pointer, the trap frame, and the CPL badge — through the entire out-and-back journey.</p>
+
+  <p class="reveal">First, a quick reconciliation with the "three doors into the kernel" from the PCB/threads article — syscall, exception, and hardware interrupt. All three are traps in the CPU's eyes, but only one of them has a purpose-built shortcut:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Door</th><th>Which mechanism can carry it?</th><th>Error code?</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">System Call</td><td>Either — <code>int 0x80</code> (legacy/32-bit) or <code>syscall</code> (fast path, 64-bit)</td><td>No</td></tr>
+        <tr><td class="hl">Exception / Fault</td><td>Interrupt/trap-gate mechanism only — there is no "fast" exception path</td><td>Sometimes (page fault, GPF, and a few others)</td></tr>
+        <tr><td class="hl">Hardware Interrupt</td><td>Interrupt-gate mechanism only, dispatched by vector number off the IDT</td><td>No</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal"><code>syscall</code>/<code>sysret</code> is the odd one out on purpose: it was built for exactly one door and doesn't even attempt to serve the other two. A CPU exception can't announce itself through a register-only MSR shortcut — it needs the full generality of an IDT vector, because the CPU itself is the one raising it, asynchronously, mid-instruction, with no cooperation from any program.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="ringLabel">▶ Choose a transition mechanism to animate</div>
+    <canvas id="ringCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runRing('legacy')">▶ Legacy: int 0x80 → iret</button>
+    <button class="ctrl-btn gold" onclick="runRing('fast')">▶ Fast path: syscall → sysret</button>
+    <button class="ctrl-btn red" onclick="resetRing()">Reset</button>
+  </div>
+
+  <p class="reveal">Now the two paths, laid out in full — not merged, so you can see exactly where they diverge and exactly where they end up in the same place.</p>
+
+  <h3>Legacy path — <code>int 0x80</code> in, <code>iret</code> out</h3>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. User program executes int 0x80</strong>Or a hardware device fires an interrupt asynchronously — either way, CPL is 3 and <code>ss:esp</code> still point at the user stack at this instant.</div></li>
+    <li><div class="step-body"><strong>2. CPU looks up the vector's gate descriptor in the IDT</strong>The vector number (0x80, or the device's assigned IRQ line) selects a slot; the gate descriptor there is checked — its DPL must permit the caller's CPL — and supplies the eventual target <code>cs:eip</code>.</div></li>
+    <li><div class="step-body"><strong>3. CPU reads ss0:esp0 from the current TSS via tr</strong>And switches <code>ss:esp</code> to it immediately — hardware, atomic, no software involved yet.</div></li>
+    <li><div class="step-body"><strong>4. CPU pushes the trap frame onto the new kernel stack</strong>Old ss, old esp, eflags, old cs, old eip — in that order — plus an error code if this particular vector supplies one.</div></li>
+    <li><div class="step-body"><strong>5. CPL becomes 0; cs:eip loads from the gate descriptor</strong>The kernel's registered handler starts executing, on the kernel stack, at full privilege.</div></li>
+    <li><div class="step-body"><strong>6. Handler does its work, then executes iret</strong><code>iret</code> pops eip, cs, and eflags. Because the popped <code>cs</code>'s privilege level differs from the current CPL, <code>iret</code> <em>also</em> pops esp and ss — switching the stack back to the user's, in the same instruction.</div></li>
+    <li><div class="step-body"><strong>7. Execution resumes in Ring 3</strong>Exactly at the instruction after <code>int 0x80</code>, on the original user stack, with the original flags. Nothing observable changed from the program's point of view.</div></li>
+  </ol>
+
+  <h3>Fast path — <code>syscall</code> in, <code>sysret</code> out</h3>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. User program executes syscall</strong>CPL is 3, <code>rsp</code> still points at the user stack — and, critically, will keep pointing there for a few more instructions yet.</div></li>
+    <li><div class="step-body"><strong>2. CPU saves rip→rcx, rflags→r11, masks rflags, loads cs/ss/rip from MSRs</strong><code>IA32_STAR</code> supplies the kernel <code>cs</code>/<code>ss</code>, <code>IA32_LSTAR</code> supplies the target <code>rip</code>, <code>IA32_FMASK</code> clears whichever <code>rflags</code> bits the kernel configured (typically the interrupt-enable flag). CPL becomes 0. No IDT was ever consulted.</div></li>
+    <li><div class="step-body"><strong>3. Kernel entry code runs swapgs and manually swaps rsp</strong>Still, technically, running on the user's stack for these first few instructions — this is why this hand-written assembly has to be so careful. Once <code>rsp</code> points at the kernel stack, the incoming user <code>rsp</code> is stashed safely, and it's finally safe to push normal data.</div></li>
+    <li><div class="step-body"><strong>4. Kernel entry code pushes whatever the C handler will need</strong>Unlike the legacy path, this isn't one atomic hardware bundle — it's ordinary push instructions the kernel's own assembly chose to execute, building up enough of a frame for the C syscall handler to run normally.</div></li>
+    <li><div class="step-body"><strong>5. The kernel handler does its work</strong>Arguments arrive in <code>rdi, rsi, rdx, r10, r8, r9</code> (note <code>r10</code>, not <code>rcx</code> — see the ABI note above) plus the syscall number in <code>rax</code>.</div></li>
+    <li><div class="step-body"><strong>6. Kernel restores rsp to the saved user value, then executes sysret</strong><code>sysret</code> reloads <code>rip</code> from <code>rcx</code>, <code>rflags</code> from <code>r11</code>, and <code>cs</code>/<code>ss</code> from the other half of <code>IA32_STAR</code>. CPL returns to 3.</div></li>
+    <li><div class="step-body"><strong>7. Execution resumes in Ring 3</strong>Same destination as the legacy path — right after the <code>syscall</code> instruction, original stack, original flags — just gotten to by a leaner, MSR-driven route with more of the bookkeeping done by hand.</div></li>
+  </ol>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Whole Point, Stated Plainly</div>
+    A syscall is designed to be <strong>indistinguishable from an ordinary function call</strong> from the caller's point of view — same "call, do work, return with a result" shape. Everything in this section exists purely so that illusion holds up perfectly, even though underneath it, the CPU tore down an entire privilege context and rebuilt it twice.
+  </div>
+</div>
+</section>
+
+<!-- CALL GATES / TASK GATES -->
+<section id="gates">
+<div class="container">
+  <div class="section-num">06 — The Older Aristocracy</div>
+  <h2>Call Gates &amp; Task Gates: <span class="accent">Roads Less Traveled</span></h2>
+
+  <p class="reveal">The interrupt/trap-gate mechanism and <code>syscall</code>/<code>sysret</code> aren't the only descriptor-table-based ways to change privilege — they're just the two that won. Two older, System-type descriptors (siblings of the TSSD from the base article, with the S flag cleared the same way) offered more controlled, more structured privilege escalation. You'll rarely see either used in a modern general-purpose OS, but you should know they exist and roughly why they lost.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Call Gate Descriptor</span></div>
+      <div class="fam-desc">A System-type descriptor that lets a program invoke a specific, pre-registered privileged procedure via an ordinary-looking <code>call</code> instruction targeting the gate's selector — as if calling a regular subroutine. The CPU checks privilege against the gate itself, optionally switches stacks (again via the TSS), and jumps to a fixed entry point, exactly like a much more constrained, subroutine-flavored version of the interrupt-gate mechanism.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Task Gate Descriptor</span></div>
+      <div class="fam-desc">Points at a TSS and, when invoked, tells the CPU to perform a full <em>hardware task switch</em>: save the entire current register set into the outgoing TSS, and load an entirely new register set — including <code>cr3</code>, meaning a whole new address space — from the incoming TSS, all done by the CPU itself with no software register-saving code at all.</div>
+    </div>
+  </div>
+
+  <p class="reveal">Hardware task switching sounds appealing on paper — the CPU does all the bookkeeping for you. In practice it lost decisively to software-managed context switching (the PCB/TCB-based approach from the earlier article) for reasons that should sound familiar by now: it's rigid (the format of what gets saved is fixed by the CPU, not the OS), it saves and restores far more state than most switches actually need, and — the recurring theme of this entire page — it's <em>slow</em> relative to a kernel just doing the minimal necessary work in software. Call gates suffer a milder version of the same problem: real, useful privilege checking, but with more table-walking overhead than a purpose-built instruction like <code>syscall</code> needs to pay.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why They Faded</div>
+    Every mechanism on this page is trading the same two things against each other: <strong>how much the hardware automates</strong> versus <strong>how fast the common case runs</strong>. Task gates automate the most and are the slowest. Call gates automate a fair amount and sit in the middle. Interrupt/trap gates automate what's needed for traps specifically. <code>syscall</code>/<code>sysret</code> automate the least — pushing real work onto the kernel's own entry code — and are the fastest of all. Modern OS design consistently chose the fast end for the path that runs the most often, and reserved the fully automatic, heavier mechanisms for the rare cases (or dropped them entirely).
+  </div>
+
+  <p class="reveal">Zooming back out, every System-type descriptor this series has now touched turns out to belong to one small family — all S-flag-cleared, all living primarily in the GDT, each aimed at a different flavor of "controlled transfer of control":</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>System Descriptor</th><th>What It Points To</th><th>Triggers a Stack Switch?</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">TSS Descriptor (TSSD)</td><td>A Task State Segment</td><td>N/A — it's the <em>source</em> of the switch, not a trigger</td><td class="pos">Alive and load-bearing, every trap</td></tr>
+        <tr><td class="hl">Interrupt/Trap Gate</td><td>A handler entry point (cs:eip), looked up via IDT vector</td><td class="pos">Yes, automatic via TSS</td><td class="pos">Alive — the only path for exceptions/interrupts</td></tr>
+        <tr><td class="hl">Call Gate</td><td>A privileged procedure's entry point</td><td>Optionally, via TSS</td><td class="neg">Rare — largely unused by mainstream OS kernels</td></tr>
+        <tr><td class="hl">Task Gate</td><td>A whole second TSS</td><td class="pos">Yes — an entire context, not just a stack</td><td class="neg">Effectively retired in 64-bit mode</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">07 — Side by Side</div>
+  <h2>Two Paths, <span class="accent">Compared</span></h2>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐢 int 0x80 / iret (interrupt-gate)</h4>
+      Target address found by walking the IDT and checking a gate descriptor's DPL. Stack switch to <code>ss0:esp0</code> is fully automatic, pulled from the TSS by hardware. Works uniformly for syscalls, faults, <em>and</em> interrupts. Slower, because of the table walk and privilege check on every single trip.
+    </div>
+    <div class="compare-card good">
+      <h4>⚡ syscall / sysret (fast path)</h4>
+      Target address read directly from <code>IA32_STAR</code>/<code>IA32_LSTAR</code> — no table, no walk. Stack switch is <strong>not</strong> automatic — the kernel's entry code must <code>swapgs</code> and move <code>rsp</code> itself. Purpose-built for one job only: a Ring 3 program deliberately requesting a kernel service.
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>int 0x80 → iret</th><th>syscall → sysret</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Target lookup</td><td>IDT gate descriptor, by vector number</td><td class="pos">IA32_STAR / IA32_LSTAR MSRs directly</td></tr>
+        <tr><td class="hl">Privilege check</td><td>Gate DPL vs. caller CPL, checked by hardware</td><td>None — any Ring 3 code may execute it; the kernel handler itself must validate arguments</td></tr>
+        <tr><td class="hl">Stack switch</td><td class="pos">Automatic, via TSS ss0:esp0</td><td class="neg">Manual — kernel entry code does swapgs + rsp swap</td></tr>
+        <tr><td class="hl">Error code support</td><td class="pos">Yes, for applicable exception vectors</td><td>N/A — not an exception mechanism</td></tr>
+        <tr><td class="hl">Works for interrupts / faults?</td><td class="pos">Yes — general-purpose trap mechanism</td><td class="neg">No — syscalls only, by design</td></tr>
+        <tr><td class="hl">Typical use today</td><td>32-bit legacy syscall entry, all interrupts/exceptions on any mode</td><td class="pos">The default syscall path for 64-bit user programs</td></tr>
+        <tr><td class="hl">Relative speed</td><td class="neg">Slower — table walk + automatic stack switch</td><td class="pos">Faster — the entire reason it exists</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Both still coexist on real machines today: interrupts and CPU exceptions have no choice but to go through the gate-descriptor mechanism (there's no "exception equivalent" of <code>syscall</code>), while an ordinary 64-bit Linux program making a deliberate syscall — <code>read()</code>, <code>write()</code>, <code>mmap()</code> — almost always rides the fast path instead.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Ring Transition</div><div class="glossary-def">Any change in CPL — most importantly Ring 3 → Ring 0 (entering the kernel) and back, always accompanied by a stack switch when crossing that boundary.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TSS (ss0 / esp0, rsp0)</div><div class="glossary-def">The Task State Segment's saved Ring-0 stack pointer fields — where hardware gets the trusted kernel stack address for the legacy interrupt/trap-gate path.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trap Frame</div><div class="glossary-def">The concrete bundle pushed onto the kernel stack on entry: old ss, old esp, eflags, old cs, old eip, plus an optional error code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">int 0x80</div><div class="glossary-def">The classic 32-bit Linux software-interrupt syscall gate — a deliberate trap instruction that triggers the interrupt-gate transition mechanism.</div></div>
+    <div class="glossary-card"><div class="glossary-term">iret</div><div class="glossary-def">The return instruction for the interrupt/trap-gate path — pops the trap frame and, when a privilege change is detected, also restores ss:esp.</div></div>
+    <div class="glossary-card"><div class="glossary-term">syscall / sysret</div><div class="glossary-def">x86-64's fast-path instruction pair for entering and leaving Ring 0, purpose-built for the "user wants a kernel service" case, bypassing the IDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IA32_STAR / LSTAR / CSTAR / FMASK</div><div class="glossary-def">The Model-Specific Registers that configure syscall's target CS/SS, target RIP (64-bit and compat mode), and the RFLAGS mask, respectively.</div></div>
+    <div class="glossary-card"><div class="glossary-term">swapgs</div><div class="glossary-def">The instruction the kernel's syscall entry code uses to reach a per-CPU data area (holding the kernel stack address) without an automatic hardware stack switch.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Call Gate</div><div class="glossary-def">An older System-type descriptor letting a call instruction invoke a pre-registered privileged routine with a hardware-checked privilege boundary.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Task Gate</div><div class="glossary-def">An older System-type descriptor triggering a full hardware task switch — entire register set (including cr3) swapped by the CPU via a pair of TSSs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IST (Interrupt Stack Table)</div><div class="glossary-def">Seven extra dedicated stack pointers in the 64-bit TSS, forced for specific dangerous vectors (double fault, NMI) so those handlers never depend on a possibly-corrupt current stack.</div></div>
+    <div class="glossary-card"><div class="glossary-term">r10 (syscall ABI)</div><div class="glossary-def">Stands in for rcx as the 4th syscall argument register on Linux, because syscall itself overwrites rcx with the return address before the kernel can read it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">sysenter / sysexit</div><div class="glossary-def">Intel's earlier, MSR-driven fast syscall path (predating x86-64's syscall/sysret), now largely confined to 32-bit compatibility and legacy vDSO code.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Crossing the Ring · A Companion Deep-Dive to "Segmentation in Hardware" · OS Sweet Stories Series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">From selector to stack switch — now you've seen the whole trip, there and back.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── RING TRANSITION ROUND-TRIP CANVAS ──────────────────────────────────────────
+const FRAME_ITEMS=['ss','esp','eflags','cs','eip'];
+
+function drawRingScene(t,phase,mode){
+  const canvas=document.getElementById('ringCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const userY=40, userH=64;
+  const kernY=H-118, kernH=64;
+
+  // CPL badge
+  const cplZero = (phase==='switch'||phase==='push'||phase==='cpl0'||phase==='handler'||phase==='pop'||phase==='cpl0_ret');
+  ctx.fillStyle = cplZero ? 'rgba(56,189,248,.14)' : 'rgba(167,139,250,.14)';
+  ctx.strokeStyle = cplZero ? C.cyan : C.purple;
+  ctx.lineWidth=1.5;
+  const bx=W/2-70, by=(userY+userH+kernY)/2-20, bw=140, bh=40;
+  ctx.beginPath();ctx.roundRect?ctx.roundRect(bx,by,bw,bh,8):ctx.rect(bx,by,bw,bh);ctx.fill();ctx.stroke();
+  ctx.fillStyle = cplZero ? C.cyan : C.purple;
+  ctx.font='bold 15px Source Code Pro,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('CPL = '+(cplZero?'0 (kernel)':'3 (user)'), bx+bw/2, by+bh/2);
+  ctx.textBaseline='alphabetic';
+
+  // user stack lane
+  ctx.fillStyle='rgba(167,139,250,.06)';ctx.fillRect(0,userY,W,userH);
+  ctx.strokeStyle=C.purple;ctx.lineWidth=1;ctx.strokeRect(0,userY,W,userH);
+  ctx.fillStyle=C.purple;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Ring 3 — User Stack (ss:esp / ss:rsp)',10,userY-8);
+
+  // kernel stack lane
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(0,kernY,W,kernH);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;ctx.strokeRect(0,kernY,W,kernH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';
+  ctx.fillText('Ring 0 — Kernel Stack (ss0:esp0, from TSS / manually set)',10,kernY-8);
+
+  const legacy = mode==='legacy';
+  const captions={
+    idle:'Choose int 0x80 → iret, or syscall → sysret, above',
+    exec:legacy?'⚡ int 0x80 executes (or a hw interrupt fires) — CPU still on the user stack, CPL=3':'⚡ syscall executes — rip saved to rcx, rflags saved to r11, CPL=3 still',
+    switch:legacy?'CPU reads ss0:esp0 from the current TSS and switches automatically':'No automatic switch — kernel entry code runs swapgs, then moves rsp itself',
+    push:legacy?'Trap frame pushed: ss, esp, eflags, cs, eip (+ error code if applicable)':'Entry code pushes what it still needs — rip/rflags already safe in rcx/r11',
+    cpl0:legacy?'CPL set to 0 — cs:eip loaded from the IDT gate descriptor':'CPL set to 0 — cs:rip loaded from IA32_STAR / IA32_LSTAR',
+    handler:'Kernel handler runs the actual syscall logic on the kernel stack',
+    pop:legacy?'iret pops eip, cs, eflags — and, since privilege is changing, esp & ss too':'sysret restores rip from rcx and rflags from r11',
+    cpl0_ret:legacy?'Stack switches back to ss:esp — the user stack':'Kernel code manually restores rsp to the user stack value',
+    resume:'CPL back to 3 — user program resumes at the instruction right after the trap'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+
+  // moving CPU marker
+  let dotX=W*0.12, dotY=userY+userH/2, dotCol=C.purple;
+  if(phase==='exec'){dotX=W*(0.12+0.12*t);dotY=userY+userH/2;dotCol=C.purple;}
+  else if(phase==='switch'){dotX=W*0.24+(W*0.26)*t; dotY=(userY+userH/2)+((kernY+kernH/2)-(userY+userH/2))*t; dotCol=C.orange;}
+  else if(phase==='push'){dotX=W*0.5;dotY=kernY+kernH/2;dotCol=C.cyan;}
+  else if(phase==='cpl0'){dotX=W*0.5+(W*0.1)*t;dotY=kernY+kernH/2;dotCol=C.cyan;}
+  else if(phase==='handler'){dotX=W*0.6+(W*0.1)*t;dotY=kernY+kernH/2;dotCol=C.cyan;}
+  else if(phase==='pop'){dotX=W*0.7;dotY=kernY+kernH/2;dotCol=C.gold;}
+  else if(phase==='cpl0_ret'){dotX=W*0.7-(W*0.06)*t;dotY=(kernY+kernH/2)-((kernY+kernH/2)-(userY+userH/2))*t*0+ (kernY+kernH/2); dotCol=C.gold;
+     dotY=(kernY+kernH/2)+((userY+userH/2)-(kernY+kernH/2))*t;}
+  else if(phase==='resume'){dotX=W*0.76+(W*0.12)*t;dotY=userY+userH/2;dotCol=C.green;}
+
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+
+  // trap-frame mini stack, appears during push/handler/pop
+  if(phase==='push'||phase==='cpl0'||phase==='handler'||phase==='pop'){
+    const nShown = phase==='push' ? Math.max(1,Math.ceil(t*FRAME_ITEMS.length)) : FRAME_ITEMS.length;
+    const boxW=52, boxH=18, gap=4;
+    const totalW=nShown*(boxW+gap)-gap;
+    let sx=W/2-totalW/2, sy=kernY+kernH+14;
+    for(let i=0;i<nShown;i++){
+      ctx.fillStyle='rgba(56,189,248,.16)';
+      ctx.strokeStyle=C.cyan;ctx.lineWidth=1;
+      ctx.fillRect(sx,sy,boxW,boxH);ctx.strokeRect(sx,sy,boxW,boxH);
+      ctx.fillStyle=C.cyan;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText(FRAME_ITEMS[i],sx+boxW/2,sy+boxH/2+3);
+      sx+=boxW+gap;
+    }
+  }
+}
+
+function runRing(mode){
+  const phases=['exec','switch','push','cpl0','handler','pop','cpl0_ret','resume'];
+  const durations=[400,550,600,400,500,450,550,400];
+  let idx=0,start=performance.now();
+  const label=document.getElementById('ringLabel');
+  label.textContent = mode==='legacy' ? '▶ Legacy path: int 0x80 → automatic TSS stack switch → trap frame → iret' : '▶ Fast path: syscall → MSR-driven jump → manual stack swap → sysret';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawRingScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        label.textContent='▶ Round trip complete — try the other mechanism';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetRing(){
+  document.getElementById('ringLabel').textContent='▶ Choose a transition mechanism to animate';
+  drawRingScene(0,'idle','');
+}
+
+// ── SCROLL REVEAL / TOC ──────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRing(); });
+window.addEventListener('resize',()=>{ resetRing(); });
+</script>
+</body>
+</html>

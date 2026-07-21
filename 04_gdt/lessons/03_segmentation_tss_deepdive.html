@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The TSS: Intel's Abandoned Idea for Task Switching in Hardware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.35);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)} h2 .accent.c{color:var(--cyan)} h2 .accent.p{color:var(--purple)} h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;background:var(--code-bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;font-size:.88em;color:var(--gold);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)} td.mut{color:var(--muted)}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:.8rem;flex-wrap:wrap;margin:1.2rem 0 0;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.7rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .5rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.bitfield{display:flex;border:1.5px solid var(--gold2);border-radius:8px;overflow:hidden;margin:1.8rem 0;font-family:'Source Code Pro',monospace;}
+.bitfield .bf-seg{padding:1.2rem .5rem;text-align:center;border-right:1px solid var(--border);}
+.bitfield .bf-seg:last-child{border-right:none}
+.bitfield .bf-name{font-size:.85rem;font-weight:700;margin-bottom:.3rem;}
+.bitfield .bf-bits{font-size:.68rem;color:var(--muted);}
+
+/* dossier card, adapted from the PCB module's dossier component */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+.dossier-field.vestigial .f-val{color:var(--red);}
+.dossier-field.used .f-val{color:var(--green);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#origin" title="The Original Plan"></a>
+  <a class="toc-dot" href="#anatomy" title="Anatomy of a TSS"></a>
+  <a class="toc-dot" href="#compare" title="Hardware vs Software"></a>
+  <a class="toc-dot" href="#whylost" title="Why It Lost"></a>
+  <a class="toc-dot" href="#stack0" title="RSP0 & Ring Crossings"></a>
+  <a class="toc-dot" href="#ist" title="The IST"></a>
+  <a class="toc-dot" href="#onepercpu" title="One Per Core"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Companion Deep-Dive · The TSS</div>
+    <h1>The Descriptor<br>Nobody <span>Talks About</span></h1>
+    <p class="hero-sub">Back in the segmentation article, the Task State Segment Descriptor got one sentence: "S flag cleared, describes a region used to save processor register contents, lives only in the GDT." That sentence is hiding one of the strangest stories in x86 history — a piece of hardware Intel built to do a kernel's job for it, that almost every kernel on Earth quietly declined to use.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1985</div><div class="lbl">80386 Ships Full Hardware Task Switching</div></div>
+      <div class="hero-stat"><div class="num">7</div><div class="lbl">IST Stack Pointers Per TSS</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">TSS Actually Loaded Per CPU Core</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Hardware Task Switches In Modern Linux/Windows</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="origin">
+<div class="container">
+  <div class="section-num">01 — What Intel Actually Meant To Build</div>
+  <h2>The <span class="accent">Ambitious</span> Original Plan</h2>
+  <p class="reveal">Go back to the PCB/threads article for a second. It described a context switch as fundamentally a <em>software</em> job: the kernel notices it's time to run someone else, hand-writes every register the outgoing thread cares about into that thread's PCB, then hand-reads a completely different set of saved values out of the incoming thread's PCB back into live registers. All of that — the deciding, the saving, the loading — is code the kernel author had to write.</p>
+  <p class="reveal">When Intel designed protected mode for the 80286 (1982) and then fully fleshed it out for the 32-bit 80386 (1985), they looked at that whole dance and asked a genuinely bold question: <strong>what if the CPU just did this itself?</strong> Not "provide a fast instruction the kernel can call" — actually <em>own the entire context switch</em>, in silicon, with the kernel barely involved.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">🎯 The Pitch, As Intel Saw It</div>
+    Give every task its own <strong>Task State Segment (TSS)</strong> — a fixed-format block of memory holding a complete snapshot of that task: every general-purpose register, every segment register, the flags register, the instruction pointer, and even the page-table base (<code>CR3</code>). Then switching from Task A to Task B becomes a single instruction: a far <code>jmp</code> or <code>call</code> targeting Task B's TSS descriptor, or a jump through a special IDT/GDT/LDT entry called a <strong>task gate</strong>. The CPU handles the rest, automatically, with no kernel code running in between.
+  </div>
+
+  <p class="reveal">There wasn't even just one way to trigger this. Intel gave the kernel — and, deliberately, occasionally even user code — several distinct doors into a hardware task switch:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Far JMP to a TSS selector</span></div><div class="fam-desc">A one-way switch. Task A doesn't expect to come back to where it left off via this mechanism.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--green)">Far CALL to a TSS selector</span></div><div class="fam-desc">A nested switch — sets the NT flag and stamps a back-link, so a later IRET can hand control right back to Task A.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">Jump/call through a Task Gate</span></div><div class="fam-desc">One extra layer of indirection: the gate itself carries its own DPL, letting the kernel control who's allowed to trigger the switch, independent of the TSSD's own DPL.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">A hardware interrupt/exception via a Task Gate in the IDT</span></div><div class="fam-desc">The most radical option — an interrupt itself becomes a full task switch, with no ordinary interrupt handler code running first.</div></div>
+  </div>
+
+  <p class="reveal">Just like the ordinary segment descriptors from the earlier article, every one of these paths still goes through a privilege check before the CPU lets it happen — the requesting CPL and the gate/descriptor's own DPL have to line up correctly, exactly the same DPL-vs-CPL logic you already learned. Hardware task switching was never meant to be a privilege-bypass shortcut; it was meant to be the <em>normal</em> way every context switch happened, guarded by the same rules as everything else.</p>
+
+  <p class="reveal">And "handles the rest" was meant literally. On execution of that far jump, the processor would, in hardware:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Freeze and dump Task A</strong>Write the live values of every general register, every segment selector, EFLAGS, and the current instruction pointer out into Task A's own TSS in memory — the exact "save" half of a context switch, done by microcode instead of kernel code.</div></li>
+    <li><div class="step-body"><strong>Mark the link</strong>Set the <strong>NT (Nested Task)</strong> flag and stamp a "previous task" back-link into the new TSS, so a task reached via a <code>call</code> or interrupt could later hand control back with an <code>iret</code> — tasks could nest, like stack frames, entirely in hardware.</div></li>
+    <li><div class="step-body"><strong>Load Task B wholesale</strong>Pull every one of those same fields back out of Task B's TSS and pour them into the live registers — including, remarkably, <code>CR3</code>. Loading a new address space was not a separate step the kernel had to remember; switching tasks and switching page tables were the <em>same hardware event</em>.</div></li>
+    <li><div class="step-body"><strong>Resume in Task B</strong>Execution simply continues at whatever <code>EIP</code> was stored in Task B's TSS, at whatever privilege level Task B's saved <code>CS</code> implies. From the outside, the entire context switch happened between one instruction and the next.</div></li>
+  </ol>
+
+  <div class="sidenote reveal">
+    <b>Wait — task gates could fire from an interrupt, too.</b> A task gate could sit in the IDT itself, meaning a hardware interrupt or CPU exception could trigger a full hardware task switch directly, with no software handler running at all until the new task's own code began executing. Intel wasn't just proposing hardware-assisted <em>scheduling</em> — they were proposing hardware-assisted <em>everything that used to require the kernel to run first</em>.
+  </div>
+
+  <p class="reveal">What did one of these task gates actually look like as bits in memory? Structurally, it's a close cousin of the segment descriptor from the earlier article — same 8-byte size, same idea of "a selector plus some access rules" — but it points at a <em>TSS</em> instead of at ordinary code or data:</p>
+
+  <div class="bitfield reveal">
+    <div class="bf-seg" style="flex:5;background:rgba(56,189,248,.08)"><div class="bf-name" style="color:var(--cyan)">TSS Selector</div><div class="bf-bits">bits 16–31 of word 1</div></div>
+    <div class="bf-seg" style="flex:2;background:rgba(245,200,66,.1)"><div class="bf-name" style="color:var(--gold)">DPL</div><div class="bf-bits">who's allowed to jump here</div></div>
+    <div class="bf-seg" style="flex:1;background:rgba(74,222,128,.1)"><div class="bf-name" style="color:var(--green)">P</div><div class="bf-bits">present</div></div>
+    <div class="bf-seg" style="flex:2;background:rgba(167,139,250,.1)"><div class="bf-name" style="color:var(--purple)">Type = 0x5</div><div class="bf-bits">"this is a task gate"</div></div>
+  </div>
+
+  <p class="reveal">No base, no limit, no offset field worth mentioning — unlike a call gate, a task gate doesn't even point at a specific instruction. It just names a TSS selector and says "go run whatever's in there." The whole notion of "resume at a specific address" is irrelevant, because the destination TSS's own saved <code>EIP</code> already says where to resume. Everything about the target task's identity is carried entirely by which TSS you point at — which is a tidy encapsulation of the whole 1985 idea in one small structure.</p>
+
+  <p class="reveal">This is worth sitting with, because it is a genuinely different philosophy from the one your machine actually runs today. The TSS wasn't a minor convenience field. It was Intel's attempt to make the operating system's single most fundamental, most frequently executed piece of logic — "who runs next, and how do I safely swap them in" — something the kernel didn't have to write at all.</p>
+</div>
+</section>
+
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">02 — Reading the Actual Structure</div>
+  <h2>Anatomy of a <span class="accent">TSS</span></h2>
+  <p class="reveal">So what's actually inside one of these things? The original 32-bit TSS is a 104-byte structure, and it reads almost exactly like a hardware-native PCB — because that's precisely what it is. Here's the dossier, legacy 32-bit format:</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>32-bit Task State Segment — one per task (original design)</span><span style="color:var(--muted);font-size:.7rem">104 bytes, referenced by a TSSD in the GDT</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Previous Task Link</div><div class="f-val">16-bit selector</div><div class="f-desc">Back-pointer to the TSS of whoever called into this task — how nested task switches unwind via iret.</div></div>
+      <div class="dossier-field"><div class="f-label">EAX, EBX, ECX, EDX, ESI, EDI, EBP, ESP</div><div class="f-val">8 × 32-bit</div><div class="f-desc">The complete general-purpose register file, saved and restored unconditionally on every switch.</div></div>
+      <div class="dossier-field"><div class="f-label">CS, SS, DS, ES, FS, GS</div><div class="f-val">6 × 16-bit selectors</div><div class="f-desc">Every segmentation register from the earlier article — all six, every time, whether or not they actually changed.</div></div>
+      <div class="dossier-field"><div class="f-label">LDTR</div><div class="f-val">16-bit selector</div><div class="f-desc">Which Local Descriptor Table belongs to this task — the LDT itself gets swapped as part of the task switch.</div></div>
+      <div class="dossier-field"><div class="f-label">EFLAGS, EIP</div><div class="f-val">32-bit + 32-bit</div><div class="f-desc">The flags register and the exact instruction to resume at — the CPU's whole "where was I" state.</div></div>
+      <div class="dossier-field"><div class="f-label">CR3 (PDBR)</div><div class="f-val">32-bit physical address</div><div class="f-desc">The page directory base — this task's entire address space, swapped as one field alongside everything else.</div></div>
+      <div class="dossier-field"><div class="f-label">ESP0/SS0, ESP1/SS1, ESP2/SS2</div><div class="f-val">3 × stack pointer pairs</div><div class="f-desc">One safe kernel-side stack per privilege level 0–2, used whenever a *privilege* change happens — this field alone outlived the whole hardware-switching idea. More in Section 05.</div></div>
+      <div class="dossier-field"><div class="f-label">I/O Map Base</div><div class="f-val">16-bit offset</div><div class="f-desc">Points to a bitmap, later in the same TSS, that grants this task fine-grained permission to individual I/O ports without needing full Ring 0.</div></div>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">😲 Even "Full Hardware" Wasn't Actually Full</div>
+    Look closely at that field list: there's no FPU/x87 state anywhere in it. Intel's own "do the entire context switch in hardware" structure didn't cover the floating-point register file. Instead, the CPU used a separate trick — a <code>TS</code> ("task switched") bit in <code>CR0</code>, set automatically on every task switch, that caused the <em>next</em> FPU instruction to fault (<code>#NM</code>) so software could lazily save and restore FPU state by hand. Even in Intel's most maximalist hardware vision, a piece of the switch still had to be done in software. That should be a hint about how the rest of this story goes.
+  </div>
+
+  <p class="reveal">The TSSD's <strong>Type</strong> field — the same field the segmentation article showed you, just with different values this time — also quietly encodes something clever: whether a given TSS is currently <em>busy</em>. A 32-bit Available TSS descriptor uses type <code>0x9</code>; the exact same descriptor flips to type <code>0xB</code>, "Busy," the instant the CPU switches into it, and flips back on the way out via <code>iret</code>. That's the hardware's own guard against re-entrancy — you cannot far-jump into a TSS that's already marked busy (except by returning to it through the nested-task chain via <code>iret</code>), which is precisely the kind of double-entry bug a kernel's own scheduler has to guard against by hand today.</p>
+
+  <p class="reveal">Now compare that to the structure actually used today. In 64-bit long mode, AMD and Intel didn't just stop using hardware task switching — they physically <em>redesigned</em> the TSS format, and the redesign is itself a confession. Task gates aren't even supported in 64-bit mode; the CPU won't let you attempt a hardware task switch at all. So the fields that only existed to support one got deleted:</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>64-bit Task State Segment — what actually survived</span><span style="color:var(--muted);font-size:.7rem">a fixed 104 bytes again, but almost entirely different contents</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field vestigial"><div class="f-label">General registers, segment selectors, EFLAGS, EIP, previous-task link, LDTR</div><div class="f-val">GONE</div><div class="f-desc">Deleted entirely from the format. There is no hardware task switch in long mode, so there is nothing to save them for.</div></div>
+      <div class="dossier-field used"><div class="f-label">RSP0, RSP1, RSP2</div><div class="f-val">3 × 64-bit stack pointers</div><div class="f-desc">Direct descendants of ESP0–ESP2 — supplied to the CPU on a privilege-level change. RSP0 is the one that matters almost every time.</div></div>
+      <div class="dossier-field used"><div class="f-label">IST1 through IST7</div><div class="f-val">7 × 64-bit stack pointers</div><div class="f-desc">Brand new in long mode. Always-valid emergency stacks for the CPU's scariest exceptions. Section 06 is entirely about this field.</div></div>
+      <div class="dossier-field used"><div class="f-label">I/O Map Base</div><div class="f-val">16-bit offset</div><div class="f-desc">Survived unchanged — still points to an optional per-task I/O permission bitmap.</div></div>
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field (32-bit name)</th><th>In 32-bit TSS</th><th>In 64-bit TSS</th><th>Modern-day status</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Previous Task Link</td><td>Yes</td><td class="neg">Removed</td><td class="neg">Vestigial — nested hardware task switching is gone</td></tr>
+        <tr><td class="hl">EAX…EDI (GP registers)</td><td>Yes</td><td class="neg">Removed</td><td class="neg">Vestigial — software context switch owns this now</td></tr>
+        <tr><td class="hl">CS/SS/DS/ES/FS/GS</td><td>Yes</td><td class="neg">Removed</td><td class="neg">Vestigial — not part of a syscall/interrupt entry</td></tr>
+        <tr><td class="hl">LDTR</td><td>Yes</td><td class="neg">Removed</td><td class="neg">Vestigial — almost nobody uses per-task LDTs anymore</td></tr>
+        <tr><td class="hl">EFLAGS / EIP</td><td>Yes</td><td class="neg">Removed</td><td class="neg">Vestigial — pushed to the stack by the trap mechanism instead</td></tr>
+        <tr><td class="hl">CR3 / PDBR</td><td>Yes</td><td class="neg">Removed</td><td class="neg">Vestigial — the kernel loads CR3 itself, in software, on switch</td></tr>
+        <tr><td class="hl">ESP0/SS0 → RSP0</td><td>Yes</td><td class="pos">Yes</td><td class="pos">Used — every Ring 3 → Ring 0 trap needs this</td></tr>
+        <tr><td class="hl">ESP1/SS1, ESP2/SS2 → RSP1, RSP2</td><td>Yes</td><td class="pos">Yes</td><td class="mut">Rarely used — Ring 1/2 are essentially unused on Linux/Windows</td></tr>
+        <tr><td class="hl">IST1–IST7</td><td class="neg">Did not exist</td><td class="pos">Yes</td><td class="pos">Used — double fault, NMI, machine check, debug</td></tr>
+        <tr><td class="hl">I/O Map Base</td><td>Yes</td><td class="pos">Yes</td><td class="mut">Rarely used — only processes calling <code>ioperm()</code>/<code>iopl()</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔍 The One Field That Actually Kept Its Original Job: I/O Map Base</div>
+    Ordinarily, touching a hardware I/O port with <code>in</code>/<code>out</code> requires full Ring 0, or at least a CPL numerically ≤ the CPU's <code>IOPL</code> flag. The I/O permission bitmap is Intel's escape hatch for a narrower case: a normally-unprivileged process that a kernel deliberately trusts with a handful of specific ports — a userspace X server needing direct video-card port access, say. Each bit in the bitmap, one per I/O port number, says "this specific process may access this specific port directly, no trap, no kernel mediation." The <strong>I/O Map Base</strong> field just holds the byte offset, inside that same TSS, where the bitmap begins — a pointer to a pointer's target, tucked inside a structure that's mostly retired. Linux exposes this to userspace through the <code>ioperm()</code> and <code>iopl()</code> syscalls, and updates the live TSS's bitmap on a context switch only for the rare process that actually uses them.
+  </div>
+</div>
+</section>
+
+<section id="compare">
+<div class="container">
+  <div class="section-num">03 — See It Side By Side</div>
+  <h2>Hardware Switch vs <span class="accent c">Software</span> Switch</h2>
+  <p class="reveal">The clearest way to understand why one of these approaches survived and the other didn't is to watch them work on the exact same job — swapping out one running task for another — and count what each one actually touches. Same starting point, same ending point, two completely different amounts of work along the way. Run both below and watch the field list light up.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="cmpLabel">▶ Choose a switch mechanism to animate</div>
+    <canvas id="cmpCanvas" height="430"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runCmp('hw')">▶ Hardware task switch (far jmp to a TSS)</button>
+    <button class="ctrl-btn cyan" onclick="runCmp('sw')">▶ Software context switch (kernel switch_to)</button>
+    <button class="ctrl-btn red" onclick="resetCmp()">Reset</button>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">👀 What To Watch For</div>
+    The hardware column touches <em>every</em> field, every time, no exceptions — it's a fixed microcoded sequence and it cannot skip a row just because that row didn't change. The software column skips almost everything that doesn't actually need touching. That gap is the entire reason this article exists.
+  </div>
+
+  <p class="reveal">Notice, too, that "skipped" isn't a shortcut the software path <em>discovered</em> — it's a shortcut the hardware path was structurally incapable of taking. A microcoded instruction sequence baked into the silicon has no way to ask "does this specific process even use an LDT?" or "did any segment register actually change since last time?" It just runs its fixed list, top to bottom, every time. Software gets to ask those questions, because software is, by definition, allowed to have an opinion.</p>
+</div>
+</section>
+
+<section id="whylost">
+<div class="container">
+  <div class="section-num">04 — The Twist</div>
+  <h2>Why Operating Systems <span class="accent r">Abandoned</span> It</h2>
+  <p class="reveal">Here's the part that surprises people: hardware task switching didn't lose because it was buggy, or unsafe, or hard to program. It lost a straightforward speed contest. A hand-written software context switch, running on the very same CPU, reliably beat the CPU's own built-in task-switch instruction. Let that sit for a second — the manufacturer's own "let silicon do it" feature was slower than a kernel engineer's assembly loop.</p>
+
+  <h3>Reason one: hardware can't skip work it doesn't know is unnecessary</h3>
+  <p class="reveal">A hardware task switch is <em>unconditional</em>. It doesn't know — and architecturally can't know — that your operating system uses a flat memory model where <code>ds</code>, <code>es</code>, and <code>ss</code> barely ever change between tasks. It reloads all six segment registers anyway, every single switch, because the microcode sequence has no branch for "actually, skip this one, nothing changed." A software context switch, written by someone who knows exactly how their OS uses segmentation, simply never touches those registers at all when they don't need it.</p>
+
+  <h3>Reason two: hardware can't be tuned, inlined, or scheduled around</h3>
+  <p class="reveal">Software context-switch code lives inside the compiler's and CPU's normal optimization machinery — it can be hand-written in assembly, inlined at the call site, reordered by the compiler, and its instructions can be predicted and speculated around like any other code. A hardware task switch is none of that. It's a fixed, opaque, <strong>serializing</strong> event: the pipeline can't speculate past it, can't overlap it with other work, can't reorder around it. It is, by design, a wall.</p>
+
+  <h3>Reason three: the kernel needs to do other bookkeeping anyway</h3>
+  <p class="reveal">A real context switch is never just "save registers, load registers." The scheduler also has to update run-queue statistics, decide who runs next, handle timing accounting, and possibly wake up other waiters — logic that has to be software regardless. Once you accept that software has to run right before and right after the switch either way, folding the register save/restore into that same hand-tuned software path costs you almost nothing extra, while a hardware task switch forces an awkward, expensive detour through a completely separate, fixed-cost mechanism.</p>
+
+  <h3>Reason four: it forces a TLB flush you often don't even need</h3>
+  <p class="reveal">Remember that <code>CR3</code> sits right there in the TSS as an ordinary field, saved and loaded exactly like every other one. That means a hardware task switch reloads <code>CR3</code> <em>every single time</em> — even when switching between two threads of the <em>same</em> process, which by definition share one address space and one <code>CR3</code> value already. Reloading <code>CR3</code> isn't free: it's specifically what triggers a full flush of the <strong>TLB</strong>, the CPU's cache of virtual-to-physical translations, forcing every subsequent memory access to walk the page tables from scratch until the cache warms back up. A software context switch knows exactly when the address space is actually changing and only reloads <code>CR3</code> — and pays that TLB tax — when it truly has to. Thread-to-thread switches within one process, which are extremely common, pay nothing at all on this front.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad"><h4>🐌 Hardware Task Switch (TSS far jmp)</h4>Touches all 8 GP registers, all 6 segment selectors, LDTR, EFLAGS, EIP, and CR3 — unconditionally, every time. Fully serializing; the pipeline cannot work around it. Fixed sequence, no OS-specific tuning possible.</div>
+    <div class="compare-card good"><h4>⚡ Software Context Switch</h4>Touches only what's known to have changed — often just the stack pointer, a handful of callee-saved registers, and CR3 (only if the address space differs). Hand-optimized, inlinable, and integrated directly with the scheduler's other bookkeeping.</div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 One Honest Exception, From Linux's Own History</div>
+    Classic 32-bit Linux actually did use a sliver of hardware task switching — for exactly one case. Handling a <strong>double fault</strong> safely means you cannot trust the current kernel stack is even valid (that's often <em>why</em> you're in a double fault). x86-32 has no IST mechanism to solve that. So 32-bit Linux kept one dedicated, statically-allocated TSS reachable via a task gate purely for <code>#DF</code>: a hardware task switch guarantees a fresh, known-good stack pointer with zero reliance on whatever the old stack pointer currently held. It's a tiny, single-purpose use of the very mechanism the rest of the kernel abandoned — solving precisely the problem the 64-bit IST field (Section 06) was later built to solve more cheaply.
+  </div>
+</div>
+</section>
+
+<section id="stack0">
+<div class="container">
+  <div class="section-num">05 — What The TSS Is Actually For, Part One</div>
+  <h2><span class="accent">RSP0</span> and Crossing Rings</h2>
+  <p class="reveal">So if task switching itself is dead, why does every modern x86-64 kernel still keep a TSS around and load it at boot? Because one job never went away: <strong>supplying a trustworthy stack pointer the moment the CPU changes privilege level.</strong></p>
+  <p class="reveal">Think about what has to happen the instant user-mode (CPL 3) code triggers a trap into the kernel (CPL 0) — a page fault, a hardware interrupt, a software <code>int</code> instruction. The CPU is about to start executing kernel code, and it needs somewhere to push the interrupted context (<code>SS</code>, old <code>RSP</code>, <code>RFLAGS</code>, <code>CS</code>, <code>RIP</code>). It absolutely cannot keep using whatever stack pointer user-mode code happened to have loaded — that stack is untrusted, might be misaligned on purpose, and handing the kernel's first instructions a stack an attacker controls is exactly the kind of hole real exploits are built from.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">🔑 Where RSP0 Comes From</div>
+    For any Ring 3 → Ring 0 transition made through the classic interrupt/trap-gate mechanism (hardware interrupts, CPU exceptions, the legacy <code>int</code> instruction), the CPU reads a brand-new stack pointer straight out of <strong>RSP0</strong> in the <em>currently loaded</em> TSS, switches <code>RSP</code> to it, and only <em>then</em> starts pushing the trap frame. This is the field the segmentation article's TSSD entry was quietly pointing at all along — a real hardware register-loading step that happens on essentially every syscall and interrupt your machine handles. The "Crossing the Ring" companion piece in this series walks this exact hand-off byte-by-byte, frame-push by frame-push, if you want the full mechanical play-by-play; the short version that matters here is simply: <em>the TSS is where that trusted address lives.</em>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>But wait — doesn't the fast <code>syscall</code> path use this too?</b> Actually, no, and it's worth being precise here. The <code>SYSCALL</code>/<code>SYSRET</code> instruction pair — the one Linux and Windows actually use for ordinary system calls — is a separate, MSR-driven mechanism. The new <code>CS</code>/<code>SS</code> come from the <code>IA32_STAR</code> MSR and the new <code>RIP</code> from <code>IA32_LSTAR</code>. Critically, <code>SYSCALL</code> does <em>not</em> automatically switch the stack pointer at all — <code>RSP</code> still holds the user-mode value the instant kernel code starts running. The kernel's own entry code has to manually pivot onto a safe per-CPU kernel stack (typically via <code>swapgs</code> plus a known per-CPU pointer) before it dares do anything else. RSP0 is for the older gate-based path — interrupts, exceptions, and legacy traps — not for the fast syscall path. Both roads lead to "the kernel supplies its own stack, in software or via the TSS," which is really the whole theme of this page.
+  </div>
+
+  <p class="reveal">Concretely, here's the sequence the CPU actually runs when a user-mode page fault fires and lands on a gate-based path:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Fault detected mid-instruction</strong>The CPU notices the memory access is invalid and prepares to deliver vector 14 (<code>#PF</code>) using the IDT entry registered for it.</div></li>
+    <li><div class="step-body"><strong>Privilege check: is this a ring change?</strong>The CPU compares the target gate's code segment CPL (0, kernel) against the CPL that was running (3, user). They differ — this is a real privilege escalation, not a same-ring trap.</div></li>
+    <li><div class="step-body"><strong>RSP0 is read from the current TSS</strong>Because the privilege level is changing, the CPU pulls a fresh <code>SS:RSP</code> straight out of the currently loaded TSS's <code>RSP0</code> field — never touching the old, untrusted user-mode stack pointer for this step.</div></li>
+    <li><div class="step-body"><strong>The trap frame is pushed — onto the new stack</strong>Old <code>SS</code>, old <code>RSP</code>, <code>RFLAGS</code>, <code>CS</code>, <code>RIP</code>, and (for a page fault specifically) an error code all get pushed — but onto the brand-new kernel stack from step 3, not the old one.</div></li>
+    <li><div class="step-body"><strong>The kernel's page-fault handler begins</strong>Execution jumps to the handler's address from the IDT gate, already running at CPL 0, already standing on a stack the kernel itself controls and trusts completely.</div></li>
+  </ol>
+
+  <div class="sidenote reveal">
+    <b>What if there's no privilege change at all?</b> If an interrupt fires while the CPU is already at CPL 0 — one kernel-mode interrupt handler getting interrupted by another, for instance — step 2 finds no privilege change, and the CPU skips the RSP0 lookup entirely, simply continuing to push the trap frame onto whatever stack was already active. The TSS's stack-pointer fields only ever get consulted at the exact moment a <em>ring boundary</em> is being crossed — which is a nice, tight illustration of just how narrowly scoped the TSS's surviving job really is.
+  </div>
+
+  <p class="reveal">Either way — via RSP0 or via manual <code>swapgs</code> plumbing — the principle from the very first article in this series is being enforced in concrete silicon: crossing from a lower ring to a higher one is never something the lower ring gets to control the mechanics of. The higher ring always insists on stepping onto ground it trusts first.</p>
+</div>
+</section>
+
+<section id="ist">
+<div class="container">
+  <div class="section-num">06 — What The TSS Is Actually For, Part Two</div>
+  <h2>The <span class="accent c">Interrupt Stack Table</span></h2>
+  <p class="reveal">RSP0 solves the ordinary case. But some exceptions are not ordinary — they're the CPU telling you something has gone wrong in a way that makes even RSP0 unsafe to trust. What if the "normal" kernel stack pointer is the <em>problem</em>? A kernel stack overflow is a real, observed failure mode — and it triggers a page fault at the exact moment the CPU has no good stack to push the resulting trap frame onto.</p>
+
+  <p class="reveal">Long mode's answer is the <strong>Interrupt Stack Table (IST)</strong>: up to <strong>7</strong> alternate stack pointers — <code>IST1</code> through <code>IST7</code> — stored right there in the same TSS as RSP0. Each entry in the IDT (the interrupt descriptor table) can optionally tag itself with a 3-bit IST index. A value of 0 means "use the normal RSP0-based logic." A nonzero value means something much stronger:</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🛡️ The IST Guarantee</div>
+    "For <em>this specific</em> vector, don't even look at the current stack pointer — no matter what it is, no matter whether it's valid, corrupted, or mid-overflow — switch <code>RSP</code> unconditionally to this known-good, dedicated, always-valid address before running the handler." That's a stronger promise than RSP0 makes, and it's reserved for exactly the exceptions where you can't afford to be wrong about stack validity.
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">Double Fault (#DF, vector 8)</span></div><div class="fam-desc">Fired when the CPU fails to even deliver a first exception. Classic cause: a kernel stack overflow triggers a page fault, and the page-fault handler's own attempt to push a frame fails too. Needs a stack that has nothing to do with the one that just broke.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--orange)">NMI (Non-Maskable Interrupt)</span></div><div class="fam-desc">Can arrive at literally any instruction boundary, including mid-way through the kernel's own interrupt entry code. You cannot assume any particular stack state is stable when this fires.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--purple)">Machine Check (#MC, vector 18)</span></div><div class="fam-desc">The hardware itself is reporting it may be malfunctioning. This is the last moment you want to discover your stack pointer is also broken.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Debug Exception (#DB, vector 1)</span></div><div class="fam-desc">Commonly given its own IST slot too, since debug traps can legitimately fire from awkward, half-finished kernel states while single-stepping.</div></div>
+  </div>
+
+  <p class="reveal">Linux and Windows both assign small, dedicated, permanently-mapped stacks to several of these vectors via IST slots, set up once at boot. It's the direct architectural descendant of the double-fault-only task gate that 32-bit Linux relied on — same underlying worry ("what if the stack itself is the thing that's broken"), a cheaper and more general hardware mechanism to answer it.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Exception</th><th>Vector</th><th>Uses an IST slot?</th><th>Why it can't just use RSP0</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Double Fault (#DF)</td><td>8</td><td class="pos">Yes, dedicated</td><td>Often caused by a stack overflow — the "normal" stack is frequently the exact thing that just broke.</td></tr>
+        <tr><td class="hl">NMI</td><td>2</td><td class="pos">Yes, dedicated</td><td>Can interrupt literally any instruction, including the kernel's own in-progress interrupt entry code.</td></tr>
+        <tr><td class="hl">Machine Check (#MC)</td><td>18</td><td class="pos">Yes, dedicated</td><td>Signals possible hardware malfunction — the last moment to discover the stack is also unreliable.</td></tr>
+        <tr><td class="hl">Debug (#DB)</td><td>1</td><td class="pos">Often, dedicated</td><td>Can legitimately fire from half-finished kernel states while single-stepping.</td></tr>
+        <tr><td class="hl">Page Fault, General Protection, ordinary interrupts</td><td>varies</td><td class="mut">No — IST index 0</td><td>The normal RSP0-based path is trusted and sufficient; no need to burn a scarce IST slot.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<section id="onepercpu">
+<div class="container">
+  <div class="section-num">07 — The Final Irony</div>
+  <h2>One TSS Per <span class="accent">Core</span> — Not Per Task</h2>
+  <p class="reveal">Sit with how far this has drifted from the original 1985 pitch. The TSS was designed to be <strong>one per task</strong> — every runnable task in the system was meant to own its own TSS, and switching between hundreds of them was supposed to be routine. Modern Linux and Windows instead keep exactly <strong>one TSS per physical CPU core</strong>, set up once, essentially for the lifetime of the machine.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Boot time: one TSS descriptor per core is built in the GDT</strong>Each CPU core gets its own TSS structure and its own TSSD entry in the (per-core) GDT — not one per process, not one per thread. Just one, permanently, per core.</div></li>
+    <li><div class="step-body"><strong><code>ltr</code> loads it into the Task Register</strong>The privileged <strong><code>ltr</code></strong> ("load task register") instruction loads that TSS's selector into the CPU's hidden <strong>Task Register (TR)</strong> — a 16-bit visible selector backed by a hidden cache of that TSS's base address and limit, exactly like the segmentation registers from the earlier article cache their descriptor's contents. <code>ltr</code> runs once, at boot, and essentially never again.</div></li>
+    <li><div class="step-body"><strong>RSP0 gets rewritten constantly, not the TSS itself</strong>Here's the trick that makes "one TSS per core" compatible with running thousands of different tasks: the kernel doesn't reload the whole TSS on every context switch — it just overwrites that one core's TSS's <code>RSP0</code> field (and IST fields, rarely) to point at whichever task is about to run next. The TSS became a fixed piece of per-core furniture; only one small field inside it churns.</div></li>
+    <li><div class="step-body"><strong>The actual task-switching, meanwhile, is 100% software</strong>Register save/restore for the ten thousand real task switches your machine does per second happens exactly the way the PCB/threads article described: by hand, in the scheduler's <code>switch_to</code>-style code, using each task's own PCB/TCB — never by touching the Task Register, never by a far jump to a TSS descriptor.</div></li>
+  </ol>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad"><h4>📜 The TSS's Job, 1985</h4>One TSS per task, in their thousands. A far <code>jmp</code>/<code>call</code> or a task gate performs the CPU's most important repeated operation — the full context switch — entirely in hardware, unconditionally saving and restoring every register, every segment, and the address space itself.</div>
+    <div class="compare-card good"><h4>🖥️ The TSS's Job, Today</h4>One TSS per core, loaded once at boot via <code>ltr</code> and essentially never reloaded again. Its only living duties: hand the CPU a trustworthy Ring-0 stack pointer on a privilege change (RSP0), and hand it a guaranteed-good emergency stack for the handful of exceptions that can't trust anything else (IST1–7).</div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Shape of the Whole Story</div>
+    Intel built a mechanism for switching between many TSSs. Operating systems kept exactly one TSS, forever, per core — and repurposed a couple of its fields as a mailbox for "here's the stack to use right now." The structure survived; the entire premise it was designed around didn't. And yet that narrow surviving job is not optional trivia — it runs on every syscall, every hardware interrupt, every page fault your machine handles, all day, every day.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>History rhymed once more, one layer up.</b> When Intel and AMD later designed hardware support for running whole guest operating systems (VT-x's VMCS, AMD-V's VMCB), they faced the exact same design fork the TSS once represented — and made the same choice the industry already made once. A "VM exit/entry" absolutely does save and restore a large, fixed set of guest state in hardware, but crucially the hypervisor still gets fine control over exactly which pieces get saved eagerly versus lazily, precisely because a fully rigid all-or-nothing hardware switch was already a known, learned-the-hard-way mistake.
+  </div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">TSS (Task State Segment)</div><div class="glossary-def">A fixed-format memory structure originally meant to hold one task's complete CPU state; today, on x86-64, reduced mainly to stack-pointer fields (RSP0–2, IST1–7) plus an I/O bitmap pointer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TSSD (TSS Descriptor)</div><div class="glossary-def">The 8-byte system-type descriptor (S flag cleared) that describes a TSS's location and size — can only live in the GDT, never an LDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Task Register (TR)</div><div class="glossary-def">A hidden CPU register holding the selector of the currently loaded TSS, plus a cached copy of that TSS's base address and limit.</div></div>
+    <div class="glossary-card"><div class="glossary-term"><code>ltr</code> (Load Task Register)</div><div class="glossary-def">The privileged instruction that loads a TSS selector into TR — run once per core at boot on modern kernels, essentially never again.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Task Gate</div><div class="glossary-def">A special IDT/GDT/LDT entry that triggers a full hardware task switch, including from directly inside interrupt/exception handling. Not supported at all in 64-bit long mode.</div></div>
+    <div class="glossary-card"><div class="glossary-term">RSP0 / ESP0</div><div class="glossary-def">The Ring-0 stack pointer field in the currently loaded TSS, loaded automatically by the CPU whenever a trap or interrupt raises privilege from Ring 3 to Ring 0 via a gate.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IST (Interrupt Stack Table)</div><div class="glossary-def">Seven alternate, always-trusted kernel stack pointers (IST1–IST7) a 64-bit TSS can supply, used for exceptions like double fault and NMI where the normal stack pointer can't be trusted.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Double Fault (#DF)</div><div class="glossary-def">Vector 8 — fired when the CPU fails to deliver an exception normally, often from a kernel stack overflow; a canonical IST use case.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SYSCALL / SYSRET</div><div class="glossary-def">The fast, MSR-driven system-call entry mechanism used by modern OSes; unlike gate-based traps, it does not use RSP0 — the kernel switches stacks manually.</div></div>
+    <div class="glossary-card"><div class="glossary-term">I/O Permission Bitmap</div><div class="glossary-def">An optional per-TSS bitmap, pointed to by the TSS's I/O Map Base field, granting fine-grained access to individual I/O ports without full Ring 0.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TLB (Translation Lookaside Buffer)</div><div class="glossary-def">The CPU's cache of virtual-to-physical translations. Reloading CR3 flushes it — a real cost a hardware task switch paid on every single switch, needed or not.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CR3 / PDBR</div><div class="glossary-def">The page-directory/page-table base register — the root of the current address space. Part of the original TSS; loaded manually by software today, and only when the address space actually changes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Lazy FPU Switching</div><div class="glossary-def">A technique using CR0's TS flag: the CPU faults (#NM) on the first FPU instruction after a switch, letting software save/restore FPU state only when actually needed — notably, never covered by the hardware TSS switch itself.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The TSS: Intel's Abandoned Idea for Task Switching in Hardware</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion deep-dive to "Segmentation in Hardware" · Operating System Sweet Stories</p>
+</footer>
+
+<script>
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+// ── HARDWARE VS SOFTWARE SWITCH COMPARISON CANVAS ──────────────────────────
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const CMP_FIELDS=[
+  {label:'General-purpose registers (8)', hw:'touch', sw:'touch', swNote:'callee-saved subset only'},
+  {label:'Segment selectors CS/SS/DS/ES/FS/GS', hw:'touch', sw:'skip', swNote:'flat model, unchanged'},
+  {label:'LDTR selector', hw:'touch', sw:'skip', swNote:'unused by Linux/Windows'},
+  {label:'EFLAGS / instruction pointer', hw:'touch', sw:'touch', swNote:'via normal call/ret'},
+  {label:'CR3 (page-table base)', hw:'touch', sw:'cond', swNote:'only if address space differs'},
+  {label:'Stack pointer(s)', hw:'touch', sw:'touch', swNote:'always — this is the switch itself'},
+  {label:'FPU / SSE / AVX state', hw:'partial', sw:'cond', swNote:'lazily/eagerly, only if used'},
+  {label:'I/O permission bitmap', hw:'touch', sw:'skip', swNote:'rarely used at all'},
+];
+
+let cmpState={rows:0, running:false, mode:null};
+
+function stateColor(v){
+  if(v==='touch') return C.orange;
+  if(v==='cond') return C.gold;
+  if(v==='partial') return C.purple;
+  return C.muted;
+}
+function stateLabel(v){
+  if(v==='touch') return 'TOUCHED';
+  if(v==='cond') return 'CONDITIONAL';
+  if(v==='partial') return 'PARTIAL (via #NM)';
+  return 'SKIPPED';
+}
+
+function drawCmp(revealCount, mode){
+  const canvas=document.getElementById('cmpCanvas');
+  const W=gW(canvas), H=430;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
+
+  const lx=20, rx=W/2+10;
+  const cw=W/2-30;
+  const top=44, rowH=42;
+
+  ctx.font='bold 12px Source Code Pro,monospace';
+  ctx.textAlign='left';
+  ctx.fillStyle= mode==='hw' ? C.orange : C.muted;
+  ctx.fillText('HARDWARE — TSS far jmp', lx, 26);
+  ctx.fillStyle= mode==='sw' ? C.cyan : C.muted;
+  ctx.fillText('SOFTWARE — kernel switch_to()', rx, 26);
+
+  ctx.strokeStyle=C.border; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(W/2, 34); ctx.lineTo(W/2, H-50); ctx.stroke();
+
+  let hwTouched=0, swTouched=0;
+  for(let i=0;i<CMP_FIELDS.length;i++){
+    const f=CMP_FIELDS[i];
+    const y=top+i*rowH;
+    const active = i < revealCount;
+    const dim = !active;
+
+    // row label (shared, drawn once centered over the divider in small text above each box pair)
+    ctx.font='10px Lato,sans-serif';
+    ctx.fillStyle= dim? 'rgba(122,155,191,.35)' : C.text;
+    ctx.textAlign='center';
+    ctx.fillText(f.label, W/2, y+2);
+
+    // hardware box
+    const hwv = active? f.hw : null;
+    ctx.textAlign='left';
+    const boxY=y+8, boxH=24;
+    ctx.fillStyle = hwv? 'rgba(251,146,60,.12)':'rgba(255,255,255,.02)';
+    ctx.fillRect(lx, boxY, cw, boxH);
+    ctx.strokeStyle = hwv? stateColor(hwv) : C.border;
+    ctx.lineWidth=1; ctx.strokeRect(lx,boxY,cw,boxH);
+    if(hwv){
+      ctx.fillStyle=stateColor(hwv);
+      ctx.font='bold 10px Source Code Pro,monospace';
+      ctx.fillText(stateLabel(hwv), lx+10, boxY+16);
+      hwTouched++;
+    }
+
+    // software box
+    const swv = active? f.sw : null;
+    ctx.fillStyle = swv? (swv==='skip'?'rgba(122,155,191,.08)':'rgba(56,189,248,.12)') : 'rgba(255,255,255,.02)';
+    ctx.fillRect(rx, boxY, cw, boxH);
+    ctx.strokeStyle = swv? (swv==='skip'? C.muted : stateColor(swv)) : C.border;
+    ctx.lineWidth=1; ctx.strokeRect(rx,boxY,cw,boxH);
+    if(swv){
+      ctx.fillStyle= swv==='skip'? C.muted : stateColor(swv);
+      ctx.font='bold 10px Source Code Pro,monospace';
+      ctx.fillText(stateLabel(swv)+(swv!=='skip' && f.swNote? '  ·  '+f.swNote : (swv==='skip'? '  ·  '+f.swNote:'')), rx+10, boxY+16);
+      if(swv!=='skip') swTouched++;
+    }
+  }
+
+  // tally + serialization penalty bar at bottom
+  const barY=H-38;
+  ctx.font='11px Source Code Pro,monospace';
+  if(revealCount>=CMP_FIELDS.length){
+    ctx.textAlign='left';
+    ctx.fillStyle=C.orange;
+    ctx.fillText(`Hardware: ${hwTouched}/${CMP_FIELDS.length} fields touched, unconditionally + full pipeline serialization`, lx, barY);
+    ctx.fillStyle=C.cyan;
+    ctx.fillText(`Software: ${swTouched}/${CMP_FIELDS.length} fields touched — the rest cost nothing`, rx, barY);
+
+    // penalty bars
+    const maxBarW=cw;
+    const hwBarW = maxBarW; // hardware always "full cost"
+    const swBarW = maxBarW * (swTouched/CMP_FIELDS.length) * 0.55; // software: fewer touches + no serialization tax
+    ctx.fillStyle='rgba(251,146,60,.35)'; ctx.fillRect(lx, barY+8, hwBarW, 10);
+    ctx.strokeStyle=C.orange; ctx.strokeRect(lx, barY+8, hwBarW, 10);
+    ctx.fillStyle='rgba(56,189,248,.35)'; ctx.fillRect(rx, barY+8, swBarW, 10);
+    ctx.strokeStyle=C.cyan; ctx.strokeRect(rx, barY+8, swBarW, 10);
+  } else {
+    ctx.textAlign='center'; ctx.fillStyle=C.muted;
+    ctx.fillText('Choose a scenario above to animate field-by-field', W/2, barY+10);
+  }
+}
+
+function runCmp(mode){
+  cmpState.mode=mode;
+  document.getElementById('cmpLabel').textContent = mode==='hw'
+    ? '▶ Hardware task switch — every field, unconditionally'
+    : '▶ Software context switch — only what actually changed';
+  let revealCount=0;
+  const total=CMP_FIELDS.length;
+  const stepMs= mode==='hw' ? 260 : 170; // hardware is deliberately drawn slower — it has no choice but to do every step
+  function tick(){
+    revealCount++;
+    drawCmp(revealCount, mode);
+    if(revealCount<total){
+      setTimeout(()=>requestAnimationFrame(tick), stepMs);
+    } else {
+      document.getElementById('cmpLabel').textContent = mode==='hw'
+        ? '▶ Done — hardware touched everything, no exceptions. Try software.'
+        : '▶ Done — software skipped most of the list. Try hardware.';
+    }
+  }
+  requestAnimationFrame(tick);
+}
+function resetCmp(){
+  document.getElementById('cmpLabel').textContent='▶ Choose a switch mechanism to animate';
+  drawCmp(0,null);
+}
+resetCmp();
+window.addEventListener('resize', ()=>{ if(!cmpState.running) drawCmp(cmpState.mode? CMP_FIELDS.length:0, cmpState.mode); });
+</script>
+</body>
+</html>

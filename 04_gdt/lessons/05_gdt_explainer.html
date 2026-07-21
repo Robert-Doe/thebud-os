@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The GDT — The Machine's One Shared Catalog of Segments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)} h2 .accent.c{color:var(--cyan)} h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--purple)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#what" title="What Is the GDT"></a>
+  <a class="toc-dot" href="#gdtvsldt" title="GDT vs LDT"></a>
+  <a class="toc-dot" href="#gdtr" title="Finding the Table"></a>
+  <a class="toc-dot" href="#math" title="The Indexing Math"></a>
+  <a class="toc-dot" href="#lookup" title="Watch a Lookup"></a>
+  <a class="toc-dot" href="#worked" title="Worked Example"></a>
+  <a class="toc-dot" href="#linux" title="GDT in Linux"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Chapter 2 · A Dedicated Deep Dive</div>
+    <h1>The GDT: One<br><span>Shared Catalog</span></h1>
+    <p class="hero-sub">A segment selector's index field is a row number. But a row number is useless without knowing which book it's a row number <em>in</em>. The Global Descriptor Table is that book — the one catalog nearly every segment on the machine gets looked up in, sitting in kernel memory, findable through exactly one register, and readable by hardware alone.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">GDT Per System</div></div>
+      <div class="hero-stat"><div class="num">8-byte</div><div class="lbl">Per Descriptor Slot</div></div>
+      <div class="hero-stat"><div class="num">gdtr</div><div class="lbl">The Register That Finds It</div></div>
+      <div class="hero-stat"><div class="num">×8</div><div class="lbl">Index Multiplier</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="what">
+<div class="container">
+  <div class="section-num">01 — The Big Idea</div>
+  <h2>What Is the <span class="accent">GDT</span>, Actually?</h2>
+  <p class="reveal">Think of a large library with one central card catalog at the front desk — a numbered set of drawers, and every drawer holds one card describing exactly one book: where it sits on the shelves, how thick it is, who's allowed to check it out. The <strong>Global Descriptor Table (GDT)</strong> is precisely this catalog, except every "card" is a Segment Descriptor, and every "book" is a memory segment.</p>
+  <p class="reveal">It is, structurally, nothing more exotic than an <em>array of 8-byte Segment Descriptors</em>, sitting somewhere in ordinary RAM — but RAM the kernel controls, that user-mode code cannot directly edit. There is normally exactly <strong>one</strong> GDT for the whole system (occasionally one per CPU on multiprocessor machines, kept in sync), which is precisely what makes it "Global": every process, every segment selector with TI=0, is looking things up in this same shared table.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A segment selector's <code>index</code> field, from the previous article, is nothing more than <strong>which drawer number to open in this specific catalog.</strong> The GDT is what turns "drawer number 2" into an actual, meaningful Segment Descriptor — base address, size, type, and privilege, all included.
+  </div>
+</div>
+</section>
+
+<section id="gdtvsldt">
+<div class="container">
+  <div class="section-num">02 — Two Catalogs, Different Scope</div>
+  <h2><span class="accent c">GDT</span> vs <span class="accent p">LDT</span></h2>
+  <p class="reveal">Recall the TI bit from the segment selector: 0 selects the GDT, 1 selects the currently active <strong>Local Descriptor Table (LDT)</strong>. Same structure — an array of 8-byte descriptors — completely different scope.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📖 GDT — the shared catalog</h4>
+      One per system. Holds descriptors every process can reference: the kernel's own code/data segments, the standard user-mode code/data segments every process uses, Task State Segment descriptors, and (notably) the descriptor that describes <em>where the current LDT itself lives</em>.
+    </div>
+    <div class="compare-card bad">
+      <h4>📔 LDT — the private supplement</h4>
+      Optional, and potentially different for every process. Used only if a process needs extra segments beyond what the GDT already offers — historically more relevant to old segmented MS-DOS/Windows-style programs than to typical Linux processes.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>So an LDT descriptor lives... in the GDT?</b> Yes — deliberately recursive. An LDT is itself just a segment, described by a special system-type Segment Descriptor (the S flag cleared) that, by rule, can only appear in the GDT. So finding a process's LDT is itself a GDT lookup, using a selector kept in the <code>ldtr</code> register. The GDT really is the one root catalog everything ultimately traces back to.
+  </div>
+</div>
+</section>
+
+<section id="gdtr">
+<div class="container">
+  <div class="section-num">03 — Finding the Catalog Itself</div>
+  <h2>The <span class="accent">gdtr</span> Register</h2>
+  <p class="reveal">If the GDT is just an array sitting in RAM, the CPU needs to know two things to use it: where it starts, and how big it is. Both live in a dedicated control register called <strong>gdtr</strong> — holding the GDT's base memory address plus its size (limit). A sibling register, <strong>ldtr</strong>, holds the address and size of whichever LDT is currently active for the running process.</p>
+
+  <div class="formula gold reveal">
+    <span class="label">What gdtr actually stores</span>
+    gdtr = { base address of the GDT in RAM, size of the GDT in bytes }
+    <span class="sub">Loaded once (typically at boot, by the kernel) via a privileged instruction — ordinary user-mode code cannot read or modify gdtr's contents.</span>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why gdtr Is Locked Down</div>
+    If user-mode code could repoint <code>gdtr</code> at memory of its own choosing, it could fabricate a Segment Descriptor with DPL 0, Base 0, and Limit covering all of RAM — and hand itself full, unrestricted access to everything. Loading <code>gdtr</code>/<code>ldtr</code> is itself a privileged instruction, refused outside Ring 0, for exactly the same silicon-level reason any other privileged instruction is refused there.
+  </div>
+</div>
+</section>
+
+<section id="math">
+<div class="container">
+  <div class="section-num">04 — The Arithmetic</div>
+  <h2>Turning an Index Into a <span class="accent">Real Address</span></h2>
+  <p class="reveal">Here's the entire trick, and it's genuinely just arithmetic. Every Segment Descriptor is exactly 8 bytes wide. So to find descriptor number <code>index</code>, the CPU just does simple array indexing — the same math a compiler generates for <code>array[i]</code> in any language.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The GDT lookup formula</span>
+    Descriptor Address = gdtr.base + (selector.index × 8)
+    <span class="sub">Read 8 bytes starting at that address, and you have the full Segment Descriptor — Base, Limit, Type, DPL, and everything else from the previous article.</span>
+  </div>
+
+  <p class="reveal">And once that descriptor is in hand, the very first formula from this whole series clicks fully into place:</p>
+
+  <div class="formula gold reveal">
+    <span class="label">Full journey, start to finish</span>
+    Linear Address = Descriptor.Base + Offset
+    <span class="sub">Where Descriptor.Base was fetched using exactly the gdtr + index×8 arithmetic above.</span>
+  </div>
+</div>
+</section>
+
+<section id="lookup">
+<div class="container">
+  <div class="section-num">05 — Watch It Happen</div>
+  <h2>A Live <span class="accent">GDT Lookup</span></h2>
+  <p class="reveal">Pick a segment selector and watch the CPU walk from selector, to catalog, to descriptor, to a final linear address.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="gdtLabel">▶ Choose a selector to look up</div>
+    <canvas id="gdtCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runGDT(2)">▶ Look up index 2 — kernel code</button>
+    <button class="ctrl-btn" onclick="runGDT(15)">▶ Look up index 15 — user data</button>
+    <button class="ctrl-btn red" onclick="resetGDT()">Reset</button>
+  </div>
+</section>
+</div>
+
+<section id="worked">
+<div class="container">
+  <div class="section-num">06 — Play By Play</div>
+  <h2>A Worked <span class="accent">Example</span></h2>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Start with a selector</strong>Say <code>cs</code> holds a selector with index = 15, TI = 0 (GDT), RPL = 3 (user-mode access).</div></li>
+    <li><div class="step-body"><strong>Consult gdtr</strong>The CPU reads the GDT's base address straight out of the gdtr register — say, for illustration, <code>0x00120000</code>.</div></li>
+    <li><div class="step-body"><strong>Compute the descriptor's address</strong><code>0x00120000 + (15 × 8) = 0x00120078</code>. This is a plain array index — no page tables, no paging unit involved yet.</div></li>
+    <li><div class="step-body"><strong>Fetch the 8-byte descriptor</strong>The CPU reads those 8 bytes and unpacks Base, Limit, Type, DPL, and the rest, exactly as laid out in the previous article's field table.</div></li>
+    <li><div class="step-body"><strong>Check privilege before proceeding</strong>The CPU compares the descriptor's DPL against the current CPL and the selector's RPL. If the access isn't allowed — say, RPL/CPL 3 trying to touch a DPL 0 segment — a general protection fault fires instead of completing the access.</div></li>
+    <li><div class="step-body"><strong>Compute the linear address</strong>Assuming the privilege check passes, the descriptor's Base field is added to the offset from the original logical address, producing the final linear address — ready to be handed to the paging unit.</div></li>
+  </ol>
+</div>
+</section>
+
+<section id="linux">
+<div class="container">
+  <div class="section-num">07 — One Layer Deeper</div>
+  <h2>How Linux Actually <span class="accent">Uses the GDT</span></h2>
+  <p class="reveal">Here's a twist worth knowing: Linux uses segmentation about as little as the hardware will allow. Rather than giving every process a tightly bounded segment the way old MS-DOS programs needed, Linux defines just a small, fixed handful of GDT entries — essentially one flat code segment and one flat data segment for Kernel Mode, and one flat code segment and one flat data segment for User Mode, each with Base = 0 and Limit covering the full addressable range.</p>
+  <p class="reveal">In other words, Linux uses the segmentation unit mostly just to <em>carry the CPL</em> (via which code segment's DPL is active) and otherwise gets out of the way, leaving essentially all real memory protection and address flexibility to the paging unit. The GDT is still consulted on every memory access — the hardware pipeline doesn't skip steps — but its entries are deliberately boring by design.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why This Is a Smart Design Choice</div>
+    Two protection mechanisms doing overlapping jobs (segmentation <em>and</em> paging) is redundant complexity. By flattening segmentation down to "cover everything, differ only by privilege level," Linux keeps one real protection mechanism — paging — as the source of truth, while still getting Ring 0 / Ring 3 separation almost for free out of the segmentation hardware it can't disable anyway.
+  </div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">GDT (Global Descriptor Table)</div><div class="glossary-def">The one shared, system-wide array of Segment Descriptors that TI=0 selectors index into.</div></div>
+    <div class="glossary-card"><div class="glossary-term">LDT (Local Descriptor Table)</div><div class="glossary-def">An optional, per-process array of additional Segment Descriptors, indexed by TI=1 selectors, itself described by an entry in the GDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">gdtr</div><div class="glossary-def">Control register holding the GDT's base address and size in RAM; loaded only via a privileged instruction.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ldtr</div><div class="glossary-def">Control register holding the currently active LDT's base address and size.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Descriptor Address Formula</div><div class="glossary-def">gdtr.base + (selector.index × 8) — plain array indexing into 8-byte descriptor slots.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Flat Segmentation (Linux)</div><div class="glossary-def">Linux's approach of giving Kernel/User code/data segments Base=0 and a limit spanning the full address range, leaving real protection to paging.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The GDT · Memory Addressing Series, Part 3</p>
+  <p style="margin-top:.5rem;font-size:.78rem">One catalog, indexed by arithmetic, guarded by hardware.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const PRESETS={
+  2:{name:'kernel code (index 2)',base:'0x00000000',dpl:'0',type:'code'},
+  15:{name:'user data (index 15)',base:'0x00000000',dpl:'3',type:'data'}
+};
+
+function drawGDT(t,phase,idx){
+  const canvas=document.getElementById('gdtCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const p=PRESETS[idx]||PRESETS[2];
+
+  // selector box top-left
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(14,16,W*0.26,60);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(14,16,W*0.26,60);
+  ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SELECTOR',14+W*0.13,36);
+  ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('index='+idx+'  TI=0  RPL='+p.dpl,14+W*0.13,54);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(p.name,14+W*0.13,68);
+
+  // gdtr box
+  ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(W*0.37,16,W*0.24,60);
+  ctx.strokeStyle=C.gold;ctx.strokeRect(W*0.37,16,W*0.24,60);
+  ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';
+  ctx.fillText('gdtr',W*0.37+W*0.12,36);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('base = 0x00120000',W*0.37+W*0.12,54);
+  ctx.fillText('size = ...bytes',W*0.37+W*0.12,66);
+
+  // formula box
+  ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(W*0.66,16,W*0.32,60);
+  ctx.strokeStyle=C.purple;ctx.strokeRect(W*0.66,16,W*0.32,60);
+  ctx.fillStyle=C.purple;ctx.font='bold 10px Source Code Pro,monospace';
+  ctx.fillText('base + index×8',W*0.66+W*0.16,36);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText('= 0x00120000+'+(idx*8),W*0.66+W*0.16,54);
+
+  // GDT array
+  const arrY=110, cellW=Math.min(46,(W-40)/16), arrH=32, startX=(W-16*cellW)/2;
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('THE GDT ARRAY (each slot = 8 bytes)',startX,arrY-8);
+  for(let i=0;i<16;i++){
+    const x=startX+i*cellW;
+    const hi=(i===idx);
+    ctx.fillStyle=hi?'rgba(245,200,66,.28)':'rgba(122,155,191,.08)';
+    ctx.fillRect(x,arrY,cellW-2,arrH);
+    ctx.strokeStyle=hi?C.gold:C.border;ctx.lineWidth=hi?2:1;
+    ctx.strokeRect(x,arrY,cellW-2,arrH);
+    ctx.fillStyle=hi?C.gold:C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(i,x+cellW/2-1,arrY+arrH/2+3);
+  }
+
+  // descriptor detail box
+  const descY=arrY+arrH+50;
+  ctx.fillStyle='rgba(74,222,128,.08)';ctx.fillRect(W*0.2,descY,W*0.6,90);
+  ctx.strokeStyle=C.green;ctx.strokeRect(W*0.2,descY,W*0.6,90);
+  ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SEGMENT DESCRIPTOR #'+idx,W*0.5,descY+20);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText('Base='+p.base+'   DPL='+p.dpl+'   Type='+p.type,W*0.5,descY+40);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('Linear Address = Base + Offset',W*0.5,descY+62);
+  ctx.fillText('(handed next to the paging unit)',W*0.5,descY+76);
+
+  const captions={
+    idle:'Choose a selector above to run the lookup',
+    step1:'Selector read from cs/ds/etc — index='+idx+', TI=0 → use the GDT',
+    step2:'CPU reads gdtr for the GDT\u2019s base address',
+    step3:'Compute descriptor address: base + index×8',
+    step4:'Jump to that slot in the GDT array',
+    step5:'Fetch the 8-byte Segment Descriptor and check DPL vs CPL/RPL',
+    step6:'Base extracted — ready to add the offset and produce a linear address'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-8);
+
+  // moving marker along the path depending on phase
+  if(phase==='step4'){
+    const x=startX+idx*cellW+cellW/2-1;
+    ctx.beginPath();ctx.arc(x,arrY-14,6,0,Math.PI*2);ctx.fillStyle=C.gold;ctx.fill();
+  }
+}
+
+function runGDT(idx){
+  const phases=['step1','step2','step3','step4','step5','step6'];
+  const durations=[450,450,500,450,550,500];
+  let i=0,start=performance.now();
+  document.getElementById('gdtLabel').textContent='▶ Looking up '+(PRESETS[idx]?PRESETS[idx].name:'selector');
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[i]);
+    drawGDT(t,phases[i],idx);
+    if(t>=1){i++;if(i>=phases.length){document.getElementById('gdtLabel').textContent='▶ Done — try the other selector';return;}start=now;}
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetGDT(){document.getElementById('gdtLabel').textContent='▶ Choose a selector to look up';drawGDT(0,'idle',2);}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetGDT);
+window.addEventListener('resize',resetGDT);
+</script>
+</body>
+</html>

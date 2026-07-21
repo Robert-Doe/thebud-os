@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPF Forensics — Every Way a Segment Check Can Fail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:740px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)} h2 .accent.c{color:var(--cyan)} h2 .accent.g{color:var(--gold)} h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.9em;background:rgba(122,155,191,.12);padding:.1rem .35rem;border-radius:4px;color:var(--cyan);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.red{border-color:var(--red);color:var(--red);}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan);}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.7rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .5rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+/* bitfield diagram */
+.bitfield{display:flex;border:1.5px solid var(--gold2);border-radius:8px;overflow:hidden;margin:1.8rem 0;font-family:'Source Code Pro',monospace;}
+.bitfield .bf-seg{padding:1.2rem .5rem;text-align:center;border-right:1px solid var(--border);}
+.bitfield .bf-seg:last-child{border-right:none}
+.bitfield .bf-name{font-size:.85rem;font-weight:700;margin-bottom:.3rem;}
+.bitfield .bf-bits{font-size:.68rem;color:var(--muted);}
+/* bespoke: check-card + verdict badge, used throughout for worked numeric examples */
+.check-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem 1.5rem;margin:1.4rem 0;}
+.check-card .check-row{display:flex;flex-wrap:wrap;gap:.9rem;align-items:center;margin-bottom:.9rem;}
+.check-card .check-val{font-family:'Source Code Pro',monospace;font-size:.95rem;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:.35rem .8rem;color:var(--text);}
+.check-card .check-val .check-label{color:var(--muted);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;margin-right:.5rem;}
+.check-card .check-math{font-family:'Source Code Pro',monospace;color:var(--text);font-size:1rem;margin-bottom:.9rem;line-height:1.6;}
+.check-card .check-desc{font-size:.92rem;color:var(--muted);margin-top:.7rem;}
+.verdict{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1.1rem;border-radius:2rem;font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;}
+.verdict.pass{background:rgba(74,222,128,.14);border:1.5px solid var(--green);color:var(--green);}
+.verdict.fail{background:rgba(248,113,113,.14);border:1.5px solid var(--red);color:var(--red);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#core-rule" title="The Core Rule"></a>
+  <a class="toc-dot" href="#why-rpl" title="Why RPL Exists"></a>
+  <a class="toc-dot" href="#gate" title="The Privilege Gate"></a>
+  <a class="toc-dot" href="#selector-faults" title="Selector Loading Faults"></a>
+  <a class="toc-dot" href="#type-faults" title="Type Mismatches"></a>
+  <a class="toc-dot" href="#taxonomy" title="Full Taxonomy"></a>
+  <a class="toc-dot" href="#error-code" title="The Error Code"></a>
+  <a class="toc-dot" href="#reading-a-fault" title="Reading a Real Fault"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Companion Deep-Dive · GPF Forensics</div>
+    <h1>Every Way <span>a Segment Check Can Fail</span></h1>
+    <p class="hero-sub">The GDT article ended with one sentence: "the CPU compares the descriptor's DPL against the current CPL and the selector's RPL — if the access isn't allowed, a general protection fault fires instead." That sentence is doing an enormous amount of quiet work. This is the deep dive that cracks it open — the exact formula, why RPL exists as its own concept distinct from CPL, and every other distinct way a segmentation check can blow up in your face.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">MAX(CPL,RPL)≤DPL</div><div class="lbl">The Core Rule</div></div>
+      <div class="hero-stat"><div class="num">8</div><div class="lbl">Distinct GPF Triggers</div></div>
+      <div class="hero-stat"><div class="num">32-bit</div><div class="lbl">GPF Error Code</div></div>
+      <div class="hero-stat"><div class="num">#13</div><div class="lbl">Exception Vector (#GP)</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="core-rule">
+<div class="container">
+  <div class="section-num">01 — The Rule The Base Modules Only Half-Told You</div>
+  <h2>The Real Check: <span class="accent">MAX(CPL, RPL) ≤ DPL</span></h2>
+  <p class="reveal">Think of this whole article as an autopsy. Every fault the CPU can raise over a segment access leaves a trail — a precise reason it fired, a precise number that decided it. Section by section, this piece works through that trail: the formula behind the privilege check, why RPL is a separate knob from CPL at all, the faults that have nothing to do with privilege, and finally the error code the CPU leaves behind so you can reconstruct exactly what happened after the fact.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">📜 Where We Left Off</div>
+    From the GDT article's worked example, step five: <em>"The CPU compares the descriptor's DPL against the current CPL and the selector's RPL. If the access isn't allowed... a general protection fault fires instead."</em> That's technically true. It's also hiding the one detail that actually matters: <strong>how</strong> two separate numbers — CPL and RPL — get "compared" against a single DPL.
+  </div>
+
+  <p class="reveal">Here's the honest version. For an ordinary data-segment access — loading a selector into <code>ds</code>, <code>es</code>, <code>fs</code>, <code>gs</code>, or <code>ss</code>, or more generally touching a segment through one of those registers — the CPU does not check CPL against DPL, and it does not check RPL against DPL. It checks <strong>both at once</strong>, by taking whichever of the two is numerically worse, and comparing <em>that</em> against DPL.</p>
+
+  <div class="formula red reveal">
+    <span class="label">The Actual Rule (Data Segment Access)</span>
+    MAX(CPL, RPL) ≤ DPL
+    <span class="sub">Remember: lower numbers mean MORE privileged. So this reads — "the less-privileged of the two requesting parties must still be privileged enough for the target segment."</span>
+  </div>
+
+  <p class="reveal">Why take the <em>worse</em> of the two instead of just checking CPL? Because either number could be the weak link. CPL says how privileged the currently running code really is. RPL says what privilege level this specific access is <em>claiming</em> to be happening at — and as you're about to see, a routine can deliberately understate its own privilege on a single access, on purpose. The check has to honor whichever number is stingier, or the whole mechanism would be pointless.</p>
+
+  <h3>Case 1 — The Obvious Fault</h3>
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">CPL</span>3</span>
+      <span class="check-val"><span class="check-label">RPL</span>3</span>
+      <span class="check-val"><span class="check-label">target DPL</span>0</span>
+    </div>
+    <div class="check-math">MAX(3, 3) = 3 &nbsp;&nbsp;→&nbsp;&nbsp; is 3 ≤ 0? <strong>No.</strong></div>
+    <span class="verdict fail">✕ General Protection Fault</span>
+    <p class="check-desc">Ordinary user-mode code (CPL 3), using its own ordinary selector (RPL 3, matching CPL as usual), reaches for a kernel-only segment (DPL 0). Exactly the fault you'd expect — and exactly the case the GDT article's one-line summary was describing.</p>
+  </div>
+
+  <h3>Case 2 — The Kernel Deliberately Lowers Itself</h3>
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">CPL</span>0</span>
+      <span class="check-val"><span class="check-label">RPL</span>3</span>
+      <span class="check-val"><span class="check-label">target DPL</span>3</span>
+    </div>
+    <div class="check-math">MAX(0, 3) = 3 &nbsp;&nbsp;→&nbsp;&nbsp; is 3 ≤ 3? <strong>Yes.</strong></div>
+    <span class="verdict pass">✓ Access Granted</span>
+    <p class="check-desc">A kernel routine (CPL 0, full hardware privilege) is servicing a user request and needs to touch a user-owned data segment (DPL 3). It deliberately loads that access with RPL forced to 3. Even though the code itself is running at CPL 0, MAX(CPL, RPL) still evaluates to 3 — the CPU treats this one access as if it were happening at user privilege, and since the target genuinely allows DPL 3, it succeeds.</p>
+  </div>
+
+  <h3>Case 3 — The Same Trick, Catching a Bad Pointer</h3>
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">CPL</span>0</span>
+      <span class="check-val"><span class="check-label">RPL</span>3</span>
+      <span class="check-val"><span class="check-label">target DPL</span>0</span>
+    </div>
+    <div class="check-math">MAX(0, 3) = 3 &nbsp;&nbsp;→&nbsp;&nbsp; is 3 ≤ 0? <strong>No.</strong></div>
+    <span class="verdict fail">✕ General Protection Fault</span>
+    <p class="check-desc">Same kernel routine, same deliberately-lowered RPL = 3 — but this time the selector it was handed actually resolves to a kernel-only segment (DPL 0), whether from a bug or a hostile caller trying to trick the kernel into touching kernel memory on the user's behalf. Because RPL was forced to 3, the CPU catches it before a single byte is touched. <strong>This is the mechanism working exactly as designed.</strong></p>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🛡️ "Can't I Just Set RPL = 0 and Get Kernel Access?"</div>
+    No — and this is the detail that makes the whole scheme airtight. MAX(CPL, RPL) always takes the <strong>worse</strong> (numerically higher) of the two. If code is genuinely executing at CPL 3, forging RPL = 0 in a selector changes nothing: MAX(3, 0) is still 3. RPL can only ever make an access look <em>less</em> privileged than CPL by setting it higher — it can never make an access look <em>more</em> privileged, because CPL — which ordinary code cannot forge; it's fixed by which code segment is actually executing — always sets the floor.
+  </div>
+
+  <h3>Three Ways People Misremember the Rule</h3>
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">"Just check CPL vs DPL"</span><span class="fam-count">wrong</span></div><div class="fam-desc">Ignores RPL entirely. Under this (incorrect) model, Case 3 from above would wrongly succeed — the kernel's CPL 0 would satisfy any DPL, and the confused-deputy catch would never fire.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">"Just check RPL vs DPL"</span><span class="fam-count">wrong</span></div><div class="fam-desc">Ignores CPL entirely. Under this (incorrect) model, the "RPL=0 cheat" from later in this article would wrongly succeed — any code could claim RPL 0 and access anything, regardless of its real privilege.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--green)">MAX(CPL, RPL) ≤ DPL</span><span class="fam-count">correct</span></div><div class="fam-desc">Takes the worse of the two before comparing. Neither a privileged deputy borrowing lower privilege, nor unprivileged code forging higher privilege, can slip past it. Both surrounding examples resolve correctly under this model — and only this model.</div></div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Scope note:</b> everything above describes the check for loading and using a <em>data</em>-segment register (ds/es/fs/gs/ss). Code-segment access via far <code>call</code>/<code>jmp</code> uses a related but distinct rule involving the target's <em>conforming</em> bit — a conforming code segment can be entered without an exact privilege match, a non-conforming one requires CPL = DPL exactly. That's a big enough topic for its own article; this one stays focused on the data-segment rule, which is also the one the GDT worked example was describing.
+  </div>
+</div>
+</section>
+
+<section id="why-rpl">
+<div class="container">
+  <div class="section-num">02 — Confused Deputies and the Reason RPL Exists</div>
+  <h2>Why <span class="accent">RPL</span> Isn't Just Redundant CPL</h2>
+
+  <p class="reveal">Here's the question a careful reader should be asking: if the CPU already knows CPL straight out of <code>cs</code>, why does a selector need its <em>own</em> separate privilege field at all? Couldn't the whole check just use CPL alone?</p>
+
+  <p class="reveal">Walk through what goes wrong if it did. Imagine a kernel routine implementing something like a <code>read()</code> system call. A user process hands it a buffer pointer and asks the kernel to fill it with data. The kernel is running at CPL 0 — full privilege — for the entire duration of that syscall handler. If the hardware's privilege check used CPL alone, then <em>every single memory access the kernel makes</em> would sail through regardless of DPL, since CPL 0 satisfies any DPL. That includes the access to the user's buffer — which is fine — but it would <em>equally</em> include an access to a segment the user buffer pointer was never supposed to be able to reach, if that pointer were wrong, corrupted, or maliciously crafted.</p>
+
+  <p class="reveal">This exact shape of bug — a highly-privileged program tricked into misusing its own authority on behalf of a less-privileged caller — is a well-known category. Security researcher Norm Hardy named it the <strong>confused deputy problem</strong> in 1988: the kernel is the "deputy," acting with full authority, and it gets "confused" into spending that authority somewhere the original requester could never have reached directly.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Deliberate Fix</div>
+    Before touching a user-supplied pointer, the kernel loads (or reuses) a data-segment selector for that one specific access with <strong>RPL forced to 3</strong> — matching what a genuine user-mode CPL would be. Now MAX(CPL, RPL) = MAX(0, 3) = 3 for that access, no matter how privileged the kernel code around it actually is. The CPU ends up applying the <em>exact same restriction</em> a real CPL-3 accessor would face — using RPL as a way for a privileged deputy to temporarily borrow its caller's lower privilege for one specific touch of memory.
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>✕ A World Without RPL</h4>
+      The check would have to be CPL ≤ DPL alone. Kernel code, always CPL 0, would satisfy every DPL on the machine for every access it ever makes — including ones aimed at attacker-supplied pointers. There would be no hardware-level way to say "for this one touch, treat me as if I were only as privileged as my caller."
+    </div>
+    <div class="compare-card good">
+      <h4>✓ A World With RPL</h4>
+      The kernel can voluntarily narrow its own effective privilege, access by access, just by choosing what RPL to put in the selector it uses. Privilege becomes something the deputy can <em>temporarily lend down</em> to match the request it's fulfilling — not an all-or-nothing property of which ring the code happens to run in.
+    </div>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>User calls read(buf, 100)</strong>Passes a pointer to <code>buf</code>, expecting the kernel to fill it with up to 100 bytes.</div></li>
+    <li><div class="step-body"><strong>Kernel enters the syscall handler at CPL 0</strong>Full hardware privilege, for the entire duration of the call — this doesn't change.</div></li>
+    <li><div class="step-body"><strong>Before writing through the pointer, the kernel sets RPL = 3</strong>On the selector it's about to use for this specific write — not a general change, just for this one access.</div></li>
+    <li><div class="step-body"><strong>The CPU runs MAX(CPL, RPL) ≤ DPL using RPL = 3</strong>Not the kernel's real CPL = 0 — the check is now anchored to the caller's privilege level instead.</div></li>
+    <li><div class="step-body"><strong>Two outcomes</strong>If <code>buf</code> genuinely lives in a DPL 3 user segment: MAX(0,3)=3 ≤ 3, check passes, the kernel writes the data. If <code>buf</code>'s selector actually resolves to a DPL 0 kernel structure — attacker trickery, or a kernel bug — the check fails and a GPF fires <em>before any write happens.</em></div></li>
+  </ol>
+
+  <div class="sidenote reveal">
+    <b>Historical corroboration:</b> this pattern is real enough that x86 shipped a dedicated instruction for it — <code>ARPL</code> (Adjust RPL Field) — which raises a selector's RPL to at least a given value, exactly so kernel code could safely enforce "treat this access as no more privileged than the caller" before touching a caller-supplied selector. Companion instructions <code>VERR</code>/<code>VERW</code> let code verify a selector is even readable/writable at the current privilege before committing to use it.
+  </div>
+
+  <p class="reveal">Segmented multitasking operating systems of the era — OS/2 among the most prominent — leaned on exactly this: per-process LDTs, and kernel code paths that used ARPL routinely whenever a syscall handler had to touch memory on a caller's behalf. The specific mechanism has mostly faded from daily use on flat-segment Linux, but the underlying problem it solved never went away — it's the same shape of question modern mechanisms like capability-based sandboxing and strict syscall argument validation are still answering: how does a more-privileged component avoid being tricked into spending its privilege on a less-privileged caller's behalf?</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔗 Tying Back to the Series</div>
+    The earlier GDT article noted that Linux flattens segmentation almost entirely — one Base = 0, full-range segment per privilege level — and leans on paging plus explicit range checks (its own <code>copy_to_user</code>/<code>copy_from_user</code> machinery) for this exact confused-deputy protection instead of RPL games. That's a software-level descendant of the same idea. But the RPL mechanism above is genuine, live x86 hardware behavior on every chip you're running this page on — it's simply not the primary tool Linux reaches for today, on flat segments where DPL differences between kernel and user segments already do most of the work.
+  </div>
+</div>
+</section>
+
+<section id="gate">
+<div class="container">
+  <div class="section-num">03 — Watch the Gate Decide</div>
+  <h2>The <span class="accent">Privilege Gate</span>, Live</h2>
+  <p class="reveal">Rather than take the formula on faith, run it. Pick a scenario and watch the CPU read CPL, read RPL, compute the max, and stamp a verdict against the target DPL.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="gateLabel">▶ Choose a scenario to run the gate</div>
+    <canvas id="gateCanvas" height="380"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runGate('A')">▶ User overreach</button>
+    <button class="ctrl-btn green" onclick="runGate('B')">▶ Kernel-for-user (allowed)</button>
+    <button class="ctrl-btn red" onclick="runGate('C')">▶ Confused-deputy catch</button>
+    <button class="ctrl-btn green" onclick="runGate('D')">▶ Pure kernel access</button>
+    <button class="ctrl-btn red" onclick="runGate('E')">▶ The RPL=0 cheat attempt</button>
+    <button class="ctrl-btn gold" onclick="resetGate()">Reset</button>
+  </div>
+</div>
+</section>
+
+<section id="selector-faults">
+<div class="container">
+  <div class="section-num">04 — Faults Before You Even Get to DPL</div>
+  <h2>Selector <span class="accent">Loading</span> Faults</h2>
+  <p class="reveal">Not every GPF is a privilege violation. Two entire categories of fault happen from a malformed or out-of-range selector, before DPL ever enters the picture.</p>
+
+  <h3>Index Out of Range</h3>
+  <p class="reveal">Recall the GDT lookup formula from the previous article: <code>Descriptor Address = table.base + (selector.index × 8)</code>. That address has to land inside the table — and "inside" is defined by the table's <code>limit</code> field, loaded into <code>gdtr</code> or <code>ldtr</code>. If <code>index × 8</code> (plus 7, for the last byte of the 8-byte descriptor) exceeds the table's limit, there is no descriptor to fetch — the CPU can't even reach the DPL check.</p>
+
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">GDT entries</span>32</span>
+      <span class="check-val"><span class="check-label">gdtr.limit</span>32×8−1 = 255 (0xFF)</span>
+      <span class="check-val"><span class="check-label">selector.index</span>40</span>
+    </div>
+    <div class="check-math">40 × 8 = 320 &nbsp;&nbsp;→&nbsp;&nbsp; is 320 + 7 ≤ 255? <strong>No.</strong></div>
+    <span class="verdict fail">✕ General Protection Fault</span>
+    <p class="check-desc">Index 40 asks for a slot that would start at byte 320 — but the table only covers bytes 0–255. The fault fires purely from bounds-checking the index against the limit, long before any DPL, Type, or even Base field is read.</p>
+  </div>
+
+  <h3>Null Selector: Legal in ds/es/fs/gs, Illegal in ss</h3>
+  <p class="reveal">A <strong>null selector</strong> is index = 0, TI = 0 — pointing at GDT slot zero, which by convention is never a usable descriptor. What happens when you load one depends entirely on <em>which</em> register you load it into, and this is one of the easiest facts in the whole subject to get backwards.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✓ ds, es, fs, gs — allowed</h4>
+      Loading a null selector into any of these four is explicitly legal. Nothing faults at load time. The register is simply marked <em>unusable</em>. It's only when code later tries to actually reference memory <em>through</em> that register — e.g. <code>mov eax, [es:ebx]</code> — that the CPU faults, because there's no valid descriptor backing the access.
+    </div>
+    <div class="compare-card bad">
+      <h4>✕ ss — illegal, always</h4>
+      Loading a null selector into <code>ss</code> faults immediately, at load time. <code>ss</code> must always reference a valid, present, writable data segment, because the CPU can push or pop through it at any moment — an interrupt, a call, an exception — with no warning. A stack segment that might turn out to be unusable would leave the machine unable to safely handle its own very next event.
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">🔑 Load-Time vs. Use-Time Faults</div>
+    This pair is a genuinely useful illustration that not every illegal-looking state faults the instant it's created. x86 sometimes defers the fault to the moment the illegal state is actually <em>exploited</em> — a null <code>es</code> is harmless sitting in a register; it only becomes a problem the moment something tries to dereference through it. <code>ss</code> gets no such grace period, because the CPU itself might need to use it unpredictably at any time.
+  </div>
+
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">instruction</span>mov ss, ax</span>
+      <span class="check-val"><span class="check-label">ax</span>0x0000</span>
+      <span class="check-val"><span class="check-label">index / TI / RPL</span>0 / 0 / 0</span>
+    </div>
+    <div class="check-math">Target register is ss, selector is null (index 0) &nbsp;&nbsp;→&nbsp;&nbsp; illegal for ss regardless of what slot 0 even contains.</div>
+    <span class="verdict fail">✕ General Protection Fault, at load time</span>
+    <p class="check-desc">Notice this fault doesn't even need a DPL, or a Type, or an index-range check to fire — "null selector, destination is ss" is sufficient on its own. It's the one selector-loading fault that's unconditional.</p>
+  </div>
+</div>
+</section>
+
+<section id="type-faults">
+<div class="container">
+  <div class="section-num">05 — Right Descriptor, Wrong Kind of Segment</div>
+  <h2><span class="accent">Type</span> Mismatches</h2>
+  <p class="reveal">Recall the descriptor's <code>Type</code> field from the GDT article — it says what kind of segment this is: code, data, or a system structure like a TSS or LDT. Each segmentation register only accepts certain Types, and loading the wrong kind is its own distinct fault, independent of any privilege check.</p>
+
+  <h3>Loading a Register With the Wrong Kind of Descriptor</h3>
+  <p class="reveal">As a rule, a data register — <code>ds</code>, <code>es</code>, <code>fs</code>, <code>gs</code>, or <code>ss</code> — may only be loaded with a descriptor for a data segment (with one narrow exception: <code>ds</code>/<code>es</code>/<code>fs</code>/<code>gs</code> may also hold a <em>readable</em> code segment, but <code>ss</code> never can — it must always be a writable data segment). Loading any of these registers with a non-readable code-segment descriptor, or with a system-segment descriptor such as a TSS or LDT descriptor, is a straightforward Type mismatch and faults immediately.</p>
+
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">instruction</span>mov ds, ax</span>
+      <span class="check-val"><span class="check-label">descriptor at that index</span>TSS descriptor (S=0)</span>
+    </div>
+    <div class="check-math">ds requires a data-segment (S=1) descriptor &nbsp;&nbsp;→&nbsp;&nbsp; found a system segment instead.</div>
+    <span class="verdict fail">✕ General Protection Fault</span>
+    <p class="check-desc">The index and RPL were perfectly valid, the table lookup succeeded, and DPL was never even reached — the descriptor is simply the wrong <em>kind</em> of "card" for the register being loaded.</p>
+  </div>
+
+  <p class="reveal">The same logic runs the other direction for <code>cs</code>: it may only be loaded (via a far <code>call</code>/<code>jmp</code>/<code>ret</code>, an interrupt/task gate, or the CPU's own initial boot state) with a descriptor for a code segment. Loading it with an ordinary data-segment descriptor is also a Type mismatch.</p>
+
+  <h3>Executing From a Non-Executable Segment</h3>
+  <p class="reveal">There's a second, subtler flavor of this fault: even if <code>cs</code> somehow ends up pointing at a descriptor whose Type marks the segment as data rather than code, the fault doesn't necessarily wait for a load instruction — the moment the CPU tries to <em>fetch and execute</em> an instruction from that segment, the Type check runs again and fails, because execution demands an executable Type regardless of how the register got there.</p>
+
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">instruction</span>jmp far ptr [selector]</span>
+      <span class="check-val"><span class="check-label">target descriptor Type</span>data, read/write (non-executable)</span>
+    </div>
+    <div class="check-math">cs is about to be loaded with a descriptor whose Type says "data" &nbsp;&nbsp;→&nbsp;&nbsp; execution requires an executable Type.</div>
+    <span class="verdict fail">✕ General Protection Fault</span>
+    <p class="check-desc">DPL is irrelevant here — this segment might even have DPL 3 and CPL might be 3, a perfect privilege match. It still faults, because privilege was never the problem; the segment simply isn't the kind of thing you're allowed to run.</p>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧩 The Type Field Is Doing Access-Control Work Too</div>
+    It's tempting to think DPL is the only field standing between code and a fault. It isn't. Type answers a logically prior question — "is this even the right <em>category</em> of thing to be doing this with?" — before privilege is ever consulted. A perfectly-matched DPL 3-to-CPL 3 access still faults instantly if you try to execute a segment whose Type says "data."
+  </div>
+</div>
+</section>
+
+<section id="taxonomy">
+<div class="container">
+  <div class="section-num">06 — The Complete Taxonomy</div>
+  <h2>Every Way a <span class="accent">Segment Check</span> Can Fail</h2>
+  <p class="reveal">Pulling everything above together, here's the full catalog — every distinct root cause that can make the segmentation unit raise a General Protection Fault.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Trigger</th><th>Example Scenario</th><th>Why It Faults</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Privilege violation</td><td>CPL 3 code loads a selector pointing at a DPL 0 kernel data segment.</td><td>MAX(CPL, RPL) is numerically greater than the descriptor's DPL.</td></tr>
+        <tr><td class="hl">Selector index out of range</td><td>Selector index = 40 into a 32-entry GDT (limit = 255).</td><td><code>index × 8</code> exceeds the table's limit from gdtr/ldtr — there's no descriptor there to read.</td></tr>
+        <tr><td class="hl">Null selector dereferenced</td><td><code>es</code> loaded with selector 0 (allowed), then code executes <code>mov eax,[es:0]</code>.</td><td>The load succeeded, but the register is marked unusable; the fault fires at first use, not at load.</td></tr>
+        <tr><td class="hl">Null selector loaded into ss</td><td><code>mov ss, ax</code> where ax = 0.</td><td>ss must always reference a valid, present, writable stack segment — no grace period, faults at load.</td></tr>
+        <tr><td class="hl">Type mismatch on load</td><td><code>mov ds, ax</code> where the descriptor at that index is a TSS descriptor (S=0).</td><td>ds/es/fs/gs/ss require a data-segment (or narrowly, readable code-segment) descriptor — a system segment is the wrong kind of card.</td></tr>
+        <tr><td class="hl">Executing a non-executable segment</td><td>A far jmp targets a descriptor whose Type marks it data, not code.</td><td>Instruction fetch demands an executable Type; the CPU refuses to run "data" as code.</td></tr>
+        <tr><td class="hl">RPL-enforced confused-deputy catch</td><td>Kernel touches a user pointer with RPL forced to 3; the pointer actually resolves to a DPL 0 segment.</td><td>Same MAX(CPL,RPL) ≤ DPL formula as row one — triggered deliberately, as a safety net, rather than by accident.</td></tr>
+        <tr><td class="hl">Offset beyond segment Limit</td><td><code>mov eax,[ds:0x50000000]</code> where the active data segment's Limit is only 0xFFFF.</td><td>Every memory reference is bounds-checked against the active segment's Limit, independent of any selector or privilege check.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Notice the pattern:</b> only the first and seventh rows are actually about privilege (DPL vs. CPL/RPL). The other six are about whether the CPU can even legally resolve the reference at all — index validity, register-specific rules for null selectors, Type compatibility, and plain address bounds. "General Protection Fault" is a catch-all name for a whole family of distinct legality checks, not one single rule.
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">The Privilege Family</span><span class="fam-count">2 of 8</span></div><div class="fam-desc">Rows 1 and 7. The descriptor exists, the selector is well-formed and the right Type — but MAX(CPL, RPL) still comes out numerically higher than DPL. This is the family this whole article opened with.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">The Legality Family</span><span class="fam-count">6 of 8</span></div><div class="fam-desc">Rows 2–6 and 8. Privilege is never even reached — the reference is malformed, out of range, the wrong kind of descriptor, or simply outside the segment's bounds. These fire earlier in the pipeline, structurally, not by policy.</div></div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Scope boundary — this is not #GP:</b> the GDT article's descriptor field table included a <code>P</code> (Present) flag, and it's tempting to assume an unset P flag belongs in this taxonomy too. It doesn't — loading a selector whose descriptor has P = 0 raises a <em>different</em> exception entirely, <strong>#NP (Segment Not Present, vector 11)</strong>, not #GP. The two get confused constantly because both are "segment failed to load" in casual conversation. Everything cataloged on this page assumes P = 1; presence is checked separately, before any of these rules even run.
+  </div>
+</div>
+</section>
+
+<section id="error-code">
+<div class="container">
+  <div class="section-num">07 — Reading the Trap Frame</div>
+  <h2>The GPF <span class="accent">Error Code</span></h2>
+  <p class="reveal">When #GP fires, the CPU doesn't hand the fault handler an empty-handed "something broke." It pushes a 32-bit <strong>error code</strong> onto the exception stack frame — forensic detail identifying exactly which selector and which table were implicated, so kernel fault-handling code (and human debuggers staring at a crash dump) can pinpoint the precise selector load or memory reference that caused it.</p>
+
+  <div class="bitfield reveal">
+    <div class="bf-seg" style="flex:16;background:rgba(122,155,191,.06)"><div class="bf-name" style="color:var(--muted)">reserved</div><div class="bf-bits">bits 31–16</div></div>
+    <div class="bf-seg" style="flex:13;background:rgba(56,189,248,.08)"><div class="bf-name" style="color:var(--cyan)">selector index</div><div class="bf-bits">bits 15–3 (13 bits)</div></div>
+    <div class="bf-seg" style="flex:1;background:rgba(245,200,66,.1)"><div class="bf-name" style="color:var(--gold)">TI</div><div class="bf-bits">bit 2</div></div>
+    <div class="bf-seg" style="flex:1;background:rgba(167,139,250,.1)"><div class="bf-name" style="color:var(--purple)">IDT</div><div class="bf-bits">bit 1</div></div>
+    <div class="bf-seg" style="flex:1;background:rgba(248,113,113,.1)"><div class="bf-name" style="color:var(--red)">EXT</div><div class="bf-bits">bit 0</div></div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">EXT</td><td>Set if the exception was provoked by an event external to the currently executing instruction stream — e.g. delivery of a hardware interrupt through a bad gate — rather than directly by the instruction itself.</td></tr>
+        <tr><td class="hl">IDT</td><td>Set if the selector index in this error code refers to a gate descriptor inside the <em>IDT</em> rather than the GDT/LDT — relevant when the fault happened during interrupt or exception delivery itself.</td></tr>
+        <tr><td class="hl">TI</td><td>Meaningful only when IDT is clear — 0 means the implicated index is a GDT index, 1 means it's an LDT index. Mirrors the exact same TI bit from the original segment selector.</td></tr>
+        <tr><td class="hl">Selector Index</td><td>The 13-bit index of the specific selector involved. Read this out of the trap frame and you know precisely which GDT/LDT slot the CPU was using when it faulted.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">If the error code is exactly zero, the fault generally wasn't caused by a specific selector reference at all — it points to some other flavor of general-protection condition, such as attempting a privileged instruction outside Ring 0.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔍 Why Debuggers Actually Print This</div>
+    A kernel panic dump or a human debugging a fault doesn't have to guess "something about segments broke." Decode the error code and you get a sentence: "selector index 5, GDT, not from interrupt delivery, not external." That's the difference between grepping through every selector load in a crash and going straight to the one that mattered.
+  </div>
+
+  <h3>Decoding One in the Other Direction</h3>
+  <p class="reveal">Given a raw error code, the decode runs just as mechanically as any of the formulas above. Suppose a crash dump shows a #GP with error code <code>0x4B</code>.</p>
+
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">error code</span>0x4B = 75 = 0b01001011</span>
+    </div>
+    <div class="check-math">EXT = bit0 = <strong>1</strong> &nbsp;·&nbsp; IDT = bit1 = <strong>1</strong> &nbsp;·&nbsp; TI = bit2 = irrelevant (IDT is set) &nbsp;·&nbsp; index = 75 &gt;&gt; 3 = <strong>9</strong></div>
+    <p class="check-desc">Reading left to right: the implicated table is the <strong>IDT</strong> (not the GDT/LDT), specifically <strong>gate 9</strong>, and the fault was provoked by an <strong>external event</strong> — a hardware interrupt arrived and tried to use IDT slot 9, and whatever it found there wasn't a valid, sufficiently-privileged gate. Same four fields every time; only the bit pattern changes.</p>
+  </div>
+</div>
+</section>
+
+<section id="reading-a-fault">
+<div class="container">
+  <div class="section-num">08 — Now You Try: Reading a Real Fault</div>
+  <h2>A Worked <span class="accent">Walkthrough</span></h2>
+  <p class="reveal">Here's a fabricated but realistic crash log. Walk it through the same way a kernel developer would, using nothing but the formula and the error-code layout above.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🧾 The Log</div>
+    <code>CPL at fault = 3</code> · faulting instruction <code>mov ds, ax</code> where <code>ax = 0x002B</code> · the GDT has 12 entries (limit = 0x5F) · descriptor at the resolved index is a data segment with <code>DPL = 0</code>.
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Decode the selector</strong><code>0x002B</code> = 43 decimal = binary <code>00101011</code>. Index = 43 >> 3 = <strong>5</strong>. TI = bit 2 = <strong>0</strong> (GDT). RPL = low 2 bits = <strong>3</strong>.</div></li>
+    <li><div class="step-body"><strong>Validate the index against the limit</strong>12 entries means valid indices run 0–11, limit = 0x5F = 95 bytes covers up to index 11. Index 5 is well within range — no out-of-bounds fault here.</div></li>
+    <li><div class="step-body"><strong>Fetch the descriptor's DPL</strong>Given as DPL = 0 in the log — a kernel-only data segment.</div></li>
+    <li><div class="step-body"><strong>Apply the rule</strong>CPL = 3, RPL = 3 (both already at user level here — no deliberate lowering trick involved). MAX(3, 3) = 3. Is 3 ≤ 0? No.</div></li>
+    <li><div class="step-body"><strong>Conclude</strong>Ordinary privilege violation — user-mode code tried to load a kernel-only segment into ds. Predicted error code: index 5, TI 0 (GDT), IDT 0, EXT 0 → (5 << 3) = <strong>0x28</strong>.</div></li>
+  </ol>
+
+  <div class="callout red reveal">
+    <div class="callout-title">✏️ Try It Yourself</div>
+    A different fault: <code>CPL = 3</code> (genuine — this is ordinary user code), and it loads <code>fs</code> with a selector where it has deliberately set <code>RPL = 0</code>, hoping that claiming top privilege on the selector will let it slip past the check. The target descriptor, at a valid GDT index, has <code>DPL = 0</code>. Does this access succeed? Compute MAX(CPL, RPL) yourself before reading on.
+  </div>
+
+  <div class="check-card reveal">
+    <div class="check-row">
+      <span class="check-val"><span class="check-label">CPL</span>3</span>
+      <span class="check-val"><span class="check-label">RPL (forged)</span>0</span>
+      <span class="check-val"><span class="check-label">target DPL</span>0</span>
+    </div>
+    <div class="check-math">MAX(3, 0) = 3 &nbsp;&nbsp;→&nbsp;&nbsp; is 3 ≤ 0? <strong>No.</strong></div>
+    <span class="verdict fail">✕ General Protection Fault — the cheat does not work</span>
+    <p class="check-desc">Exactly as the callout back in section one promised: forging a lower RPL cannot rescue an access when the real CPL is the one that's actually too weak. MAX always takes the worse of the two, and CPL — which the running code cannot fake — sets the floor.</p>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✏️ One More: Decode the Error Code, Not Just the Verdict</div>
+    Back in section 4, loading a null selector into <code>ss</code> faulted unconditionally. Suppose that fault's trap frame shows error code <code>0x0000</code>. Does a zero error code mean nothing was implicated — or does it mean something else here?
+  </div>
+
+  <p class="reveal">Decode it the same way: index = 0 >> 3 = <strong>0</strong>, TI = <strong>0</strong>, IDT = <strong>0</strong>, EXT = <strong>0</strong>. The error code genuinely is zero — but not because no selector was implicated. It's because the implicated selector <em>is</em> index 0 (the null selector itself), and index 0 happens to encode as all-zero bits in every field. Reading an error code always requires knowing the faulting instruction too; the two together, not the error code alone, tell the full story. That's exactly why the format in section 7 exists — to be read <em>alongside</em> the instruction that triggered it, not in isolation.</p>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">General Protection Fault (#GP)</div><div class="glossary-def">Exception vector 13. Raised whenever a segmentation-related legality or privilege check fails — the CPU's catch-all name for a whole family of distinct checks.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CPL (Current Privilege Level)</div><div class="glossary-def">The CPU's live, actual privilege level right now, carried inside cs. Cannot be forged by ordinary code — it's set by which code segment is genuinely executing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">RPL (Requestor Privilege Level)</div><div class="glossary-def">A 2-bit field inside a selector, stating the privilege level a specific access is claiming to happen at — independently settable, per access, by whoever built the selector.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DPL (Descriptor Privilege Level)</div><div class="glossary-def">The minimum privilege required to access a given segment, fixed inside its descriptor.</div></div>
+    <div class="glossary-card"><div class="glossary-term">MAX(CPL, RPL) ≤ DPL</div><div class="glossary-def">The actual data-segment privilege check — the numerically worse (less privileged) of CPL and RPL must still satisfy the target's DPL.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Confused Deputy Problem</div><div class="glossary-def">Term coined by Norm Hardy (1988) for a highly-privileged program tricked into misusing its own authority on behalf of a less-privileged caller — exactly what RPL, used deliberately, defends against.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Null Selector</div><div class="glossary-def">index = 0, TI = 0. Legal to load into ds/es/fs/gs (faults only on later use); illegal to load into ss at all (faults immediately).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Type Mismatch</div><div class="glossary-def">Loading a segmentation register with a descriptor of the wrong kind — e.g. a system-segment descriptor into ds, or a data descriptor into cs. Faults independently of any privilege check.</div></div>
+    <div class="glossary-card"><div class="glossary-term">GPF Error Code</div><div class="glossary-def">32-bit value pushed onto the trap frame on #GP: EXT, IDT, and TI bits plus a 13-bit selector index, identifying exactly which selector/table caused the fault.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ARPL (Adjust RPL Field)</div><div class="glossary-def">x86 instruction that raises a selector's RPL to at least a given value — historically used by kernel code to safely enforce reduced privilege before touching a caller-supplied selector.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>GPF Forensics · Memory Addressing Series · Companion Deep-Dive</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A deep dive into the privilege-check step from "Segmentation in Hardware" and "The GDT" — same series, same catalog, same one shared table.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const PRESETS={
+  A:{cpl:3,rpl:3,dpl:0,label:'User overreach',scenario:'CPL 3, own selector RPL 3, reaching for a DPL 0 kernel segment.'},
+  B:{cpl:0,rpl:3,dpl:3,label:'Kernel-for-user (allowed)',scenario:'Kernel (CPL 0) deliberately sets RPL 3 to touch a genuine DPL 3 user segment.'},
+  C:{cpl:0,rpl:3,dpl:0,label:'Confused-deputy catch',scenario:'Same kernel trick, but the pointer actually resolves to a DPL 0 kernel segment — caught.'},
+  D:{cpl:0,rpl:0,dpl:0,label:'Pure kernel access',scenario:'Kernel code doing ordinary kernel-internal work, honestly at full privilege.'},
+  E:{cpl:3,rpl:0,dpl:0,label:'The RPL=0 cheat attempt',scenario:'User code forges RPL 0 hoping to look privileged. MAX still uses the real CPL.'}
+};
+
+function drawGate(phase,key){
+  const canvas=document.getElementById('gateCanvas');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const p=PRESETS[key]||PRESETS.A;
+  const maxv=Math.max(p.cpl,p.rpl);
+  const pass=maxv<=p.dpl;
+
+  ctx.textAlign='center';
+  ctx.fillStyle=C.text;ctx.font='11px Lato,sans-serif';
+  ctx.fillText(p.scenario,W/2,26);
+
+  // CPL box
+  const boxY=50,boxH=70,boxW=Math.min(150,W*0.24);
+  const cplX=W*0.08;
+  ctx.fillStyle='rgba(56,189,248,.1)';ctx.fillRect(cplX,boxY,boxW,boxH);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(cplX,boxY,boxW,boxH);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';
+  ctx.fillText('CPL',cplX+boxW/2,boxY+26);
+  ctx.font='bold 20px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText(String(p.cpl),cplX+boxW/2,boxY+54);
+
+  // RPL box
+  const rplX=W*0.08+boxW+24;
+  ctx.fillStyle='rgba(248,113,113,.1)';ctx.fillRect(rplX,boxY,boxW,boxH);
+  ctx.strokeStyle=C.red;ctx.strokeRect(rplX,boxY,boxW,boxH);
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';
+  ctx.fillText('RPL',rplX+boxW/2,boxY+26);
+  ctx.font='bold 20px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText(String(p.rpl),rplX+boxW/2,boxY+54);
+
+  // MAX box
+  const maxX=rplX+boxW+40;
+  const maxShow=(phase==='step1')?0:1;
+  if(maxShow){
+    ctx.fillStyle='rgba(245,200,66,.12)';ctx.fillRect(maxX,boxY,boxW,boxH);
+    ctx.strokeStyle=C.gold;ctx.strokeRect(maxX,boxY,boxW,boxH);
+    ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';
+    ctx.fillText('MAX(CPL,RPL)',maxX+boxW/2,boxY+24);
+    ctx.font='bold 20px Source Code Pro,monospace';ctx.fillStyle=C.text;
+    ctx.fillText(String(maxv),maxX+boxW/2,boxY+54);
+  }
+  // arrows
+  ctx.strokeStyle=C.muted;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(cplX+boxW,boxY+boxH/2);ctx.lineTo(rplX,boxY+boxH/2);ctx.stroke();
+  if(maxShow){
+    ctx.beginPath();ctx.moveTo(rplX+boxW,boxY+boxH/2);ctx.lineTo(maxX,boxY+boxH/2);ctx.stroke();
+  }
+
+  // DPL box (second row)
+  const row2Y=boxY+boxH+60;
+  const dplX=W*0.5-boxW/2;
+  const dplShow=(phase==='step1'||phase==='step2')?0:1;
+  if(dplShow){
+    ctx.fillStyle='rgba(167,139,250,.1)';ctx.fillRect(dplX,row2Y,boxW,boxH);
+    ctx.strokeStyle=C.purple;ctx.strokeRect(dplX,row2Y,boxW,boxH);
+    ctx.fillStyle=C.purple;ctx.font='bold 12px Source Code Pro,monospace';
+    ctx.fillText('target DPL',dplX+boxW/2,row2Y+26);
+    ctx.font='bold 20px Source Code Pro,monospace';ctx.fillStyle=C.text;
+    ctx.fillText(String(p.dpl),dplX+boxW/2,row2Y+54);
+    ctx.strokeStyle=C.muted;
+    ctx.beginPath();ctx.moveTo(maxX+boxW/2,boxY+boxH);ctx.lineTo(dplX+boxW/2,row2Y);ctx.stroke();
+  }
+
+  // verdict stamp
+  if(phase==='step3'||phase==='done'){
+    const vy=row2Y+boxH+55;
+    ctx.font='bold 16px Source Code Pro,monospace';
+    ctx.fillStyle=pass?C.green:C.red;
+    const text=pass?'✓ ACCESS GRANTED':'✕ GENERAL PROTECTION FAULT';
+    ctx.fillText(text,W/2,vy);
+    ctx.font='11px Lato,sans-serif';ctx.fillStyle=C.muted;
+    ctx.fillText('MAX('+p.cpl+','+p.rpl+') = '+maxv+'   —   is '+maxv+' ≤ '+p.dpl+'?  '+(pass?'yes':'no'),W/2,vy+22);
+  }
+
+  const captions={
+    idle:'Choose a scenario above to run the gate',
+    step1:'Reading CPL from cs and RPL from the selector...',
+    step2:'Computing MAX(CPL, RPL), fetching target DPL from the descriptor...',
+    step3:'Comparing MAX(CPL, RPL) against DPL and stamping a verdict...',
+    done:p.label
+  };
+  ctx.font='12px Lato,sans-serif';ctx.fillStyle=C.text;
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function runGate(key){
+  const phases=['step1','step2','step3','done'];
+  const durations=[500,500,600,10];
+  let i=0,start=performance.now();
+  document.getElementById('gateLabel').textContent='▶ Running: '+(PRESETS[key]?PRESETS[key].label:'scenario');
+  function step(now){
+    if(now-start>=durations[i]){i++;start=now;}
+    if(i>=phases.length){
+      drawGate('done',key);
+      document.getElementById('gateLabel').textContent='▶ Done — '+PRESETS[key].label+' — try another scenario';
+      return;
+    }
+    drawGate(phases[i],key);
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetGate(){document.getElementById('gateLabel').textContent='▶ Choose a scenario to run the gate';drawGate('idle','A');}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetGate);
+window.addEventListener('resize',resetGate);
+</script>
+</body>
+</html>

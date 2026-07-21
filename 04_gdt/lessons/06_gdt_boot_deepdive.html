@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDT Archaeology: Watching a CPU Boot Into Protected Mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)} h2 .accent.c{color:var(--cyan)} h2 .accent.g{color:var(--gold)} h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--orange);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;}
+p code, li code{background:var(--code-bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;color:var(--cyan);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)} td.orng{color:var(--orange)}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.orange{border-color:var(--orange);color:var(--orange);background:rgba(251,146,60,.08);}
+.ctrl-btn.orange:hover{background:rgba(251,146,60,.18);}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.bad h4{color:var(--red)} .compare-card.good h4{color:var(--green)}
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:#fff;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.7rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);color:var(--orange);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;background:none;border:none;padding:0;color:var(--text);}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#scene" title="Powering On Into 1978"></a>
+  <a class="toc-dot" href="#chicken" title="The Chicken and the Egg"></a>
+  <a class="toc-dot" href="#build" title="Building the Table by Hand"></a>
+  <a class="toc-dot" href="#accessbyte" title="Reading the Raw Bytes"></a>
+  <a class="toc-dot" href="#five" title="Five Instructions"></a>
+  <a class="toc-dot" href="#farjump" title="Why the Far Jump"></a>
+  <a class="toc-dot" href="#triplefault" title="Triple Faults"></a>
+  <a class="toc-dot" href="#watch" title="Watch the Switch Flip"></a>
+  <a class="toc-dot" href="#wrinkles" title="A20 and Long Mode"></a>
+  <a class="toc-dot" href="#inthewild" title="Real Code, In the Wild"></a>
+  <a class="toc-dot" href="#aha" title="The Aha"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">The GDT · Companion Deep Dive · A Live Boot Trace</div>
+    <h1>The Moment a CPU<br><span>Grows Up</span></h1>
+    <p class="hero-sub">You already know the GDT as a settled, working structure — base, limit, 8-byte descriptors, a clean lookup formula. This page is about the one moment none of that was true yet: the first few hundred microseconds after power-on, when the table doesn't exist, the CPU is still pretending it's 1978, and a handful of real assembly instructions have to build the table and throw the switch, once, with nothing to fall back on if they get it wrong.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Descriptors, Minimum</div></div>
+      <div class="hero-stat"><div class="num">1 bit</div><div class="lbl">Flips Real → Protected</div></div>
+      <div class="hero-stat"><div class="num">1978</div><div class="lbl">Origin of the Mode It Leaves</div></div>
+      <div class="hero-stat"><div class="num">~5</div><div class="lbl">Instructions That Do It All</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="scene">
+<div class="container">
+  <div class="section-num">01 — Set the Scene</div>
+  <h2>Powering On Into <span class="accent">1978</span></h2>
+  <p class="reveal">Here is a fact that surprises almost everyone the first time they hear it stated plainly: when you press the power button on a modern x86 machine — a 2026 laptop with a chip built on a process node its own designers can barely see under a light microscope — the CPU does not boot up modern. It boots up as an <strong>Intel 8086</strong>. Specifically, it resets into <strong>16-bit real mode</strong>: the same primitive addressing scheme the companion piece on memory addressing history describes for the original 1978 chip — <code>segment × 16 + offset</code>, a 20-bit address bus capping out at 1MB of addressable memory, and critically, <em>no protection whatsoever</em>. No privilege levels. No rings. No concept of "this code shouldn't be allowed to touch that memory." Any instruction can address any byte.</p>
+  <p class="reveal">Why would a chip this advanced deliberately cripple itself on every single boot? Backward compatibility, stretched across nearly five decades. Every x86 CPU since the 80286 has had to guarantee that software written for the original 8086 could still run unmodified — and the only way to make that promise ironclad is to make it the CPU's <em>default, reset-time</em> state, not an opt-in mode a modern OS remembers to request. So the reset vector always lands in real mode, full stop, no exceptions, no matter how many billions of transistors are sitting idle around it.</p>
+  <div class="formula reveal">
+    <span class="label">Real mode addressing, in full</span>
+    Physical Address = (Segment × 16) + Offset
+    <span class="sub">The entire addressing scheme available at the reset vector. No descriptors, no lookup table, no privilege check — just a shift and an add.</span>
+  </div>
+
+  <p class="reveal">This is the mode your machine's <strong>firmware</strong> — legacy BIOS, or the earliest bytes of a UEFI implementation's compatibility path — wakes up in. It's the mode the very first bytes of a classic bootloader, loaded from disk sector zero into memory address <code>0x7C00</code>, execute in. Nothing about protected mode exists yet. There is no GDT. There is no <code>gdtr</code> pointing at anything meaningful. If an instruction right now tried to use a segment selector the way the GDT article described — index, TI bit, RPL — the CPU wouldn't know what any of those words mean. It isn't that mode yet.</p>
+
+  <div class="sidenote reveal"><b>What about UEFI specifically?</b> Modern UEFI firmware actually performs a version of this exact real-mode-to-protected/long-mode transition itself, very early, invisibly, before a traditional OS bootloader ever gets control — which is part of why UEFI systems boot faster. But the underlying requirement doesn't change: some piece of code, at some point after reset, still has to build a GDT and flip the switch by hand. This page follows the classic, explicit version of that story because it's the clearest place to see every instruction doing real work.</div>
+
+  <p class="reveal">Put the two modes side by side and the gap is stark — this is genuinely the difference between the state the CPU wakes up in, and the state everything else in this series assumes it's already in:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Property</th><th>Real Mode (boot default)</th><th>Protected Mode (the goal)</th></tr>
+      <tr><td class="hl">Address bus used</td><td>20 bits</td><td class="pos">32 bits</td></tr>
+      <tr><td class="hl">Max addressable memory</td><td class="neg">1MB</td><td class="pos">4GB</td></tr>
+      <tr><td class="hl">Addressing scheme</td><td>segment × 16 + offset</td><td class="pos">selector → GDT/LDT descriptor → base + offset</td></tr>
+      <tr><td class="hl">Privilege levels</td><td class="neg">none</td><td class="pos">4 rings (0–3), enforced in hardware</td></tr>
+      <tr><td class="hl">Memory protection</td><td class="neg">none — any code touches any byte</td><td class="pos">descriptor limits + DPL/CPL/RPL checks</td></tr>
+      <tr><td class="hl">Requires a GDT to function</td><td>no</td><td class="gold">yes — mandatory</td></tr>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🕰️ The Uncomfortable Truth</div>
+    Every time this machine boots, for a brief stretch measured in microseconds, it is — architecturally, not metaphorically — running as an unprotected 8086. Everything from this series about rings, descriptors, and privilege checks starts its existence <em>after</em> that stretch ends.
+  </div>
+</div>
+</section>
+
+<section id="chicken">
+<div class="container">
+  <div class="section-num">02 — The Bootstrapping Problem</div>
+  <h2>The <span class="accent">Chicken</span> and the <span class="accent c">Egg</span></h2>
+  <p class="reveal">Here's the puzzle that makes this whole sequence necessary, and it's worth sitting with because it's a genuine logical trap, not just a formality. Protected mode's entire definition depends on the GDT. The moment the CPU is told "you are now in protected mode," every segment register — <code>cs</code>, <code>ds</code>, <code>es</code>, <code>ss</code>, and the rest — is redefined to hold not a raw base address the old way, but a <strong>selector</strong>: an index into a Segment Descriptor Table. From that instant forward, the CPU refuses to treat those registers any other way.</p>
+  <p class="reveal">So ask the obvious question: what happens if protected mode gets switched on and the GDT the selectors are supposed to point into simply doesn't exist yet? Nothing good. A selector pointing at descriptor slot 2 in a table that has zero entries isn't a minor inconvenience — it's a reference to memory nobody defined the meaning of. The CPU cannot function correctly, cannot fetch its next instruction reliably, cannot do anything protected-mode-shaped, with zero descriptors on hand.</p>
+  <p class="reveal">Which means the order of operations is forced, and it only works one way: <strong>the GDT must be built and locatable <em>before</em> the CPU is ever told to enter protected mode</strong> — not simultaneously, not just after, before. And since nothing except real-mode code is running at this point, the GDT has to be built by hand, in real mode, using real-mode-style flat addressing, sitting in memory the still-primitive CPU can reach.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha, Early</div>
+    A bootloader doesn't ask the operating system for a GDT. There is no operating system yet — that's the entire point of a bootloader. It has to <em>author</em> the table itself, by hand, in real mode, as raw bytes sitting at a fixed memory address, and only then dare to flip the switch that makes that table load-bearing.
+  </div>
+
+  <p class="reveal">In practice this hand-built table is almost always the smallest table that could possibly work: <strong>three descriptors</strong>. Not because three happens to be a nice round number, but because three is the minimum the architecture will actually accept.</p>
+</div>
+</section>
+
+<section id="build">
+<div class="container">
+  <div class="section-num">03 — Building the Table by Hand</div>
+  <h2>The <span class="accent">Minimal GDT</span>: Three Slots</h2>
+  <p class="reveal">Recall from the main GDT article that descriptor slot 0 is a mandatory <strong>null descriptor</strong> — the architecture requires it to exist and requires the CPU to fault if anything ever tries to actually use it as a live segment. A bootloader's hand-built GDT respects that rule from the first byte. Beyond the null descriptor, the smallest useful table adds exactly two more entries: one <strong>flat code segment</strong> and one <strong>flat data segment</strong>, both with Base <code>0x00000000</code> and a Limit spanning the full 4GB range, both at ring 0, since nothing resembling user mode exists yet either.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Index</th><th>Selector</th><th>Descriptor</th><th>Base</th><th>Limit</th><th>Purpose</th></tr>
+      <tr><td class="neg">0</td><td class="neg">never used</td><td>Null descriptor</td><td>—</td><td>—</td><td>Required by the architecture; touching it as a real segment faults on purpose.</td></tr>
+      <tr><td class="hl">1</td><td class="hl">0x08</td><td>Flat code segment</td><td class="gold">0x00000000</td><td class="gold">0xFFFFFFFF</td><td>Executable, readable, ring 0. Covers the entire address space.</td></tr>
+      <tr><td class="orng">2</td><td class="orng">0x10</td><td>Flat data segment</td><td class="gold">0x00000000</td><td class="gold">0xFFFFFFFF</td><td>Writable, ring 0. Also covers the entire address space.</td></tr>
+    </table>
+  </div>
+  <p class="reveal" style="font-size:.85rem;color:var(--muted)">Selector values come straight from the GDT lookup formula in the main article: <code>index × 8</code>. Index 1 → <code>0x08</code>. Index 2 → <code>0x10</code>. No coincidence — it's the same arithmetic, just running for the very first time.</p>
+
+  <p class="reveal">As raw bytes, sitting in memory, that table looks like this — genuinely the kind of thing you'd find, byte for byte, near the top of a real "hello world" bootloader:</p>
+
+  <pre class="reveal"><span class="tag">hand-built gdt, as it sits in memory</span><code><span class="cm">; index 0 — the mandatory null descriptor: 8 zero bytes</span>
+<span class="var">gdt_start</span>:
+<span class="var">gdt_null</span>:      <span class="kw">dq</span> <span class="numc">0x0000000000000000</span>
+
+<span class="cm">; index 1 — flat code segment, base 0, limit 0xFFFFF (×4K granularity)</span>
+<span class="var">gdt_code</span>:      <span class="kw">dw</span> <span class="numc">0xFFFF</span>            <span class="cm">; limit bits 0-15</span>
+               <span class="kw">dw</span> <span class="numc">0x0000</span>            <span class="cm">; base bits 0-15</span>
+               <span class="kw">db</span> <span class="numc">0x00</span>              <span class="cm">; base bits 16-23</span>
+               <span class="kw">db</span> <span class="numc">10011010b</span>         <span class="cm">; access: present,ring0,code,readable</span>
+               <span class="kw">db</span> <span class="numc">11001111b</span>         <span class="cm">; 4K gran, 32-bit, limit bits 16-19</span>
+               <span class="kw">db</span> <span class="numc">0x00</span>              <span class="cm">; base bits 24-31</span>
+
+<span class="cm">; index 2 — flat data segment, otherwise identical</span>
+<span class="var">gdt_data</span>:      <span class="kw">dw</span> <span class="numc">0xFFFF</span>
+               <span class="kw">dw</span> <span class="numc">0x0000</span>
+               <span class="kw">db</span> <span class="numc">0x00</span>
+               <span class="kw">db</span> <span class="numc">10010010b</span>         <span class="cm">; access: present,ring0,data,writable</span>
+               <span class="kw">db</span> <span class="numc">11001111b</span>
+               <span class="kw">db</span> <span class="numc">0x00</span>
+<span class="var">gdt_end</span>:
+
+<span class="cm">; the 6-byte "pseudo-descriptor" lgdt actually loads: limit, then base</span>
+<span class="var">gdt_descriptor</span>:
+    <span class="kw">dw</span> <span class="var">gdt_end</span> - <span class="var">gdt_start</span> - <span class="numc">1</span>   <span class="cm">; size in bytes, minus 1</span>
+    <span class="kw">dd</span> <span class="var">gdt_start</span>                 <span class="cm">; linear address of the table</span></code></pre>
+
+  <div class="sidenote reveal"><b>Only 24 bytes of actual table.</b> Three descriptors × 8 bytes each. This is, quite literally, the entire protection apparatus the CPU needs to hear about before it's willing to leave 1978 behind — everything else (paging, user-mode segments, TSS descriptors, an LDT) gets added later, by the kernel, once it's actually running.</div>
+</div>
+</section>
+
+<section id="accessbyte">
+<div class="container">
+  <div class="section-num">04 — Reading the Raw Bytes</div>
+  <h2>What <span class="accent">10011010b</span> Actually Says</h2>
+  <p class="reveal">It's worth slowing down on those two binary literals from the code block above — <code>10011010b</code> and <code>11001111b</code> — because they're not arbitrary magic numbers. Every single bit is a deliberate answer to a question the CPU will ask about that segment on every access. Reading them bit by bit is genuinely the fastest way to understand what a Segment Descriptor's Type/DPL/flags fields from the main GDT article actually look like as real, physical bits.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Bit(s)</th><th>Name</th><th>Code seg value</th><th>Data seg value</th><th>Meaning</th></tr>
+      <tr><td class="hl">7</td><td>Present</td><td class="pos">1</td><td class="pos">1</td><td>Segment is valid and in memory — a 0 here faults on use.</td></tr>
+      <tr><td class="hl">6–5</td><td>DPL</td><td class="gold">00</td><td class="gold">00</td><td>Descriptor Privilege Level — ring 0, since nothing else exists yet.</td></tr>
+      <tr><td class="hl">4</td><td>S (descriptor type)</td><td class="pos">1</td><td class="pos">1</td><td>1 = a normal code/data segment, not a system segment like a TSS.</td></tr>
+      <tr><td class="hl">3</td><td>Executable</td><td class="orng">1</td><td class="neg">0</td><td>1 = code segment, 0 = data segment. This is the bit that tells them apart.</td></tr>
+      <tr><td class="hl">2</td><td>Direction / Conforming</td><td>0</td><td>0</td><td>For code: not conforming. For data: segment grows up, not down.</td></tr>
+      <tr><td class="hl">1</td><td>Readable / Writable</td><td class="pos">1</td><td class="pos">1</td><td>Code: readable (not just executable). Data: writable.</td></tr>
+      <tr><td class="hl">0</td><td>Accessed</td><td>0</td><td>0</td><td>Set to 1 by the CPU the first time the segment is actually used.</td></tr>
+    </table>
+  </div>
+
+  <p class="reveal">The second byte, <code>11001111b</code>, is a 4-bit flags nibble stacked on top of the high 4 bits of the 20-bit Limit field:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Bit(s)</th><th>Name</th><th>Value</th><th>Meaning</th></tr>
+      <tr><td class="hl">7</td><td>G (Granularity)</td><td class="pos">1</td><td>Limit is counted in 4KB pages, not raw bytes — how a 20-bit limit field covers a full 4GB.</td></tr>
+      <tr><td class="hl">6</td><td>D/B (default size)</td><td class="pos">1</td><td>1 = 32-bit protected mode segment (vs. 0 for a 16-bit one).</td></tr>
+      <tr><td class="hl">5</td><td>L (long mode)</td><td class="neg">0</td><td>Reserved for 64-bit code segments — irrelevant here, we're only reaching protected mode.</td></tr>
+      <tr><td class="hl">4</td><td>AVL</td><td>0</td><td>Free for OS use; ignored by the CPU entirely.</td></tr>
+      <tr><td class="hl">3–0</td><td>Limit bits 16–19</td><td class="gold">1111</td><td>Combined with the earlier <code>0xFFFF</code>, gives a 20-bit limit of <code>0xFFFFF</code> — ×4K granularity = 4GB, the whole address space.</td></tr>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 Why Granularity Matters Here</div>
+    A raw 20-bit Limit field can only count up to <code>0xFFFFF</code> — about 1MB — one byte at a time. Setting the <strong>G</strong> bit changes the units to 4KB pages instead, so that same 20-bit field can describe a limit up to 4GB. Without it, a "flat" segment covering all of memory literally couldn't be expressed.
+  </div>
+</div>
+</section>
+
+<section id="five">
+<div class="container">
+  <div class="section-num">05 — The Sequence</div>
+  <h2>Five Instructions That <span class="accent">Change Everything</span></h2>
+  <p class="reveal">With the table built and sitting at a known address, the actual mode switch is almost anticlimactically short. Here is the real sequence, in order, exactly as it appears — give or take label names — in essentially every x86 bootloader ever written.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. Disable interrupts</strong>An interrupt firing mid-transition would try to use the current (soon-to-be-invalid) interrupt handling setup — real mode's Interrupt Vector Table, which protected mode doesn't use the same way. Nothing is ready to handle an interrupt safely across this boundary, so the CPU is told, bluntly, to stop listening for a moment.</div></li>
+    <li><div class="step-body"><strong>2. Load the GDT's address into gdtr</strong>The <code>lgdt</code> instruction — a privileged instruction, but real mode has no privilege concept yet to stop it — reads the 6-byte pseudo-descriptor and populates <code>gdtr</code> with the table's base and limit. This is the moment the table stops being "just some bytes in memory" and becomes the thing the CPU will actually consult.</div></li>
+    <li><div class="step-body"><strong>3. Set the Protection Enable bit in CR0</strong>Bit 0 of the <strong>CR0</strong> control register is literally named <strong>PE</strong>. Reading CR0 into a general register, OR-ing in <code>0x1</code>, and writing it back is the single, literal bit flip that turns protected mode on. Not a metaphor — one bit, one instruction sequence, and the CPU's fundamental operating mode changes underneath it.</div></li>
+    <li><div class="step-body"><strong>4. Immediately perform a far jump</strong>Not "eventually" — <em>immediately</em>, the very next instruction. This is non-negotiable, and the next section explains exactly why in mechanical detail.</div></li>
+    <li><div class="step-body"><strong>5. Reload the remaining segment registers</strong>Landing inside the far jump's target, <code>cs</code> is now valid — the jump itself loaded it. But <code>ds</code>, <code>es</code>, <code>fs</code>, <code>gs</code>, and <code>ss</code> still hold whatever real-mode segment values they had a moment ago, which are now meaningless garbage under protected-mode interpretation. Each gets explicitly reloaded with the flat data selector before anything touches memory through them.</div></li>
+  </ol>
+
+  <p class="reveal">As actual code, steps 1 through 4 look like this:</p>
+
+  <pre class="reveal"><span class="tag">the switch itself — 16-bit real mode code</span><code><span class="kw">cli</span>                          <span class="cm">; (1) mask interrupts — nothing downstream</span>
+                             <span class="cm">;     of this is safe to interrupt yet</span>
+
+<span class="kw">lgdt</span> [<span class="var">gdt_descriptor</span>]         <span class="cm">; (2) gdtr now points at our 3-entry table</span>
+
+<span class="kw">mov</span> <span class="cls">eax</span>, <span class="cls">cr0</span>               <span class="cm">; (3) read CR0 into a general register...</span>
+<span class="kw">or</span>  <span class="cls">eax</span>, <span class="numc">0x1</span>              <span class="cm">;     ...set bit 0, the PE bit...</span>
+<span class="kw">mov</span> <span class="cls">cr0</span>, <span class="cls">eax</span>              <span class="cm">;     ...write it back. Protected mode</span>
+                             <span class="cm">;     is now ON, this instant.</span>
+
+<span class="kw">jmp</span> <span class="numc">0x08</span>:<span class="var">protected_start</span>     <span class="cm">; (4) FAR JUMP — reloads cs with a real</span>
+                             <span class="cm">;     selector, flushes stale pipeline state</span></code></pre>
+
+  <p class="reveal">And landing on the other side of that jump, in genuinely 32-bit protected-mode code now, step 5 finishes the job:</p>
+
+  <pre class="reveal"><span class="tag">the landing — 32-bit protected mode code</span><code><span class="kw">[BITS 32]</span>
+<span class="var">protected_start</span>:
+    <span class="kw">mov</span> <span class="cls">ax</span>, <span class="numc">0x10</span>       <span class="cm">; (5) selector for gdt_data (index 2 × 8)</span>
+    <span class="kw">mov</span> <span class="cls">ds</span>, <span class="cls">ax</span>
+    <span class="kw">mov</span> <span class="cls">es</span>, <span class="cls">ax</span>
+    <span class="kw">mov</span> <span class="cls">fs</span>, <span class="cls">ax</span>
+    <span class="kw">mov</span> <span class="cls">gs</span>, <span class="cls">ax</span>
+    <span class="kw">mov</span> <span class="cls">ss</span>, <span class="cls">ax</span>
+    <span class="kw">mov</span> <span class="cls">esp</span>, <span class="numc">0x90000</span>  <span class="cm">; a real, sane 32-bit protected-mode stack</span></code></pre>
+
+  <div class="formula orange reveal">
+    <span class="label">Step 3, isolated</span>
+    CR0 ← CR0 | 0x00000001
+    <span class="sub">One bit, bit 0, named PE. Everything else in this entire series exists downstream of this single write succeeding.</span>
+  </div>
+</div>
+</section>
+
+<section id="farjump">
+<div class="container">
+  <div class="section-num">06 — The Instruction Everyone Asks About</div>
+  <h2>Why a <span class="accent">Far Jump</span>, Specifically?</h2>
+  <p class="reveal">This is the step that trips people up, because "just jump to the next instruction" sounds like it shouldn't need a special kind of jump at all. Here's the concrete mechanical reason it does.</p>
+  <p class="reveal">Modern x86 CPUs — even ones running this ancient boot dance — fetch and partially decode instructions ahead of where execution currently is, as part of a pipeline. At the moment CR0's PE bit flips, the CPU's pipeline may still be holding onto instructions it fetched and started decoding <em>under the old real-mode assumptions</em> — in particular, a cached, real-mode-flavored notion of what <code>cs</code> means and how addresses built from it should be interpreted. A plain near jump, or simply falling through to the next instruction, doesn't force any of that stale state to be thrown out.</p>
+  <p class="reveal">A <strong>far jump</strong> — one that specifies both a new segment selector and an offset, like <code>jmp 0x08:protected_start</code> — is different by definition. Loading <code>cs</code> with a genuinely new selector is exactly the kind of event the architecture guarantees will flush the instruction pipeline and force a fresh fetch, this time correctly interpreting <code>0x08</code> as a protected-mode selector — an index into the GDT, RPL 0, TI 0 — rather than as an old-style real-mode segment base. That's the whole reason for choosing this specific instruction at this specific moment: it isn't stylistic, it's the one operation guaranteed to reload <code>cs</code> and clear stale pipeline state in the same breath.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad"><h4>❌ Without the far jump</h4>Execution could continue momentarily on pre-decoded instructions that still assume real-mode segment semantics — an inconsistent, unpredictable window where PE=1 in CR0 but <code>cs</code> hasn't been meaningfully reinterpreted yet.</div>
+    <div class="compare-card good"><h4>✅ With the far jump</h4><code>cs</code> is forcibly reloaded from the GDT as a real protected-mode selector, the pipeline is flushed, and execution resumes cleanly at <code>protected_start</code> with the CPU fully, consistently in protected mode.</div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ This Is Why Every Bootloader Does This</div>
+    Skim the boot code of GRUB, a minimal "hello world" OS tutorial, or the Linux kernel's own early <code>boot/</code> assembly, and you will find this exact pattern — set PE, then far jump, no instructions in between — because it isn't a stylistic convention someone picked. It's the one sequence the architecture actually requires to land safely in protected mode.
+  </div>
+</div>
+</section>
+
+<section id="triplefault">
+<div class="container">
+  <div class="section-num">07 — What Happens If It's Wrong</div>
+  <h2>The Failure Mode: <span class="accent r">Triple Faults</span></h2>
+  <p class="reveal">One detail sharpens why this sequence has to be exactly right: <code>cli</code> only masks <em>maskable interrupts</em> — external events like a keyboard press or a timer tick. It does nothing to stop a <strong>fault</strong>, the CPU's own reaction to something like a malformed descriptor, a bad limit, or an invalid opcode. Faults aren't optional; the CPU raises them regardless of the interrupt flag.</p>
+  <p class="reveal">So what happens if the hand-built GDT has a mistake in it — say, the access byte is wrong, or <code>lgdt</code> pointed at the wrong address — and a fault fires the instant protected mode goes live? Normally a fault is handled by consulting a table of handlers: the real-mode Interrupt Vector Table, or, in protected mode, the <strong>Interrupt Descriptor Table (IDT)</strong>. But at this exact moment in boot, neither is in a usable state for a protected-mode fault — the IDT hasn't been built yet either; that's a separate piece of setup this page hasn't even covered.</p>
+  <p class="reveal">When the CPU tries to handle a fault and can't even locate a valid handler for it, it doesn't just give up quietly — it raises a second fault (a <strong>double fault</strong>) trying to report the first one. And if <em>that</em> also can't be handled — which, at this point in boot, it can't — the CPU gives up entirely and does something drastic: a <strong>triple fault</strong>, which on real hardware simply resets the machine. No blue screen, no message, no log. The computer just reboots, instantly, and you're staring at the BIOS splash screen again wondering what happened.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Debugging Reality</div>
+    Anyone who has hand-written a bootloader has hit this: one wrong byte in the GDT, one missing far jump, and the machine doesn't print an error — it just silently restarts, over and over, in a fraction of a second, with nothing to read. This is exactly why hobbyist OS developers lean so heavily on emulators like QEMU or Bochs for this stage: those tools can pause on a triple fault and dump the CPU's exact register state, instead of just resetting like real silicon does.
+  </div>
+
+  <div class="sidenote reveal"><b>So why is <code>cli</code> still step one, if it can't stop faults?</b> Because it still matters for the class of interrupt it <em>can</em> stop. A timer or keyboard interrupt firing between <code>lgdt</code> and the far jump would try to use whatever interrupt-handling state currently exists — and since that state is also about to become invalid, masking it removes one entire category of things that could go wrong during a window where the CPU is already in a fragile, half-transitioned state.</div>
+</div>
+</section>
+
+<section id="watch">
+<div class="container">
+  <div class="section-num">08 — Watch It Happen</div>
+  <h2>The Switch, <span class="accent">Live</span></h2>
+  <p class="reveal">Step through the same five-instruction sequence and watch what changes in the CPU's own state at each point — the interrupt flag, <code>gdtr</code>, the PE bit in <code>cr0</code>, and finally <code>cs</code> itself.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="bootLabel">▶ Run the boot sequence to trace CPU state</div>
+    <canvas id="bootCanvas" height="400"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn orange" onclick="runBoot()">▶ Run cli → lgdt → PE → jmp → reload</button>
+    <button class="ctrl-btn red" onclick="resetBoot()">Reset</button>
+  </div>
+
+  <p class="reveal" style="font-size:.85rem;color:var(--muted)">Notice the gap between step 3 and step 4 in the trace: PE is already 1, but <code>cs</code> is still marked stale until the far jump actually lands. That gap is exactly the "old pipeline state" problem the previous section described — and it's why step 4 has to happen with no instructions in between.</p>
+</div>
+</section>
+
+<section id="wrinkles">
+<div class="container">
+  <div class="section-num">09 — Two Practical Wrinkles</div>
+  <h2>A20, and the Road to <span class="accent c">Long Mode</span></h2>
+  <p class="reveal">Two things worth knowing exist right around this same moment in a real bootloader, even though neither is really <em>about</em> the GDT itself.</p>
+
+  <div class="sidenote reveal"><b>The A20 line.</b> The original 8086's 20-bit address bus meant addresses naturally wrapped around at 1MB — some early software came to quietly depend on that wraparound as a feature. Later chips with wider address buses had to add a gate on address line 20 (the "A20 line") that, by default, still forces this old wraparound behavior for compatibility. Since protected mode wants to actually use memory above 1MB, a bootloader typically has to explicitly enable the A20 line — commonly through the keyboard controller or BIOS interrupt <code>0x15</code> — as a small, separate housekeeping step near this same point in the boot sequence. It's a compatibility quirk from the same 1978-era lineage as real mode itself, not a GDT concept — full detail belongs in the memory-addressing history piece, not here.</div>
+
+  <p class="reveal">The second wrinkle is bigger: everything on this page gets a CPU into <strong>32-bit protected mode</strong>. Getting from there into <strong>64-bit long mode</strong> — where modern 64-bit operating systems actually run — is a further, separate transition. It requires building an additional set of in-memory structures (paging tables, since long mode cannot be entered without paging enabled), setting the <strong>PAE</strong> bit, and setting the <strong>LME</strong> bit in a model-specific register called <code>EFER</code> before finally enabling paging itself. That's a real, meaty topic on its own — worth flagging here so the boundary is clear, but genuinely out of scope for this page.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why Mention This At All</div>
+    Because it's easy to assume "protected mode" and "the mode my 64-bit OS runs in" are the same thing. They're not — protected mode is a real, complete, load-bearing stop along the way, not a rounding error on the path to long mode. The GDT you've been studying this whole series is protected mode's structure, built and used exactly as described here, whether or not a long-mode transition follows it moments later.
+  </div>
+</div>
+</section>
+
+<section id="inthewild">
+<div class="container">
+  <div class="section-num">10 — Not Hypothetical</div>
+  <h2>This Exact Sequence, <span class="accent">In Real Code</span></h2>
+  <p class="reveal">None of this is a teaching simplification invented for this page. The same <code>cli</code> → <code>lgdt</code> → CR0.PE → far jump shape shows up, largely unchanged, across nearly every real piece of x86 boot software in existence.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">GRUB2 (i386-pc)</span><span class="fam-count">bootloader</span></div>
+      <div class="fam-desc">GRUB's real-mode stage builds its own small hand-rolled GDT and performs this exact transition before it ever loads a kernel — visible in its <code>boot.S</code>/<code>diskboot.S</code> assembly sources.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Linux kernel</span><span class="fam-count">arch/x86/boot</span></div>
+      <div class="fam-desc">The kernel's own early boot code — <code>pmode.c</code> and <code>pmjump.S</code> — calls <code>go_to_protected_mode()</code>, which does this same dance before the "real" kernel entry point ever runs.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">coreboot / SeaBIOS</span><span class="fam-count">firmware</span></div>
+      <div class="fam-desc">Open-source firmware projects perform their own real-mode-to-protected-mode transitions early during POST, often more than once across handoffs between firmware stages.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">OSDev.org tutorials</span><span class="fam-count">teaching</span></div>
+      <div class="fam-desc">Nearly every "write your own bootloader" tutorial in the hobbyist OS community walks through precisely these five steps, usually as the very first real milestone.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section id="aha">
+<div class="container">
+  <div class="section-num">11 — The Point of All This</div>
+  <h2>Not Abstract. <span class="accent">Real. Once.</span></h2>
+  <p class="reveal">It's easy, reading about selectors, descriptor privilege levels, and lookup arithmetic, to start treating the GDT as a piece of pure theory — a diagram, a formula, an idea the hardware happens to implement. It isn't. It is a 24-byte structure, built by hand out of literal bytes, sitting at a fixed address in ordinary RAM, loaded by one real instruction (<code>lgdt</code>), activated by one real bit flip (<code>cr0</code>'s PE bit), and made to stick by one real far jump — a sequence you could type into a text editor, assemble, and boot on real hardware this afternoon.</p>
+  <p class="reveal">And it runs <em>once</em>. Not once per process, not once per context switch — once, in the first fraction of a second after this specific machine powered on, before an operating system, before a scheduler, before a single process control block existed. Everything the rest of this series takes for granted — that <code>cs</code> holds a meaningful selector, that a descriptor privilege level means something, that Ring 0 and Ring 3 are real and enforced — only exists because that handful of instructions ran, in order, without a mistake, that one time.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    The GDT isn't a concept the CPU was born understanding. It's a structure a bootloader <em>teaches</em> the CPU to trust, in real time, by force — and the moment that teaching succeeds is the exact moment this entire series' subject matter starts being true.
+  </div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">12 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Real Mode</div><div class="glossary-def">The 16-bit, unprotected addressing mode (segment×16+offset, 1MB max) every x86 CPU resets into, regardless of how modern the chip actually is.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Protected Mode</div><div class="glossary-def">The 32-bit mode where segment registers hold selectors indexing into a GDT/LDT, and privilege levels are enforced in hardware.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CR0</div><div class="glossary-def">A control register holding CPU-mode flags; bit 0 is PE (Protection Enable) — the literal bit that turns protected mode on.</div></div>
+    <div class="glossary-card"><div class="glossary-term">lgdt</div><div class="glossary-def">Privileged instruction that loads gdtr from a 6-byte pseudo-descriptor (2-byte limit + 4-byte base) in memory.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Far Jump</div><div class="glossary-def">A jump that reloads cs with a new selector and an offset in one instruction — required right after setting PE to flush stale pipeline state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Null Descriptor</div><div class="glossary-def">The mandatory, unusable GDT entry at index 0; using it as a live segment deliberately faults.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Flat Segment</div><div class="glossary-def">A descriptor with Base 0x00000000 and a limit spanning the full address range — the entire "segment" is the whole address space.</div></div>
+    <div class="glossary-card"><div class="glossary-term">A20 Line</div><div class="glossary-def">A gate on the 21st physical address line, defaulting to forcing old 8086-style 1MB wraparound; typically enabled by the bootloader around this same point.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Long Mode</div><div class="glossary-def">The 64-bit mode reachable from protected mode only after setting up paging structures, PAE, and the LME bit in EFER — a separate transition.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reset Vector</div><div class="glossary-def">The fixed memory address the CPU always begins fetching instructions from immediately after power-on, always in real mode.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Access Byte</div><div class="glossary-def">The descriptor byte encoding Present, DPL, S, Executable, and Readable/Writable — e.g. 10011010b for a flat ring-0 code segment.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Triple Fault</div><div class="glossary-def">A fault the CPU cannot deliver even after a double fault, forcing an immediate hardware reset — the classic outcome of a broken GDT setup.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IDT</div><div class="glossary-def">The Interrupt Descriptor Table — protected mode's table of fault/interrupt handlers, not yet built at the moment this page describes.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>GDT Archaeology: Watching a CPU Boot Into Protected Mode · A companion deep-dive to "The GDT," OS Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A few real instructions, run once, and everything else in this series gets to be true.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const BOOT_PHASES=['idle','cli','lgdt','pe','jump','reload','done'];
+const BOOT_INSTR={
+  idle:'',cli:'cli',lgdt:'lgdt [gdt_descriptor]',pe:'mov cr0,eax  (PE bit set)',
+  jump:'jmp 0x08:protected_start',reload:'mov ds,ax  ; and es,fs,gs,ss',done:''
+};
+function stateFor(phase){
+  const s={mode:'REAL',modeCol:C.red,IF:'1',IFcol:C.text,gdtr:'unset',gdtrCol:C.muted,
+    pe:'0',peCol:C.text,cs:'0x0000 (real)',csCol:C.muted,dseg:'stale',dsegCol:C.muted};
+  const order=BOOT_PHASES.indexOf(phase);
+  if(order>=1){s.IF='0';s.IFcol=C.orange;} // after cli
+  if(order>=2){s.gdtr='base=0x00007E00';s.gdtrCol=C.orange;} // after lgdt
+  if(order>=3){s.pe='1';s.peCol=C.orange;s.mode='REAL (stale cs)';s.modeCol=C.orange;} // after PE set, before jump
+  if(order>=4){s.mode='PROTECTED';s.modeCol=C.green;s.cs='0x08 (flat code)';s.csCol=C.green;}
+  if(order>=5){s.dseg='0x10 (flat data)';s.dsegCol=C.green;}
+  if(order>=6){s.dseg='0x10 — ds/es/fs/gs/ss';s.dsegCol=C.green;}
+  return s;
+}
+function drawBoot(t,phase){
+  const canvas=document.getElementById('bootCanvas');
+  const W=gW(canvas),H=400;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const s=stateFor(phase);
+
+  // top: 5 state boxes
+  const boxes=[
+    {label:'MODE',val:s.mode,col:s.modeCol},
+    {label:'IF (interrupts)',val:s.IF,col:s.IFcol},
+    {label:'gdtr',val:s.gdtr,col:s.gdtrCol},
+    {label:'cr0.PE',val:s.pe,col:s.peCol},
+    {label:'cs',val:s.cs,col:s.csCol},
+  ];
+  const bw=Math.min(190,(W-60)/5),bh=64,gap=(W-bw*5)/6;
+  boxes.forEach((b,i)=>{
+    const x=gap+i*(bw+gap);
+    ctx.fillStyle=b.col+'1f';ctx.fillRect(x,20,bw,bh);
+    ctx.strokeStyle=b.col;ctx.lineWidth=1.5;ctx.strokeRect(x,20,bw,bh);
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(b.label,x+bw/2,20+18);
+    ctx.fillStyle=b.col;ctx.font='bold 11px Source Code Pro,monospace';
+    ctx.fillText(b.val,x+bw/2,20+40);
+  });
+
+  // data segment reload box (only relevant late)
+  const dsY=110;
+  ctx.fillStyle=s.dsegCol+'1f';ctx.fillRect(gap,dsY,W-gap*2,34);
+  ctx.strokeStyle=s.dsegCol;ctx.strokeRect(gap,dsY,W-gap*2,34);
+  ctx.fillStyle=s.dsegCol;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('ds / es / fs / gs / ss  →  '+s.dseg,W/2,dsY+21);
+
+  // instruction track
+  const trackY=180,trackH=54,trackX=gap,trackW=W-gap*2;
+  ctx.strokeStyle=C.border;ctx.strokeRect(trackX,trackY,trackW,trackH);
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('EXECUTING NOW',trackX+10,trackY-8);
+  ctx.font='bold 14px Source Code Pro,monospace';ctx.fillStyle=(phase==='idle'||phase==='done')?C.muted:C.orange;
+  ctx.textAlign='center';
+  ctx.fillText(BOOT_INSTR[phase]||(phase==='done'?'— sequence complete —':'— waiting to start —'),trackX+trackW/2,trackY+trackH/2+5);
+
+  // pipeline flush visual only during 'jump'
+  if(phase==='jump'){
+    ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.red;
+    ctx.fillText('⚡ stale pipeline state flushed — cs reloaded from GDT',trackX+trackW/2,trackY+trackH+16);
+  }
+
+  const captions={
+    idle:'Click run to trace cli → lgdt → PE → far jump → segment reload',
+    cli:'Step 1 — interrupts masked. Nothing downstream is safe to interrupt yet.',
+    lgdt:'Step 2 — gdtr loaded with the hand-built table’s base and limit.',
+    pe:'Step 3 — CR0.PE set to 1. Protected mode is on, but cs is still stale.',
+    jump:'Step 4 — far jump reloads cs from the GDT and flushes the pipeline.',
+    reload:'Step 5 — remaining segment registers reloaded with a valid data selector.',
+    done:'Done. The CPU is now a fully, consistently protected-mode machine.'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+}
+function runBoot(){
+  const phases=BOOT_PHASES.slice(1); // skip idle
+  const durations=[500,550,600,650,600,650];
+  let i=0,start=performance.now();
+  document.getElementById('bootLabel').textContent='▶ Tracing the boot sequence…';
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[i]);
+    drawBoot(t,phases[i]);
+    if(t>=1){i++;if(i>=phases.length){document.getElementById('bootLabel').textContent='▶ Done — run it again to replay';return;}start=now;}
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetBoot(){document.getElementById('bootLabel').textContent='▶ Run the boot sequence to trace CPU state';drawBoot(0,'idle');}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetBoot);
+window.addEventListener('resize',resetBoot);
+</script>
+</body>
+</html>

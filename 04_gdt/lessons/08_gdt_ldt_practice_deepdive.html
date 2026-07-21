@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The LDT in the Wild — Where Local Descriptor Tables Still Matter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(13,148,136,.20) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(13,148,136,.14);border:1px solid rgba(45,212,191,.35);color:var(--teal);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--teal)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--teal);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--teal);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)} h2 .accent.c{color:var(--cyan)} h2 .accent.p{color:var(--purple)} h2 .accent.t{color:var(--teal)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+code{font-family:'Source Code Pro',monospace;background:var(--code-bg);padding:.15rem .4rem;border-radius:4px;font-size:.88em;color:var(--teal);}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(45,212,191,.07)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.teal .callout-title{color:var(--teal)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula.teal{border-color:var(--teal);color:var(--teal);}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)} td.tl{color:var(--teal);font-weight:600}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(45,212,191,.15);border:1.5px solid var(--teal);color:var(--teal);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.teal{border-color:var(--teal);color:var(--teal);background:rgba(45,212,191,.08);}
+.ctrl-btn.teal:hover{background:rgba(45,212,191,.2);}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--purple)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.4rem;margin:1.4rem 0;font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--text);overflow-x:auto;line-height:1.7;}
+.code-block .cm{color:var(--muted)}
+.code-block .kw{color:var(--purple)}
+.code-block .fn{color:var(--cyan)}
+.code-block .tl{color:var(--teal)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Quick Recap"></a>
+  <a class="toc-dot" href="#syscall" title="modify_ldt()"></a>
+  <a class="toc-dot" href="#wine" title="Wine"></a>
+  <a class="toc-dot" href="#playbyplay" title="Play By Play"></a>
+  <a class="toc-dot" href="#sandbox" title="DOSBox &amp; Sandboxing"></a>
+  <a class="toc-dot" href="#whouses" title="Who Still Uses It"></a>
+  <a class="toc-dot" href="#observe" title="See It Yourself"></a>
+  <a class="toc-dot" href="#future" title="Why It Won't Return"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Companion Deep-Dive · A Living Fossil, Examined</div>
+    <h1>The LDT in<br>the <span>Wild</span></h1>
+    <p class="hero-sub">The GDT article left a loose thread: the Local Descriptor Table is "historically more relevant to old segmented MS-DOS/Windows-style programs than to typical Linux processes." True — but vague. This chapter makes it concrete: a real syscall, a real compatibility layer millions of people still run, and a real emulator, all still quietly exercising decades-old segmentation hardware on purpose, today.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">modify_ldt()</div><div class="lbl">The Syscall That Still Exists</div></div>
+      <div class="hero-stat"><div class="num">Win16</div><div class="lbl">The Segmented Programs Being Kept Alive</div></div>
+      <div class="hero-stat"><div class="num">Wine</div><div class="lbl">Real Software Using This Today</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">LDTs a 64-bit Program Ever Needs</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="recap">
+<div class="container">
+  <div class="section-num">01 — Quick Recap</div>
+  <h2>Why the <span class="accent t">LDT</span> Existed At All</h2>
+  <p class="reveal">You already know the shape of this from the GDT article: TI=0 in a selector means "look in the shared catalog," TI=1 means "look in <em>my own</em> private supplement." What's worth dwelling on is <strong>why</strong> any process would ever want a private supplement in the first place.</p>
+  <p class="reveal">Picture a real 16-bit DOS or Windows 3.x program from the late 1980s. It wasn't written against a single flat 4GB address space the way a modern Linux binary is — it was written assuming it could carve out and juggle <strong>many small segments of its own</strong>: one for its code, several for different chunks of data, maybe one per open document, one per loaded resource. Each segment topped out at 64KB, so a real application routinely needed dozens of them, defined and redefined constantly as it ran.</p>
+  <p class="reveal">A modern kernel isn't going to manage that for you. Linux's GDT, as the previous article showed, hands every process exactly the same small, boring, flat set of code/data descriptors and calls it done — one shared catalog, same entries for everyone. That's fine for a program that thinks in flat pointers. It's useless for a program that thinks in dozens of tiny segments it wants to allocate and free at will. The LDT is the escape hatch: a table a process gets to define <em>for itself</em>, without the kernel needing to babysit every allocation in the one shared, systemwide table.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The One-Sentence Version</div>
+    The GDT is the catalog the <strong>kernel</strong> curates for everyone. The LDT is a scratch catalog a <strong>process</strong> gets to fill in itself — and almost nothing running today wants that, except software whose entire job is pretending to be something written decades ago.
+  </div>
+
+  <p class="reveal">Made concrete, a real Windows 3.x-era program's segment table might have looked something like this — a fistful of small, independently sized, independently movable segments, nothing like the one giant flat address space a modern binary assumes:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Segment</th><th>Holds</th><th>Typical size</th></tr>
+      <tr><td class="tl">CS (code)</td><td>The program's executable instructions</td><td>up to 64KB</td></tr>
+      <tr><td class="tl">DS (main data)</td><td>Global variables, window handles, small buffers</td><td>a few KB – 64KB</td></tr>
+      <tr><td class="tl">Dialog resource segment</td><td>One loaded dialog box template</td><td>a few hundred bytes – a few KB</td></tr>
+      <tr><td class="tl">Document/buffer segment</td><td>One open document's editable contents</td><td>up to 64KB, one per open document</td></tr>
+      <tr><td class="tl">Bitmap/resource segment</td><td>One loaded icon, bitmap, or string table</td><td>varies, often small</td></tr>
+    </table>
+  </div>
+
+  <p class="reveal">That's easily a dozen-plus segments for a modest application, each one independently allocatable and freeable — the LDT is simply where all of those extra, private, program-specific entries had to live, since the shared GDT was never meant to track one specific program's ever-changing document count.</p>
+
+  <h3>A Brief Timeline, For Grounding</h3>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1978 — Intel 8086</strong>Real mode only, no protection, no descriptor tables — but segmentation as a concept (segment × 16 + offset) is already here.</div></li>
+    <li><div class="step-body"><strong>1982 — Intel 80286</strong>Protected mode arrives, and with it the GDT and LDT exactly as this series describes them — the hardware this whole chapter is about is over four decades old.</div></li>
+    <li><div class="step-body"><strong>1990 — Windows 3.0 "standard mode"</strong>Runs Win16 applications in genuine 16-bit protected mode, leaning hard on the LDT for every program's private segment set — the target this chapter's Wine section reproduces.</div></li>
+    <li><div class="step-body"><strong>1995 — Windows 95 / growing 32-bit dominance</strong>Mainstream software increasingly adopts flat 32-bit addressing; heavy LDT usage becomes the exception, not the rule, even before 64-bit CPUs exist.</div></li>
+    <li><div class="step-body"><strong>2003 — AMD64 / x86-64 and long mode</strong>Long mode arrives and, as Section 07 covers, effectively finishes the job — flat 64-bit addressing becomes the only mode genuinely new software targets.</div></li>
+  </ol>
+
+  <p class="reveal">That "except" from the callout above is the whole subject of this chapter. It's not a hypothetical corner case in a spec document — it's live code, in real, still-maintained software, that people run today.</p>
+</div>
+</section>
+
+<section id="syscall">
+<div class="container">
+  <div class="section-num">02 — The Doorway From User-Space</div>
+  <h2>The Syscall: <span class="accent t">modify_ldt()</span></h2>
+  <p class="reveal">Loading <code>gdtr</code> is a privileged instruction — ordinary programs can't touch it, full stop. But a process's <em>own</em> LDT is a different story: it's the one piece of segmentation the kernel is willing to let user-space partially control, because by definition it can only affect that process itself. On Linux, the doorway is a genuinely real, documented syscall: <strong>modify_ldt()</strong>.</p>
+
+  <div class="code-block reveal">
+<span class="cm">// from &lt;asm/ldt.h&gt; and the modify_ldt(2) man page</span>
+<span class="kw">int</span> <span class="fn">modify_ldt</span>(<span class="kw">int</span> func, <span class="kw">void</span> *ptr, <span class="kw">unsigned long</span> bytecount);
+
+<span class="cm">// func == 0        read the calling process's current LDT entries
+// func == 1        write one 16-bit-only-capable LDT entry (legacy form)
+// func == 0x11      write one LDT entry, in a form that also allows
+//                   32-bit segments — this is the form real emulators use
+//
+// note: func == 0 (the read side) isn't just for symmetry — a debugger
+// attached to a Wine process via ptrace() can call it too, to learn
+// what a traced program's own segment registers actually point at
+// before trying to interpret a "segment-relative" memory watch.</span>
+
+<span class="kw">struct</span> <span class="tl">user_desc</span> {
+  <span class="kw">unsigned int</span>  entry_number;   <span class="cm">// which LDT slot to fill</span>
+  <span class="kw">unsigned int</span>  base_addr;      <span class="cm">// the segment's Base</span>
+  <span class="kw">unsigned int</span>  limit;          <span class="cm">// the segment's Limit</span>
+  <span class="kw">unsigned int</span>  seg_32bit:1;
+  <span class="kw">unsigned int</span>  contents:2;
+  <span class="kw">unsigned int</span>  read_exec_only:1;
+  <span class="kw">unsigned int</span>  limit_in_pages:1;
+  <span class="kw">unsigned int</span>  seg_not_present:1;
+  <span class="kw">unsigned int</span>  useable:1;
+};</div>
+
+  <p class="reveal">Read that struct closely and it's the same handful of fields from the Segment Descriptor in the GDT article — base, limit, a 32-bit-vs-16-bit flag, a present bit — just repackaged as something a <em>user-mode</em> process is allowed to hand to the kernel. Call <code>modify_ldt(0x11, &amp;desc, sizeof(desc))</code> and the kernel writes a real Segment Descriptor into your process's private LDT, in RAM it controls, on your behalf. From that point on, a selector with TI=1 and the right index genuinely resolves through <em>your</em> custom descriptor — the actual segmentation hardware does the base+offset arithmetic, exactly as described back in the GDT lookup formula, just rooted in <code>ldtr</code> instead of <code>gdtr</code>.</p>
+
+  <div class="formula teal reveal">
+    <span class="label">The LDT lookup formula — same shape as the GDT's</span>
+    Descriptor Address = ldtr.base + (selector.index × 8)
+    <span class="sub">Identical arithmetic to the GDT article's formula. The only thing that changed is which register — and which table — supplies the base.</span>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">🛡️ The Kernel Doesn't Trust You Blindly</div>
+    Letting user-space write directly into a table the CPU's segmentation hardware trusts sounds dangerous, and the kernel treats it that way: <code>modify_ldt()</code>'s implementation validates every entry before installing it — rejecting attempts to mark a descriptor as a system-segment type (which could otherwise be abused to fabricate something like a call gate), and constraining what privilege level and type bits a plain user process is allowed to set. The syscall gives you a private table to fill in, not a blank check to forge arbitrary hardware trust.
+  </div>
+
+  <p class="reveal">One easy mix-up worth heading off: <code>modify_ldt()</code> is <em>not</em> how ordinary thread-local storage works on Linux, even on 32-bit x86. That job historically belonged to a sibling syscall, <strong>set_thread_area()</strong> — and tellingly, it manages a small reserved range of entries in the <em>GDT</em>, not the LDT, precisely because TLS is common enough that Linux gave it a lightweight, shared-table-friendly mechanism instead of routing every thread through a private per-process table.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🧵 set_thread_area() — the common case</h4>
+      Installs one small TLS segment per thread into a reserved slice of the <em>GDT</em>. This is what glibc actually uses for ordinary thread-local variables on 32-bit x86 — mundane, frequent, and nothing to do with emulating old software.
+    </div>
+    <div class="compare-card bad">
+      <h4>📔 modify_ldt() — the rare case</h4>
+      Installs arbitrary custom segments into a process's private <em>LDT</em>. This is the one reserved for exactly the software this chapter is about — Wine, DOSEMU, and historically NaCl — not for routine thread-local storage.
+    </div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🤔 Why Does a 2020s Kernel Still Ship This?</div>
+    Because <strong>something</strong> still needs it — and it's exactly the kind of software this chapter is about. Nobody writes new 64-bit Linux programs that call <code>modify_ldt()</code>; you won't find it in a typical <code>server</code> or <code>webapp</code> binary. It survives in the kernel's syscall table for one specific reason: certain programs must <em>faithfully reproduce</em> the segmented memory model of software written before flat addressing was the norm, and the only way to reproduce genuine hardware segmentation is to actually use the hardware's segmentation.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>It isn't a free lunch.</b> <code>modify_ldt()</code> is a small, rarely exercised corner of the kernel — and rarely exercised code paths are exactly where security bugs like to hide. It's been implicated in real kernel hardening discussions over the years, and some hardened kernel configurations (grsecurity-style builds, and the mainline <code>CONFIG_X86_16BIT</code> option) let you disable 16-bit segment support outright, explicitly trading away Wine/DOS-emulator compatibility for a smaller attack surface. Reviving old hardware features for compatibility isn't free — it's a genuine, ongoing security-vs-compatibility trade-off, not just a historical footnote.
+  </div>
+
+  <p class="reveal">One more detail worth knowing, because it foreshadows this chapter's ending: an LDT installed via <code>modify_ldt()</code> is scoped to the calling process (and is inherited across a plain <code>fork()</code>, then copied-on-write same as the rest of the address space). That's a genuinely different mechanism from how modern 64-bit code gets a private "segment" for thread-local storage. A 64-bit program that wants per-thread storage reachable through <code>%fs</code> or <code>%gs</code> doesn't call <code>modify_ldt()</code> at all — it calls <strong><code>arch_prctl(ARCH_SET_FS, ...)</code></strong>, which just pokes a base address straight into a model-specific register, bypassing the descriptor-table machinery entirely. Long mode kept a tiny sliver of segmentation alive (an <code>fs</code>/<code>gs</code> base you can relocate), but even that sliver no longer needs the LDT to work. The two mechanisms coexist in the kernel; almost nothing modern chooses the LDT one.</p>
+</div>
+</section>
+
+<section id="wine">
+<div class="container">
+  <div class="section-num">03 — The Headline User</div>
+  <h2><span class="accent t">Wine</span>: Real Hardware Segmentation, On Purpose</h2>
+  <p class="reveal">Wine — the compatibility layer that lets Windows programs run on Linux and other Unix-like systems — is not a museum piece. It's actively developed, and it underpins huge chunks of the "Windows games running on Linux/Steam Deck" ecosystem. Most of what Wine does today is running ordinary 32-bit and 64-bit Windows executables, which need essentially no segmentation trickery at all — same flat-segments story as native Linux binaries.</p>
+  <p class="reveal">But Wine's job has always included a harder case: genuinely old 16-bit Windows applications (Win16, the Windows 3.x-era binary format) and certain DOS-era software. These programs were <em>written</em> assuming real x86 segmentation — <code>far</code> pointers, segment:offset addressing, dozens of small segments swapped in and out. You cannot correctly run that code by just mapping it into a flat address space and hoping; the program's own logic depends on segment boundaries actually behaving like segment boundaries.</p>
+
+  <p class="reveal">This isn't purely academic, either. Wine is the engine underneath <strong>Proton</strong>, Valve's compatibility layer that lets a huge fraction of the Windows game library run on the Steam Deck and on Linux desktops through Steam. The overwhelming majority of Proton's traffic is ordinary 32-bit and 64-bit titles that never touch the LDT. But the same Wine codebase — LDT-management code included — is what's sitting underneath it, ready for the rarer case of a genuinely old, genuinely segmented title someone still wants to launch. The compatibility problem this chapter is about isn't hypothetical or confined to hobbyist retrocomputing circles; it's shipped, today, inside one of the most widely used pieces of gaming software on Linux.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🍷 What Wine Actually Does About It</div>
+    Wine's source tree includes dedicated LDT-management code (historically <code>dlls/ntdll/ldt.c</code>, now living under <code>dlls/ntdll/unix/</code>) whose entire job is translating "this Win16 app wants segment N to mean base X, limit Y" into real calls to <strong><code>modify_ldt()</code></strong> on Linux. The result: the actual x86 segmentation unit — the same hardware this whole series has been describing — does real base+offset translation for that guest program's segment registers. Wine isn't faking segmentation in software here; it is <em>re-arming</em> genuine, decades-old CPU hardware and pointing it at a live process.
+  </div>
+
+  <p class="reveal">On other Unix-like hosts that lack Linux's <code>modify_ldt()</code>, Wine falls back to platform equivalents — <code>i386_set_ldt()</code> on the BSDs and older macOS, or <code>sysarch()</code> — because the underlying need is the same everywhere x86 segmentation exists: give this one process its own private, hardware-enforced table of extra segments.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚙️ A Nuance Worth Knowing: No V86 Mode Required</div>
+    Most Win16 applications ran under what Windows 3.x called "standard mode" — genuine <strong>16-bit protected mode</strong>, not the raw real-mode 8086 emulation DOS programs needed. That distinction matters here: a 32-bit protected-mode CPU can execute 16-bit code <em>natively</em>, governed entirely by the D-bit in the code segment's descriptor (the same default-operand-size flag from the Segment Descriptor field table in the GDT article). So Wine doesn't need to drop the CPU into virtual-8086 mode at all for this case — installing a 16-bit-flagged LDT descriptor via <code>modify_ldt()</code> is sufficient by itself. Contrast that with DOSEMU's real-mode DOS support two sections from now, which genuinely does need <code>vm86()</code> because true DOS real-mode code assumes 8086-style addressing the D-bit trick alone can't reproduce.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>A telling nuance:</b> because this really does depend on genuine x86 segment mechanics, Win16 support has generally only been available in <strong>32-bit</strong> Wine builds/prefixes — much the way real 64-bit Windows itself dropped the ability to run 16-bit programs. That's not a Wine limitation so much as a hint about where this chapter is headed: 64-bit long mode and rich segmentation don't really coexist.
+  </div>
+
+  <h3>Watch the Routing Happen</h3>
+  <p class="reveal">Here's the piece that ties straight back to the TI bit from the GDT article. A Wine process still has the same boring, shared, flat GDT every other Linux process has — <em>plus</em> its own private LDT, freshly populated via <code>modify_ldt()</code>, holding real 16-bit segment descriptors for the Win16 guest program it's hosting. Which table a given lookup uses is decided by exactly one bit in the selector.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="wineLabel">▶ Choose which selector to resolve</div>
+    <canvas id="wineCanvas" height="420"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runWine('gdt')">▶ TI=0 — ordinary flat GDT segment</button>
+    <button class="ctrl-btn teal" onclick="runWine('ldt')">▶ TI=1 — Win16 segment via the LDT</button>
+    <button class="ctrl-btn red" onclick="runWine('fault')">▶ TI=1 — but modify_ldt() was never called</button>
+    <button class="ctrl-btn" onclick="resetWine()">Reset</button>
+  </div>
+
+  <p class="reveal">That third button is worth trying deliberately. If a selector claims TI=1 but the process never actually populated that LDT slot via <code>modify_ldt()</code>, the descriptor the CPU fetches has its <strong>present bit clear</strong> — and hardware refuses to complete the access. This is the same privilege-and-validity checking machinery from the GDT article's worked example, just guarding a table that happens to usually be empty. It's exactly why a stray or corrupted selector on a typical 64-bit Linux process reliably faults instead of silently reading garbage: there's normally nothing behind door TI=1 at all.</p>
+</div>
+</section>
+
+<section id="playbyplay">
+<div class="container">
+  <div class="section-num">04 — Play By Play</div>
+  <h2>What Actually Happens, <span class="accent t">Step By Step</span></h2>
+  <p class="reveal">It's easy to wave a hand at "Wine calls <code>modify_ldt()</code>" and move on. It's more convincing to walk through what that sequence really looks like the moment a Win16 program is loaded.</p>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The user launches an old .exe</strong>Wine's loader inspects the binary and recognizes a 16-bit New Executable (NE) header instead of the 32/64-bit PE header modern Windows programs use.</div></li>
+    <li><div class="step-body"><strong>Wine reads the program's segment table</strong>The NE header itself lists the segments this program was built with — how many, how big, which one is the entry point's code segment — exactly the information a real Windows 3.x loader would have consumed in 1990.</div></li>
+    <li><div class="step-body"><strong>Wine allocates real memory for each segment</strong>For every listed segment, Wine <code>mmap()</code>s a plain chunk of linear memory to actually hold that segment's bytes — this part is unremarkable, ordinary memory allocation.</div></li>
+    <li><div class="step-body"><strong>Wine calls modify_ldt() per segment</strong>For each segment, Wine issues <code>modify_ldt(0x11, &amp;desc, sizeof(desc))</code> with <code>base_addr</code> pointing at that freshly allocated memory and <code>limit</code> set to the segment's real size — often nowhere near 4GB, sometimes just a few KB, precisely reproducing the "many small segments" model from Section 01.</div></li>
+    <li><div class="step-body"><strong>The kernel writes the descriptor and hands back a selector</strong>The kernel validates the request, writes an 8-byte Segment Descriptor into this process's private LDT, and Wine now has a real selector — index and TI=1 — to load into a segment register for the guest program's thread.</div></li>
+    <li><div class="step-body"><strong>The guest program runs, and the CPU does the rest</strong>From here on, every <code>far</code> pointer dereference the Win16 program performs is a genuine selector:offset access. The segmentation unit — not Wine's own interpreter — enforces the segment's limit and computes the linear address, exactly as described throughout this whole series.</div></li>
+  </ol>
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔁 The Payoff</div>
+    Notice what Wine <em>didn't</em> have to build: its own software model of segment limits, its own bounds-checking on every memory access, its own translation layer between "segment 4, offset 0x1A2" and a real address. It got all of that for free, at full hardware speed, just by asking the kernel — once, via <code>modify_ldt()</code> — to set up descriptors the CPU already knows how to use.
+  </div>
+</div>
+</section>
+
+<section id="sandbox">
+<div class="container">
+  <div class="section-num">05 — A Second Approach, and a Bigger Principle</div>
+  <h2><span class="accent t">DOSBox</span>, and Segmentation as a Sandbox</h2>
+  <p class="reveal">Wine isn't the only still-relevant emulator dealing with segmented programs — and it's worth contrasting it with a genuinely different strategy for the same underlying problem. <strong>DOSBox</strong> (and its actively maintained forks) is a full PC emulator built to run real DOS-era 16-bit software: games, utilities, whole segmented programs, exactly the kind Wine's Win16 support targets from the Windows side.</p>
+  <p class="reveal">DOSBox takes a different route to get there than Wine does. Instead of arming the <em>host's</em> real segmentation hardware on the guest program's behalf, DOSBox emulates an entire virtual x86 CPU in software — including its own model of segment registers, its own segment:offset math, its own protection checks — all tracked as ordinary data structures inside the emulator process. The guest DOS program's segments are real to <em>it</em>, but the host CPU never sees them as segments at all; from the host's point of view, DOSBox is just one ordinary flat-addressed process doing arithmetic.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🍷 Wine's approach — real hardware</h4>
+      Calls <code>modify_ldt()</code> so the actual x86 segmentation unit performs genuine base+offset translation for the guest program's segment registers. Faster once set up, but only works on hosts whose CPU and OS actually expose real segmentation — which is exactly why it's tied to 32-bit builds.
+    </div>
+    <div class="compare-card bad">
+      <h4>📦 DOSBox's approach — software model</h4>
+      Emulates segment registers, limits, and address translation entirely as data inside its own interpreter/recompiler. Slower per-access than real hardware doing it, but fully portable — it runs identically on ARM Macs and other hosts with no x86 segmentation hardware at all.
+    </div>
+  </div>
+
+  <p class="reveal">Between those two poles sits a third real example that actually splits the difference: <strong>DOSEMU</strong>, a Linux-specific DOS emulator that runs real-mode DOS code inside the kernel's <code>vm86()</code> virtual-8086 mode, then goes a step further for programs that expect <strong>DPMI</strong> — the DOS Protected Mode Interface many later DOS games and tools relied on to escape real mode's 1MB ceiling. To host a DPMI client faithfully, DOSEMU's DPMI server allocates genuine 32-bit protected-mode segments for it, and — like Wine — does that by calling <code>modify_ldt()</code> to install real descriptors in the emulated process's LDT. It's the same syscall Wine uses, aimed at a different generation of segmented software.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🕹️ DOSEMU vs. DOSBox — Same Goal, Opposite Tactics</div>
+    Both run old DOS software. DOSEMU leans on the host's real x86 hardware as hard as it can — <code>vm86()</code> for real-mode code, <code>modify_ldt()</code> for protected-mode DPMI segments — which is fast, but ties it to actual x86 Linux hosts. DOSBox leans on none of that, modeling the whole CPU in portable software — slower per access, but it's exactly why DOSBox runs unmodified on ARM laptops and phones that have no x86 segmentation hardware to borrow in the first place.
+  </div>
+
+  <p class="reveal">That contrast points at a bigger, more general idea worth pulling out on its own: <strong>a local descriptor table isn't only useful for backward compatibility.</strong> The underlying trick — "give this one piece of code its own small, hardware-bounded window into memory, cheaply" — has been reused for security, not just nostalgia.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🔒 The Principle: Segmentation As a Cheap Sandbox</div>
+    Google's <strong>Native Client (NaCl)</strong> project — a scheme for safely running untrusted native machine code inside a browser — used exactly this trick on 32-bit x86. Rather than paying for a whole separate process and page-table switch per sandbox, NaCl's x86-32 implementation used <code>modify_ldt()</code>-installed segments to force untrusted, JIT-generated code's memory accesses through a segment with a fixed, restrictive base and limit. The segmentation hardware itself — not a software bounds check that clever generated code might find a way around — refused any access outside the sandbox. Cheap, and enforced by silicon.
+  </div>
+
+  <div class="formula reveal">
+    <span class="label">The general principle, stripped to its essence</span>
+    One modify_ldt() call = one hardware-enforced memory boundary, for one specific piece of code
+    <span class="sub">No new process. No new page tables. No software bounds-check to write, and none for an attacker to try to bypass — the CPU itself refuses out-of-bounds access.</span>
+  </div>
+
+  <p class="reveal">That's the general principle beneath both of this chapter's examples: an LDT entry is a remarkably cheap way to hand one specific piece of code a private, hardware-enforced view of memory, without standing up an entire new process or page-table hierarchy for it. Mostly, today, that cheapness gets spent on backward compatibility. Occasionally, it's gotten spent on sandboxing instead.</p>
+
+  <p class="reveal">It's also worth noting how that sandboxing story ends, because it rhymes with everything else in this chapter. Native Client's segmentation-based trick was specific to 32-bit x86 — on 64-bit x86, segment bases and limits are mostly ignored by the hardware for exactly the same long-mode reasons this chapter keeps circling back to, so a 64-bit NaCl sandbox couldn't lean on the same mechanism. Its x86-64 implementation switched to a different technique entirely (base-and-mask address confinement instead of hardware segment limits), and NaCl itself was eventually superseded in browsers by WebAssembly's own sandboxing model. Even the "clever sandboxing" use of the LDT turned out to be a 32-bit-era trick, not a lasting one.</p>
+</div>
+</section>
+
+<section id="whouses">
+<div class="container">
+  <div class="section-num">06 — Tallying It Up</div>
+  <h2>Who Still Uses <span class="accent t">LDTs</span>, and Why</h2>
+  <p class="reveal">Put the last three sections side by side and a short, honest list falls out. This isn't a mainstream feature with a long tail of users — it's a short, specific list of programs with a genuine reason to touch it.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Who</th><th>What they do with the LDT</th><th>Still active today?</th></tr>
+      <tr><td class="tl">Wine (32-bit builds)</td><td>Calls <code>modify_ldt()</code> to install real segment descriptors so genuine Win16/DOS-era guest programs get correct, hardware-enforced segmentation</td><td class="pos">Yes — actively maintained</td></tr>
+      <tr><td class="tl">DOSEMU</td><td>Uses <code>vm86()</code> for real-mode DOS code and <code>modify_ldt()</code> to give DPMI clients genuine protected-mode segments</td><td class="pos">Yes — actively maintained</td></tr>
+      <tr><td class="tl">DOSBox &amp; forks</td><td>Emulate segmentation entirely in software instead; don't touch the host LDT, but solve the same underlying compatibility problem</td><td class="pos">Yes — actively maintained</td></tr>
+      <tr><td class="tl">Google Native Client (x86-32)</td><td>Used <code>modify_ldt()</code>-installed segments as a hardware-enforced sandbox boundary for untrusted generated code</td><td class="neg">Historical — largely superseded by WebAssembly &amp; other sandboxing</td></tr>
+      <tr><td class="tl">Hardened kernel configs</td><td>Deliberately restrict or disable 16-bit segment support and <code>modify_ldt()</code> to shrink kernel attack surface</td><td class="pos">Yes — an active hardening practice</td></tr>
+      <tr><td class="tl">A typical 64-bit Linux process</td><td>Nothing. <code>ldtr</code> is never loaded with anything meaningful in its whole lifetime</td><td class="gold">The overwhelming majority case</td></tr>
+    </table>
+  </div>
+
+  <h3>GDT Usage Today vs. LDT Usage Today</h3>
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📖 The GDT — quietly universal</h4>
+      Consulted on <em>every single memory access</em>, for every process, all the time — even though its entries are deliberately boring, flat, do-nothing-special descriptors. You cannot opt out of the GDT; the segmentation unit isn't optional silicon.
+    </div>
+    <div class="compare-card bad">
+      <h4>📔 The LDT — almost always empty</h4>
+      For the vast majority of processes on a vast majority of machines, <code>ldtr</code> holds a null selector its entire life. It only gets populated by name-brand exceptions: things faithfully emulating segmented-era software, or — rarely — squeezing a sandbox boundary out of cheap hardware.
+    </div>
+  </div>
+</div>
+</section>
+
+<section id="observe">
+<div class="container">
+  <div class="section-num">07 — Make It Concrete</div>
+  <h2>Watching <span class="accent t">modify_ldt()</span> Actually Fire</h2>
+  <p class="reveal">All of this is easy to take on faith and hard to actually see — but you don't need special tools to catch it happening. Linux's <code>strace</code> traces every syscall a process makes, <code>modify_ldt()</code> included, and Wine is more than willing to make the call the moment it needs a custom segment.</p>
+
+  <div class="code-block reveal">
+<span class="cm">$ strace -f -e trace=modify_ldt wine notepad.exe</span>
+
+<span class="tl">modify_ldt</span>(0x11, {entry_number=<span class="kw">3</span>, base_addr=<span class="kw">0x7f2a10000000</span>,
+             limit=<span class="kw">0xffff</span>, seg_32bit=<span class="kw">0</span>, ...}, <span class="kw">16</span>) = <span class="kw">0</span>
+<span class="cm">// a real 16-bit LDT entry just got installed for this process —
+// exactly the descriptor this chapter's canvas animation depicts,
+// now sitting in real kernel memory backing a real ldtr</span></div>
+
+  <p class="reveal">For a modern 64-bit Windows game running under Proton, you'll typically see nothing at all under that same filter — which is itself the point this chapter has been making. The syscall's presence or absence in the trace is a direct, observable signal of whether the program underneath actually needed genuine segmentation, or was flat all along.</p>
+
+  <div class="sidenote reveal">
+    <b>Try comparing traces.</b> Running the same <code>strace -f -e trace=modify_ldt</code> filter against an ordinary modern 64-bit Linux binary — a text editor, a compiler, anything built in the last decade — will almost always come back completely empty for the process's entire lifetime. That silence is the "0" from this page's opening hero stat, made observable.
+  </div>
+</div>
+</section>
+
+<section id="future">
+<div class="container">
+  <div class="section-num">08 — The Honest Ending</div>
+  <h2>Why It's <span class="accent t">Never Coming Back</span></h2>
+  <p class="reveal">It would be tempting to end this chapter by suggesting the LDT is quietly making a comeback. It isn't, and it's worth being straightforward about that rather than manufacturing false suspense.</p>
+  <p class="reveal">64-bit long mode — the mode every modern 64-bit OS actually runs its processes in — guts segmentation almost entirely. Base and limit checking for CS/SS/DS/ES are hardware-disabled in long mode; addresses through those registers are just flat 64-bit pointers, full stop, with paging doing essentially all the real protection work. (This series' companion piece, "Long Mode — What Happened to Segmentation on a 64-bit CPU," walks the full register-by-register story — the short version is that only <code>fs</code>/<code>gs</code> keep a genuinely live Base field, kept alive specifically for thread-local storage, set via that very same <code>arch_prctl(ARCH_SET_FS, ...)</code> call from Section 02.)</p>
+  <p class="reveal">A genuinely 64-bit program, running in long mode, therefore has essentially <strong>zero</strong> reason to ever populate an LDT. There's no old segmented code to emulate — it was born flat. That's exactly why the hero stat at the top of this page reads "0 LDTs a 64-bit program ever needs": it isn't an exaggeration, it's close to the literal truth for ordinary software.</p>
+
+  <div class="formula teal reveal">
+    <span class="label">The honest summary</span>
+    LDT usage today ≈ { software emulating pre-flat-addressing programs } ∪ { rare, deliberate hardware-sandbox tricks }
+    <span class="sub">Not a growing set. Not shrinking to zero either, as long as Wine and DOSBox still have users — but never coming back into the mainstream.</span>
+  </div>
+
+  <p class="reveal">Laid out across every mode a real x86 CPU can run in, the pattern is stark — the LDT only ever mattered where segmentation itself mattered, and long mode is precisely where the series of modes stops caring:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>CPU mode</th><th>Segmentation enforced?</th><th>LDT realistically used?</th></tr>
+      <tr><td class="hl">Real mode</td><td>Segments as raw ×16 offsets, no protection</td><td class="neg">No — no descriptor tables exist yet</td></tr>
+      <tr><td class="hl">16-bit protected mode</td><td>Fully — base, limit, type, DPL all enforced</td><td class="pos">Yes — this is the LDT's native habitat</td></tr>
+      <tr><td class="hl">32-bit protected mode</td><td>Fully, though often flattened by choice (Linux)</td><td class="gold">Occasionally — Wine, DOSEMU, historical NaCl</td></tr>
+      <tr><td class="hl">Compatibility mode (64-bit CPU, 32-bit code)</td><td>Mostly, similar to 32-bit protected mode</td><td class="gold">Rarely — same niche, smaller population</td></tr>
+      <tr><td class="hl">Long mode (genuine 64-bit code)</td><td>Bases/limits ignored for code &amp; data segments</td><td class="neg">Essentially never</td></tr>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🌍 It Was Always An x86 Story</div>
+    Worth remembering as this series wraps up its detour: the GDT/LDT split isn't some universal operating-systems concept every architecture eventually grows — it's a specifically <strong>x86</strong> artifact, inherited all the way from the 80286. ARM, RISC-V, and most other architectures that came after never adopted segmented memory as a hardware protection mechanism at all; they went straight to paging. The LDT isn't just a living fossil in <em>time</em> — running decades-old code today — it's also increasingly a living fossil in <em>architecture</em>, as more of the software world's compute quietly moves onto chips that never had an LDT to begin with.
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">🦖 A Genuine Living Fossil</div>
+    That's really the right way to think about the LDT in 2026: not "obsolete and gone," and not "secretly still important" — a <strong>living fossil</strong>. Kept alive in the kernel's syscall table and the x86 instruction set by one specific, valuable niche: faithfully running yesterday's software today. As long as someone wants to run a 16-bit Windows program or a decades-old DOS game correctly, on real x86 hardware, the LDT — and <code>modify_ldt()</code>, and the segmentation unit underneath both — still has exactly one job to do, and still does it.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>One last cousin worth a mention:</b> segment selectors do occasionally do real work elsewhere in the 64-bit world too — just usually through the <em>GDT</em>, not the LDT. 64-bit Windows's WoW64 layer, for instance, uses a well-documented technique nicknamed "Heaven's Gate," where a nominally 32-bit process performs a far jump to a fixed GDT selector (0x33) describing a genuine 64-bit code segment, briefly running true 64-bit instructions before jumping back. It's the same underlying mechanism this whole series has described — a selector routing through a table to a descriptor that changes what the CPU does next — just applied to mode-switching rather than memory bounding, and rooted in the shared GDT rather than a private LDT. Segmentation hardware never fully retired; it just mostly stopped needing a <em>private</em> table to do its remaining jobs.
+  </div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent t">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">LDT (Local Descriptor Table)</div><div class="glossary-def">An optional, per-process array of Segment Descriptors, selected by TI=1, that a process can populate with its own private segments.</div></div>
+    <div class="glossary-card"><div class="glossary-term">modify_ldt()</div><div class="glossary-def">The Linux syscall (<code>func</code>, <code>ptr</code>, <code>bytecount</code>) that lets user-space read or install real Segment Descriptors into its own process's LDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">struct user_desc</div><div class="glossary-def">The descriptor format <code>modify_ldt()</code> accepts from user-space: entry number, base, limit, and the same 32-bit/present/type-style flags a real Segment Descriptor carries.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Wine</div><div class="glossary-def">A compatibility layer that runs Windows programs on Linux and other Unix-like systems; its 32-bit builds use <code>modify_ldt()</code> to give genuine segmentation hardware to old Win16/DOS-era guest programs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Win16</div><div class="glossary-def">The 16-bit Windows 3.x-era application format, written assuming real segment:offset addressing with many small (≤64KB) segments per program.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DOSBox</div><div class="glossary-def">A full DOS-era PC emulator that reproduces segmentation entirely in software, without exercising the host's own segmentation hardware or LDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DOSEMU</div><div class="glossary-def">A Linux-specific DOS emulator that uses <code>vm86()</code> for real-mode code and <code>modify_ldt()</code> to give DPMI clients genuine protected-mode segments.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DPMI</div><div class="glossary-def">The DOS Protected Mode Interface — a standard many later DOS programs used to run in 32-bit protected mode with real segments instead of cramped real-mode memory.</div></div>
+    <div class="glossary-card"><div class="glossary-term">vm86 Mode</div><div class="glossary-def">A CPU submode letting the kernel run real-mode (16-bit, unprotected-style) code as a controllable, trappable guest inside protected mode.</div></div>
+    <div class="glossary-card"><div class="glossary-term">arch_prctl / FS base</div><div class="glossary-def">The syscall 64-bit programs use to set a relocatable <code>%fs</code> base for thread-local storage directly — the modern replacement for descriptor-table tricks, needing no LDT at all.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Native Client (NaCl)</div><div class="glossary-def">A historical Google browser sandboxing scheme whose x86-32 implementation used <code>modify_ldt()</code>-installed segments as a hardware-enforced boundary for untrusted code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TI Bit</div><div class="glossary-def">The bit in a segment selector that chooses which table a lookup uses: 0 routes to the shared GDT, 1 routes to the process's own LDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Long Mode</div><div class="glossary-def">The 64-bit operating mode where segmentation is almost entirely disabled by hardware, leaving genuine 64-bit programs with no practical reason to ever touch an LDT.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CONFIG_X86_16BIT</div><div class="glossary-def">A Linux kernel build option gating 16-bit segment support; disabling it trades Wine/DOS-emulator compatibility for a smaller kernel attack surface.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The LDT in the Wild · A Companion Deep-Dive to "The GDT," Memory Addressing Series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Decades-old hardware, still doing exactly the one job it was kept alive for.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0',teal:'#2dd4bf'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const WPRESETS={
+  gdt:{name:'flat user-data segment (index 15, TI=0)',table:'GDT',idx:15,base:'0x00000000',limit:'0xFFFFFFFF (4GB)',type:'flat 32-bit data',reg:'gdtr'},
+  ldt:{name:'Win16 data segment (index 3, TI=1)',table:'LDT',idx:3,base:'0x00347000',limit:'0x0000FFFF (64KB)',type:'16-bit data (Wine, via modify_ldt)',reg:'ldtr'},
+  fault:{name:'stray selector (index 6, TI=1) — never installed',table:'LDT',idx:6,base:'—',limit:'—',type:'present bit = 0 (empty slot)',reg:'ldtr'}
+};
+
+function drawWine(t,phase,mode){
+  const canvas=document.getElementById('wineCanvas');
+  const W=gW(canvas),H=420;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const p=WPRESETS[mode]||WPRESETS.gdt;
+  const isFault = mode==='fault';
+  const activeTeal = mode==='ldt' || isFault;
+
+  // selector box
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(14,14,W*0.27,58);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(14,14,W*0.27,58);
+  ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SELECTOR (in a segment register)',14+W*0.135,32);
+  ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('index='+p.idx+'  TI='+(activeTeal?1:0),14+W*0.135,49);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(p.name,14+W*0.135,63);
+
+  // register box (gdtr or ldtr)
+  const regColor = activeTeal?C.teal:C.gold;
+  ctx.fillStyle=activeTeal?'rgba(45,212,191,.08)':'rgba(245,200,66,.08)';
+  ctx.fillRect(W*0.39,14,W*0.24,58);
+  ctx.strokeStyle=regColor;ctx.strokeRect(W*0.39,14,W*0.24,58);
+  ctx.fillStyle=regColor;ctx.font='bold 11px Source Code Pro,monospace';
+  ctx.fillText(p.reg,W*0.39+W*0.12,32);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(activeTeal?'base = this process’s LDT':'base = 0x00120000',W*0.39+W*0.12,49);
+  ctx.fillText(activeTeal?'(installed via modify_ldt)':'(the shared system table)',W*0.39+W*0.12,62);
+
+  // TI routing box
+  ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(W*0.67,14,W*0.31,58);
+  ctx.strokeStyle=C.purple;ctx.strokeRect(W*0.67,14,W*0.31,58);
+  ctx.fillStyle=C.purple;ctx.font='bold 10px Source Code Pro,monospace';
+  ctx.fillText('TI bit routes the lookup',W*0.67+W*0.155,32);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=activeTeal?C.teal:C.gold;
+  ctx.fillText('TI='+(activeTeal?1:0)+' → use the '+p.table,W*0.67+W*0.155,49);
+
+  // GDT array (top, shared)
+  const gY=100, cellW=Math.min(40,(W-40)/16), arrH=28, startX=(W-16*cellW)/2;
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('THE SHARED GDT  (every process, boring flat entries)',startX,gY-8);
+  for(let i=0;i<16;i++){
+    const x=startX+i*cellW;
+    const hi=(!activeTeal && i===p.idx);
+    ctx.fillStyle=hi?'rgba(245,200,66,.28)':'rgba(122,155,191,.08)';
+    ctx.fillRect(x,gY,cellW-2,arrH);
+    ctx.strokeStyle=hi?C.gold:C.border;ctx.lineWidth=hi?2:1;
+    ctx.strokeRect(x,gY,cellW-2,arrH);
+    ctx.fillStyle=hi?C.gold:C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(i,x+cellW/2-1,gY+arrH/2+3);
+  }
+
+  // LDT array (bottom, private, only 8 slots, Wine's)
+  const lY=gY+arrH+56, lCellW=Math.min(46,(W-40)/8), lArrH=28, lStartX=(W-8*lCellW)/2;
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('THIS WINE PROCESS’S PRIVATE LDT  (filled by modify_ldt)',lStartX,lY-8);
+  for(let i=0;i<8;i++){
+    const x=lStartX+i*lCellW;
+    const hi=(activeTeal && i===p.idx);
+    const hiColor = isFault ? C.red : C.teal;
+    ctx.fillStyle=hi?(isFault?'rgba(248,113,113,.28)':'rgba(45,212,191,.30)'):'rgba(45,212,191,.06)';
+    ctx.fillRect(x,lY,lCellW-2,lArrH);
+    ctx.strokeStyle=hi?hiColor:'rgba(45,212,191,.35)';ctx.lineWidth=hi?2:1;
+    if(hi&&isFault){ctx.setLineDash([3,3]);}
+    ctx.strokeRect(x,lY,lCellW-2,lArrH);
+    ctx.setLineDash([]);
+    ctx.fillStyle=hi?hiColor:C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(i,x+lCellW/2-1,lY+lArrH/2+3);
+  }
+
+  // descriptor detail box
+  const descY=lY+lArrH+40;
+  const descColor = isFault?C.red:(activeTeal?C.teal:C.green);
+  ctx.fillStyle=isFault?'rgba(248,113,113,.10)':(activeTeal?'rgba(45,212,191,.08)':'rgba(74,222,128,.08)');ctx.fillRect(W*0.16,descY,W*0.68,86);
+  ctx.strokeStyle=descColor;ctx.strokeRect(W*0.16,descY,W*0.68,86);
+  ctx.fillStyle=descColor;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(isFault?'⚠ #NP — SEGMENT NOT PRESENT':'SEGMENT DESCRIPTOR — '+p.table+' #'+p.idx,W*0.5,descY+20);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  if(isFault){
+    ctx.fillText('The kernel never wrote a descriptor here.',W*0.5,descY+38);
+    ctx.fillText('Hardware refuses the access instead of guessing.',W*0.5,descY+54);
+  } else {
+    ctx.fillText('Base='+p.base,W*0.5,descY+38);
+    ctx.fillText('Limit='+p.limit,W*0.5,descY+54);
+  }
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(p.type,W*0.5,descY+72);
+
+  const captions={
+    idle:'Choose a selector above to run the lookup',
+    step1:'Selector read from a segment register — TI='+(activeTeal?1:0)+' decides the table',
+    step2:'CPU consults '+p.reg+' for the base address of the '+p.table,
+    step3:'Compute descriptor address: '+p.reg+'.base + index×8',
+    step4:'Jump to that slot in the '+p.table+' array',
+    step5: isFault ? 'Fetch attempted — but this slot’s present bit is 0' : 'Fetch the 8-byte Segment Descriptor and check privilege',
+    step6: isFault ? 'CPU raises #NP instead of completing the access — no modify_ldt() call ever happened' : (activeTeal ? 'Real segmentation hardware now translates this Win16 program’s segment:offset addresses' : 'Base extracted — flat segment, offset added directly, done')
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+
+  if(phase==='step4'){
+    if(activeTeal){
+      const x=lStartX+p.idx*lCellW+lCellW/2-1;
+      ctx.beginPath();ctx.arc(x,lY-14,6,0,Math.PI*2);ctx.fillStyle=isFault?C.red:C.teal;ctx.fill();
+    } else {
+      const x=startX+p.idx*cellW+cellW/2-1;
+      ctx.beginPath();ctx.arc(x,gY-14,6,0,Math.PI*2);ctx.fillStyle=C.gold;ctx.fill();
+    }
+  }
+}
+
+function runWine(mode){
+  const phases=['step1','step2','step3','step4','step5','step6'];
+  const durations=[450,450,500,450,550,600];
+  let i=0,start=performance.now();
+  document.getElementById('wineLabel').textContent='▶ Resolving '+(WPRESETS[mode]?WPRESETS[mode].name:'selector');
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[i]);
+    drawWine(t,phases[i],mode);
+    if(t>=1){i++;if(i>=phases.length){document.getElementById('wineLabel').textContent='▶ Done — try the other selector';return;}start=now;}
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetWine(){document.getElementById('wineLabel').textContent='▶ Choose which selector to resolve';drawWine(0,'idle','gdt');}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetWine);
+window.addEventListener('resize',resetWine);
+</script>
+</body>
+</html>
