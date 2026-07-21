@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 16 — ELF Loader | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source Code Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;--accent:#38bdf8;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(56,189,248,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--accent);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--accent);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--accent);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--accent);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(56,189,248,0.08),rgba(13,148,136,0.08));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .elf-layout{margin:20px 0;}
+  .elf-row{display:flex;align-items:center;padding:10px 16px;border-radius:6px;margin:3px 0;font-family:'Source Code Pro',monospace;font-size:13px;}
+  .elf-row .offset{color:var(--muted);min-width:80px;}
+  .elf-row .name{font-weight:700;min-width:120px;}
+  .elf-row .desc{color:var(--muted);font-size:12px;}
+  .elf-row.magic{background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.2);}.elf-row.magic .name{color:var(--gold);}
+  .elf-row.phdr{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);}.elf-row.phdr .name{color:var(--cyan);}
+  .elf-row.text{background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);}.elf-row.text .name{color:var(--green);}
+  .elf-row.data{background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);}.elf-row.data .name{color:var(--orange);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">MODULE 16 — PHASE 3</div>
+  <h1>ELF <span>Loader</span></h1>
+  <p class="tagline">User programs graduate from kernel blobs to real files. Module 16 reads an ELF32 binary from BobFS, parses its program headers, allocates pages in a fresh address space, copies segments in — and jumps to the entry point at ring 3.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">0x7F454C46</div><div class="label">ELF magic number (\x7FELF)</div></div>
+    <div class="hero-stat"><div class="num">PT_LOAD</div><div class="label">program header type to process</div></div>
+    <div class="hero-stat"><div class="num">0x400000</div><div class="label">where user code loads (PDE[1])</div></div>
+    <div class="hero-stat"><div class="num">e_entry</div><div class="label">ELF field: the process entry point</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-numbers">Number Systems</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-build">Build Pipeline</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of an ELF file like an IKEA flat-pack box. The box has an instruction sheet (ELF header) that says "this kit has 3 sections — put section A at position X, section B at position Y." The program headers are those instructions. The ELF loader is the person following them: open the box, find each part, place it where the instructions say, then step back and let the finished furniture do its job.</p>
+      <p style="margin-top:10px;">The "furniture" is your user process. The "position" is a virtual address. The "placing" is copying bytes from the ELF file into freshly allocated memory pages.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — ELF32 File Structure</h2>
+    <div class="elf-layout">
+      <div class="elf-row magic"><div class="offset">offset 0</div><div class="name">ELF Header</div><div class="desc">52 bytes — magic, arch, entry point, phdr offset/count</div></div>
+      <div class="elf-row phdr"><div class="offset">offset 52</div><div class="name">Phdr[0] .text</div><div class="desc">PT_LOAD: vaddr=0x400000, filesz, memsz, flags=RX</div></div>
+      <div class="elf-row phdr"><div class="offset">offset 84</div><div class="name">Phdr[1] .data</div><div class="desc">PT_LOAD: vaddr=0x401000, filesz, memsz, flags=RW</div></div>
+      <div class="elf-row text"><div class="offset">offset N</div><div class="name">.text segment</div><div class="desc">executable code bytes</div></div>
+      <div class="elf-row data"><div class="offset">offset M</div><div class="name">.data / .bss</div><div class="desc">initialized data; BSS is zeros (memsz > filesz)</div></div>
+    </div>
+    <pre><code>/* elf.h — the structs we care about */
+typedef struct {
+    uint8_t  e_ident[16]; /* magic + class + endian + ... */
+    uint16_t e_type;      /* ET_EXEC = 2 */
+    uint16_t e_machine;   /* EM_386 = 3 */
+    uint32_t e_entry;     /* entry point virtual address */
+    uint32_t e_phoff;     /* offset to first program header */
+    uint32_t e_phentsize; /* size of one program header (32) */
+    uint16_t e_phnum;     /* number of program headers */
+    /* ... */
+} Elf32_Ehdr;
+
+typedef struct {
+    uint32_t p_type;   /* PT_LOAD = 1 */
+    uint32_t p_offset; /* offset in file */
+    uint32_t p_vaddr;  /* virtual address to load at */
+    uint32_t p_filesz; /* bytes in file */
+    uint32_t p_memsz;  /* bytes in memory (>= filesz; BSS = memsz-filesz) */
+    uint32_t p_flags;  /* PF_R=4, PF_W=2, PF_X=1 */
+    uint32_t p_align;
+} Elf32_Phdr;</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — The Loader Algorithm</h2>
+    <pre><code>/* elf_loader.c */
+uint32_t elf_load(const char *filename, uint32_t *cr3_out) {
+    char buf[65536];
+    int n = fs_read(filename, buf, sizeof(buf));
+    if (n < 0) return 0;
+
+    Elf32_Ehdr *ehdr = (Elf32_Ehdr*)buf;
+    /* validate magic */
+    if (*(uint32_t*)ehdr->e_ident != 0x464C457F) return 0; /* \x7FELF */
+
+    /* create a fresh address space */
+    uint32_t pd = paging_create_address_space();
+    *cr3_out = pd;
+
+    /* process each PT_LOAD segment */
+    for (int i = 0; i < ehdr->e_phnum; i++) {
+        Elf32_Phdr *ph = (Elf32_Phdr*)(buf + ehdr->e_phoff + i * ehdr->e_phentsize);
+        if (ph->p_type != 1) continue; /* skip non-PT_LOAD */
+
+        /* allocate pages and map them into the new address space */
+        uint32_t vaddr = ph->p_vaddr & ~0xFFF;
+        uint32_t pages = (ph->p_memsz + 0xFFF) / PAGE_SIZE;
+        for (uint32_t p = 0; p < pages; p++) {
+            uint32_t phys = pmm_alloc_page();
+            paging_map_user_page(pd, vaddr + p * PAGE_SIZE, phys);
+        }
+        /* copy file bytes into the mapping (temporarily switch to new PD) */
+        paging_switch(pd);
+        memcpy((void*)ph->p_vaddr, buf + ph->p_offset, ph->p_filesz);
+        memset((void*)(ph->p_vaddr + ph->p_filesz), 0,  /* zero BSS */
+               ph->p_memsz - ph->p_filesz);
+        paging_switch(paging_kernel_cr3());
+    }
+    return ehdr->e_entry; /* entry point */
+}</code></pre>
+
+    <div class="callout orange">
+      <div class="label">The objcopy trick for embedding ELFs</div>
+      <p>Before the ELF loader can read from BobFS, someone has to put the ELF file there. The Makefile uses <code>objcopy -I binary</code> to embed the compiled user ELF as a blob inside the kernel image with symbols <code>_binary_user_prog_elf_start</code> / <code>_end</code>. At boot, <code>kernel_main</code> calls <code>fs_create("prog.elf", &amp;_binary_...)</code> to write it to disk. After that, <code>sys_exec("prog.elf")</code> reads it back through the ELF loader.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Building the User ELF</h2>
+    <pre><code># user_linker.ld — tells the linker where user code lives
+ENTRY(user_entry)
+SECTIONS {
+    . = 0x400000;          /* user code base address */
+    .text   : { *(.text) }
+    .rodata : { *(.rodata) }
+    . = 0x401000;
+    .data   : { *(.data) }
+    .bss    : { *(.bss) }
+}</code></pre>
+    <div class="callout green">
+      <div class="label">Two linker scripts, two worlds</div>
+      <p><code>linker.ld</code> links the kernel at 0x1000 as a flat binary. <code>user_linker.ld</code> links user programs at 0x400000 as ELF32 executables. They're built and linked separately; the kernel never knows the user program's source — only its ELF file on disk.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run Module 16 — ELF Loader</h4>
+      <div class="step"><div class="desc">Navigate and run:</div>
+      <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\16_elf_loader
+make disk.img &amp;&amp; make run</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[BobOS] Module 16 -- ELF Loader
+  Writing hello.elf to BobFS (2048 bytes)...
+  sys_exec("hello.elf") → loading ELF...
+  ELF: entry=0x400000, 2 PT_LOAD segments
+  Segment 0: vaddr=0x400000 filesz=512 memsz=512
+  Segment 1: vaddr=0x401000 filesz=64  memsz=128 (BSS=64)
+  Jumping to ring-3 entry 0x400000...
+  [ring-3] Hello from a real ELF binary!
+  [ring-3] I was loaded from disk. PID=1
+  [kernel] ELF process exited (code 0)</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> The loader temporarily switches to the new process's CR3 to copy segment data into the mapped pages (<code>paging_switch(pd)</code>). Then it switches back (<code>paging_switch(kernel_cr3)</code>).</p>
+      <p style="margin-top:14px;color:var(--muted);">What would happen if we forgot to switch back? The next kernel operation that accesses a kernel data structure would be using the new process's page directory — which doesn't have any of the kernel allocations made after <code>paging_create_address_space()</code>. What symptom would you see?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why ELF32 and not ELF64?</div>
+      <div class="a">BobOS targets i686 — a 32-bit x86 CPU. ELF64 is for 64-bit binaries. Our GCC cross-compiler uses <code>-m32</code> which produces ELF32. The structures are simpler (fewer fields, no 64-bit addresses), making the loader easier to write and understand.</div>
+      <div class="q">Q: What happens if the ELF is corrupted or has the wrong magic?</div>
+      <div class="a">The loader checks <code>*(uint32_t*)e_ident == 0x464C457F</code> (the "\x7FELF" magic). If it fails, <code>elf_load</code> returns 0 and <code>sys_exec</code> returns an error code. The calling process (exec_stub) sees the error, prints a message, and calls <code>sys_exit(1)</code>. The kernel itself is unaffected.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — Companion Lessons</h2>
+    <div class="callout cyan">
+      <div class="label">Go deeper — companion lessons for this module</div>
+      <p>Everything above covers what the code does. These lessons go further into <em>why</em> it works this way, walking through bob_os's actual <code>elf_load()</code> and <code>do_exec()</code> step by step, with interactive diagrams and a full failure-mode breakdown.</p>
+      <div class="prereq-bar">
+        <a class="prereq-tag" href="../lessons/12_elf_loader/01_explainer.html">The ELF Format</a>
+        <a class="prereq-tag" href="../lessons/12_elf_loader/02_loading_deepdive.html">From File to Running Process</a>
+        <a class="prereq-tag" href="../lessons/12_elf_loader/03_linking_deepdive.html">Static vs Dynamic Linking</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: Module 17 — fork &amp; exec</div>
+      <p>The ELF loader gives you <code>exec</code>. Module 17 adds <code>fork</code> — a deep copy of the current process's address space — and wires them together into the Unix process model. <code>fork()</code> + <code>exec()</code> = spawn a child that runs a different program. <code>wait()</code> lets the parent collect the exit code.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>elf_loader.c</code> · <code>elf.h</code> · <code>user_linker.ld</code></p>
+  </section>
+</div>
+<footer>BobOS Tutorial — Module 16 of 42 &nbsp;|&nbsp; <a href="../15_address_spaces/tutorial.html">← Module 15</a> &nbsp;·&nbsp; <a href="../17_fork_exec/tutorial.html">Module 17 →</a></footer>
+</body>
+</html>
