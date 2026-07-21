@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fork(), exec() &amp; Copy-on-Write: The Life and Death of a Process</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.bug{color:var(--red);font-weight:700}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* PCB dossier card */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier.dead{border-color:var(--red);}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;}
+.dossier.dead .dossier-head{background:rgba(248,113,113,.08);border-bottom-color:var(--red);}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier.dead .dossier-head span{color:var(--red);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier.dead .dossier-field .f-val{color:var(--red);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+.dossier-field .f-val.strike{text-decoration:line-through;color:var(--muted);}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage.zombie{border-color:var(--red);}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage.zombie .pipe-name{color:var(--red);}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#nofork" title="The Missing Syscall"></a>
+  <a class="toc-dot" href="#forking" title="fork() Mechanics"></a>
+  <a class="toc-dot" href="#cow" title="Copy-on-Write"></a>
+  <a class="toc-dot" href="#execsec" title="exec() Replaces Everything"></a>
+  <a class="toc-dot" href="#shellcase" title="fork+exec Case Study"></a>
+  <a class="toc-dot" href="#death" title="Death, wait(), Zombies"></a>
+  <a class="toc-dot" href="#orphans" title="Orphans & PID 1"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · fork() · exec() · Copy-on-Write · Zombies</div>
+    <h1>Clone, Then<br><span>Become</span></h1>
+    <p class="hero-sub">You already know the PCB is the kernel's dossier on every process, and that one field on it — Parent/Children — sketches a whole family tree. This page is about the two syscalls that actually draw that tree: <strong>fork()</strong>, which clones a running process down to the letter, and <strong>exec()</strong>, which guts a process and rebuilds it as something else entirely. And once a process is born this way, we'll follow it all the way to death — through <code>wait()</code>, the zombie state, and the strange fate of an orphan.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Syscalls to birth a new program: fork() + exec()</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Parent memory pages eagerly copied at fork() time</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">PID kept across an exec() — same PCB, new program</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">PID that adopts every orphan (init / systemd)</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>That "Parent / Children" Field Was Hiding <span class="accent">A Whole Mechanism</span></h2>
+  <p class="reveal">Back in the PCB dossier, one field read <code>PPID 3980 → [4022, 4023]</code>, captioned "who spawned this process, and what it has spawned — the process tree." We treated that as a given: processes just... have children. But how does PID 4022 actually come into existence? What runs first, the kernel's bookkeeping or the new program's code? And when 4022 eventually finishes, does its PCB just evaporate, or does something else happen first? Those are today's questions, and the honest answer to the first one is genuinely surprising.</p>
+</div>
+</section>
+
+<!-- THE MISSING SYSCALL -->
+<section id="nofork">
+<div class="container">
+  <div class="section-num">01 — The Surprising Core Fact</div>
+  <h2>There Is No <span class="accent">"Run This Program" Syscall</span></h2>
+
+  <p class="reveal">If you had to design process creation from scratch, you'd probably reach for something like <code>spawn_process("/bin/ls")</code> — one call, in goes a path, out comes a running program. That is <em>not</em> how Linux, or any UNIX-family kernel, actually does it. There is no such syscall. Instead, "run a new program" is <strong>always</strong> a two-step dance performed by two completely separate, much more primitive syscalls:</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The Universal Idiom</span>
+    fork() — clone the calling process into an exact duplicate<br>then, usually, exec() — replace the caller's own code with a different program
+    <span class="sub">Two narrow tools, composed, instead of one do-everything syscall.</span>
+  </div>
+
+  <p class="reveal"><code>fork()</code> takes the process that is <em>currently running it</em> and clones it into a second, independent, schedulable process — same code, same data, same open files, brand-new PID. <code>exec()</code> (really the <code>execve()</code> family) then throws away a process's current code and data and replaces them with a different program entirely, keeping the same PID. Neither one, alone, is "run a new program." Together, they are.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment — Why Split It Into Two?</div>
+    This isn't historical baggage; it's a genuinely elegant separation of concerns. <code>fork()</code>'s entire job is "manufacture a new schedulable entity with its own PCB" — nothing about <em>what program</em> that entity eventually runs. <code>exec()</code>'s entire job is "load a specific program into the currently running process" — nothing about <em>where that process came from</em>. Because they're decoupled, you can use either one without the other: <code>exec()</code> alone (no prior fork) is exactly what a login shell does to replace itself, and — as the next paragraph shows — <code>fork()</code> alone, with no <code>exec()</code> at all, is a genuinely useful thing to do.
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">🟢 fork() Without exec(): When You Actually Want An Identical Twin</div>
+    Sometimes the goal really is "give me a second copy of exactly what's already running," with no new program involved at all. This is literally how a UNIX shell backgrounds a job with <code>&amp;</code> in some implementations, and it's the classic architecture behind old-school "pre-fork" servers (Apache's <code>prefork</code> MPM is the textbook example): the master process calls <code>fork()</code> repeatedly with <em>no</em> following <code>exec()</code>, producing a pool of worker processes that are identical clones of the master, each one then independently accepting connections. No new program was ever loaded — the clone itself was the point.
+  </div>
+</div>
+</section>
+
+<!-- FORK MECHANICS -->
+<section id="forking">
+<div class="container">
+  <div class="section-num">02 — fork(): Cloning A Running Process</div>
+  <h2>fork() Duplicates The <span class="accent">Calling Process</span></h2>
+
+  <p class="reveal">Think of <code>fork()</code> the way a biology textbook describes a cell dividing: one cell becomes two, each a complete, independent copy of the original, both now free to live separate lives. When a process calls <code>fork()</code>, the kernel builds a brand-new PCB for a child process: a new PID, but — at the instant of the split — the same open file descriptors, the same environment variables, the same code, and (conceptually) the same entire memory image as the parent.</p>
+
+  <p class="reveal">Here's the detail that trips people up the first time they see it: <strong>both the parent and the child resume execution from the exact same point</strong> — the line immediately after the <code>fork()</code> call — because that's where the parent was when the kernel cloned it. There is no separate "child's starting line." The only way either process can tell which one it is comes from <code>fork()</code>'s own return value, which is different in each:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>fork() returns…</th><th>To whom</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0</td><td>The child</td><td>"You are the new process. Your own PID, if you need it, is <code>getpid()</code>."</td></tr>
+        <tr><td class="hl">&gt; 0 (the child's PID)</td><td>The parent</td><td>"Cloning succeeded — here is your new child's PID, in case you need to <code>wait()</code> on it later."</td></tr>
+        <tr><td class="neg">&lt; 0</td><td>The (would-be) parent only</td><td>Cloning failed (e.g. too many processes already) — no child was created at all.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <pre class="reveal"><span class="tag">C — the classic fork() branch</span><code><span class="cls">pid_t</span> pid = <span class="fn">fork</span>();
+
+<span class="kw">if</span> (pid == <span class="numc">0</span>) {
+    <span class="cm">// This branch runs in the CHILD only.</span>
+    <span class="cm">// pid is 0 here — that's how the child knows it's the child.</span>
+    <span class="fn">printf</span>(<span class="str">"child: my pid is %d\n"</span>, <span class="fn">getpid</span>());
+} <span class="kw">else if</span> (pid &gt; <span class="numc">0</span>) {
+    <span class="cm">// This branch runs in the PARENT only.</span>
+    <span class="cm">// pid holds the CHILD's new pid here.</span>
+    <span class="fn">printf</span>(<span class="str">"parent: spawned child %d\n"</span>, pid);
+} <span class="kw">else</span> {
+    <span class="cm">// fork() itself failed — no child exists.</span>
+    <span class="fn">perror</span>(<span class="str">"fork"</span>);
+}</code></pre>
+
+  <p class="reveal">Notice what this snippet does <em>not</em> do: it never explicitly tells the kernel "now go create a child that starts at some other function." It calls <code>fork()</code> exactly once, and the <code>if</code>/<code>else</code> is how <em>one piece of source code</em> ends up steering two different, now-independent processes down two different paths — purely based on which copy is asking.</p>
+</div>
+</section>
+
+<!-- COPY ON WRITE -->
+<section id="cow">
+<div class="container">
+  <div class="section-num">03 — The Trick That Makes fork() Fast</div>
+  <h2>Copy-on-Write: <span class="accent">Sharing Until Someone Writes</span></h2>
+
+  <p class="reveal">Here's the obvious objection to everything in the last section: if a real process has hundreds of megabytes (or gigabytes) of memory, doesn't <code>fork()</code> have to copy <em>all of it</em> the instant it's called? That would make <code>fork()</code> catastrophically slow for any process with a large memory footprint. The kernel's actual answer is <strong>Copy-on-Write (COW)</strong>, and it's one of the cleaner tricks in all of OS design.</p>
+
+  <p class="reveal">At the moment of <code>fork()</code>, the kernel does <em>not</em> copy the parent's memory pages at all. Instead, it duplicates only the <em>page table</em> — the map of virtual addresses to physical page frames — so that the child's page table entries point at the exact same physical pages the parent is already using. Both processes' entries for those shared pages are then marked <strong>read-only</strong>, even for pages the parent had previously marked writable.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📖 The Analogy: Sharing a Textbook</div>
+    Picture two students who both need the same textbook. Instead of photocopying the entire book for the second student the moment they're assigned a partner, the library just says "share this one copy — but no writing in the margins until you get your own." Both students read from the identical physical book, freely, at zero extra cost. Only the instant one of them actually reaches for a pencil to write a note does the library step in, run to the copier, and hand that one student their own private, writable copy of <em>just that page</em> — not the whole book.
+  </div>
+
+  <p class="reveal">That "someone reaches for a pencil" moment is a genuine hardware event: the writing process attempts a normal store instruction to what it believes is ordinary writable memory, the MMU sees the page table entry is marked read-only, and it raises a <strong>page fault</strong> — not a bug, not a crash, but the exact same fault mechanism you've already met in the memory-addressing material, deliberately engineered as a trap the kernel is waiting to catch. The kernel's fault handler recognizes "oh, this is a COW page," allocates one fresh physical frame, copies just that single page's worth of bytes into it, updates the faulting process's page table entry to point at the new private frame (now writable), and lets the store instruction retry — this time succeeding for real. The other process (and any other pages that were never written) never notices a thing.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="cowLabel">▶ Step through fork() and a Copy-on-Write fault</div>
+    <canvas id="cowCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="cowStepFork()">▶ Step 1 — fork(): share pages, mark read-only</button>
+    <button class="ctrl-btn gold" onclick="cowStepWrite()">▶ Step 2 — child writes: page fault → private copy</button>
+    <button class="ctrl-btn red" onclick="cowReset()">Reset</button>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚡ Why This Is Such A Big Performance Win</div>
+    Consider how <code>fork()</code> is actually used in practice: an enormous fraction of calls to it are immediately followed by <code>exec()</code>, which is about to <strong>discard the entire memory image anyway</strong> and load a completely different program. Eagerly copying gigabytes of memory the child is going to throw away a few microseconds later would be pure waste — CPU cycles and memory bandwidth spent producing bytes nobody will ever read. Copy-on-Write means <code>fork()</code> stays fast (essentially: duplicate a page table, not the memory it describes) regardless of the parent's size, and actual copying only ever happens for the specific pages that turn out to genuinely need it.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Going further — vfork(), posix_spawn(), and Windows' different answer.</b> Because "fork() immediately followed by exec()" is so common, some systems offer even leaner shortcuts: <code>vfork()</code> skips setting up COW page tables altogether by briefly having the child share the parent's address space directly (with the parent suspended until the child execs or exits), and <code>posix_spawn()</code> wraps the whole fork-then-exec sequence into one library call for callers who never wanted a plain fork() in the first place. It's worth knowing that not every OS made the same design bet: Windows' <code>CreateProcess()</code> really is a single call that both creates a process <em>and</em> loads a program into it — there's no Windows equivalent of "fork() alone." The UNIX two-step is a deliberate design choice, not the only possible one.
+  </div>
+</div>
+</section>
+
+<!-- EXEC -->
+<section id="execsec">
+<div class="container">
+  <div class="section-num">04 — exec(): Same PCB, Brand New Program</div>
+  <h2>exec() Doesn't Create Anything — It <span class="accent">Replaces Everything</span></h2>
+
+  <p class="reveal">If <code>fork()</code> is "new PCB, old code," then <code>exec()</code> — the <code>execve()</code> family of syscalls — is precisely its mirror image: <strong>same PCB, entirely new code.</strong> Calling <code>execve()</code> does not create a new process. The calling process keeps its own PID, its own PPID, its own PCB. What changes is everything <em>inside</em> that PCB's memory description: the old program's code, data, heap, and stack are all discarded and replaced wholesale with a brand-new program loaded fresh from disk, and the saved program counter is reset to point at that new program's entry point.</p>
+
+  <pre class="reveal"><span class="tag">C — the child execs into ls</span><code><span class="cm">// Runs only in the branch where pid == 0 (the child)</span>
+<span class="kw">char</span> *args[] = { <span class="str">"/bin/ls"</span>, <span class="str">"-l"</span>, <span class="kw">NULL</span> };
+<span class="fn">execve</span>(<span class="str">"/bin/ls"</span>, args, environ);
+
+<span class="cm">// If execve() succeeds, THIS LINE NEVER RUNS —</span>
+<span class="cm">// the process is now running /bin/ls's code, same PID.</span>
+<span class="fn">perror</span>(<span class="str">"execve failed"</span>);
+<span class="fn">_exit</span>(<span class="numc">1</span>);</code></pre>
+
+  <p class="reveal">That comment is not decoration — it's the single most important thing to understand about <code>exec()</code>. A successful <code>execve()</code> never returns to the calling code at all, because the code that called it no longer exists in that process's memory to return to. The only way <code>execve()</code> ever returns is if it <em>failed</em> (bad path, permission denied, bad executable format) — in which case the original program is still there, completely intact, exactly as if nothing happened.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Say The Distinction Out Loud</div>
+    <strong>fork()</strong> makes a new PCB that keeps running the <em>old</em> code. <strong>exec()</strong> keeps the <em>same</em> PCB but starts running entirely <em>new</em> code. One multiplies the number of running processes; the other transforms one process in place. They are not two flavors of the same operation — they're opposites that happen to be used together constantly.
+  </div>
+</div>
+</section>
+
+<!-- SHELL CASE STUDY -->
+<section id="shellcase">
+<div class="container">
+  <div class="section-num">05 — Putting It Together</div>
+  <h2>How A Shell Runs <span class="accent">ls</span></h2>
+
+  <p class="reveal">You now have both halves. Here is the exact sequence your shell performs every time you type a command and hit Enter — the textbook illustration of why the two-step design pays off:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>You type <code>ls -l</code> and press Enter</strong>The shell process (say PID 900) parses the command line and prepares to run it — but the shell itself must <em>not</em> turn into <code>ls</code>, or it would never come back to give you another prompt.</div></li>
+    <li><div class="step-body"><strong>The shell calls fork()</strong>The kernel clones PID 900 into a new child, say PID 901 — a Copy-on-Write duplicate of the shell itself, sharing the shell's memory pages read-only, exactly as in the last section.</div></li>
+    <li><div class="step-body"><strong>Both processes resume — and immediately diverge</strong>PID 900 (parent) sees <code>fork()</code> return 901 and goes on to call <code>waitpid(901, …)</code>, blocking. PID 901 (child) sees <code>fork()</code> return 0 and, instead of continuing as a shell, calls <code>execve("/bin/ls", …)</code>.</div></li>
+    <li><div class="step-body"><strong>Only the child execs</strong>PID 901's memory is wiped and reloaded with <code>/bin/ls</code>'s code. It is <em>still PID 901</em> — same PCB — but it is now, for all practical purposes, the <code>ls</code> program, not the shell.</div></li>
+    <li><div class="step-body"><strong>ls runs, prints its output, and exits</strong>Meanwhile PID 900 — the original shell — was never touched. It didn't fork again, didn't exec, didn't change at all; it's just been sitting in <code>waitpid()</code> the whole time.</div></li>
+    <li><div class="step-body"><strong>The shell's wait() returns, and you get your prompt back</strong>PID 900 collects PID 901's exit status and prints a fresh <code>$</code> — ready to fork a brand-new child for your next command.</div></li>
+  </ol>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Aspect</th><th>fork()</th><th>exec() (execve family)</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">New PID created?</td><td class="pos">Yes — child gets a fresh PID</td><td class="neg">No — same PID as before the call</td></tr>
+        <tr><td class="hl">New PCB allocated?</td><td class="pos">Yes, a whole new one</td><td class="neg">No — the existing PCB is updated in place</td></tr>
+        <tr><td class="hl">Processes after the call</td><td class="gold">2 (parent + child)</td><td class="gold">Still 1 — just running different code now</td></tr>
+        <tr><td class="hl">Code / data / heap / stack</td><td>Duplicated (COW) — identical to parent at first</td><td>Completely replaced by the new program's image</td></tr>
+        <tr><td class="hl">Open file descriptors</td><td>Duplicated — child shares the same open file descriptions</td><td>Preserved by default (unless a descriptor is marked <code>O_CLOEXEC</code>)</td></tr>
+        <tr><td class="hl">Program counter</td><td>Both processes resume right after the fork() call</td><td>Reset to the new program's entry point</td></tr>
+        <tr><td class="hl">Typical next step</td><td>Child usually calls exec() next</td><td>Runs until it calls exit(), or is killed</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- DEATH / WAIT / ZOMBIE -->
+<section id="death">
+<div class="container">
+  <div class="section-num">06 — Death, wait(), and the Zombie State</div>
+  <h2>When A Child Exits, It Doesn't Just <span class="accent r">Vanish</span></h2>
+
+  <p class="reveal">A process's full life, laid end to end, looks like this — including a stop most people never learn about:</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">🧬</div><div class="pipe-name">fork()</div><div class="pipe-desc">New PCB, COW-shared memory</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🔁</div><div class="pipe-name">exec()</div><div class="pipe-desc">Same PCB, new program loaded</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">▶️</div><div class="pipe-name">Running</div><div class="pipe-desc">Scheduled normally, does its work</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🚪</div><div class="pipe-name">exit()</div><div class="pipe-desc">Program finishes or calls exit()</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage zombie"><div class="pipe-icon">🧟</div><div class="pipe-name">Zombie</div><div class="pipe-desc">Dead, but PCB remnant lingers</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🗑️</div><div class="pipe-name">Reaped</div><div class="pipe-desc">Parent calls wait() — PCB freed</div></div>
+  </div>
+
+  <p class="reveal">When a process calls <code>exit()</code> (or falls off the end of <code>main()</code>, or is killed by a signal), the kernel immediately reclaims almost everything expensive: its memory pages, its open file descriptors, its page table. But it does <em>not</em> immediately delete the PCB. Why? Because the parent might still want to know <em>how</em> the child ended — its exit status, or which signal killed it — and that information has to be stored somewhere until the parent actually asks for it. So the kernel keeps a stripped-down remnant of the PCB around, and the process enters the <strong>zombie</strong> state: dead, but not yet fully gone.</p>
+
+  <div class="dossier dead reveal">
+    <div class="dossier-head"><span>Process Control Block — PID 901 — ZOMBIE (defunct)</span><span style="color:var(--muted);font-size:.7rem">exited, awaiting wait()</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Process State</div><div class="f-val">ZOMBIE</div><div class="f-desc">Not running, not runnable, not blocked — just dead and unreaped.</div></div>
+      <div class="dossier-field"><div class="f-label">Exit Status</div><div class="f-val">0 (success)</div><div class="f-desc">The one piece of information this whole remnant exists to preserve.</div></div>
+      <div class="dossier-field"><div class="f-label">Program Counter</div><div class="f-val strike">0x00005621...</div><div class="f-desc">Meaningless now — nothing left to resume.</div></div>
+      <div class="dossier-field"><div class="f-label">CPU Registers</div><div class="f-val strike">discarded</div><div class="f-desc">Freed at exit — a zombie owns no CPU state.</div></div>
+      <div class="dossier-field"><div class="f-label">Memory / Page Table</div><div class="f-val strike">freed</div><div class="f-desc">All memory pages already returned to the system.</div></div>
+      <div class="dossier-field"><div class="f-label">Open File Table</div><div class="f-val strike">closed</div><div class="f-desc">Every file descriptor already released.</div></div>
+      <div class="dossier-field"><div class="f-label">Parent / Children</div><div class="f-val">PPID 900</div><div class="f-desc">Still recorded — this is who owes it a wait() call.</div></div>
+      <div class="dossier-field"><div class="f-label">Accounting Info</div><div class="f-val">CPU time used: 4ms</div><div class="f-desc">Kept so the parent can retrieve resource-usage stats via wait4()/getrusage().</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">The zombie stays exactly like this — occupying a PID and a slot in the process table, contributing nothing, doing nothing — until its parent calls <code>wait()</code> or <code>waitpid()</code>. That call is what programmers mean by <strong>reaping</strong>: the kernel hands the parent the stored exit status, and only <em>then</em> deletes the last remnant of the PCB. This is exactly the <code>waitpid(pid, &amp;status, 0)</code> call from the shell walkthrough above — the shell wasn't just "waiting" in some vague sense, it was performing the specific act of reaping its zombie child so the prompt could return.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why Zombie Pile-Up Is A Real Resource Leak</div>
+    A single zombie is harmless. A <em>pile</em> of them is not. Every zombie still occupies a slot in the kernel's process table and still holds onto a PID — and PIDs are a finite resource (on a default Linux config, commonly capped somewhere in the tens of thousands, configurable via <code>/proc/sys/kernel/pid_max</code>). A parent that spawns children in a loop and never calls <code>wait()</code> on any of them will, given enough time, accumulate thousands of zombies and eventually be unable to fork <em>any</em> new process at all — not because it ran out of memory or CPU, but because it ran out of PID slots. This is a genuine, well-known class of production bug, usually caused by a parent process that forgets — or, in a long-running daemon, simply never gets around to — reaping its children.
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">exit()</span><span class="fam-count">normal</span></div>
+      <div class="fam-desc">The libc wrapper most programs actually call. Flushes stdio buffers, runs any registered <code>atexit()</code> handlers, then calls <code>_exit()</code> underneath.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">_exit()</span><span class="fam-count">direct</span></div>
+      <div class="fam-desc">The raw syscall. Immediate kernel-level termination — no buffer flushing, no cleanup handlers. Sets the exit status the parent will eventually read.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Killed by signal</span><span class="fam-count">signal</span></div>
+      <div class="fam-desc">SIGKILL, SIGSEGV, and friends terminate a process involuntarily. The "exit status" the parent sees encodes exactly which signal did it.</div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="lifeLabel">▶ Watch a process's full lifecycle, two ways</div>
+    <canvas id="lifeCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runLife('normal')">▶ Normal life: fork → exec → exit → wait() (reaped by parent)</button>
+    <button class="ctrl-btn purple" onclick="runLife('orphan')">▶ Orphan life: parent dies first → reparented to PID 1</button>
+    <button class="ctrl-btn red" onclick="resetLife()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- ORPHANS -->
+<section id="orphans">
+<div class="container">
+  <div class="section-num">07 — When The Parent Dies First</div>
+  <h2>Parent Dies First? <span class="accent p">PID 1</span> Adopts The Orphan</h2>
+
+  <p class="reveal">Zombies assume the parent is still around, just slow to call <code>wait()</code>. But what if the parent dies — crashes, gets killed, exits on purpose — while its child is still running, or is a zombie nobody has reaped yet? The child doesn't die too, and it doesn't get orphaned into limbo either. The kernel immediately gives it a new parent: it gets <strong>re-parented</strong>, and on Linux that new parent is, by default, <strong>PID 1</strong> — historically <code>init</code>, on most modern distributions now <code>systemd</code>.</p>
+
+  <p class="reveal">PID 1 has a standing responsibility baked into how the kernel treats it: it must periodically call <code>wait()</code> on <em>any</em> child that shows up attached to it, precisely because it's going to keep inheriting other processes' orphans for as long as the system runs. This is the actual mechanism that keeps orphaned processes from becoming permanent zombies — someone has to be willing to reap children they never spawned, and on Linux, PID 1 is contractually that someone.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>❌ Common Misconception</h4>
+      "An orphaned process immediately becomes a zombie, since its parent is gone." This conflates two unrelated states — orphan describes <em>who your parent is</em>, zombie describes <em>whether you've exited and been reaped yet</em>.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ What Actually Happens</h4>
+      An orphan just means "re-parented to PID 1." A re-parented process keeps running completely normally. It only becomes a (very briefly) zombie when it eventually exits — and PID 1 reaps it almost immediately, since reaping orphans is its job.
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why This Matters In Practice</div>
+    This is precisely the mechanism daemonizing processes rely on: a program that wants to detach from its launching shell and keep running in the background typically forks, has the original process exit immediately, and lets the child get re-parented to PID 1 — outliving the terminal session that launched it entirely. It's also why, on a Linux box, <code>ps -ef</code> often shows a scattering of long-lived processes with PPID 1: not because <code>systemd</code> launched them originally, but because whatever <em>did</em> launch them is long gone.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">fork()</div><div class="glossary-def">Clones the calling process into a new, independent child process with its own PID and PCB. Both processes resume right after the call, distinguished only by fork()'s return value.</div></div>
+    <div class="glossary-card"><div class="glossary-term">exec() / execve()</div><div class="glossary-def">Replaces the calling process's code, data, heap, and stack with a different program, keeping the same PID/PCB. Never returns on success.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Copy-on-Write (COW)</div><div class="glossary-def">The fork() implementation trick: share physical pages read-only between parent and child at fork() time, and only copy a page the moment either side actually writes to it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Page Fault</div><div class="glossary-def">A CPU trap fired when an instruction touches memory in a way its page table entry disallows — including, deliberately, a COW-marked write.</div></div>
+    <div class="glossary-card"><div class="glossary-term">wait() / waitpid()</div><div class="glossary-def">Syscalls a parent calls to block until a child changes state (usually exits), retrieve its exit status, and free its remaining PCB — a.k.a. "reaping."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Zombie Process</div><div class="glossary-def">A process that has exited but whose exit status hasn't yet been collected by its parent — dead, but still holding a PID and a PCB remnant.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Orphan Process</div><div class="glossary-def">A still-running process whose original parent has died before it did. Immediately re-parented — on Linux, typically to PID 1.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PID 1 (init / systemd)</div><div class="glossary-def">The first process the kernel starts at boot. Standing responsibility: adopt every orphan and reap it once it exits, preventing permanent zombies.</div></div>
+    <div class="glossary-card"><div class="glossary-term">vfork() / posix_spawn()</div><div class="glossary-def">Leaner variants for the common "fork immediately followed by exec" pattern — skipping or wrapping the general-purpose COW machinery.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reaping</div><div class="glossary-def">The act of a parent calling wait()/waitpid() on a zombie child, retrieving its exit status and allowing the kernel to finally free its PCB.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>fork(), exec() &amp; Copy-on-Write: The Life and Death of a Process</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion deep-dive to "PCBs, Threads &amp; Shared Memory," part of the OS Sweet Stories series.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── COW FORK CANVAS ──────────────────────────────────────────────────────
+let cowStage=0; // 0=before fork, 1=forked+COW-shared, 2=child wrote, private copy made
+let cowAnimId=null;
+
+function drawCOWScene(stage,t,phase){
+  const canvas=document.getElementById('cowCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const pW=W*0.34, pH=100, pY=26;
+  const parentX=W*0.08;
+  const childX=W*0.58;
+
+  // Parent box (always present)
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.fillStyle='rgba(56,189,248,.06)';
+  ctx.fillRect(parentX,pY,pW,pH);ctx.strokeRect(parentX,pY,pW,pH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Parent — PID 500',parentX+10,pY+18);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('page table:',parentX+10,pY+36);
+
+  // parent page cells
+  const cellW=54,cellH=30,cellY=pY+44;
+  const pCell0X=parentX+10, pCell1X=parentX+10+cellW+10;
+  drawCell(ctx,pCell0X,cellY,cellW,cellH,'Page 0',stage>=1?C.gold:C.cyan);
+  drawCell(ctx,pCell1X,cellY,cellW,cellH,'Page 1',stage>=1?C.gold:C.cyan);
+
+  const childOpacity=stage>=1?1:Math.max(0,t*(phase==='newpcb'?1:1));
+  const showChild = stage>=1 || phase==='newpcb';
+
+  if(showChild){
+    const op = (phase==='newpcb') ? t : 1;
+    ctx.globalAlpha=op;
+    ctx.strokeStyle=C.purple;ctx.fillStyle='rgba(167,139,250,.06)';
+    ctx.fillRect(childX,pY,pW,pH);ctx.strokeRect(childX,pY,pW,pH);
+    ctx.fillStyle=C.purple;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText('Child — PID 501',childX+10,pY+18);
+    ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('page table:',childX+10,pY+36);
+    const cCell0X=childX+10, cCell1X=childX+10+cellW+10;
+    let page1Label='Page 1', page1Col = stage>=1?C.gold:C.muted;
+    if(stage>=2){ page1Label='Page 1′'; page1Col=C.green; }
+    if(phase==='fault'){ page1Col=C.orange; }
+    drawCell(ctx,cCell0X,cellY,cellW,cellH,'Page 0',stage>=1?C.gold:C.muted);
+    drawCell(ctx,cCell1X,cellY,cellW,cellH,page1Label,page1Col);
+    ctx.globalAlpha=1;
+  }
+
+  // physical frames row
+  const fY=H*0.62, fH=54;
+  const frame0X=W*0.22, frame1X=W*0.5, frame1pX=W*0.74;
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('PHYSICAL MEMORY',14,fY-10);
+
+  const f0col = stage>=1? C.gold : C.cyan;
+  drawFrame(ctx,frame0X,fY,90,fH,'Frame A',f0col, stage>=1?'R/O shared':'owned by 500');
+
+  const f1col = (phase==='fault')?C.orange:(stage>=1?C.gold:C.cyan);
+  drawFrame(ctx,frame1X,fY,90,fH,'Frame B',f1col, stage>=1?'R/O shared':'owned by 500');
+
+  if(stage>=2 || phase==='copy'){
+    const op = phase==='copy' ? t : 1;
+    ctx.globalAlpha=op;
+    drawFrame(ctx,frame1pX,fY,90,fH,'Frame B′',C.green,'private (501, R/W)');
+    ctx.globalAlpha=1;
+  }
+
+  // connecting lines
+  ctx.strokeStyle=C.border;ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  // parent page0 -> frame0
+  line(ctx,pCell0X+cellW/2,cellY+cellH,frame0X+45,fY);
+  // parent page1 -> frame1
+  line(ctx,pCell1X+cellW/2,cellY+cellH,frame1X+45,fY);
+  if(showChild){
+    const cCell0X=childX+10, cCell1X=childX+10+cellW+10;
+    // child page0 -> frame0
+    if(stage>=1) line(ctx,cCell0X+cellW/2,cellY+cellH,frame0X+45,fY);
+    // child page1 -> frame1 (before copy) or frame1' (after)
+    if(stage>=1 && stage<2 && phase!=='copy') line(ctx,cCell1X+cellW/2,cellY+cellH,frame1X+45,fY);
+    if(phase==='writeattempt'||phase==='fault') line(ctx,cCell1X+cellW/2,cellY+cellH,frame1X+45,fY);
+    if(stage>=2 || phase==='copy'){
+      const lw = phase==='copy'? t: 1;
+      ctx.globalAlpha=lw;
+      line(ctx,cCell1X+cellW/2,cellY+cellH,frame1pX+45,fY);
+      ctx.globalAlpha=1;
+    }
+  }
+  ctx.setLineDash([]);
+
+  if(phase==='fault'){
+    ctx.fillStyle=C.orange;ctx.font='bold 22px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',frame1X+45,fY-20);
+    ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('PAGE FAULT',frame1X+45,fY+fH+16);
+  }
+
+  const captions={
+    start:'Single process, PID 500 — owns its pages normally, read/write.',
+    callfork:'Child calls fork()… kernel builds a new PCB for PID 501.',
+    newpcb:'New PCB (PID 501) created — child page table cloned from parent.',
+    sharepages:'Both page tables now point at the SAME physical frames — marked read-only (COW).',
+    writeattempt:'Child (PID 501) executes a normal store instruction into Page 1…',
+    fault:'…MMU sees the entry is read-only → page fault traps into the kernel.',
+    copy:'Kernel allocates Frame B′, copies just that one page, repoints PID 501\'s entry — now private & writable.',
+    done1:'Step 1 complete. Try Step 2 to trigger the Copy-on-Write fault.',
+    done2:'Done — Frame B stays shared+R/O for the parent; only PID 501 got a private copy.'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+}
+
+function drawCell(ctx,x,y,w,h,label,col){
+  ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle=col;ctx.lineWidth=1.3;ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle=col;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2+3);
+}
+function drawFrame(ctx,x,y,w,h,label,col,sub){
+  ctx.fillStyle=col+'22';ctx.strokeStyle=col;ctx.lineWidth=1.5;
+  ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle=col;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2-4);
+  ctx.font='8px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(sub,x+w/2,y+h/2+11);
+}
+function line(ctx,x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+
+function animatePhases(phases,durations,onDone,stageDuring){
+  if(cowAnimId) cancelAnimationFrame(cowAnimId);
+  let idx=0,start=performance.now();
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawCOWScene(stageDuring,t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){ if(onDone) onDone(); return; }
+      start=now;
+    }
+    cowAnimId=requestAnimationFrame(step);
+  }
+  cowAnimId=requestAnimationFrame(step);
+}
+
+function cowStepFork(){
+  document.getElementById('cowLabel').textContent='▶ fork(): cloning PID 500 into PID 501, Copy-on-Write';
+  animatePhases(['callfork','newpcb','sharepages'],[450,500,600],()=>{
+    cowStage=1;
+    drawCOWScene(1,1,'done1');
+    document.getElementById('cowLabel').textContent='▶ Shared, read-only — now try Step 2';
+  },0);
+}
+function cowStepWrite(){
+  if(cowStage<1){ cowStepFork(); return; }
+  document.getElementById('cowLabel').textContent='▶ Child writes to Page 1 — Copy-on-Write fault';
+  animatePhases(['writeattempt','fault','copy'],[450,550,600],()=>{
+    cowStage=2;
+    drawCOWScene(2,1,'done2');
+    document.getElementById('cowLabel').textContent='▶ Done — Frame B′ is now PID 501\'s own private copy';
+  },1);
+}
+function cowReset(){
+  cowStage=0;
+  if(cowAnimId) cancelAnimationFrame(cowAnimId);
+  document.getElementById('cowLabel').textContent='▶ Step through fork() and a Copy-on-Write fault';
+  drawCOWScene(0,0,'start');
+}
+
+// ── LIFECYCLE CANVAS ──────────────────────────────────────────────────────
+const lifeStages=[
+  {name:'fork()',icon:'🧬'},
+  {name:'exec()',icon:'🔁'},
+  {name:'Running',icon:'▶️'},
+  {name:'exit()',icon:'🚪'},
+  {name:'Zombie',icon:'🧟'},
+  {name:'Reaped',icon:'🗑️'}
+];
+let lifeAnimId=null;
+
+function drawLifeScene(activeIdx,mode,note){
+  const canvas=document.getElementById('lifeCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const n=lifeStages.length;
+  const margin=20, gap=10;
+  const boxW=(W-margin*2-gap*(n-1))/n;
+  const boxY=H*0.32, boxH=70;
+
+  for(let i=0;i<n;i++){
+    const x=margin+i*(boxW+gap);
+    const isActive=i===activeIdx;
+    const isZombie = i===4;
+    let col = isZombie? C.red : C.cyan;
+    if(mode==='orphan' && i>=4) col=C.purple;
+    ctx.fillStyle = isActive? col+'33' : 'rgba(255,255,255,.03)';
+    ctx.strokeStyle = isActive? col : C.border;
+    ctx.lineWidth = isActive? 2 : 1;
+    ctx.fillRect(x,boxY,boxW,boxH);
+    ctx.strokeRect(x,boxY,boxW,boxH);
+    ctx.font='18px sans-serif';ctx.textAlign='center';
+    ctx.fillText(lifeStages[i].icon,x+boxW/2,boxY+28);
+    ctx.font='9px Source Code Pro,monospace';
+    ctx.fillStyle = isActive? col : C.muted;
+    ctx.fillText(lifeStages[i].name,x+boxW/2,boxY+48);
+    if(i<n-1){
+      ctx.fillStyle=C.muted;ctx.font='14px sans-serif';
+      ctx.fillText('→',x+boxW+gap/2,boxY+boxH/2+5);
+    }
+  }
+
+  // orphan branch marker above "Running" box when relevant
+  if(mode==='orphan' && activeIdx>=2){
+    const rx = margin+2*(boxW+gap);
+    ctx.strokeStyle=C.purple;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(rx+boxW/2,boxY);ctx.lineTo(rx+boxW/2,boxY-34);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.purple;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('parent dies → reparented to PID 1',rx+boxW/2,boxY-40);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(note||'',W/2,H-16);
+}
+
+function runLife(mode){
+  if(lifeAnimId) cancelAnimationFrame(lifeAnimId);
+  const normalNotes=[
+    'fork() — kernel clones the parent into a new child PCB.',
+    'exec() — child replaces its own code with the real program.',
+    'Running — scheduled normally like any other process.',
+    'exit() — the program finishes; memory & files are freed.',
+    'Zombie — exit status held in a PCB remnant, waiting on the parent.',
+    'Parent calls wait() — status collected, PCB fully freed.'
+  ];
+  const orphanNotes=[
+    'fork() — kernel clones the parent into a new child PCB.',
+    'exec() — child replaces its own code with the real program.',
+    'Running — then, unexpectedly, the ORIGINAL PARENT dies.',
+    'Kernel re-parents the child to PID 1 immediately — it keeps running.',
+    'Eventually it exits — briefly a zombie, but now PID 1\'s zombie.',
+    'PID 1 reaps it almost immediately — that\'s its standing job.'
+  ];
+  const notes = mode==='orphan'? orphanNotes: normalNotes;
+  document.getElementById('lifeLabel').textContent = mode==='orphan'
+    ? '▶ Orphan path: parent dies before reaping — PID 1 adopts and reaps instead'
+    : '▶ Normal path: parent reaps its own child via wait()';
+  let idx=0,start=performance.now();
+  const dur=650;
+  function step(now){
+    const t=(now-start)/dur;
+    drawLifeScene(idx,mode,notes[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=lifeStages.length){
+        document.getElementById('lifeLabel').textContent='▶ Done — try the other path, or Reset';
+        return;
+      }
+      start=now;
+    }
+    lifeAnimId=requestAnimationFrame(step);
+  }
+  lifeAnimId=requestAnimationFrame(step);
+}
+function resetLife(){
+  if(lifeAnimId) cancelAnimationFrame(lifeAnimId);
+  document.getElementById('lifeLabel').textContent='▶ Watch a process\'s full lifecycle, two ways';
+  drawLifeScene(-1,'normal','Pick a scenario above to begin.');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ cowReset(); resetLife(); });
+window.addEventListener('resize',()=>{ cowReset(); resetLife(); });
+</script>
+</body>
+</html>

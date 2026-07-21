@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Same-Origin Policy — The Web's Foundational Security Rule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+.ftag.rend{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.brow{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.ftag.gpu{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.net{background:rgba(13,148,136,.15);color:var(--teal);border:1px solid rgba(13,148,136,.3);}
+.ftag.util{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.origin-anatomy{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;justify-content:center;font-family:'Source Code Pro',monospace;font-size:1.1rem;margin:2rem 0;padding:1.5rem;background:var(--code-bg);border-radius:10px;border:1px solid var(--border);}
+.origin-part{padding:.5rem 1rem;border-radius:6px;text-align:center;}
+.origin-part .part-label{display:block;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;margin-top:.3rem;color:var(--muted);font-family:'Lato',sans-serif;}
+.op-scheme{background:rgba(74,222,128,.12);border:1.5px solid var(--green);color:var(--green);}
+.op-sep{color:var(--muted)}
+.op-host{background:rgba(56,189,248,.12);border:1.5px solid var(--cyan);color:var(--cyan);}
+.op-port{background:rgba(167,139,250,.12);border:1.5px solid var(--purple);color:var(--purple);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#anatomy" title="What Is an Origin"></a>
+  <a class="toc-dot" href="#whysop" title="Why SOP Exists"></a>
+  <a class="toc-dot" href="#sim" title="Blocked Read Simulation"></a>
+  <a class="toc-dot" href="#comparisons" title="Origin Comparisons"></a>
+  <a class="toc-dot" href="#whatblocks" title="What SOP Blocks/Allows"></a>
+  <a class="toc-dot" href="#edgecases" title="Edge Cases"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Web Platform Security · Origin Model · bob_os Lesson 18.1</div>
+    <h1>The Same-Origin <span>Policy</span></h1>
+    <p class="hero-sub">You have your bank open in one tab and a random blog in another. Nothing stops both pages from running JavaScript at the same time on your machine. So why can't the blog's script just reach over and read your bank balance? One rule, enforced on every single script execution, in every browser, since 1995: the <strong>Same-Origin Policy</strong>. It's not a suggestion. It's the load-bearing wall the entire web is built on top of.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Parts Make An Origin</div></div>
+      <div class="hero-stat"><div class="num">100%</div><div class="lbl">Must Match, No Exceptions</div></div>
+      <div class="hero-stat"><div class="num">1995</div><div class="lbl">Netscape Introduces SOP</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Trust Given By Default</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 1: ANATOMY OF AN ORIGIN -->
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">01 — First, Define The Word</div>
+  <h2>What "Origin" Actually <span class="accent">Means</span></h2>
+
+  <p class="reveal">Every conversation about web security uses the word "origin" like everyone already agrees what it means. They don't, at first — so let's fix that before anything else. An origin is not a domain name. It's not a website. It is a precise, three-part tuple that a browser computes from a URL:</p>
+
+  <div class="origin-anatomy reveal">
+    <div class="origin-part op-scheme">https<span class="part-label">scheme</span></div>
+    <span class="op-sep">://</span>
+    <div class="origin-part op-host">example.com<span class="part-label">host</span></div>
+    <span class="op-sep">:</span>
+    <div class="origin-part op-port">443<span class="part-label">port</span></div>
+  </div>
+
+  <p class="reveal">That's it. That's the whole definition. <strong>scheme + host + port</strong>. Not the path, not the query string, not the fragment — <code>https://example.com/inbox?x=1#top</code> and <code>https://example.com/settings</code> are the exact same origin, because everything after the port is irrelevant to the origin computation. The browser strips all of that away and looks only at the triple.</p>
+
+  <div class="formula reveal">
+    <span class="label">The Rule, In Full</span>
+    origin(A) == origin(B)  ⇔  scheme(A) == scheme(B)  AND  host(A) == host(B)  AND  port(A) == port(B)
+    <span class="sub">All three. Not two out of three. A single mismatched character in any part makes them different origins.</span>
+  </div>
+
+  <p class="reveal">Ports have a wrinkle worth knowing: each scheme has a default port that's implied when none is written. <code>https://</code> implies <code>:443</code>. <code>http://</code> implies <code>:80</code>. So <code>https://example.com</code> and <code>https://example.com:443</code> are, in fact, the same origin — the browser fills in the default before comparing.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Host Field Is Not "The Domain"</div>
+    This is where almost everyone trips up on their first read: <code>host</code> means the <em>exact</em> hostname string, character for character. <code>example.com</code> and <code>mail.example.com</code> and <code>api.example.com</code> are three completely different hosts, and therefore three completely different origins — even though a human would call all three "example.com's stuff." The browser does not know, or care, that they're related. There is no concept of "the same company" or "the same parent domain" anywhere in the origin model.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: WHY SOP EXISTS -->
+<section id="whysop">
+<div class="container">
+  <div class="section-num">02 — The Actual Threat</div>
+  <h2>Why This Rule Had To <span class="accent">Exist</span></h2>
+
+  <p class="reveal">Here's the default, unrestricted behavior the Same-Origin Policy exists to prevent. Without it: JavaScript loaded from <em>any</em> origin, running in <em>any</em> tab, could freely reach out and read the full contents of any other open tab — its DOM, its cookies, its <code>localStorage</code> — regardless of which site that other tab belongs to. Two tabs sitting side by side, unrelated to each other in every way a human would care about, would be one <code>fetch()</code> call away from bleeding into each other.</p>
+
+  <p class="reveal">Play that forward for thirty seconds and you get the actual scenario this rule is stopping: you log into your bank in Tab 1. You open Tab 2 to read a recipe blog. That blog embeds a tracking script, or worse, is itself hostile. Without SOP, that script's JavaScript could quietly issue a request to your bank's domain, and — because your browser automatically attaches your bank's session cookie to any request sent to your bank's domain — get back your real, authenticated account page. Then read it. Balance, transaction history, everything, silently, in the background, while you're reading about pasta.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="threatLabel">▶ What "no SOP" would look like — click to run</div>
+    <canvas id="threatCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runThreat()">▶ Simulate: Malicious Tab Reads Bank Tab</button>
+    <button class="ctrl-btn" onclick="resetThreat()">Reset</button>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Cookie Is the Trap Door</div>
+    The reason this attack works so cleanly without SOP is that cookies are attached to requests <em>by the browser, automatically, based on the destination domain</em> — not based on which tab or script initiated the request. Your browser doesn't ask "did the user mean to do this?" It just sees "request going to bank.com" and attaches whatever cookies it's holding for bank.com. That behavior is <em>necessary</em> (it's how you stay logged in while clicking around a site) — which is exactly why something else has to be the safeguard. That something is SOP, blocking the malicious script from ever reading the response that comes back.
+  </div>
+
+  <p class="reveal">Notice precisely what SOP protects here: not the <em>request</em>. The request can still go out — your browser will still send it, cookies and all (we'll come back to why that matters in the CORS lesson). What SOP guarantees is that the malicious tab's JavaScript is <strong>blind</strong> to whatever comes back. It can throw the request over the wall, but it can never see the reply.</p>
+</div>
+</section>
+
+<!-- SECTION 3: SIMULATION -->
+<section id="sim">
+<div class="container">
+  <div class="section-num">03 — Watch The Wall Do Its Job</div>
+  <h2>The Read That <span class="accent c">Never Happens</span></h2>
+
+  <p class="reveal">Below is the same scenario, but this time with SOP switched on — which is the actual, default state of every browser you've ever used. The malicious script still runs, still tries the same read. Watch what's different.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="sopLabel">▶ SOP enforcement in action — click to run</div>
+    <canvas id="sopCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn cyan" onclick="runSOP()" style="border-color:var(--cyan);color:var(--cyan)">▶ Simulate: Same Attempt, SOP Enforced</button>
+    <button class="ctrl-btn" onclick="resetSOP()">Reset</button>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">What Actually Changed</span>
+    Request still sent → cookies still attached → server still responds normally
+    <br>but: browser compares origin(caller) vs origin(response) → mismatch → response withheld from JS
+    <span class="sub">The network layer barely knows anything happened. This check is enforced entirely in the browser's JavaScript engine / fetch layer — the server is never even consulted.</span>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Where exactly does the browser check this?</b> Every API that could leak cross-origin data enforces the check independently: <code>XMLHttpRequest</code> and <code>fetch()</code> responses, <code>document</code> access into another origin's <code>&lt;iframe&gt;</code>, reading <code>localStorage</code>/<code>sessionStorage</code>/IndexedDB, and calling <code>getImageData()</code> on a canvas that drew a cross-origin image (a "tainted" canvas). Different code paths, same underlying origin comparison, same verdict.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: COMPARISON TABLE -->
+<section id="comparisons">
+<div class="container">
+  <div class="section-num">04 — Worked Examples</div>
+  <h2>Same Origin? <span class="accent">Check For Yourself</span></h2>
+
+  <p class="reveal">This table is the one worth memorizing. Every row is a pair of URLs and the exact reason they are, or are not, the same origin. Run each one through the three-part rule yourself before reading the "reason" column.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Origin A</th><th>Origin B</th><th>Same Origin?</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>https://example.com/inbox</td><td>https://example.com/settings</td><td class="pos center">✓ SAME</td><td>Only the path differs — path is not part of the origin at all.</td></tr>
+        <tr><td>https://example.com</td><td>http://example.com</td><td class="neg center">✗ DIFFERENT</td><td>Scheme differs: <code>https</code> vs <code>http</code>. Even though the host is identical.</td></tr>
+        <tr><td>https://example.com</td><td>https://sub.example.com</td><td class="neg center">✗ DIFFERENT</td><td>Host differs. A subdomain is a completely distinct host string, full stop.</td></tr>
+        <tr><td>https://example.com</td><td>https://example.com:8443</td><td class="neg center">✗ DIFFERENT</td><td>Port differs: implied 443 vs explicit 8443.</td></tr>
+        <tr><td>https://example.com:443</td><td>https://example.com</td><td class="pos center">✓ SAME</td><td>443 is the default port for https — writing it explicitly changes nothing.</td></tr>
+        <tr><td>https://example.com</td><td>https://EXAMPLE.com</td><td class="pos center">✓ SAME</td><td>Hostnames are compared case-insensitively per DNS convention.</td></tr>
+        <tr><td>https://example.com</td><td>https://example.com.evil.com</td><td class="neg center">✗ DIFFERENT</td><td>Host is a totally different string — <code>evil.com</code> is the real parent domain here, a classic phishing trick.</td></tr>
+        <tr><td>https://app.example.com</td><td>https://api.example.com</td><td class="neg center">✗ DIFFERENT</td><td>Both are subdomains of the same parent, but the host strings don't match each other.</td></tr>
+        <tr><td>file:///a.html</td><td>file:///b.html</td><td class="neg center">✗ DIFFERENT</td><td>Most browsers give every local file its own unique origin — no host/port to compare at all.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 The Most Common Real-World Surprise</div>
+    New developers building a site with <code>app.example.com</code> (frontend) and <code>api.example.com</code> (backend) almost always assume, at first, that JavaScript on one can freely read from the other because "they're the same company, same domain, basically the same thing." They are not the same origin, and the browser will block it by default. This exact situation — two legitimate parts of the same product, on different subdomains, needing to talk — is precisely what the next lesson (CORS) exists to solve properly.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: WHAT SOP BLOCKS VS ALLOWS -->
+<section id="whatblocks">
+<div class="container">
+  <div class="section-num">05 — Draw The Actual Line</div>
+  <h2>What Gets Blocked, What <span class="accent">Doesn't</span></h2>
+
+  <p class="reveal">SOP has a surprisingly narrow, specific target: it blocks <em>JavaScript from reading cross-origin data</em>. It does not block cross-origin activity in general — the web would be unusable if it did, since half of every page is other origins' images, fonts, and scripts.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🚫 Blocked By Default</h4>
+      <ul style="margin-bottom:0">
+        <li>Reading the response body of a cross-origin <code>fetch()</code>/XHR</li>
+        <li>Reading <code>document</code>/DOM inside a cross-origin <code>&lt;iframe&gt;</code></li>
+        <li>Reading another origin's <code>localStorage</code>/<code>sessionStorage</code>/cookies</li>
+        <li>Reading pixel data off a canvas drawn with a cross-origin image</li>
+      </ul>
+    </div>
+    <div class="compare-card good">
+      <h4>✅ Allowed By Default</h4>
+      <ul style="margin-bottom:0">
+        <li>Embedding a cross-origin <code>&lt;img src="...">‍</code>, <code>&lt;script src="...">‍</code>, <code>&lt;link rel="stylesheet"></code></li>
+        <li>Embedding a cross-origin page in an <code>&lt;iframe&gt;</code> (you can display it, not read into it)</li>
+        <li><em>Sending</em> a cross-origin request at all — forms, simple GET/POST — the browser does not stop the request from going out</li>
+        <li>Navigating the top-level page to any origin (clicking a link, <code>location.href = ...</code>)</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="reveal">That "sending is allowed, reading is blocked" split is exactly why CDNs work at all — <code>https://cdn.example.net/jquery.js</code> loading into your page from a totally different origin is completely normal and unblocked, because loading a script is embedding, not programmatic reading. It's also exactly why SOP alone is <em>not</em> a defense against Cross-Site Request Forgery (CSRF): a malicious page can still trick your browser into <em>sending</em> an authenticated request to your bank, it just can't read what comes back. If the attacker doesn't need to read the response — say, the mere act of the request executes a transfer — SOP offers zero protection. That's a different problem with a different fix, and it's out of scope here.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 One Sentence To Keep</div>
+    <strong>Same-Origin Policy is a read restriction on JavaScript, enforced by the browser, based on a strict three-part scheme+host+port comparison — it does not restrict what gets embedded on a page, and it does not restrict what requests get sent, only what a script is allowed to see come back.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: EDGE CASES -->
+<section id="edgecases">
+<div class="container">
+  <div class="section-num">06 — Sharp Edges</div>
+  <h2>Edge Cases Worth <span class="accent">Knowing</span></h2>
+
+  <div class="step-list reveal">
+    <li>
+      <div class="step-body">
+        <strong>The "null" origin</strong>
+        Sandboxed iframes (<code>&lt;iframe sandbox&gt;</code>) and pages loaded from <code>data:</code> URLs get the special origin value <code>"null"</code> rather than a real scheme+host+port. Some servers historically misconfigured their CORS allowlists to trust <code>"null"</code>, thinking it meant "no origin, therefore safe" — attackers exploited this by crafting sandboxed iframes specifically to present that origin string.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>file:// URLs get their own private origin</strong>
+        Open two local HTML files in the same browser and, in most modern browsers, they cannot read each other's data even though they're both "file://" — each local file is typically treated as its own unique origin, precisely to stop a malicious downloaded HTML file from reading other files on your disk via script.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>Ports matter even when people forget they exist</strong>
+        Running a frontend on <code>localhost:3000</code> and an API on <code>localhost:8080</code> during local development is a textbook cross-origin situation, even though the host — "localhost" — is identical. This trips up nearly every developer the first time they build a full-stack app locally.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>SOP predates HTTP as we know it, and it's not written into one single spec</strong>
+        The policy was introduced by Netscape Navigator 2.0 in 1995, back when JavaScript itself was brand new and someone had to decide, on the spot, what a script should and shouldn't be allowed to touch. It's since been codified piecemeal across the Fetch spec, the HTML spec, and the Web Storage spec rather than living in one single RFC.
+      </div>
+    </li>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Origin</div><div class="glossary-def">The scheme + host + port triple computed from a URL. The unit of trust for nearly every web security decision.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Same-Origin Policy (SOP)</div><div class="glossary-def">The browser-enforced default rule that JavaScript may only programmatically read data (DOM, responses, storage) belonging to its own origin.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Scheme</div><div class="glossary-def">The protocol prefix of a URL — <code>https</code>, <code>http</code>, <code>file</code>, etc. Part 1 of the origin triple.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Host</div><div class="glossary-def">The exact hostname string — not "the domain," the literal characters. <code>a.example.com</code> and <code>example.com</code> are different hosts.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Port</div><div class="glossary-def">The numeric network port, explicit or implied by the scheme's default (443 for https, 80 for http). Part 3 of the origin triple.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cross-Origin</div><div class="glossary-def">Any pair of URLs whose scheme, host, or port differ in at least one respect.</div></div>
+    <div class="glossary-card"><div class="glossary-term">null Origin</div><div class="glossary-def">A special origin value assigned to sandboxed iframes and data: URLs — historically a source of CORS misconfiguration bugs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Tainted Canvas</div><div class="glossary-def">A <code>&lt;canvas&gt;</code> that has drawn a cross-origin image becomes "tainted" — its pixel data can no longer be read via <code>getImageData()</code>, even though the image itself displayed fine.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>bob_os · Lesson 18.1 — The Same-Origin Policy</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Companion lesson for bob_os/browser modules <a href="../../browser/B03_same_origin_policy/tutorial.html">B03_same_origin_policy</a> and <a href="../../browser/B14_cors/tutorial.html">B14_cors</a>.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── THREAT CANVAS (no SOP) ─────────────────────────────────────────────────
+function drawThreatScene(t,phase){
+  const canvas=document.getElementById('threatCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=W*0.04, leftW=W*0.42, rightX=W*0.54, rightW=W*0.42;
+  // malicious tab box
+  ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(leftX,30,leftW,H-80);
+  ctx.strokeStyle=C.red;ctx.lineWidth=1.5;ctx.strokeRect(leftX,30,leftW,H-80);
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('recipe-blog.com (malicious script)',leftX+leftW/2,50);
+
+  // bank tab box
+  ctx.fillStyle='rgba(74,222,128,.08)';ctx.fillRect(rightX,30,rightW,H-80);
+  ctx.strokeStyle=C.green;ctx.lineWidth=1.5;ctx.strokeRect(rightX,30,rightW,H-80);
+  ctx.fillStyle=C.green;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('yourbank.com (logged in)',rightX+rightW/2,50);
+
+  const captions={
+    idle:'Click to simulate what happens with NO Same-Origin Policy',
+    request:'fetch("https://yourbank.com/account") called from recipe-blog.com’s script',
+    cookie:'Browser attaches yourbank.com’s session cookie automatically (this always happens)',
+    respond:'Bank server responds normally with the real account page HTML',
+    leak:'WITHOUT SOP: script freely reads the response — balance, history, everything'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-18);
+
+  let dotX=leftX+leftW*0.5, dotY=H/2, dotCol=C.red, dotR=8;
+  if(phase==='request'){dotX=leftX+leftW*0.3+ (rightX-(leftX+leftW*0.3))*0.5*t; dotCol=C.orange;}
+  else if(phase==='cookie'){dotX=leftX+leftW+(rightX-leftX-leftW)*t; dotCol=C.gold;}
+  else if(phase==='respond'){dotX=rightX+rightW*0.5; dotCol=C.green;
+    // draw response packet moving back
+    dotX = rightX + rightW*0.15 + (leftX+leftW*0.85 - (rightX+rightW*0.15))*t*(-1)+ (rightX+rightW*0.15);
+    dotX = rightX+rightW*0.15 - (rightX+rightW*0.15-(leftX+leftW*0.85))*t;
+  }
+  else if(phase==='leak'){
+    dotX=leftX+leftW*0.5; dotY=H/2; dotCol=C.red; dotR=8+6*Math.sin(t*Math.PI*4)*t;
+    // pulse a big red warning ring
+    ctx.beginPath();ctx.arc(dotX,dotY,20+10*t,0,Math.PI*2);ctx.strokeStyle='rgba(248,113,113,'+(0.6*(1-t))+')';ctx.lineWidth=2;ctx.stroke();
+  }
+  ctx.beginPath();ctx.arc(dotX,dotY,dotR,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+
+  if(phase==='leak'){
+    ctx.fillStyle=C.red;ctx.font='bold 24px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.globalAlpha=t;
+    ctx.fillText('DATA LEAKED',leftX+leftW/2,H/2+40);
+    ctx.globalAlpha=1;
+  }
+}
+function runThreat(){
+  const phases=['request','cookie','respond','leak'];
+  const durations=[550,450,550,900];
+  let idx=0,start=performance.now();
+  document.getElementById('threatLabel').textContent='▶ Simulating unrestricted cross-tab read...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawThreatScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('threatLabel').textContent='▶ This is why the Same-Origin Policy exists — run again, or scroll on';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetThreat(){
+  document.getElementById('threatLabel').textContent='▶ What "no SOP" would look like — click to run';
+  drawThreatScene(0,'idle');
+}
+
+// ── SOP ENFORCED CANVAS ─────────────────────────────────────────────────────
+function drawSOPScene(t,phase){
+  const canvas=document.getElementById('sopCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=W*0.04, leftW=W*0.42, wallX=leftX+leftW, wallW=W*0.08, rightX=wallX+wallW, rightW=W-rightX-W*0.04;
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(leftX,30,leftW,H-80);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX,30,leftW,H-80);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('recipe-blog.com (malicious script)',leftX+leftW/2,50);
+
+  // wall
+  ctx.fillStyle='rgba(122,155,191,.12)';ctx.fillRect(wallX,30,wallW,H-80);
+  ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,30,wallW-2,H-80);ctx.setLineDash([]);
+  ctx.save();ctx.translate(wallX+wallW/2,H/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SOP CHECK',0,0);ctx.restore();
+
+  ctx.fillStyle='rgba(74,222,128,.08)';ctx.fillRect(rightX,30,rightW,H-80);
+  ctx.strokeStyle=C.green;ctx.lineWidth=1.5;ctx.strokeRect(rightX,30,rightW,H-80);
+  ctx.fillStyle=C.green;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('yourbank.com (logged in)',rightX+rightW/2,50);
+
+  const captions={
+    idle:'Click to simulate the same attempt — this time with SOP enforced',
+    request:'fetch("https://yourbank.com/account") called — request still fires normally',
+    cookie:'Cookie still attached, request still sent — SOP never touches outbound requests',
+    respond:'Bank responds normally — the server has no idea SOP even exists',
+    blocked:'Response arrives back at the browser — origin(caller) ≠ origin(response) — JS is denied access'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-18);
+
+  let dotX=leftX+leftW*0.5, dotY=H/2, dotCol=C.cyan;
+  if(phase==='request'){dotX=leftX+leftW*0.5+(wallX-leftX-leftW*0.5)*t; dotCol=C.orange;}
+  else if(phase==='cookie'){dotX=wallX+wallW*t; dotCol=C.gold; if(t>=1)dotX=rightX;}
+  else if(phase==='respond'){dotX=rightX+rightW*0.5; dotCol=C.green;}
+  else if(phase==='blocked'){
+    // response travels back but stops AT the wall
+    const startX=rightX+rightW*0.3, stopX=wallX+wallW; // stops at wall boundary
+    dotX = startX - (startX-stopX)*Math.min(t*1.6,1);
+    dotCol=C.gold;
+    if(t>0.6){
+      ctx.save();
+      ctx.translate(wallX+wallW/2,H/2-50);
+      ctx.strokeStyle=C.red;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(-12,-12);ctx.lineTo(12,12);ctx.moveTo(12,-12);ctx.lineTo(-12,12);ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle=C.red;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('BLOCKED',wallX+wallW/2,H/2-70);
+    }
+  }
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+function runSOP(){
+  const phases=['request','cookie','respond','blocked'];
+  const durations=[500,400,500,900];
+  let idx=0,start=performance.now();
+  document.getElementById('sopLabel').textContent='▶ Simulating the same read, this time with SOP on...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawSOPScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('sopLabel').textContent='▶ Response withheld from JS — the read never completes. Run again?';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetSOP(){
+  document.getElementById('sopLabel').textContent='▶ SOP enforcement in action — click to run';
+  drawSOPScene(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetThreat(); resetSOP(); });
+window.addEventListener('resize',()=>{ resetThreat(); resetSOP(); });
+</script>
+</body>
+</html>

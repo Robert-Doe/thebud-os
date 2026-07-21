@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beyond the Buffer — VGA's CRT Controller Registers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.reg-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;margin:1.2rem 0;display:flex;gap:1.4rem;align-items:flex-start;flex-wrap:wrap;}
+.reg-card .reg-idx{font-family:'Source Code Pro',monospace;font-size:1.4rem;font-weight:700;color:var(--cyan);background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.3);border-radius:8px;padding:.5rem 1rem;min-width:64px;text-align:center;}
+.reg-card .reg-body{flex:1;min-width:220px;}
+.reg-card .reg-name{font-family:'Source Code Pro',monospace;color:#fff;font-weight:600;margin-bottom:.3rem;}
+.reg-card .reg-desc{font-size:.9rem;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#ioports" title="I/O Ports"></a>
+  <a class="toc-dot" href="#cursorregs" title="Cursor Registers"></a>
+  <a class="toc-dot" href="#canvasdemo" title="Move the Cursor"></a>
+  <a class="toc-dot" href="#startoffset" title="Screen Start Offset"></a>
+  <a class="toc-dot" href="#otherregs" title="Other CRTC Behavior"></a>
+  <a class="toc-dot" href="#code" title="Wiring Into bob_os"></a>
+  <a class="toc-dot" href="#pitfalls" title="Pitfalls"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Bare-Metal Graphics · CRT Controller · Port I/O</div>
+    <h1>Beyond the Buffer:<br>VGA's <span>CRT Controller</span></h1>
+    <p class="hero-sub">Writing bytes to 0xB8000 gets characters on screen — but it doesn't move the blinking cursor, and it doesn't know how to scroll without copying thousands of bytes by hand. Both of those live somewhere else entirely: a separate bank of hardware registers called the CRT Controller (CRTC), reached not through memory at all, but through two tiny I/O ports. This is the other half of VGA text mode nobody mentions until you go looking for it.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0x3D4</div><div class="lbl">CRTC index port</div></div>
+      <div class="hero-stat"><div class="num">0x3D5</div><div class="lbl">CRTC data port</div></div>
+      <div class="hero-stat"><div class="num">18</div><div class="lbl">Addressable CRTC registers</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">out instructions per register write</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>0xB8000 Doesn't Control <span class="accent">Everything</span></h2>
+  <p class="reveal">The previous lesson established the big idea: text on screen is just bytes in a memory-mapped buffer at <code>0xB8000</code>. That's true, and it's most of what you need to get a working kernel console. But two things you've almost certainly seen a real terminal do are conspicuously <em>not</em> explained by that buffer alone:</p>
+  <ul class="reveal">
+    <li>The little blinking underline or block that shows where the next character will land — the <strong>hardware text cursor</strong>. Nothing in the character buffer represents "this is where the cursor is."</li>
+    <li>Scrolling that happens instantly, with no visible redraw lag — which is suspicious, because copying 4,000 bytes on every newline (which is exactly what bob_os's software scroll does) is not instant on real 1980s-era hardware.</li>
+  </ul>
+  <p class="reveal">Both are controlled by a completely separate piece of the VGA chipset: the <strong>CRT Controller</strong>, or <strong>CRTC</strong> — named after the Cathode Ray Tubes it was originally built to drive, back when "monitor" meant a heavy glass tube, not an LCD panel.</p>
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Reframe</div>
+    <code>0xB8000</code> is <strong>data</strong> — what character and color go in each cell. The CRTC is <strong>control</strong> — where the cursor sits, what shape it is, and which part of video memory the screen is even currently looking at. Two entirely different hardware subsystems, reached through two entirely different mechanisms.
+  </div>
+</div>
+</section>
+
+<!-- IO PORTS -->
+<section id="ioports">
+<div class="container">
+  <div class="section-num">01 — A Different Kind of Address</div>
+  <h2>Reaching the CRTC: <span class="accent">Port I/O</span>, Not Memory</h2>
+
+  <p class="reveal">Here's the twist that trips people up first: the CRTC's registers are <strong>not</strong> memory-mapped like the character buffer. x86 CPUs have an entirely separate, parallel address space just for hardware — a 16-bit space of up to 65,536 <strong>I/O ports</strong>, accessed only through two special instructions, <code>in</code> and <code>out</code>, never through a regular pointer dereference.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🧠 Memory-Mapped (0xB8000)</h4>
+      Lives in the same address space as RAM. Read/write it with normal pointer dereferences: <code>*(char*)0xB8000</code>. The CPU can't tell it apart from ordinary memory — it's the video card watching that range that makes it special.
+    </div>
+    <div class="compare-card bad">
+      <h4>🔌 Port-Mapped (0x3D4 / 0x3D5)</h4>
+      Lives in a completely separate 16-bit I/O address space. Only reachable with the dedicated <code>in</code>/<code>out</code> assembly instructions — a plain C pointer to <code>0x3D4</code> means nothing; it isn't a memory address at all.
+    </div>
+  </div>
+
+  <p class="reveal">The CRTC exposes far more internal registers (18 of them, indices <code>0x00</code>–<code>0x11</code>) than it has actual I/O ports to address them with. Rather than giving every register its own port, VGA hardware uses a classic two-step <strong>index/data</strong> pattern: one port selects <em>which</em> register you mean, a second port reads or writes its value.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Port</th><th>Name</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0x3D4</td><td>CRTC Index Register</td><td>Write the register <em>number</em> you want to target (0x00–0x11) here first.</td></tr>
+        <tr><td class="hl">0x3D5</td><td>CRTC Data Register</td><td>Then read or write the actual 8-bit value of whichever register was just selected.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">The Two-Step Pattern, in Pseudocode</span>
+    outb(0x3D4, register_index);   outb(0x3D5, value);
+    <span class="sub">Every single CRTC register access — reading or writing — is always exactly this shape: select, then transfer. There is no way to write a CRTC register in one instruction.</span>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why 0x3D4/0x3D5 specifically?</b> These are the <em>color</em> adapter's CRTC ports, fixed by the original IBM PC/CGA/VGA hardware convention (the monochrome adapter historically used 0x3B4/0x3B5 instead). Like <code>0xB8000</code> itself, these numbers aren't something you choose — they're wired into the platform and every VGA-compatible chipset preserves them for backward compatibility, all the way into today's emulated legacy BIOS mode in QEMU.
+  </div>
+</div>
+</section>
+
+<!-- CURSOR REGISTERS -->
+<section id="cursorregs">
+<div class="container">
+  <div class="section-num">02 — The Hardware Cursor</div>
+  <h2>Moving the Cursor: <span class="accent">Two Registers</span>, One Position</h2>
+
+  <p class="reveal">The blinking cursor you see in a text-mode terminal isn't software drawing anything — it's a genuine hardware feature the CRTC generates on its own, at the position <em>you</em> tell it to, and it keeps blinking on its own timer even if your kernel is sitting in an infinite loop doing nothing else. All it takes is telling the CRTC a single number: the cursor's linear position in the buffer, using the exact same cell-index math from the offset formula in the previous lesson (just without the final ×2, since this is a cell index, not a byte offset).</p>
+
+  <p class="reveal">Because that position can range up to 1,999 (row 24, col 79 → <code>24×80+79 = 1999</code>) and a single CRTC register only holds 8 bits (0–255), the position has to be split across <strong>two</strong> registers — a high byte and a low byte:</p>
+
+  <div class="reg-card reveal">
+    <div class="reg-idx">0x0E</div>
+    <div class="reg-body"><div class="reg-name">Cursor Location High</div><div class="reg-desc">Bits 15-8 of the cursor's linear cell position (row×80+col). Written first by convention.</div></div>
+  </div>
+  <div class="reg-card reveal">
+    <div class="reg-idx">0x0F</div>
+    <div class="reg-body"><div class="reg-name">Cursor Location Low</div><div class="reg-desc">Bits 7-0 of the same linear cell position. Written second.</div></div>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">Worked Example — Move Cursor to Row 5, Col 30</span>
+    pos = row × 80 + col = 5 × 80 + 30 = 430 = 0x01AE
+    <span class="sub">high byte = (pos &gt;&gt; 8) &amp; 0xFF = 0x01 &nbsp;·&nbsp; low byte = pos &amp; 0xFF = 0xAE</span>
+  </div>
+
+  <pre><code>void vga_set_cursor(int row, int col) {
+    unsigned short pos = row * VGA_COLS + col;
+
+    outb(0x3D4, 0x0E);            /* select "cursor location high" */
+    outb(0x3D5, (pos &gt;&gt; 8) &amp; 0xFF);
+
+    outb(0x3D4, 0x0F);            /* select "cursor location low" */
+    outb(0x3D5, pos &amp; 0xFF);
+}</code></pre>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Same Math, Different Destination</div>
+    Notice this is the <em>identical</em> <code>row × 80 + col</code> cell-index math from writing characters — the only difference is where the result goes. Writing a character sends bytes to a memory address (<code>0xB8000</code>-relative). Moving the cursor sends a 16-bit cell index to a hardware register (via ports <code>0x3D4</code>/<code>0x3D5</code>). Same coordinate system, two completely different delivery mechanisms.
+  </div>
+
+  <p class="reveal">A few registers below these, indices <code>0x0A</code> and <code>0x0B</code> (<strong>Cursor Start</strong> and <strong>Cursor End</strong>) control the cursor's <em>shape</em> — which scanlines within a character cell it actually draws on. Set them to cover only the bottom couple of scanlines and you get the classic thin underline cursor; set them to cover the whole cell height and you get a solid block cursor. Some of these registers also carry a "cursor disabled" bit, which is how a kernel can hide the hardware cursor entirely (useful once you're drawing your own cursor, or don't want one at all).</p>
+</div>
+</section>
+
+<!-- CANVAS DEMO -->
+<section id="canvasdemo">
+<div class="container">
+  <div class="section-num">03 — See It Happen</div>
+  <h2>Moving the Cursor, <span class="accent">Register by Register</span></h2>
+
+  <p class="reveal">Below is the exact two-register, four-<code>outb</code> sequence from <code>vga_set_cursor()</code>, played out step by step. Watch how nothing touches <code>0xB8000</code> at all — the entire operation happens through the index/data port pair.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="cursorLabel">▶ Choose a cursor position to move to</div>
+    <canvas id="cursorCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runCursor(5,30)">▶ Move cursor to row 5, col 30</button>
+    <button class="ctrl-btn green" onclick="runCursor(24,79)">▶ Move cursor to row 24, col 79 (bottom-right)</button>
+    <button class="ctrl-btn red" onclick="resetCursor()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1 — Compute the linear position</strong><code>pos = row * 80 + col</code>. This is a cell index (0–1999), not a byte offset — the CRTC's cursor registers think purely in cells.</div></li>
+    <li><div class="step-body"><strong>2 — Select register 0x0E, send the high byte</strong><code>outb(0x3D4, 0x0E)</code> tells the CRTC "the next data write is for Cursor Location High." <code>outb(0x3D5, pos&gt;&gt;8)</code> sends bits 15-8.</div></li>
+    <li><div class="step-body"><strong>3 — Select register 0x0F, send the low byte</strong><code>outb(0x3D4, 0x0F)</code> retargets the index port. <code>outb(0x3D5, pos&amp;0xFF)</code> sends bits 7-0.</div></li>
+    <li><div class="step-body"><strong>4 — The blinking cursor jumps</strong>The instant both bytes are latched, the CRTC's own cursor-blink circuitry starts blinking at the new cell — with zero further CPU involvement. It'll keep blinking on its own timer forever, or until you write these registers again.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- SCREEN START OFFSET -->
+<section id="startoffset">
+<div class="container">
+  <div class="section-num">04 — The Trick Behind Fast Scrolling</div>
+  <h2>Screen Start Offset: <span class="accent">Scrolling Without Copying</span></h2>
+
+  <p class="reveal">Recall bob_os's software <code>scroll()</code> from the previous lesson: it walks all 24 visible rows and copies each one up, cell by cell — roughly 4,000 byte-copies every time the screen scrolls. It works, but it's real, measurable CPU work for something that ought to feel instantaneous.</p>
+
+  <p class="reveal">Real VGA hardware has a much cheaper trick available, and it comes from another pair of CRTC registers: <strong>Start Address High</strong> (index <code>0x0C</code>) and <strong>Start Address Low</strong> (index <code>0x0D</code>). Together they hold a 16-bit cell index — but this time, it isn't a cursor position. It's <strong>which cell in video memory the top-left corner of the visible screen currently corresponds to.</strong></p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Reframe That Makes It Click</div>
+    Nothing says the VGA buffer you write into has to be exactly the 80×25 window you can see. If you allocate a <em>larger</em> buffer — say, 80×50, twice the visible height — you can write new lines into the rows below what's currently shown, then simply tell the CRTC "start displaying from row 25 instead of row 0" by writing one new start-address value. The screen appears to scroll instantly. Not one byte of character data moved — only the hardware's notion of "where does the visible window begin" changed.
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">Scrolling Down One Row via Start Address</span>
+    new_start_cell = old_start_cell + 80
+    <span class="sub">Advancing the start address by exactly one row's worth of cells (80) shifts the entire visible window down by one row — an O(1) register write instead of an O(rows×cols) memory copy.</span>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Approach</th><th>Cost per scroll</th><th>What actually moves</th></tr></thead>
+      <tbody>
+        <tr><td>Software scroll (bob_os today)</td><td class="neg">~4,000 byte copies</td><td>Every visible character, physically, in memory</td></tr>
+        <tr><td>Hardware start-offset scroll</td><td class="pos">2 register writes</td><td>Nothing — only which memory the CRTC reads from changes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 The Catch</div>
+    This trick only pays off if you've allocated a video buffer <em>larger</em> than the visible 80×25 window — otherwise there's nothing "below" to scroll into, and you're back to needing a wraparound scheme or periodic real copies to reclaim space. It's a classic time/space trade: spend extra buffer memory to avoid spending CPU cycles on every scroll. Most real-mode text editors and DOS-era TSRs that felt buttery-smooth were leaning on exactly this register, not on faster memcpy.
+  </div>
+</div>
+</section>
+
+<!-- OTHER CRTC BEHAVIOR -->
+<section id="otherregs">
+<div class="container">
+  <div class="section-num">05 — The Rest of the Register File</div>
+  <h2>Everything Else the <span class="accent">CRTC</span> Quietly Controls</h2>
+
+  <p class="reveal">Cursor position and start offset are the two registers worth memorizing for kernel dev, but they're only a fraction of the 18-register file. The rest mostly configure the raw timing of the video signal itself — how the electron beam (on real CRT hardware) swept across and down the screen. You'll rarely touch these directly, since the BIOS or your video mode setup already programmed sane defaults, but knowing they exist demystifies a lot of "why does changing resolution involve touching so many obscure registers" later.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Index</th><th>Register</th><th>Roughly Controls</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0x00–0x01</td><td>Horizontal Total / Display End</td><td>Total scanline width and where visible pixels stop</td></tr>
+        <tr><td class="hl">0x06–0x07</td><td>Vertical Total / Overflow</td><td>Total frame height, including off-screen retrace time</td></tr>
+        <tr><td class="hl">0x09</td><td>Maximum Scan Line</td><td>How many scanlines make up one character's height</td></tr>
+        <tr><td class="hl">0x0A–0x0B</td><td>Cursor Start / End</td><td>Which scanlines within a cell the hardware cursor occupies (its shape)</td></tr>
+        <tr><td class="gold">0x0C–0x0D</td><td>Start Address High / Low</td><td>Which buffer cell maps to the top-left of the visible screen</td></tr>
+        <tr><td class="gold">0x0E–0x0F</td><td>Cursor Location High / Low</td><td>Which cell the blinking hardware cursor sits on</td></tr>
+        <tr><td class="hl">0x10–0x11</td><td>Vertical Retrace Start / End</td><td>Timing for the "flyback" between frames</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">The two rows highlighted in gold — start address and cursor location — are the ones a kernel driver actually programs after boot. Everything else is display-timing plumbing that stays fixed once the video mode (80×25, Mode 3) is established, usually by BIOS before your kernel ever gets control.</p>
+
+  <div class="sidenote reveal">
+    <b>Why so many timing registers at all?</b> A CRT monitor doesn't receive "frames" the way an LCD does — it's a beam physically sweeping left-to-right, then snapping back (horizontal retrace), and top-to-bottom, then snapping back (vertical retrace). Registers like Horizontal Total and Vertical Total exist because the CRTC has to tell that beam exactly when to start, stop, and fly back for every single scanline and every single frame, dozens of times a second. Modern LCDs and VGA emulation in QEMU don't need any of this physically — they keep these registers around purely for compatibility with forty years of software that expects them to exist.
+  </div>
+</div>
+</section>
+
+<!-- CODE TIE-IN -->
+<section id="code">
+<div class="container">
+  <div class="section-num">06 — Wiring This Into bob_os</div>
+  <h2>What <span class="accent">vga.c</span> Would Need to Add</h2>
+
+  <p class="reveal">The bob_os driver you read in the previous lesson doesn't touch the CRTC at all yet — its cursor tracking (<code>cur_row</code>, <code>cur_col</code>) is purely a software variable, invisible on screen as an actual blinking marker, and its <code>scroll()</code> is the honest O(rows×cols) memory-copy version. Both are completely correct starting points; the CRTC registers above are the natural "next upgrade" once the basics work. Here's the shape that upgrade takes, using the same <code>outb</code>-based port I/O primitive every later driver in this course (keyboard, serial, disk) will also need:</p>
+
+  <pre><code>/* Generic byte-wide port output — the primitive underneath every
+   outb() call in this lesson. Usually lives in a small io.h/io.c. */
+static inline void outb(unsigned short port, unsigned char val) {
+    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+#define CRTC_INDEX 0x3D4
+#define CRTC_DATA  0x3D5
+
+void vga_set_cursor(int row, int col) {
+    unsigned short pos = row * VGA_COLS + col;
+    outb(CRTC_INDEX, 0x0E); outb(CRTC_DATA, (pos &gt;&gt; 8) &amp; 0xFF);
+    outb(CRTC_INDEX, 0x0F); outb(CRTC_DATA,  pos       &amp; 0xFF);
+}</code></pre>
+
+  <p class="reveal">A natural place to call this: at the end of <code>advance_cursor()</code> and after every explicit cursor move, so the hardware cursor always tracks <code>cur_row</code>/<code>cur_col</code> instead of those variables only existing in software. That one addition turns bob_os's console from "text appears, but there's no visible caret" into something that looks and feels like a real terminal.</p>
+
+  <div class="sidenote reveal">
+    <b>Why inline assembly for <code>outb</code>?</b> <code>in</code>/<code>out</code> are genuine x86 machine instructions with no C equivalent — C has no built-in concept of a separate I/O address space. Every freestanding x86 kernel ends up with a tiny <code>io.h</code> wrapping exactly this GCC inline-asm pattern, once, and every driver from then on calls <code>outb()</code>/<code>inb()</code> like ordinary functions.
+  </div>
+</div>
+</section>
+
+<!-- PITFALLS -->
+<section id="pitfalls">
+<div class="container">
+  <div class="section-num">07 — Common Pitfalls</div>
+  <h2>Things That Bite Everyone <span class="accent">Once</span></h2>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Forgetting the Index Write Before Every Data Write</div>
+    Because <code>0x3D4</code> and <code>0x3D5</code> are two separate ports, it's tempting to write the index once and then write several data bytes in a row, assuming the CRTC "remembers." It does — but only for that <em>one</em> register. If you select <code>0x0E</code>, write the high byte, then write the low byte <em>without</em> reselecting <code>0x0F</code> first, you've just overwritten Cursor Location High twice and never touched Cursor Location Low at all. Every register write is always: select, then transfer — no shortcuts.
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🐢 Port I/O Is Slow — Don't Do It Per-Character</div>
+    Unlike a memory-mapped write, each <code>outb</code>/<code>inb</code> can cost hundreds of CPU cycles, especially inside a VM like QEMU where every port access can trap out to the emulator. Updating the hardware cursor once per printed <em>character</em> (rather than once per line, or once per <code>kprintf()</code> call) is a classic accidental performance trap in a first VGA driver — invisible on a modern host, but a real, measurable slowdown on constrained or emulated hardware.
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The CRTC Doesn't Know About Your C Struct</div>
+    There's no type safety here — <code>outb(0x3D4, 0x0E)</code> and <code>outb(0x3D4, 14)</code> are identical to the hardware, and a typo'd register index (say, <code>0x0D</code> instead of <code>0x0E</code>) silently reprograms the <em>wrong</em> thing — in this case, the screen's start offset instead of the cursor — with no compiler warning and no crash, just visibly wrong behavior you have to reverse-engineer from a datasheet.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">CRT Controller (CRTC)</div><div class="glossary-def">A distinct block of VGA hardware that manages display timing, the hardware text cursor, and which part of video memory is currently visible — separate from the character buffer itself.</div></div>
+    <div class="glossary-card"><div class="glossary-term">I/O Port</div><div class="glossary-def">An address in x86's separate 16-bit I/O address space, reachable only via the in/out instructions, not through ordinary memory pointers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Index/Data Register Pair</div><div class="glossary-def">A two-port pattern (here, 0x3D4/0x3D5) letting a small number of I/O ports address a much larger internal register file: one port selects, the other transfers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">outb / inb</div><div class="glossary-def">The conventional C wrapper function names for the x86 out and in instructions, almost always implemented with a short inline-assembly stub.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hardware Cursor</div><div class="glossary-def">The blinking marker the CRTC itself renders at a programmed cell position, independent of and in addition to whatever character is stored there.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cursor Location High/Low</div><div class="glossary-def">CRTC registers 0x0E and 0x0F, together holding the 16-bit linear cell index (row×80+col) of the hardware cursor.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Start Address High/Low</div><div class="glossary-def">CRTC registers 0x0C and 0x0D, together holding the cell index that maps to the visible screen's top-left corner — the basis of hardware scrolling.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hardware Scrolling</div><div class="glossary-def">Changing what portion of a larger-than-visible buffer is displayed by updating the start address, instead of physically copying character data.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Beyond the Buffer: VGA's CRT Controller Registers · Companion lesson for bob_os module 03_vga_driver</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Not every register lives in memory.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CURSOR MOVE CANVAS ──────────────────────────────────────────────
+let lastCursor={row:5,col:30};
+
+function drawCursorScene(t,phase,target){
+  const canvas=document.getElementById('cursorCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const pos = target.row*80+target.col;
+  const hiByte = ((pos>>8)&0xFF);
+  const loByte = (pos&0xFF);
+
+  // top: port diagram
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('I/O Ports',12,24);
+
+  const idxX=W*0.12, dataX=W*0.38, pw=Math.min(150,W*0.24), ph=54, py=40;
+  const idxActive = phase==='selecthigh'||phase==='selectlow';
+  const dataActive = phase==='sendhigh'||phase==='sendlow';
+  ctx.fillStyle= idxActive? 'rgba(56,189,248,.22)':'rgba(255,255,255,.03)';
+  ctx.strokeStyle= idxActive? C.cyan : C.border; ctx.lineWidth=1.4;
+  ctx.fillRect(idxX,py,pw,ph); ctx.strokeRect(idxX,py,pw,ph);
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('0x3D4 — INDEX',idxX+pw/2,py-8);
+  ctx.fillStyle=C.text;ctx.font='13px Source Code Pro,monospace';
+  let idxVal='—';
+  if(phase==='selecthigh') idxVal='0x0E';
+  else if(phase==='sendhigh') idxVal='0x0E';
+  else if(phase==='selectlow') idxVal='0x0F';
+  else if(phase==='sendlow') idxVal='0x0F';
+  ctx.fillText(idxVal,idxX+pw/2,py+ph/2+5);
+
+  ctx.fillStyle= dataActive? 'rgba(74,222,128,.22)':'rgba(255,255,255,.03)';
+  ctx.strokeStyle= dataActive? C.green : C.border;
+  ctx.fillRect(dataX,py,pw,ph); ctx.strokeRect(dataX,py,pw,ph);
+  ctx.fillStyle=C.green;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('0x3D5 — DATA',dataX+pw/2,py-8);
+  ctx.fillStyle=C.text;ctx.font='13px Source Code Pro,monospace';
+  let dataVal='—';
+  if(phase==='sendhigh') dataVal='0x'+hiByte.toString(16).toUpperCase().padStart(2,'0');
+  else if(phase==='sendlow'||phase==='done') dataVal='0x'+loByte.toString(16).toUpperCase().padStart(2,'0');
+  ctx.fillText(dataVal,dataX+pw/2,py+ph/2+5);
+
+  // arrow cpu -> port
+  const cpuX=W*0.7, cpuY=py+ph/2;
+  ctx.fillStyle='rgba(245,200,66,.12)';ctx.strokeStyle=C.gold;ctx.lineWidth=1.3;
+  ctx.fillRect(cpuX,py,Math.min(150,W*0.22),ph);ctx.strokeRect(cpuX,py,Math.min(150,W*0.22),ph);
+  ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('CPU: outb()',cpuX+Math.min(150,W*0.22)/2,cpuY+4);
+
+  const captions={
+    idle:'Pick a cursor target above to begin',
+    compute:'Step 1 — computing pos = row × 80 + col',
+    selecthigh:'Step 2a — outb(0x3D4, 0x0E) selects Cursor Location High',
+    sendhigh:'Step 2b — outb(0x3D5, high byte) sends bits 15–8',
+    selectlow:'Step 3a — outb(0x3D4, 0x0F) selects Cursor Location Low',
+    sendlow:'Step 3b — outb(0x3D5, low byte) sends bits 7–0',
+    done:'Step 4 — CRTC latches both bytes; the hardware cursor jumps instantly'
+  };
+
+  ctx.fillStyle=C.muted;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('pos = '+target.row+' × 80 + '+target.col+' = '+pos+' = 0x'+pos.toString(16).toUpperCase().padStart(4,'0')+'  →  high=0x'+hiByte.toString(16).toUpperCase().padStart(2,'0')+' low=0x'+loByte.toString(16).toUpperCase().padStart(2,'0'),12,py+ph+34);
+
+  // bottom: mini screen with cursor
+  const gridY=py+ph+58, cellW=Math.min(22,(W-40)/24), cellH=18, cols=24, rows=6;
+  const gx0=(W-cols*cellW)/2;
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Visible screen (cropped) — cursor position',12,gridY-10);
+  const tr=Math.min(target.row,rows-1), tc=Math.min(target.col,cols-1);
+  for(let r=0;r<rows;r++){
+    for(let cIdx=0;cIdx<cols;cIdx++){
+      const cx=gx0+cIdx*cellW, cy=gridY+r*cellH;
+      ctx.fillStyle='rgba(255,255,255,.02)';
+      ctx.strokeStyle='rgba(255,255,255,.05)';
+      ctx.fillRect(cx,cy,cellW-1,cellH-1);
+      ctx.strokeRect(cx,cy,cellW-1,cellH-1);
+    }
+  }
+  if(phase==='done'){
+    const cx=gx0+tc*cellW, cy=gridY+tr*cellH;
+    ctx.fillStyle=C.cyan;ctx.fillRect(cx+2,cy+cellH-5,cellW-5,4);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+}
+
+function runCursor(row,col){
+  lastCursor={row,col};
+  const phases=['compute','selecthigh','sendhigh','selectlow','sendlow','done'];
+  const durations=[500,450,450,450,450,900];
+  let idx=0,start=performance.now();
+  document.getElementById('cursorLabel').textContent='▶ Moving cursor to row '+row+', col '+col;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawCursorScene(t,phases[idx],lastCursor);
+    if(t>=1){
+      if(phases[idx]==='done'){
+        document.getElementById('cursorLabel').textContent='▶ Done — the CRTC now blinks the cursor here on its own. Try another position, or Reset.';
+        return;
+      }
+      idx++;
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetCursor(){
+  document.getElementById('cursorLabel').textContent='▶ Choose a cursor position to move to';
+  drawCursorScene(0,'idle',lastCursor);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetCursor(); });
+window.addEventListener('resize',()=>{ resetCursor(); });
+</script>
+</body>
+</html>

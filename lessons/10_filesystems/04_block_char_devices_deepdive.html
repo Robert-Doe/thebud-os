@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Devices vs Character Devices: Two Shapes of "Everything Is a File"</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.35);color:var(--green);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--green);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--green);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--green)}
+h2 .accent.gold{color:var(--gold)}
+h2 .accent.cy{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--green);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(74,222,128,.15);border:1.5px solid var(--green);color:var(--green);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(74,222,128,.1);border:1.5px solid var(--green);color:var(--green);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(74,222,128,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--cyan)} .compare-card.bad h4{color:var(--purple)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* dossier, reused for the vfs_ops-per-device-type breakdown */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#everythingfile" title="Everything Is a File"></a>
+  <a class="toc-dot" href="#blockdev" title="Block Devices"></a>
+  <a class="toc-dot" href="#chardev" title="Character Devices"></a>
+  <a class="toc-dot" href="#watchit" title="Watch It Happen"></a>
+  <a class="toc-dot" href="#comparetable" title="Side by Side"></a>
+  <a class="toc-dot" href="#specialcases" title="mmap and Special Devices"></a>
+  <a class="toc-dot" href="#driverexpect" title="What a Driver Must Do"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Filesystems · Device Files · Block vs Character</div>
+    <h1>Two Shapes of<br><span>"Everything Is a File"</span></h1>
+    <p class="hero-sub">The VFS lets you <code style="color:var(--cyan)">open()</code> a disk and a keyboard through the exact same syscall. But a disk lets you jump straight to byte 4,000,000 without reading anything before it; a keyboard has no idea what "byte 4,000,000" would even mean — it just hands you whatever key gets pressed next, in order, whenever that happens to be. Same interface on top. Two genuinely different machines underneath.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">512B</div><div class="lbl">Typical Block Device Transfer Unit</div></div>
+      <div class="hero-stat"><div class="num">1B</div><div class="lbl">Character Device Transfer Unit — One Byte at a Time</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Seek Support on a Character Device</div></div>
+      <div class="hero-stat"><div class="num">/dev/sda vs /dev/tty</div><div class="lbl">The Canonical Example of Each</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- EVERYTHING IS A FILE -->
+<section id="everythingfile">
+<div class="container">
+  <div class="section-num">00 — The Extension</div>
+  <h2>"Everything Is a File" — <span class="accent">Including Hardware?</span></h2>
+
+  <p class="reveal">The earlier lessons in this cluster covered how the VFS gives every real, disk-backed filesystem a uniform open/read/write/close interface. Unix took that idea one step further, and made it apply to <em>hardware itself</em>: your disk, your keyboard, your serial port, even <code>/dev/null</code>, all show up as files under <code>/dev</code>, all openable with the same <code>open()</code> call as anything else.</p>
+
+  <p class="reveal">But hardware isn't uniform the way filesystem content is. A disk really can be read in any order, at any position — that's what "random access storage" means. A keyboard fundamentally cannot: there is no "byte 47 of the keyboard," only "whatever key gets pressed next." Unix's answer isn't to pretend these are the same thing. It's to explicitly split device files into two categories that behave differently on purpose, while still sharing the outer open/read/write/close shape.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Split, Stated Plainly</div>
+    A <strong>block device</strong> is addressed in fixed-size chunks and supports random access — you can ask for chunk 4, then chunk 900, then chunk 4 again, in any order, and the kernel buffers/caches chunks in memory between requests. A <strong>character device</strong> is a stream — bytes arrive (or leave) strictly in order, there's no "chunk number" to jump to, and there's generally nothing meaningful to cache ahead of time because the next byte might not exist yet.
+  </div>
+</div>
+</section>
+
+<!-- BLOCK DEVICES -->
+<section id="blockdev">
+<div class="container">
+  <div class="section-num">01 — Random Access, In Chunks</div>
+  <h2>Block Devices: <span class="accent">Disks Behave Like Arrays</span></h2>
+
+  <p class="reveal">The canonical block device is a disk — <code>/dev/sda</code> on Linux. Its defining trait is that it's addressed by a <strong>block number</strong> (commonly a 512-byte sector, though modern disks often use 4096-byte physical sectors), and any block can be requested at any time, independent of which block was requested before it. Want block 4? Ask for block 4. Want block 900,000 right after that? Also fine — no ordering requirement at all.</p>
+
+  <p class="reveal">Because random reads and writes to physical storage are comparatively slow and the same blocks are frequently reused, the kernel sits a <strong>buffer/page cache</strong> between programs and the actual device: recently read blocks stay in RAM, and writes are often batched and flushed rather than hitting the disk instantly. None of this caching is visible to a program calling <code>read()</code> — it's a performance layer entirely below the VFS interface, exactly like the dentry cache from the previous lesson in this cluster.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">bob_os Already Has a Block Device — It Just Doesn't Call It That</div>
+    Module 12's <code>disk_read_sector(lba, buf)</code> is a textbook block device operation: it takes an arbitrary sector number (the LBA — Logical Block Address) and returns exactly 512 bytes, and it can be called with any LBA in any order — reading sector 0, then sector 4000, then sector 0 again is perfectly valid. bob_os doesn't happen to add a buffer cache on top of it, which is a completely reasonable simplification for a teaching OS, but the underlying access pattern — fixed-size chunk, addressed by number, random order — is exactly what makes something a block device rather than a character device.
+  </div>
+</div>
+</section>
+
+<!-- CHARACTER DEVICES -->
+<section id="chardev">
+<div class="container">
+  <div class="section-num">02 — Sequential, No Seeking</div>
+  <h2>Character Devices: <span class="accent">Streams Behave Like Queues</span></h2>
+
+  <p class="reveal">The canonical character device is a terminal — <code>/dev/tty</code> — or, further down, the keyboard or a serial port. Its defining trait is the opposite of a disk's: there is no address space to jump around in. Bytes show up (for input) or get sent out (for output) strictly in the order they occur, one at a time, and a <code>read()</code> on a character device just means "give me the next byte(s) that are available," full stop. There's no equivalent of "give me byte 500 of the keyboard" — the concept doesn't parse.</p>
+
+  <p class="reveal">This has a direct, practical consequence: <code>read()</code> on a character device can genuinely <strong>block</strong> — the call just sits there, doing nothing, until a byte actually arrives. A disk read never has this problem in the same way; the data already physically exists on the platter or flash chip, waiting to be fetched. A keyboard press hasn't happened yet until it happens.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">bob_os's Keyboard Driver Is Already a Character Device</div>
+    Module 09's keyboard driver is interrupt-driven: a hardware interrupt fires each time a key goes down, the interrupt handler pushes that one scancode into a small in-kernel queue, and whatever's reading from the keyboard pulls bytes out of that queue one at a time, in the order they were typed. There's no "seek to keypress #12" — only "give me the next one, whenever it shows up." That queue-of-bytes-in-arrival-order shape is precisely what a character device is, independent of whether bob_os's own code labels it that way internally.
+  </div>
+</div>
+</section>
+
+<!-- WATCH IT HAPPEN -->
+<section id="watchit">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>The Same read() Call, <span class="accent">Two Different Machines</span></h2>
+
+  <p class="reveal">Below is one simulated disk (16 addressable blocks) and one simulated keyboard stream. Try reading from each and notice what's actually different: the disk lets you request <em>any</em> block in <em>any</em> order; the stream only ever gives you whatever is next, and nothing at all if nothing has arrived yet.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="devLabel">▶ Try a random block read, then a sequential stream read</div>
+    <canvas id="devCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn cyan" onclick="runDevice('block',4)">▶ Block device: read(block 4)</button>
+    <button class="ctrl-btn cyan" onclick="runDevice('block',11)">▶ Block device: read(block 11)</button>
+    <button class="ctrl-btn" onclick="runDevice('char')">▶ Char device: read() next byte</button>
+    <button class="ctrl-btn red" onclick="resetDevice()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice that the two "read(block 4)" / "read(block 11)" buttons work in any order you press them — jump straight to 11, then back to 4, and the disk simply serves whatever block you asked for. The char-device button, by contrast, always hands you the <em>next</em> queued byte in the stream — press it repeatedly and it walks forward through "H", "e", "l", "l", "o" in that fixed order, exactly like keystrokes arriving one at a time. There is no button that lets you ask the stream for its "5th byte" out of order, because that request doesn't mean anything for a character device.</p>
+</div>
+</section>
+
+<!-- COMPARE TABLE -->
+<section id="comparetable">
+<div class="container">
+  <div class="section-num">04 — Side by Side</div>
+  <h2>Block vs Character, <span class="accent">Point by Point</span></h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Block Device</th><th>Character Device</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Unit of transfer</td><td>Fixed-size chunk (e.g. 512B sector)</td><td>One byte (or a small buffered run) at a time</td></tr>
+        <tr><td class="hl">Random access / seek?</td><td class="pos">Yes — any block, any order</td><td class="neg">No — strictly sequential</td></tr>
+        <tr><td class="hl">Kernel buffering/caching?</td><td class="pos">Yes — page/buffer cache sits in front</td><td class="neg">Minimal — usually just a small ring buffer for pending bytes</td></tr>
+        <tr><td class="hl">Can read() block waiting for data?</td><td>Rarely in the "no data yet" sense</td><td class="pos">Commonly — waits for the next byte to actually arrive</td></tr>
+        <tr><td class="hl">Typical examples</td><td><code>/dev/sda</code>, <code>/dev/nvme0n1</code>, disk partitions</td><td><code>/dev/tty</code>, <code>/dev/ttyS0</code>, keyboards, <code>/dev/null</code></td></tr>
+        <tr><td class="hl">bob_os equivalent</td><td>Module 12's ATA PIO <code>disk_read_sector(lba, buf)</code></td><td>Module 09's interrupt-driven keyboard queue</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Worth knowing:</b> a serial port is technically bidirectional and byte-oriented like a keyboard, which is why <code>/dev/ttyS0</code> is a character device too — even though it's "storage-adjacent" in the sense of connecting to another machine, its access pattern (one byte at a time, strictly ordered, no seeking) is what determines its category, not what kind of hardware sits behind it.
+  </div>
+</div>
+</section>
+
+<!-- SPECIAL CASES -->
+<section id="specialcases">
+<div class="container">
+  <div class="section-num">05 — Edge Cases That Prove the Rule</div>
+  <h2>mmap(), and the <span class="accent">Character Devices With No Hardware Behind Them</span></h2>
+
+  <p class="reveal">Two loose ends worth tying up, because both make the block/character split sharper rather than blurring it.</p>
+
+  <h3>Why you can mmap() a file but not a keyboard</h3>
+  <p class="reveal"><code>mmap()</code> maps a file's contents directly into a process's address space, so ordinary memory reads and writes turn into file reads and writes without an explicit <code>read()</code>/<code>write()</code> call per access. This works naturally for block devices and the regular files sitting on top of them, precisely because random access is exactly what a memory mapping needs — the CPU can dereference any address in the mapping at any time, which lines up perfectly with a block device's "any block, any order" contract. A character device generally <em>cannot</em> be mapped this way, for the same reason it can't be seeked: there's no fixed, indexable range of bytes sitting there to map. A keyboard doesn't have "byte 900 of itself" waiting to be dereferenced — it has whatever hasn't been typed yet.</p>
+
+  <h3>Character devices that aren't really hardware at all</h3>
+  <p class="reveal">Not every character device corresponds to a physical component. <code>/dev/null</code>, <code>/dev/zero</code>, and <code>/dev/random</code> are character devices with no hardware behind them whatsoever — pure kernel logic wearing a device file's clothes, for exactly the same reason procfs wears a filesystem's clothes in the earlier lesson in this cluster.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Device</th><th>read() behavior</th><th>write() behavior</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">/dev/null</td><td>Immediately returns 0 bytes (end of stream)</td><td>Silently discards everything, always succeeds</td></tr>
+        <tr><td class="hl">/dev/zero</td><td>Returns an endless stream of zero bytes</td><td>Silently discards everything, always succeeds</td></tr>
+        <tr><td class="hl">/dev/random</td><td>Returns cryptographically random bytes, may block if entropy is low</td><td>Not meaningful; typically ignored</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Each of these still has to be sequential, no-seek, byte-at-a-time in spirit — <code>/dev/zero</code> can't hand you "the 500th zero byte specifically," because that request is as meaningless as asking a keyboard for a specific byte offset. The category isn't about physical hardware at all; it's about the <em>shape</em> of the access pattern the driver honestly supports.</p>
+</div>
+</section>
+
+<!-- DRIVER EXPECTATIONS -->
+<section id="driverexpect">
+<div class="container">
+  <div class="section-num">06 — What the Driver Actually Owes the VFS</div>
+  <h2>Same Vtable Shape, <span class="accent">Different Obligations</span></h2>
+
+  <p class="reveal">Recall from the first lesson in this cluster: every backend plugs into the VFS by filling in the same <code>vfs_ops</code> struct — <code>open</code>, <code>read</code>, <code>write</code>, <code>close</code>. A block driver and a character driver both do exactly that. What differs is what each one has to <em>do</em> inside those functions to honestly satisfy what its device type promises.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Same vfs_ops Struct, Different Backends</span><span style="color:var(--muted);font-size:.7rem">bob_os Module 19 shape</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Block driver — read()</div><div class="f-val">bobfs_ops / disk.c</div><div class="f-desc">Must accept an arbitrary offset, translate it to a block number, and correctly return that block's bytes regardless of which block was read last — true random access.</div></div>
+      <div class="dossier-field"><div class="f-label">Char driver — read()</div><div class="f-val">keyboard_ops</div><div class="f-desc">Must ignore any notion of "offset" entirely and instead pull the next byte from an in-order queue, blocking (or returning 0) if nothing has arrived yet.</div></div>
+      <div class="dossier-field"><div class="f-label">Block driver — extras</div><div class="f-val">size query, request scheduling</div><div class="f-desc">A real block driver typically also exposes "how many blocks total" and may need to order or merge multiple pending requests for efficiency.</div></div>
+      <div class="dossier-field"><div class="f-label">Char driver — extras</div><div class="f-val">poll/select support</div><div class="f-desc">A real char driver typically needs to answer "is data available right now without blocking?" so a shell can wait on multiple input sources at once.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">Neither driver gets to lie about its shape. A block driver that silently only supported sequential access would break any program that legitimately seeks around a file — which is most of them. A character driver that pretended to support seeking would have nothing sensible to do with the request; "seek to byte 12 of the keyboard" simply has no answer. The VFS interface stays uniform at the syscall level; the honesty about what a given device can and cannot do lives entirely inside the driver that implements it.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">The Takeaway</div>
+    "Everything is a file" was never a claim that all files behave identically — it's a claim that they can all be <em>opened, read, written, and closed</em> through one interface, while remaining honest about their real capabilities underneath. A block device's honesty is "I support random access and I'm probably cached." A character device's honesty is "I only ever give you what's next, and I might make you wait for it." The VFS's job is to let both kinds sit behind the same four function calls without either one having to pretend to be the other.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Block Device</div><div class="glossary-def">A device addressed in fixed-size chunks with true random access — any block, in any order — typically sitting behind a kernel buffer/page cache.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Character Device</div><div class="glossary-def">A device that delivers or accepts a strict, ordered stream of bytes with no concept of seeking — read() means "give me whatever's next."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Logical Block Address (LBA)</div><div class="glossary-def">The numeric address of a specific fixed-size block on a block device — the unit block drivers actually operate on.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Buffer / Page Cache</div><div class="glossary-def">In-memory storage of recently used disk blocks, letting the kernel avoid repeated slow physical reads — invisible to the program calling read().</div></div>
+    <div class="glossary-card"><div class="glossary-term">Blocking read()</div><div class="glossary-def">A read() call that pauses the calling process until data actually becomes available — the normal behavior for character devices like a keyboard.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Device Driver</div><div class="glossary-def">The code implementing a specific device's vfs_ops functions, translating generic open/read/write/close calls into real hardware operations.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Major/Minor Number</div><div class="glossary-def">The pair of numbers Unix uses to identify which driver (major) and which specific device instance (minor) a /dev entry refers to.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ioctl()</div><div class="glossary-def">A catch-all system call for device-specific operations that don't fit read/write/seek — e.g. querying a disk's total size or a terminal's window dimensions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">poll() / select()</div><div class="glossary-def">System calls letting a process ask "is any of these file descriptors ready without blocking?" — essential for character devices whose data arrival time is unpredictable.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Block Devices vs Character Devices: Two Shapes of "Everything Is a File" · Companion lesson for bob_os modules <code>12_filesystem</code> and <code>19_vfs</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">One interface. A disk that lets you jump anywhere. A keyboard that only ever gives you what's next.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── BLOCK vs CHAR DEVICE CANVAS ──────────────────────────────────────────────
+const streamBytes=['H','e','l','l','o',',',' ','B','o','b'];
+let streamPos=0;
+let lastBlockRead=null;
+let lastMode=null; // 'block' or 'char'
+
+function drawDevice(){
+  const canvas=document.getElementById('devCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // BLOCK DEVICE — top half
+  ctx.textAlign='left';ctx.font='bold 11px Source Code Pro,monospace';
+  ctx.fillStyle=C.cyan;
+  ctx.fillText('BLOCK DEVICE — /dev/sda — 16 addressable blocks, any order',12,22);
+
+  const cellW=Math.min(50,(W-40)/16), cellH=40, top=36;
+  for(let i=0;i<16;i++){
+    const x=16+i*(cellW+2);
+    const isLast = lastMode==='block' && lastBlockRead===i;
+    ctx.fillStyle = isLast ? 'rgba(56,189,248,.3)' : '#141c2e';
+    ctx.fillRect(x,top,cellW,cellH);
+    ctx.strokeStyle = isLast ? C.cyan : C.border;
+    ctx.lineWidth = isLast?2:1;
+    ctx.strokeRect(x,top,cellW,cellH);
+    ctx.fillStyle = isLast ? C.cyan : C.muted;
+    ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(String(i),x+cellW/2,top+cellH/2+4);
+  }
+  ctx.textAlign='left';ctx.font='11px Lato,sans-serif';ctx.fillStyle=C.text;
+  if(lastMode==='block'){
+    ctx.fillText('read(block '+lastBlockRead+') → returned instantly, any order is fine',16,top+cellH+20);
+  } else {
+    ctx.fillStyle=C.muted;
+    ctx.fillText('No block requested yet — try reading block 4, then 11, then 4 again',16,top+cellH+20);
+  }
+
+  // CHAR DEVICE — bottom half
+  const cTop=top+cellH+56;
+  ctx.font='bold 11px Source Code Pro,monospace';ctx.fillStyle=C.green;
+  ctx.fillText('CHARACTER DEVICE — /dev/tty — strictly sequential, one byte at a time',12,cTop);
+
+  const bCellW=Math.min(46,(W-40)/streamBytes.length), bCellH=40, bTop=cTop+14;
+  for(let i=0;i<streamBytes.length;i++){
+    const x=16+i*(bCellW+2);
+    const consumed = i<streamPos;
+    const isNext = i===streamPos && lastMode==='char';
+    ctx.fillStyle = consumed ? 'rgba(74,222,128,.12)' : isNext ? 'rgba(74,222,128,.3)' : '#141c2e';
+    ctx.fillRect(x,bTop,bCellW,bCellH);
+    ctx.strokeStyle = isNext ? C.green : consumed ? 'rgba(74,222,128,.4)' : C.border;
+    ctx.lineWidth = isNext?2:1;
+    ctx.strokeRect(x,bTop,bCellW,bCellH);
+    ctx.fillStyle = consumed || isNext ? C.green : C.muted;
+    ctx.font='13px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(consumed||isNext ? streamBytes[i] : '·',x+bCellW/2,bTop+bCellH/2+5);
+  }
+  ctx.textAlign='left';ctx.font='11px Lato,sans-serif';
+  if(streamPos>=streamBytes.length){
+    ctx.fillStyle=C.gold;
+    ctx.fillText('Stream exhausted — read() would now block, waiting for the next byte to arrive',16,bTop+bCellH+20);
+  } else if(lastMode==='char'){
+    ctx.fillStyle=C.text;
+    ctx.fillText('read() → \''+streamBytes[streamPos-1]+'\' — always the NEXT byte, never a chosen one',16,bTop+bCellH+20);
+  } else {
+    ctx.fillStyle=C.muted;
+    ctx.fillText('No bytes read yet — press "read() next byte" repeatedly',16,bTop+bCellH+20);
+  }
+}
+
+function runDevice(mode,blockNum){
+  lastMode=mode;
+  if(mode==='block'){
+    lastBlockRead=blockNum;
+    document.getElementById('devLabel').textContent='▶ Block device served block '+blockNum+' directly — no ordering required';
+  } else {
+    if(streamPos<streamBytes.length) streamPos++;
+    document.getElementById('devLabel').textContent = streamPos>=streamBytes.length
+      ? '▶ Stream exhausted — this is where a real read() would block'
+      : '▶ Character device served the next queued byte';
+  }
+  drawDevice();
+}
+function resetDevice(){
+  lastBlockRead=null; lastMode=null; streamPos=0;
+  document.getElementById('devLabel').textContent='▶ Try a random block read, then a sequential stream read';
+  drawDevice();
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDevice(); });
+window.addEventListener('resize',()=>{ drawDevice(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parsing HTTP From Raw Bytes — What Actually Arrives on the Wire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.4rem,5.6vw,4.6rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.gold{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.buf{font-family:'Source Code Pro',monospace;font-size:.8rem;background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0;color:var(--muted);word-break:break-all;}
+.buf .got{color:var(--green)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="TCP Recap"></a>
+  <a class="toc-dot" href="#anatomy" title="Anatomy of a Request"></a>
+  <a class="toc-dot" href="#response" title="Anatomy of a Response"></a>
+  <a class="toc-dot" href="#boundary" title="The Buffering Problem"></a>
+  <a class="toc-dot" href="#contentlength" title="Content-Length"></a>
+  <a class="toc-dot" href="#chunked" title="Chunked Encoding"></a>
+  <a class="toc-dot" href="#statemachine" title="The Parser"></a>
+  <a class="toc-dot" href="#compare" title="CL vs Chunked"></a>
+  <a class="toc-dot" href="#pipelining" title="Keep-Alive & Pipelining"></a>
+  <a class="toc-dot" href="#hazards" title="Parsing Hazards"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">HTTP/1.1 Wire Format · Streaming Parsers · bob_os Networking</div>
+    <h1>Parsing HTTP From<br><span>Raw Bytes</span></h1>
+    <p class="hero-sub">TCP already did the hard part: it handed you a reliable, ordered, arbitrarily-choppy stream of bytes between two sockets. It doesn't know or care that those bytes spell out an HTTP request. <em>You</em> have to figure that out — where one message ends, where the next begins, and how many body bytes to read before you stop. HTTP/1.1, underneath every fancy client library, is just carefully punctuated text.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">\r\n\r\n</div><div class="lbl">The 4 bytes that end headers</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Ways to know the body length</div></div>
+      <div class="hero-stat"><div class="num">N</div><div class="lbl">TCP segments one message may span</div></div>
+      <div class="hero-stat"><div class="num">0\r\n\r\n</div><div class="lbl">Terminates a chunked body</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Pick Up</div>
+  <h2>TCP Already Got You a <span class="accent">Reliable Byte Stream</span></h2>
+
+  <p class="reveal">Back in the networking module, the three-way handshake (<code>SYN</code> → <code>SYN-ACK</code> → <code>ACK</code>) did its job: it set up a socket pair where bytes written on one end arrive, in order, uncorrupted, on the other. That's a genuinely hard problem, and TCP solves it below the level HTTP ever has to think about. If a byte gets dropped, TCP retransmits it. If two packets arrive out of order, TCP reorders them before your application ever sees them.</p>
+
+  <p class="reveal">But here's the part TCP <strong>doesn't</strong> do for you: it has no concept of "message boundaries." A TCP socket is just a stream — an open-ended firehose of bytes with no built-in punctuation. When your code calls <code>recv()</code>, the kernel hands you whatever bytes happen to be sitting in the socket's receive buffer at that moment. That might be half a header line. It might be three whole HTTP requests back to back (pipelining). It might be one byte. TCP guarantees the bytes are correct and in order — it makes <em>zero</em> promises about how they'll be chopped up when you read them.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔌 The Handoff, Explicitly</div>
+    TCP's contract to HTTP is exactly one sentence: <strong>"here is an ordered, reliable stream of bytes — you figure out what they mean."</strong> Everything from here on — knowing you've received a full request line, knowing you've received all the headers, knowing exactly how many body bytes to expect — is HTTP's problem, solved entirely by convention encoded into the bytes themselves.
+  </div>
+
+  <p class="reveal">It's worth being precise about what layer this puts HTTP at. The operating system's socket API hands your application <code>recv()</code> and <code>send()</code> calls that move raw bytes — it has no idea an HTTP request is even involved. Everything this lesson covers — request lines, header syntax, body framing — is a convention that lives entirely in application-layer code sitting on top of that socket, whether that's a browser's network stack, a language's standard library, or, in <code>bob_os</code>, the hand-rolled parser in <code>B15_http_parser</code>.</p>
+</div>
+</section>
+
+<!-- SECTION 1: ANATOMY OF A REQUEST -->
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">01 — The Shape of a Request</div>
+  <h2>HTTP/1.1 Is Just <span class="accent">Structured Text</span></h2>
+
+  <p class="reveal">Strip away every framework, every fetch() call, every browser dev-tools panel, and an HTTP/1.1 request is nothing more than plain ASCII text with a strict shape, terminated by the two-byte sequence <code>\r\n</code> (carriage return, line feed) after every line:</p>
+
+  <ol class="reveal">
+    <li>One <strong>request line</strong>: method, path, and HTTP version, space-separated.</li>
+    <li>Zero or more <strong>header lines</strong>: <code>Key: Value</code>, one per line.</li>
+    <li>One <strong>blank line</strong> — just <code>\r\n</code> by itself — marking "headers are over."</li>
+    <li>An <strong>optional body</strong>, whose exact byte length is described by the headers you just read.</li>
+  </ol>
+
+  <p class="reveal">Here's a complete, real HTTP/1.1 request exactly as it would sit in a TCP receive buffer — this is genuinely everything the client sends, byte for byte (line breaks shown as actual newlines for readability; each one is really a <code>\r\n</code>):</p>
+
+  <pre class="reveal"><span class="tag">wire format</span><code><span class="kw">GET</span> <span class="fn">/articles/tls-handshake</span> <span class="cls">HTTP/1.1</span>
+<span class="var">Host</span>: <span class="str">www.example.com</span>
+<span class="var">User-Agent</span>: <span class="str">Mozilla/5.0 (Windows NT 10.0; Win64; x64) bob_os/1.0</span>
+<span class="var">Accept</span>: <span class="str">text/html,application/xhtml+xml</span>
+<span class="var">Accept-Language</span>: <span class="str">en-US,en;q=0.9</span>
+<span class="var">Connection</span>: <span class="str">keep-alive</span>
+<span class="var">Cookie</span>: <span class="str">session_id=8f14e45fceea167a5a36dedd4bea2543</span>
+<span class="cm">                                        ← blank line here (just \r\n) — no body follows a GET</span></code></pre>
+
+  <p class="reveal">Notice what's <em>not</em> there: no length prefix on the whole message, no binary framing, no magic bytes announcing "an HTTP request follows." The parser has to recognize a request line by its shape (a method token, a space, a path, a space, a version token, then <code>\r\n</code>) and recognize the end of headers purely by spotting that one blank line. That's the entire contract.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why <code>\r\n</code> and Not Just <code>\n</code>?</div>
+    HTTP inherited its line ending from earlier text protocols like SMTP and NNTP, which in turn inherited it from teletype hardware: <code>\r</code> (carriage return) physically returned the print head to the start of the line, <code>\n</code> (line feed) advanced the paper. HTTP/1.1's spec (RFC 7230) is strict about requiring the full <code>\r\n</code> pair — a parser that only watches for a lone <code>\n</code> will work against most real traffic (since bare <code>\n</code> is common in practice) but is technically non-conformant, and being loose about it is exactly the kind of front-end/back-end disagreement that enables request smuggling, covered in <strong>B15</strong>.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: ANATOMY OF A RESPONSE -->
+<section id="response">
+<div class="container">
+  <div class="section-num">02 — The Shape of a Response</div>
+  <h2>The Response Is the <span class="accent">Same Shape, Mirrored</span></h2>
+
+  <p class="reveal">The server's reply uses an identical skeleton — status line instead of request line, otherwise the same headers-then-blank-line-then-body structure. That symmetry isn't an accident; it means one parser core can handle both directions with only the first line's grammar differing.</p>
+
+  <pre class="reveal"><span class="tag">wire format</span><code><span class="cls">HTTP/1.1</span> <span class="num">200</span> <span class="str">OK</span>
+<span class="var">Date</span>: <span class="str">Tue, 21 Jul 2026 14:32:07 GMT</span>
+<span class="var">Server</span>: <span class="str">nginx/1.25.3</span>
+<span class="var">Content-Type</span>: <span class="str">text/html; charset=utf-8</span>
+<span class="var">Content-Length</span>: <span class="num">142</span>
+<span class="var">Connection</span>: <span class="str">keep-alive</span>
+<span class="cm">                                        ← blank line — exactly 142 bytes of body follow, then stop</span>
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;&lt;head&gt;&lt;title&gt;TLS Handshake&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;&lt;h1&gt;Hello, bob_os&lt;/h1&gt;&lt;p&gt;This body is exactly 142 bytes.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</code></pre>
+
+  <p class="reveal">This is the single most important line in that response, for a parser's purposes: <code>Content-Length: 142</code>. Without it, a parser reading from a live TCP stream has no way to know whether the body is finished or whether the next <code>recv()</code> call will hand it 40 more bytes belonging to the <em>same</em> body. The status line and headers are easy — they're self-delimiting, ended by <code>\r\n</code> and the blank line. The body is the hard part, because bodies can contain <em>anything</em>, including bytes that look like <code>\r\n\r\n</code>.</p>
+
+  <div class="sidenote reveal">
+    <b>Status line grammar, precisely:</b> <code>HTTP-version SP status-code SP reason-phrase CRLF</code>. The reason phrase (<code>"OK"</code>, <code>"Not Found"</code>) is technically decorative — RFC 7230 says clients must parse the three-digit status code and should ignore the reason phrase's exact text, which is why sending <code>200 Whatever</code> instead of <code>200 OK</code> doesn't break well-written clients.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: THE BUFFERING PROBLEM -->
+<section id="boundary">
+<div class="container">
+  <div class="section-num">03 — The First Real Parsing Problem</div>
+  <h2>Headers Don't Care About <span class="accent">Packet Boundaries</span></h2>
+
+  <p class="reveal">Here's the uncomfortable truth every from-scratch HTTP parser has to confront on day one: <strong>a single call to <code>recv()</code> is not guaranteed to hand you a whole HTTP message — or even a whole header line.</strong> TCP segments the byte stream however the network, the OS's socket buffers, and Nagle's algorithm see fit. A slow or congested connection can easily split a 90-byte request line across two, three, or more separate reads.</p>
+
+  <p class="reveal">Imagine the request line and first header arrive as two separate reads from the socket:</p>
+
+  <div class="buf reveal">recv() call #1 returns: <span class="got">"GET /index.html HTTP/1.1\r\nHost: exa"</span> <em>(37 bytes — cut off mid-hostname)</em></div>
+  <div class="buf reveal">recv() call #2 returns: <span class="got">"mple.com\r\nConnection: keep-alive\r\n\r\n"</span> <em>(37 more bytes — headers finish here)</em></div>
+
+  <p class="reveal">A naive parser that tries to interpret each <code>recv()</code> result independently will choke on call #1 — <code>"Host: exa"</code> isn't a complete header line, and there's no blank line in sight yet. The only correct approach is to <strong>buffer</strong>: append every chunk of bytes the socket hands you onto a growing buffer, and only attempt to parse once (and every time) new bytes arrive, re-scanning the accumulated buffer for the patterns you're looking for.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="bufLabel">▶ Watch a request line get reassembled from two TCP segments — click to run</div>
+    <canvas id="bufCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runBuffer()">▶ Simulate Slow Arrival</button>
+    <button class="ctrl-btn red" onclick="resetBuffer()">Reset</button>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧩 The General Rule</div>
+    Every streaming protocol parser — HTTP, WebSocket framing, even reading a line from a file — needs the same three-part loop: <strong>(1)</strong> append newly-received bytes to a buffer, <strong>(2)</strong> try to find a complete "unit" (a line, a frame, a fixed-length block) at the front of the buffer, <strong>(3)</strong> if found, consume and process it and go back to step 2; if not found, stop and wait for more bytes. Get this loop wrong and you either crash on partial input or silently drop data.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: CONTENT-LENGTH -->
+<section id="contentlength">
+<div class="container">
+  <div class="section-num">04 — Solving the Body-Length Problem, Method 1</div>
+  <h2><span class="accent">Content-Length</span>: Just Tell Me How Many Bytes</h2>
+
+  <p class="reveal">Once the parser has found the blank line that ends the headers, it needs to know exactly how many more bytes belong to this message's body before the <em>next</em> message (on a keep-alive connection) or the connection close begins. The simplest, most common answer is the <code>Content-Length</code> header: a plain decimal integer telling the parser precisely how many bytes of body to read, no more, no less.</p>
+
+  <ul class="reveal">
+    <li>Parser sees <code>Content-Length: 142</code> → it reads exactly 142 more bytes as the body, however many <code>recv()</code> calls that takes.</li>
+    <li>Byte 143 onward, if the connection is <code>keep-alive</code>, is the <em>next</em> request/response — not part of this body, no matter what it contains.</li>
+    <li>If a body legitimately contains bytes that look like <code>\r\n\r\n</code> (a JSON blob, an image, anything binary) — <strong>it doesn't matter.</strong> The parser isn't scanning the body for patterns anymore; it's just counting bytes.</li>
+  </ul>
+
+  <div class="formula cyan reveal">
+    <span class="label">The core invariant</span>
+    bytes_read_so_far_in_body &lt; Content-Length → keep buffering, message incomplete<br>
+    bytes_read_so_far_in_body == Content-Length → body complete, message done<br>
+    <span class="sub">This is exactly why the server MUST know the body's length before it starts sending — Content-Length can't be computed on the fly mid-stream.</span>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Why This Is the Common Case</div>
+    Whenever a server has the full response body ready in memory or on disk before it starts writing to the socket — a static file, a fully-rendered HTML page, a JSON API response — it can just measure the byte length up front and set <code>Content-Length</code>. This is the cheap, simple, default path, and it's what almost every response you'll ever see actually uses.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: CHUNKED -->
+<section id="chunked">
+<div class="container">
+  <div class="section-num">05 — Solving the Body-Length Problem, Method 2</div>
+  <h2><span class="accent">Transfer-Encoding: chunked</span> — When You Don't Know Yet</h2>
+
+  <p class="reveal">But what if the server doesn't know the total body length in advance — because it's streaming a live-generated response, proxying another slow upstream server, or producing output as it goes (think: a chat completion streaming token by token)? It can't set <code>Content-Length</code>, because it genuinely doesn't know the final number yet, and HTTP doesn't allow "figure it out as you go" with a plain length header.</p>
+
+  <p class="reveal">The fix is <code>Transfer-Encoding: chunked</code>: instead of one length declared once at the top, the body is sent as a series of self-describing pieces, each prefixed by its own length in hexadecimal, followed by <code>\r\n</code>, followed by that many bytes of chunk data, followed by another <code>\r\n</code>. A chunk of size zero marks the end of the body — no total length ever needed.</p>
+
+  <pre class="reveal"><span class="tag">wire format — chunked body</span><code><span class="kw">POST</span> <span class="fn">/upload</span> <span class="cls">HTTP/1.1</span>
+<span class="var">Host</span>: <span class="str">api.example.com</span>
+<span class="var">Transfer-Encoding</span>: <span class="str">chunked</span>
+
+<span class="num">7</span>\r\n<span class="cm"> ← next chunk is 0x7 = 7 bytes</span>
+<span class="str">Mozilla</span>\r\n
+<span class="num">9</span>\r\n<span class="cm"> ← next chunk is 0x9 = 9 bytes</span>
+<span class="str">Developer</span>\r\n
+<span class="num">7</span>\r\n<span class="cm"> ← next chunk is 0x7 = 7 bytes</span>
+<span class="str">Network</span>\r\n
+<span class="num">0</span>\r\n<span class="cm"> ← zero-length chunk = end of body</span>
+\r\n<span class="cm"> ← final CRLF closes the message (optional trailers go here)</span></code></pre>
+
+  <p class="reveal">Decoded, that body is just <code>"MozillaDeveloperNetwork"</code> — 23 bytes, delivered in three self-announced pieces without the sender ever having to know up front that the total would be 23. The parser's loop here is different from Content-Length but no harder: read a hex length line, read exactly that many data bytes plus the trailing <code>\r\n</code>, repeat until the length line reads <code>0</code>.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ Content-Length and Chunked Must Never Both Apply</div>
+    RFC 7230 is explicit: if a message somehow specifies both a <code>Content-Length</code> and <code>Transfer-Encoding: chunked</code>, <code>Transfer-Encoding</code> wins and <code>Content-Length</code> must be ignored (or the message rejected outright). A parser and a proxy in front of it that disagree on <em>which one wins</em> is the exact root cause of the CL.TE / TE.CL request-smuggling attacks covered in <strong>B15_http_parser</strong> — two components silently computing two different body lengths for the same bytes.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: THE PARSER -->
+<section id="statemachine">
+<div class="container">
+  <div class="section-num">06 — Putting It Together</div>
+  <h2>Building the Parser: <span class="accent">A State Machine</span></h2>
+
+  <p class="reveal">A real streaming HTTP parser is a small state machine that survives being fed the buffer's contents one arbitrary chunk at a time. Here's the shape it takes, matching the actual <code>bob_os</code> browser module's approach:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>PARSE_START_LINE</strong> Scan the buffer for the first <code>\r\n</code>. If found, split it into method/path/version (request) or version/status/reason (response). If not found yet, stay in this state and wait for more bytes.</div></li>
+    <li><div class="step-body"><strong>PARSE_HEADERS</strong> Keep consuming <code>Key: Value\r\n</code> lines from the buffer, storing each into a headers table, until a line is found that is just <code>\r\n</code> by itself — the empty line signaling "headers are done."</div></li>
+    <li><div class="step-body"><strong>DETERMINE_BODY_LENGTH</strong> Look up <code>Transfer-Encoding</code> first; if it says <code>chunked</code>, body mode = CHUNKED. Otherwise look up <code>Content-Length</code>; if present, body mode = FIXED(<em>n</em>). If neither header is present, body mode = NONE (or "read until connection closes," for older HTTP/1.0-style responses).</div></li>
+    <li><div class="step-body"><strong>PARSE_BODY_FIXED or PARSE_BODY_CHUNKED</strong> Consume exactly the promised number of bytes (fixed) or repeatedly consume length-prefixed chunks until a zero-length chunk (chunked). Either way, stop consuming exactly at the boundary — never one byte more, never one byte less.</div></li>
+    <li><div class="step-body"><strong>DONE</strong> Message complete. Hand it off to whatever code asked for it. If the connection is <code>keep-alive</code>, reset back to PARSE_START_LINE and keep scanning the <em>same</em> buffer — there may already be a second request sitting right behind this one.</div></li>
+  </ol>
+
+  <pre class="reveal"><span class="tag">http_parser.h — real struct from B15_http_parser</span><code><span class="kw">struct</span> <span class="cls">http_request</span> {
+    <span class="kw">char</span> method[<span class="num">16</span>];
+    <span class="kw">char</span> path[<span class="num">256</span>];
+    <span class="kw">char</span> version[<span class="num">16</span>];
+    <span class="kw">char</span> headers[HTTP_MAX_HEADERS][<span class="num">2</span>][<span class="num">128</span>]; <span class="cm">/* [n][0=name, 1=value] */</span>
+    <span class="kw">int</span>  header_count;
+    <span class="kw">char</span> body[HTTP_BODY_SIZE];
+    <span class="kw">int</span>  body_len;
+    <span class="kw">int</span>  content_length;  <span class="cm">/* from Content-Length header, -1 if absent */</span>
+    <span class="kw">int</span>  chunked;         <span class="cm">/* 1 if Transfer-Encoding: chunked */</span>
+};</code></pre>
+
+  <div class="sidenote reveal">
+    <b>Why does this struct keep a raw <code>int content_length</code> and a separate <code>chunked</code> flag instead of one "body mode" enum?</b> It mirrors the wire format directly, which makes the RFC 7230 precedence rule (chunked wins if both are present) a single, obvious <code>if</code> check at parse time rather than something baked invisibly into a constructor. Explicit fields over clever enums — easier to audit for exactly the kind of ambiguity bug that causes smuggling.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: COMPARE TABLE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">07 — Side by Side</div>
+  <h2>Content-Length vs. <span class="accent">Chunked</span>, Compared</h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Question</th><th>Content-Length</th><th>Transfer-Encoding: chunked</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Sender must know total length up front?</td><td class="pos">Yes</td><td class="neg">No</td></tr>
+        <tr><td class="gold">Good for streamed / generated-on-the-fly output?</td><td class="neg">No</td><td class="pos">Yes</td></tr>
+        <tr><td class="gold">Parser needs to count bytes?</td><td class="hl">Yes — one number</td><td class="hl">Yes — per chunk, repeatedly</td></tr>
+        <tr><td class="gold">Parser needs to parse hex length prefixes?</td><td class="neg">No</td><td class="pos">Yes</td></tr>
+        <tr><td class="gold">Supports trailing headers after the body?</td><td class="neg">No</td><td class="pos">Yes — trailers after the final chunk</td></tr>
+        <tr><td class="gold">Available in HTTP/1.0?</td><td class="pos">Yes</td><td class="neg">No — HTTP/1.1 only</td></tr>
+        <tr><td class="gold">Can both appear on the same message?</td><td colspan="2" class="neg center">Must not — chunked wins if it does (RFC 7230 §3.3.3)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ When You'll See Content-Length</h4>
+      Static files, API responses built entirely in memory before sending, most <code>GET</code> responses, uploaded form bodies from a browser (the browser already knows the file size).
+    </div>
+    <div class="compare-card bad">
+      <h4>⚡ When You'll See Chunked</h4>
+      Server-sent events, LLM streaming completions, proxied responses from a backend that itself hasn't finished generating output, dynamically compressed responses where the final compressed size isn't known until compression finishes.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: PIPELINING -->
+<section id="pipelining">
+<div class="container">
+  <div class="section-num">08 — One More Buffering Wrinkle</div>
+  <h2>Keep-Alive &amp; Pipelining: <span class="accent">More Than One Message Per Buffer</span></h2>
+
+  <p class="reveal">Section 03 showed a buffer that didn't have <em>enough</em> bytes yet. The opposite case is just as real: a buffer that already has <em>more than one full message</em> sitting in it. This happens constantly, for a completely mundane reason — <code>Connection: keep-alive</code> means the TCP socket stays open after one request/response finishes, specifically so it can carry another one without paying for a new TCP handshake (and, over HTTPS, a whole new TLS handshake too).</p>
+
+  <p class="reveal">If the client and server are both fast, and the network delivers several packets back to back, a single <code>recv()</code> call on the server can easily return two, three, or more complete requests concatenated together — especially under HTTP/1.1 <strong>pipelining</strong>, where a client is explicitly allowed to fire off several requests without waiting for earlier responses first. The parser's state machine from section 06 already handles this correctly, almost by accident: step 5 (<code>DONE</code>) doesn't clear the buffer and wait — it resets to <code>PARSE_START_LINE</code> and re-scans whatever bytes are left over.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔁 The Loop Has to Be a Loop</div>
+    A parser that treats "one <code>recv()</code> call" and "one HTTP message" as the same thing will silently drop the second and third requests sitting in a pipelined buffer, or worse, mis-parse them as garbage appended to the first body. The correct mental model is: <strong>the buffer is a queue of zero, one, or many complete messages, refilled by an unrelated, arbitrarily-chunked stream of <code>recv()</code> calls</strong> — parse in a loop until no complete message remains, then stop and wait for more bytes.
+  </div>
+
+  <p class="reveal">In practice, most modern clients avoid classic pipelining (it has nasty head-of-line blocking failure modes if an early response is slow) in favor of opening several parallel keep-alive connections, or — better — using HTTP/2's multiplexed binary framing, which solves this exact ordering problem structurally instead of by convention. But keep-alive itself (one connection, many sequential messages) remains the default, which is why "does my buffer definitely contain exactly one message" can never be assumed by a correct parser.</p>
+</div>
+</section>
+
+<!-- SECTION 9: PARSING HAZARDS -->
+<section id="hazards">
+<div class="container">
+  <div class="section-num">09 — What Bites Real Implementations</div>
+  <h2>Parsing Hazards: <span class="accent">Where the Bugs Actually Live</span></h2>
+
+  <p class="reveal">Writing a parser that works on well-formed input is the easy 80%. The remaining 20% — the part that determines whether your implementation is <em>secure</em>, not just functional — is deciding what to do with input that's technically ambiguous, obsolete, or actively hostile.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Header Name Case</span><span class="fam-count">must normalize</span></div>
+      <div class="fam-desc">HTTP header names are case-insensitive by spec — <code>content-length</code>, <code>Content-Length</code>, and <code>CONTENT-LENGTH</code> must all resolve to the same header. A parser that does a case-sensitive lookup can be tricked into "not seeing" a header a downstream component does see — another classic smuggling-adjacent desync.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Obsolete Line Folding</span><span class="fam-count">must reject</span></div>
+      <div class="fam-desc">Ancient HTTP allowed a header value to continue onto the next line if that line started with whitespace. RFC 7230 formally deprecates this and requires parsers to either reject it or normalize it — a parser that silently accepts folded headers while a peer doesn't creates yet another interpretation mismatch.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--orange)">Duplicate Headers</span><span class="fam-count">rules vary by header</span></div>
+      <div class="fam-desc">Most headers may legally appear more than once and should be treated as if comma-joined into one value. But a few — <code>Content-Length</code> chief among them — must never appear more than once with conflicting values; a strict parser rejects the whole message rather than silently picking one.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">CRLF Injection</span><span class="fam-count">an attacker input, not a wire quirk</span></div>
+      <div class="fam-desc">If application code builds a header value from unsanitized user input and that input contains a raw <code>\r\n</code>, an attacker can inject an entirely new header — or, worse, terminate the headers early and inject a fabricated body or even a second smuggled request. Never build header text via naive string concatenation of untrusted data.</div>
+    </div>
+  </div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">1</div><div class="lbl">Case-insensitive comparison, always</div></div>
+    <div class="stat-card"><div class="val">0</div><div class="lbl">Tolerance for CL/TE disagreement</div></div>
+    <div class="stat-card"><div class="val">✗</div><div class="lbl">Line folding — reject, don't normalize silently</div></div>
+    <div class="stat-card"><div class="val">✗</div><div class="lbl">Raw \r\n in any user-supplied header value</div></div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Every One of These Is the Same Root Cause</div>
+    Header case, line folding, duplicate headers, and Transfer-Encoding obfuscation (section 05) are all instances of one underlying problem: <strong>HTTP/1.1's grammar has more than one "reasonable" way to read certain inputs.</strong> Whenever two components in a chain — browser and proxy, proxy and origin server — each pick a <em>different</em> reasonable interpretation of the same bytes, you get a desync, and desyncs are where request smuggling, cache poisoning, and access-control bypasses all come from. The fix is always the same: be maximally strict about what you accept, and when genuinely ambiguous, reject rather than guess.
+  </div>
+
+  <p class="reveal">This is also, not coincidentally, a large part of why HTTP/2 exists. HTTP/2 replaces this entire text-based, ambiguity-prone framing with a strict, binary length-prefixed frame format — every frame declares its own type and exact byte length up front, so there is no blank-line scanning, no hex chunk parsing, and structurally no room for a Content-Length/Transfer-Encoding-style disagreement within a single hop. The catch, as the request-smuggling module covers, is that most of the internet still translates HTTP/2 down to HTTP/1.1 somewhere along the way — and that translation step can reintroduce exactly the ambiguity the binary framing was designed to eliminate.</p>
+
+  <div class="sidenote reveal">
+    <b>So why does this lesson focus on HTTP/1.1 at all, if HTTP/2 fixes it?</b> Because HTTP/1.1's text framing is still the format the vast majority of origin servers, load balancers, and this project's own <code>http_parser.c</code> actually implement — and because understanding exactly <em>why</em> a text format is ambiguity-prone is what makes HTTP/2's binary framing design decisions make sense, rather than feeling like arbitrary complexity.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 10: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Request Line</div><div class="glossary-def">The first line of an HTTP request: method, path, and version, space-separated, terminated by <code>\r\n</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Status Line</div><div class="glossary-def">The first line of an HTTP response: version, three-digit status code, and reason phrase.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CRLF</div><div class="glossary-def">The two-byte sequence <code>\r\n</code> that terminates every header line and, doubled, marks the end of headers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Content-Length</div><div class="glossary-def">A header giving the exact byte length of the message body, known and fixed before transmission begins.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Transfer-Encoding: chunked</div><div class="glossary-def">An alternative body-framing scheme: length-prefixed chunks ending in a zero-length chunk, for bodies whose total size isn't known upfront.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Chunk</div><div class="glossary-def">One piece of a chunked body: a hex length, <code>\r\n</code>, that many data bytes, then <code>\r\n</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Streaming Parser</div><div class="glossary-def">A parser designed to consume input incrementally across many partial reads, buffering until a complete unit is available.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Keep-Alive</div><div class="glossary-def">A connection left open after one request/response completes so the same TCP socket can carry another message, avoiding a new handshake.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Pipelining</div><div class="glossary-def">Sending multiple requests on one connection before reading any responses — meaning a parser's buffer may legitimately contain more than one full message at once.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Header Folding</div><div class="glossary-def">An obsolete continuation syntax letting a header value span multiple lines via leading whitespace; deprecated by RFC 7230 and a common source of parser disagreement.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Request Smuggling</div><div class="glossary-def">An attack exploiting two components that disagree on where one HTTP message ends and the next begins, most often via Content-Length/Transfer-Encoding ambiguity.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Parsing HTTP From Raw Bytes · A companion lesson for bob_os/browser modules <a href="../../browser/B15_http_parser/tutorial.html">B15_http_parser</a> and <a href="../../browser/B16_tls_handshake/tutorial.html">B16_tls_handshake</a></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: 02_tls_handshake_deepdive.html — how those same bytes get encrypted before they ever hit the wire.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── TCP BUFFER REASSEMBLY CANVAS ────────────────────────────────────────────────
+const seg1='GET /index.html HTTP/1.1\\r\\nHost: exa';
+const seg2='mple.com\\r\\nConnection: keep-alive\\r\\n\\r\\n';
+
+function wrapText(ctx,text,maxWidth){
+  const words=text.split(/(?<=\\\\r\\\\n)/); // keep escape tokens together visually, but text is literal here
+  return text; // buffer text kept short enough to not need wrapping
+}
+
+function drawBufferScene(phase,t){
+  const canvas=document.getElementById('bufCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.font='11px Source Code Pro,monospace';
+  ctx.textAlign='left';
+
+  // socket lane
+  ctx.fillStyle=C.muted;ctx.fillText('TCP SOCKET (recv() calls)',20,26);
+  ctx.strokeStyle='rgba(122,155,191,.4)';ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(20,40);ctx.lineTo(W-20,40);ctx.stroke();ctx.setLineDash([]);
+
+  let seg1Alpha=0, seg2Alpha=0, cursorX=null, matchGlow=0, parsedAlpha=0;
+  const label={
+    idle:'Click "Simulate Slow Arrival" to watch buffering happen',
+    seg1:'recv() #1 returns 37 bytes — cut off mid-hostname',
+    scan1:'Parser scans buffer for \\\\r\\\\n\\\\r\\\\n … not found yet. Waiting for more.',
+    seg2:'recv() #2 returns 37 more bytes — buffer now complete',
+    scan2:'Parser re-scans the WHOLE buffer from the start — finds \\\\r\\\\n\\\\r\\\\n!',
+    parsed:'Request line + headers parsed. Ready for body-length step.'
+  }[phase]||'';
+
+  if(phase==='seg1'){seg1Alpha=t;}
+  else if(phase==='scan1'){seg1Alpha=1;cursorX=t;}
+  else if(phase==='seg2'){seg1Alpha=1;seg2Alpha=t;}
+  else if(phase==='scan2'){seg1Alpha=1;seg2Alpha=1;cursorX=t;matchGlow=t>0.85?1:0;}
+  else if(phase==='parsed'){seg1Alpha=1;seg2Alpha=1;matchGlow=1;parsedAlpha=t;}
+
+  // draw the two segment arrivals as packets
+  const pktY=70;
+  ctx.globalAlpha=seg1Alpha;
+  ctx.fillStyle='rgba(56,189,248,.15)';ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;
+  ctx.fillRect(20,pktY,W*0.42,34);ctx.strokeRect(20,pktY,W*0.42,34);
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('segment #1 (37 bytes)',20+W*0.21,pktY+21);
+  ctx.globalAlpha=1;
+
+  ctx.globalAlpha=seg2Alpha;
+  ctx.fillStyle='rgba(74,222,128,.15)';ctx.strokeStyle=C.green;
+  ctx.fillRect(20+W*0.46,pktY,W*0.42,34);ctx.strokeRect(20+W*0.46,pktY,W*0.42,34);
+  ctx.fillStyle=C.green;
+  ctx.fillText('segment #2 (37 bytes)',20+W*0.46+W*0.21,pktY+21);
+  ctx.globalAlpha=1;
+
+  // buffer box
+  const bufY=130, bufH=90;
+  ctx.strokeStyle=C.border;ctx.lineWidth=1.5;
+  ctx.strokeRect(20,bufY,W-40,bufH);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('PARSE BUFFER (accumulated bytes)',28,bufY-8);
+
+  ctx.font='12px Source Code Pro,monospace';
+  let bufText='';
+  if(seg1Alpha>0) bufText+=seg1;
+  if(seg2Alpha>0) bufText+=seg2;
+  ctx.fillStyle=matchGlow?C.green:C.text;
+  const displayText=bufText.replace(/\\r\\n/g,'↵');
+  // wrap manually into ~2 lines
+  const mid=Math.ceil(displayText.length/2);
+  let splitAt=displayText.indexOf('↵',mid-6);
+  if(splitAt<0) splitAt=mid;
+  const line1=displayText.slice(0,splitAt+1);
+  const line2=displayText.slice(splitAt+1);
+  ctx.fillText(line1,32,bufY+30);
+  ctx.fillText(line2,32,bufY+52);
+
+  if(cursorX!==null){
+    const cx=28+ (W-56)*cursorX;
+    ctx.strokeStyle=C.gold;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(cx,bufY+8);ctx.lineTo(cx,bufY+bufH-8);ctx.stroke();
+    ctx.fillStyle=C.gold;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('scan →',cx,bufY+bufH+14);
+  }
+
+  if(parsedAlpha>0){
+    ctx.globalAlpha=parsedAlpha;
+    ctx.fillStyle='rgba(74,222,128,.12)';ctx.strokeStyle=C.green;ctx.lineWidth=1.5;
+    ctx.fillRect(20,bufY+bufH+26,W-40,32);ctx.strokeRect(20,bufY+bufH+26,W-40,32);
+    ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('✓ Complete request line + headers found — hand off to DETERMINE_BODY_LENGTH',W/2,bufY+bufH+47);
+    ctx.globalAlpha=1;
+  }
+
+  ctx.fillStyle=C.text;ctx.font='11px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(label,W/2,H-14);
+}
+
+function runBuffer(){
+  const phases=['seg1','scan1','seg2','scan2','parsed'];
+  const durations=[500,700,500,800,500];
+  let idx=0,start=performance.now();
+  document.getElementById('bufLabel').textContent='▶ Running buffering simulation…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawBufferScene(phases[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('bufLabel').textContent='▶ Done — click again to replay';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetBuffer(){
+  document.getElementById('bufLabel').textContent='▶ Watch a request line get reassembled from two TCP segments — click to run';
+  drawBufferScene('idle',0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetBuffer(); });
+window.addEventListener('resize',()=>{ resetBuffer(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inside V8 — How Your JavaScript Actually Runs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--gold);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+.compare-card.gold h4{color:var(--gold)} .compare-card.cyan h4{color:var(--cyan)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.ftag{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.78rem;padding:.1rem .45rem;border-radius:3px;margin:0 .1rem;vertical-align:middle;}
+.ftag.rend{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.gold{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+.ftag.purple{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.teal{background:rgba(13,148,136,.15);color:var(--teal);border:1px solid rgba(13,148,136,.3);}
+.ftag.red{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* pipeline flow (reused from Browser X-Ray) */
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--gold);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* BESPOKE: hidden-class shape-flow diagram */
+.shape-flow{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:1.2rem 0;}
+.shape-flow-label{font-family:'Source Code Pro',monospace;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;}
+.shape-box{background:var(--card);border:1.5px solid var(--gold2);border-radius:8px;padding:.7rem .95rem;min-width:112px;text-align:center;}
+.shape-box.slow{border-color:var(--red);}
+.shape-box .sb-title{font-family:'Source Code Pro',monospace;font-size:.75rem;color:var(--gold);font-weight:700;margin-bottom:.3rem;}
+.shape-box.slow .sb-title{color:var(--red)}
+.shape-box .sb-props{font-family:'Source Code Pro',monospace;font-size:.7rem;color:var(--muted);line-height:1.5;}
+.shape-arrow{color:var(--muted);font-size:1.1rem;flex-shrink:0;}
+.shape-flow-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.3rem 1.4rem;margin:1.2rem 0 1.8rem;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Where We Left Off"></a>
+  <a class="toc-dot" href="#parsing" title="Parsing"></a>
+  <a class="toc-dot" href="#ignition" title="Ignition"></a>
+  <a class="toc-dot" href="#turbofan" title="TurboFan"></a>
+  <a class="toc-dot" href="#hiddenclasses" title="Hidden Classes"></a>
+  <a class="toc-dot" href="#inlinecaches" title="Inline Caches"></a>
+  <a class="toc-dot" href="#gc" title="Garbage Collection"></a>
+  <a class="toc-dot" href="#eventloop" title="Event Loop"></a>
+  <a class="toc-dot" href="#compare" title="Side by Side"></a>
+  <a class="toc-dot" href="#whycare" title="Why It Matters"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">V8 Internals · Renderer Process Deep-Dive · A Browser X-Ray Companion</div>
+    <h1>Inside V8: How Your<br><span>JavaScript Actually Runs</span></h1>
+    <p class="hero-sub">You already know the renderer process runs Blink and V8, that your JavaScript is sandboxed, and that it all cooperates through an event loop. Fine — but what actually happens between the moment a <code>&lt;script&gt;</code> tag's bytes land in memory and the moment your code is genuinely, measurably fast? V8 has an entire internal pipeline for that, with names — Ignition, TurboFan, Scavenger — and a set of surprisingly mechanical reasons behind the performance advice you've heard a hundred times. Let's crack it open.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">JIT Compiler Tiers</div></div>
+      <div class="hero-stat"><div class="num">Map</div><div class="lbl">V8's Word For Hidden Class</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Macrotasks Run Before Microtasks Drain</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Heap Generations</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>That "V8 JS Engine" <span class="accent g">Pill You Skipped Past</span></h2>
+
+  <p class="reveal">Back in Browser X-Ray, we mapped the renderer process the same way we mapped everything else: a sandboxed, per-site worker running Blink and V8, forbidden from touching the filesystem or the network directly, cooperating with the rest of the page through a single-threaded event loop. That was the right altitude for that story — the renderer was one box on a much bigger diagram, and "V8 JS engine" was just a feature pill stuck inside it, sitting quietly next to "DOM" and "Blink engine."</p>
+
+  <p class="reveal">We're done zooming out. This time we zoom <em>into</em> that one pill. V8 isn't a black box that mysteriously "runs JavaScript" — it's a genuinely engineered system with a parser, two different compilers, a garbage collector with two heaps, and a caching scheme so central to real-world JS performance that half the "best practices" you've absorbed from blog posts are really just this one mechanism, described secondhand.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">📦 What's Already In Your Head</div>
+    You know a renderer sandboxes JS, that <code>fetch()</code> secretly goes through IPC, and that one blocking JS loop freezes a tab's whole UI because there's only one main thread. Good — hang onto all of that. Nothing here contradicts it. We're just opening the V8 box that was sitting inside the renderer the whole time.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: PARSING -->
+<section id="parsing">
+<div class="container">
+  <div class="section-num">01 — Before Any Code Runs</div>
+  <h2>V8 Barely <span class="accent g">Reads</span> Most of Your Code (At First)</h2>
+
+  <p class="reveal">Here's a question worth sitting with: a typical page loads a JS bundle full of functions — event handlers, utility helpers, framework internals, code for UI states the user may never even reach. What fraction of those functions actually get <em>called</em> during a typical page visit? Often a small one. V8's parser is built around exactly that observation.</p>
+
+  <p class="reveal">When V8 first sees your script, it doesn't fully parse every function body into a complete syntax tree up front. Instead it runs a fast, cheap <strong>pre-parse</strong> pass: just enough to find where each function starts and ends, record its parameter list and which outer variables it references, and confirm the syntax isn't broken. It deliberately does <em>not</em> build the full internal representation a function needs to actually execute.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">📄</div><div class="pipe-name">Source Bytes</div><div class="pipe-desc">Script arrives as raw UTF-16 text</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">👁️</div><div class="pipe-name">Pre-Parse</div><div class="pipe-desc">Find function boundaries, scopes, syntax errors — cheap &amp; lazy</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">⏳</div><div class="pipe-name">Deferred</div><div class="pipe-desc">Most function bodies stop right here, unparsed</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🌳</div><div class="pipe-name">Full Parse</div><div class="pipe-desc">Only happens the instant a function is actually <em>called</em></div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">⚙️</div><div class="pipe-name">AST → Bytecode</div><div class="pipe-desc">Handed to Ignition, covered next</div></div>
+  </div>
+
+  <p class="reveal">Only when a function is actually invoked for the first time does V8 go back and do the <strong>full parse</strong> — building the real abstract syntax tree needed to generate bytecode. This is called <strong>lazy compilation</strong>, and pre-parsing is what makes it cheap: V8 doesn't have to re-scan the whole file from scratch when a function finally runs, because pre-parsing already recorded exactly where it starts, where it ends, and what it closes over.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">⚡ Why Laziness Is a Load-Time Optimization</div>
+    Fully parsing every function into an AST is memory-hungry and CPU-hungry — ASTs are large, pointer-heavy structures, and building one for a function that <em>never runs</em> is pure waste. Multiply that by every unused utility function in a large bundle, and full eager parsing would visibly slow down page load for zero benefit. Pre-parsing lets V8 pay only a small "is this syntactically valid, and where are the boundaries" tax up front, and defer the expensive work to the moment it's actually justified — exactly when a function is called.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why the parens sometimes matter.</b> You may have seen JS minifiers wrap function expressions in extra parentheses, like <code>(function(){...})()</code>. Older V8 heuristics used that pattern as a hint that a function was about to be invoked immediately, nudging it to skip straight past the lazy path. Modern V8's heuristics have gotten smarter about detecting immediately-invoked functions on their own, but the underlying lazy/eager split those tricks were exploiting is still exactly the mechanism described above.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: IGNITION -->
+<section id="ignition">
+<div class="container">
+  <div class="section-num">02 — First Time a Function Runs</div>
+  <h2>Meet <span class="accent g">Ignition</span>, the Bytecode Interpreter</h2>
+
+  <p class="reveal">So a function just got called for the first time, got fully parsed into an AST — now what? You might assume V8 immediately compiles it down to optimized native machine code, the fastest possible form. It deliberately does <em>not</em>. That would be a trap.</p>
+
+  <p class="reveal">Optimized native machine code is large, slow to generate, and — this is the key part — only pays for itself if the function runs enough times to amortize the cost of producing it. Most functions on a typical page run once, or a handful of times, and then never again. Eagerly compiling <em>everything</em> straight to optimized machine code would mean spending real CPU time and real memory generating fast code for functions that will never benefit from being fast.</p>
+
+  <p class="reveal">So instead, V8's first tier is <strong>Ignition</strong>: a register-based bytecode interpreter. The AST is compiled into a compact bytecode format — a much smaller, simpler instruction set than native machine code — and Ignition just interprets that bytecode directly, instruction by instruction, the way a simple virtual machine would.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Why Bytecode First</h4>
+      Bytecode is fast and cheap to generate, and dramatically more compact in memory than native machine code for the same logic. For a function that runs once, this is close to the best possible deal: quick to produce, quick enough to execute once.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ The Cost</h4>
+      Interpreting bytecode instruction-by-instruction is inherently slower per-execution than running native machine code directly — there's dispatch overhead on every single instruction. Fine for code that runs a few times. Not fine for a loop that runs 500,000 times.
+    </div>
+  </div>
+
+  <p class="reveal">That tension — cheap-but-slower vs. expensive-but-faster — is exactly why V8 doesn't stop at Ignition. But there's a second job Ignition is quietly doing while it interprets: <strong>it watches.</strong> Every time a bytecode instruction touches a value, Ignition records what <em>kind</em> of value it actually was — was that <code>+</code> adding two small integers, two floats, or concatenating two strings? Was that property read on an object shaped like <em>this</em>, or shaped like <em>that</em>? This running record is called <strong>type feedback</strong>, and it's the fuel for the next tier.</p>
+
+  <div class="formula gold reveal">
+    <span class="label">The deal Ignition strikes</span>
+    Interpret now (slower per-run, cheap to start) + quietly record what types actually show up
+    <span class="sub">so a smarter compiler can specialize later — only for the functions that turn out to deserve it.</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: TURBOFAN -->
+<section id="turbofan">
+<div class="container">
+  <div class="section-num">03 — When Code Gets "Hot"</div>
+  <h2><span class="accent g">TurboFan</span>: Compiling for the Types You've Actually Seen</h2>
+
+  <p class="reveal">V8 keeps an invocation counter (roughly — call frequency and loop iteration counts both factor in) on every function running through Ignition. Once a function crosses a "this is being called a lot" threshold, V8 marks it as <strong>hot</strong> and hands it off to <strong>TurboFan</strong>, V8's optimizing JIT (just-in-time) compiler.</p>
+
+  <p class="reveal">TurboFan's job isn't to compile a generic, handles-anything version of your function. It compiles a version <em>specialized</em> for the exact types Ignition's type feedback already observed. If every call so far added two small integers, TurboFan doesn't emit code that checks "is this a number, a string, an object, or something else?" on every single execution — it emits lean native machine code that assumes both operands are small integers, skips the generic type-dispatch machinery entirely, and runs dramatically faster as a direct result.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="pipeLabel">▶ Watch a function move through V8's compiler tiers — click to run</div>
+    <canvas id="pipeCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn cyan" onclick="runPipeline('cold')">▶ Run a Cold Function (called once)</button>
+    <button class="ctrl-btn gold" onclick="runPipeline('hot')">▶ Run a Hot Function (called 100,000×)</button>
+    <button class="ctrl-btn red" onclick="resetPipeline()">Reset</button>
+  </div>
+
+  <p class="reveal">This is what "speculative" optimization means: TurboFan is betting that the future will look like the recent past. It bakes that bet directly into the machine code it generates, complete with lightweight guard checks that verify the bet is still true on every call — and an escape hatch for when it isn't. That escape hatch is <strong>deoptimization</strong>, and it's important enough to get its own section shortly.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🎲 "Speculative" Is the Load-Bearing Word</div>
+    TurboFan doesn't prove your function will always receive small integers — it can't, JavaScript is dynamically typed. It <em>speculates</em>, based on what Ignition actually observed, and generates machine code that is only correct under that assumption. The guard checks it inserts are cheap precisely because they only need to confirm the bet, not re-derive the answer from scratch the way a fully generic implementation would.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: HIDDEN CLASSES -->
+<section id="hiddenclasses">
+<div class="container">
+  <div class="section-num">04 — The Shape Underneath Every Object</div>
+  <h2>Hidden Classes: Why <span class="accent g">Property Order Isn't Free</span></h2>
+
+  <p class="reveal">Quick question: are <code>{x: 1, y: 2}</code> and <code>{y: 2, x: 1}</code> the same to V8? They have the same keys, the same values — surely it doesn't matter which order you wrote them in? It matters a lot, and understanding why is the single most useful piece of V8 mental model you can carry around.</p>
+
+  <p class="reveal">JavaScript objects are dynamic — properties can be added, removed, reordered at runtime. A naive implementation would store every object's properties in something like a hash map, and look up a value by hashing the property name every single time. That's correct, but slow — far slower than the fixed-offset memory reads that make languages like C or Java fast at field access.</p>
+
+  <p class="reveal">V8's answer is <strong>hidden classes</strong> (internally, V8 calls them <strong>Maps</strong> — an unfortunate name collision with JS's own <code>Map</code>, so most explanations, including this one, say "hidden class" or "shape"). Every object secretly carries a pointer to a hidden class that encodes exactly one thing: the precise sequence of property names that were added to it, and the fixed memory offset where each one lives.</p>
+
+  <div class="shape-flow-wrap reveal">
+    <div class="shape-flow-label">Fast path — same constructor, properties always assigned in the same order</div>
+    <div class="shape-flow">
+      <div class="shape-box"><div class="sb-title">C0</div><div class="sb-props">{ }<br>empty object</div></div>
+      <div class="shape-arrow">→ add x →</div>
+      <div class="shape-box"><div class="sb-title">C1</div><div class="sb-props">x: offset 0</div></div>
+      <div class="shape-arrow">→ add y →</div>
+      <div class="shape-box"><div class="sb-title">C2</div><div class="sb-props">x: offset 0<br>y: offset 1</div></div>
+    </div>
+    <p style="margin:1rem 0 0;font-size:.88rem;color:var(--muted)">A second object built by the same constructor, assigning <code>x</code> then <code>y</code> in the same order, walks the exact same C0 → C1 → C2 transition chain and ends up sharing hidden class <strong>C2</strong>. V8 already generated fast, offset-based access code for C2 — the second object gets it for free.</p>
+
+    <div class="shape-flow-label" style="margin-top:1.6rem">Slow path — properties assigned in a different order</div>
+    <div class="shape-flow">
+      <div class="shape-box slow"><div class="sb-title">C0</div><div class="sb-props">{ }<br>empty object</div></div>
+      <div class="shape-arrow">→ add y →</div>
+      <div class="shape-box slow"><div class="sb-title">C1′</div><div class="sb-props">y: offset 0</div></div>
+      <div class="shape-arrow">→ add x →</div>
+      <div class="shape-box slow"><div class="sb-title">C2′</div><div class="sb-props">y: offset 0<br>x: offset 1</div></div>
+    </div>
+    <p style="margin:1rem 0 0;font-size:.88rem;color:var(--muted)">Same final key set, <strong>different hidden class</strong> (C2′ ≠ C2), because the transition chain that produced it was different. Code optimized for C2 doesn't apply to a C2′ object — V8 has to treat them as genuinely different shapes.</p>
+  </div>
+
+  <pre class="reveal"><span class="tag">JS</span><code><span class="kw">function</span> <span class="fn">Point</span>(x, y) {
+  <span class="kw">this</span>.x = x;   <span class="cm">// every Point: hidden class transition C0 → C1</span>
+  <span class="kw">this</span>.y = y;   <span class="cm">// every Point: hidden class transition C1 → C2</span>
+}
+<span class="kw">const</span> <span class="var">a</span> = <span class="kw">new</span> <span class="cls">Point</span>(<span class="num">1</span>, <span class="num">2</span>);   <span class="cm">// shares hidden class C2</span>
+<span class="kw">const</span> <span class="var">b</span> = <span class="kw">new</span> <span class="cls">Point</span>(<span class="num">3</span>, <span class="num">4</span>);   <span class="cm">// shares hidden class C2 — fast!</span>
+
+<span class="kw">const</span> <span class="var">c</span> = {};
+c.y = <span class="num">2</span>;             <span class="cm">// different order</span>
+c.x = <span class="num">1</span>;             <span class="cm">// ends up on a DIFFERENT hidden class than a/b</span></code></pre>
+
+  <p class="reveal">Deleting a property is worse than reordering it. <code>delete obj.x</code> can't just be "undo a transition" — V8 typically has to bail the object into a much slower <strong>dictionary mode</strong>, where it genuinely does fall back to hash-map-style property storage, giving up the fixed-offset fast path entirely for that object.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🛋️ The Furniture Floor-Plan Analogy</div>
+    Think of a hidden class as a moving company's floor plan for a specific apartment layout: "couch goes in the northwest corner, bookshelf against the east wall." If every apartment on the same floor plan gets furnished in the same order, the movers can work from memory — no need to ask where anything goes, they just know the offset. Build the same furniture in a different order, or rip a piece out later, and you no longer have "the same floor plan" — the movers have to stop, look around, and figure out the layout from scratch. That look-around is the slow path.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: INLINE CACHES -->
+<section id="inlinecaches">
+<div class="container">
+  <div class="section-num">05 — Remembering the Last Lookup</div>
+  <h2>Inline Caches, and What <span class="accent g">Deoptimization</span> Really Means</h2>
+
+  <p class="reveal">Hidden classes explain how property lookups <em>can</em> be fast. <strong>Inline caches (ICs)</strong> are the mechanism that actually makes a specific line of your code fast, by remembering its own recent history.</p>
+
+  <p class="reveal">Every property access in your code — every <code>obj.x</code> — is a specific bytecode location V8 can attach a small cache to. The first few times that exact line executes, V8 records: "the object here had hidden class C2, and the property I wanted lived at offset 0." The next time that same line runs, V8 checks whether the incoming object still has hidden class C2. If yes, it skips the lookup entirely and reads offset 0 directly. No search, no hashing — just a pointer-plus-offset memory read, guarded by one cheap comparison.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>IC State</th><th>What It Means</th><th>Speed</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Monomorphic</td><td>This call site has only ever seen <strong>one</strong> hidden class</td><td class="pos">Fastest — direct offset read</td></tr>
+        <tr><td class="gold">Polymorphic</td><td>This call site has seen a <strong>small number</strong> (roughly up to 4) of distinct hidden classes</td><td class="hl">Still fast — checks a short list</td></tr>
+        <tr><td class="gold">Megamorphic</td><td>This call site has seen <strong>many</strong> different hidden classes</td><td class="neg">Slow — falls back to a generic, dictionary-style lookup</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">This is also exactly the feedback TurboFan reads when deciding how to specialize a hot function — a monomorphic call site gives TurboFan one shape to bet on; a megamorphic one gives it nothing worth speculating on, so it either compiles slower generic code for that spot or declines to optimize it as aggressively.</p>
+
+  <h3>So what happens when the bet is wrong?</h3>
+
+  <p class="reveal">Say TurboFan already compiled an optimized, specialized version of <code>add(a, b)</code> that assumes both arguments are small integers — because that's all it ever saw during profiling. Now your code calls <code>add("1", "2")</code>. The optimized machine code's guard check notices immediately: this isn't the type it was built for.</p>
+
+  <p class="reveal">V8 can't patch the optimized code on the fly to also handle strings — it was generated assuming integers, all the way down. So it does the only safe thing: it throws the optimized code away, jumps back into the slower Ignition interpreter at the equivalent point in the bytecode, and lets the function keep running correctly, just slowly again. This is called <strong>deoptimization</strong>, or "bailing out."</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label">▶ Same pipeline canvas, one step further — trigger a bailout</div>
+    <canvas id="deoptCanvas" height="220"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runDeopt()">▶ Run add(1, 2) 100,000× then add("1","2")</button>
+    <button class="ctrl-btn red" onclick="resetDeopt()">Reset</button>
+  </div>
+
+  <p class="reveal">The function then has to re-warm from the interpreter — Ignition re-collects type feedback, and if the function gets hot again, TurboFan may recompile it, this time accounting for the wider range of types actually seen (or sometimes giving up on aggressive specialization for that call site entirely). A function that deoptimizes repeatedly on the same call site can end up permanently stuck running slower, unoptimized code, because V8 concludes further optimization attempts aren't paying off.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🚫 Where the "Best Practices" Actually Come From</div>
+    "Don't change an object's shape after creation" and "keep a function's argument types consistent" aren't arbitrary style rules — they're direct consequences of the two mechanisms above. Change an object's shape and you force a hidden-class transition, potentially turning a monomorphic call site polymorphic or megamorphic. Feed a hot, type-specialized function a new type and you trigger a deoptimization, discarding real compiled work and forcing V8 to re-profile from scratch. The advice is downstream of the mechanism, not the other way around.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: GARBAGE COLLECTION -->
+<section id="gc">
+<div class="container">
+  <div class="section-num">06 — Cleaning Up After Your Code</div>
+  <h2>Garbage Collection: <span class="accent g">Two Heaps, Two Speeds</span></h2>
+
+  <p class="reveal">Every object, closure, and array your JS creates has to live somewhere, and eventually most of it becomes unreachable garbage that needs reclaiming. V8's garbage collector is built around one empirical observation, sometimes called the <strong>generational hypothesis</strong>: <em>most objects die young.</em> A temporary object created inside a loop iteration, a short-lived closure, an intermediate array in a <code>.map().filter()</code> chain — the overwhelming majority of allocations become garbage almost immediately, while a small minority (a cache, a long-lived DOM-backing object, application state) survive for the life of the page.</p>
+
+  <p class="reveal">V8 splits its heap in two to exploit that pattern directly.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Young Generation</span><span class="fam-count">small, frequent</span></div>
+      <div class="fam-desc">A small nursery region where every new object is born. Collected extremely often by the <strong>Scavenger</strong>, a fast copying collector that only has to scan a small area of memory.</div>
+      <div class="feat-list"><span class="feat-pill ftag rend">semi-space copy</span><span class="feat-pill ftag rend">minor GC</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Old Generation</span><span class="fam-count">large, infrequent</span></div>
+      <div class="fam-desc">Where objects that survive a couple of young-generation collections get <strong>promoted</strong>. Collected far less often by a mark-sweep-compact collector, because scanning and compacting the whole thing is genuinely expensive.</div>
+      <div class="feat-list"><span class="feat-pill ftag gold">mark-sweep-compact</span><span class="feat-pill ftag gold">major GC</span></div>
+    </div>
+  </div>
+
+  <p class="reveal">The Scavenger works by splitting the young generation into two halves — "from-space" and "to-space." When it runs, it copies every still-reachable (live) object out of from-space into to-space, then instantly treats the entire rest of from-space as reclaimed, no per-object bookkeeping required. Because most young-generation objects are already dead by the time a scavenge runs, this copy is cheap: it does work proportional to the (small) number of <em>survivors</em>, not the (large) number of objects that were allocated.</p>
+
+  <p class="reveal">An object that survives being copied a couple of times gets promoted into the old generation, on the theory that anything living this long is probably going to stick around. The old generation is collected with a full mark-sweep-compact pass: mark every reachable object starting from GC roots, sweep away everything unmarked, and periodically compact survivors together to avoid fragmenting memory into unusable slivers. This is more thorough — and more expensive — which is exactly why it runs far less often, and why V8's Orinoco project spent years making as much of this old-generation work as possible run <em>incrementally</em> and <em>concurrently</em> on background threads, specifically to keep it from blocking your main thread for long stretches.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">Why generational GC beats one naive full-heap collector</span>
+    Cost of a naive full-collection ∝ total live heap size, every single time
+    <br>Cost of a young-gen scavenge ∝ number of survivors in a small nursery, most of the time
+    <span class="sub">Doing the cheap, frequent thing (scavenge) far more often than the expensive, thorough thing (mark-compact) is what keeps average GC pause times low.</span>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>So does GC ever still cause visible jank?</b> Yes — a large old-generation mark-compact pass, even partially concurrent, can still show up as a stutter, especially on memory-pressured pages with lots of long-lived objects. This is part of why keeping large, long-lived object graphs lean is real performance advice, not superstition: it's directly shrinking the amount of work the less-frequent, more-expensive collector has to do.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: EVENT LOOP -->
+<section id="eventloop">
+<div class="container">
+  <div class="section-num">07 — Ordering Everything V8 Runs</div>
+  <h2>The Event Loop, <span class="accent g">Precisely</span></h2>
+
+  <p class="reveal">You already know a renderer's main thread runs one task at a time from a queue. Here's the precise version, because "a queue" is actually <em>two</em> queues with a strict ordering rule between them, and that rule explains a piece of behavior every JS developer eventually trips over.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Call Stack</span><span class="fam-count">synchronous</span></div>
+      <div class="fam-desc">Where currently-executing function calls live, innermost on top. While anything is on the stack, nothing else runs — this is the "one slow loop freezes the tab" stack.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Microtask Queue</span><span class="fam-count">drains fully, every time</span></div>
+      <div class="fam-desc">Holds Promise <code>.then()</code>/<code>.catch()</code>/<code>.finally()</code> callbacks and <code>queueMicrotask()</code> callbacks. Once the call stack empties, V8 runs <strong>every</strong> microtask currently queued — including new ones added by microtasks that just ran — before doing anything else.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Macrotask Queue</span><span class="fam-count">one per loop turn</span></div>
+      <div class="fam-desc">Holds <code>setTimeout</code>/<code>setInterval</code> callbacks, I/O completion callbacks, and UI events. After the microtask queue is fully empty, the event loop takes exactly <strong>one</strong> macrotask, runs it, then checks the microtask queue again before taking the next.</div>
+    </div>
+  </div>
+
+  <p class="reveal">That "microtasks always fully drain before the next macrotask" rule is not a minor implementation detail — it's a hard guarantee of the spec, and it's why <code>Promise.resolve().then(...)</code> reliably beats <code>setTimeout(fn, 0)</code> to the console, no matter how fast the timer is.</p>
+
+  <pre class="reveal"><span class="tag">JS</span><code><span class="fn">console</span>.log(<span class="str">'A'</span>);
+
+<span class="fn">setTimeout</span>(() => <span class="fn">console</span>.log(<span class="str">'B'</span>), <span class="num">0</span>);   <span class="cm">// → macrotask queue</span>
+
+<span class="var">Promise</span>.resolve().then(() => <span class="fn">console</span>.log(<span class="str">'C'</span>)); <span class="cm">// → microtask queue</span>
+
+<span class="fn">console</span>.log(<span class="str">'D'</span>);
+
+<span class="cm">// Output, every single time: A, D, C, B</span></code></pre>
+
+  <p class="reveal">Walk it in order: <code>'A'</code> and <code>'D'</code> run synchronously on the call stack, back to back — the <code>setTimeout</code> and <code>.then()</code> calls only <em>schedule</em> work, they don't run it yet. Once the synchronous code finishes and the call stack is empty, V8 checks the microtask queue first, always — so <code>'C'</code> runs. Only once the microtask queue is completely empty does the event loop pull the next macrotask off its queue — so <code>'B'</code> runs last, even though it was scheduled with a 0ms delay and scheduled <em>before</em> the promise callback.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="loopLabel">▶ Run the snippet above and watch execution order — click to run</div>
+    <canvas id="loopCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runEventLoop()">▶ Run the Example</button>
+    <button class="ctrl-btn red" onclick="resetEventLoop()">Reset</button>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔁 Why "0ms" Never Meant "Immediately"</div>
+    <code>setTimeout(fn, 0)</code> has always meant "put <code>fn</code> on the macrotask queue as soon as possible," never "run <code>fn</code> right now." It still has to wait for the current synchronous code to finish <em>and</em> the entire microtask queue to fully drain. A page that queues a lot of promise work can genuinely starve macrotasks for a while — which is also why an infinite chain of <code>.then()</code> calls that keeps re-queueing itself can freeze a tab just as effectively as an infinite <code>while</code> loop, without ever technically blocking on one giant synchronous call.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: SIDE BY SIDE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">08 — Side by Side</div>
+  <h2>Ignition <span class="accent g">vs.</span> TurboFan</h2>
+
+  <p class="reveal">Worth having the two tiers side by side, because the tradeoff between them is the entire reason V8 has two compilers instead of one.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Ignition</th><th>TurboFan</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Role</td><td class="hl">Baseline bytecode interpreter</td><td class="hl">Optimizing JIT compiler</td></tr>
+        <tr><td class="gold">Output</td><td>Compact bytecode, interpreted</td><td>Specialized native machine code</td></tr>
+        <tr><td class="gold">Runs for</td><td>Every function, from its first call</td><td>Only functions V8 marks "hot"</td></tr>
+        <tr><td class="gold">Compile cost</td><td class="pos">Very low</td><td class="neg">Higher — pays off only if reused</td></tr>
+        <tr><td class="gold">Per-execution speed</td><td class="neg">Slower (dispatch overhead)</td><td class="pos">Much faster (type-specialized)</td></tr>
+        <tr><td class="gold">Type assumptions</td><td>None — fully generic</td><td>Speculative, based on observed feedback</td></tr>
+        <tr><td class="gold">What feeds it</td><td>The AST from a full parse</td><td>Ignition's own type feedback / IC data</td></tr>
+        <tr><td class="gold">Can be discarded?</td><td>N/A — it's the fallback</td><td>Yes — deoptimizes back to Ignition on a bad guess</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Whole Point, in One Line</div>
+    Ignition makes sure <em>every</em> function is cheap to start running. TurboFan makes sure the small minority of functions that run a lot become genuinely fast — without ever paying that optimization cost for the majority that don't. Two tiers exist because "cheap to start" and "fast once hot" are different engineering goals, and no single compiler design is great at both simultaneously.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 9: WHY IT MATTERS -->
+<section id="whycare">
+<div class="container">
+  <div class="section-num">09 — Tying It All Together</div>
+  <h2>Why This Actually Changes How You <span class="accent g">Write Code</span></h2>
+
+  <p class="reveal">None of this is trivia. Once the mechanism clicks, a whole set of JS performance folklore stops being "rules someone told me" and starts being "obvious consequences of how V8 is built."</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🏗️</div><div class="lbl">Construct objects with the same property order every time</div></div>
+    <div class="stat-card"><div class="val">🎯</div><div class="lbl">Keep a hot function's argument types consistent</div></div>
+    <div class="stat-card"><div class="val">🧹</div><div class="lbl">Avoid deleting properties — set to undefined instead if you must</div></div>
+    <div class="stat-card"><div class="val">⏱️</div><div class="lbl">A microtask storm can starve timers exactly like a sync loop</div></div>
+  </div>
+
+  <p class="reveal">"Give objects a consistent shape" means: give V8's hidden-class machinery a chance to reuse work across your instances instead of fragmenting into dozens of near-identical shapes. "Don't polymorphize hot functions" means: don't force a monomorphic inline cache into polymorphic or megamorphic territory, and don't hand TurboFan's speculative guess a reason to deoptimize. "Watch out for long promise chains blocking timers" means: remember the microtask queue always drains completely before the next macrotask, every single time, no exceptions.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>V8 gets JavaScript fast by being lazy where laziness is free (pre-parsing, Ignition's cheap bytecode), by speculating aggressively where speculation is safe (TurboFan's type-specialized machine code, backed by hidden classes and inline caches), and by cleaning up memory at two different speeds for two different kinds of garbage — and almost every piece of "JS performance advice" you've heard is just a human-readable description of one of those mechanisms.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 10: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent g">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Pre-Parse</div><div class="glossary-def">V8's fast first pass over a script: finds function boundaries and checks syntax without building a full AST, so full parsing can be deferred until a function is actually called.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Lazy Compilation</div><div class="glossary-def">Deferring the expensive full parse + bytecode generation of a function until the moment it's first invoked, instead of doing it eagerly for the whole script up front.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Ignition</div><div class="glossary-def">V8's baseline tier: compiles the AST to compact bytecode and interprets it directly. Cheap to start, slower per-execution than optimized machine code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TurboFan</div><div class="glossary-def">V8's optimizing JIT compiler. Compiles hot functions into native machine code specialized for the types observed during interpretation.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Type Feedback</div><div class="glossary-def">The record Ignition keeps, per call site, of what types of values actually flowed through it — the raw data TurboFan speculates from.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hidden Class (Map / Shape)</div><div class="glossary-def">V8's internal descriptor for an object's exact property layout: the sequence properties were added in, and the fixed memory offset of each one.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hidden Class Transition</div><div class="glossary-def">Moving from one hidden class to another as a property is added, typically triggered on the first few objects built by a given constructor — later objects of the same shape reuse the resulting chain.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Inline Cache (IC)</div><div class="glossary-def">A per-call-site cache remembering "the last hidden class(es) seen here, and where the property lived" — monomorphic (1 shape), polymorphic (a few), or megamorphic (many, slow).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Deoptimization ("Bailout")</div><div class="glossary-def">Discarding a TurboFan-optimized, type-specialized function when it receives a type its compiled guess didn't cover, falling back to Ignition and re-profiling.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Generational Hypothesis</div><div class="glossary-def">The empirical observation that most objects die young — the design premise behind splitting the heap into young and old generations.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Scavenger</div><div class="glossary-def">V8's young-generation collector: a fast, frequent copying collector that moves live objects between two semi-spaces and reclaims the rest instantly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Microtask Queue</div><div class="glossary-def">The queue holding Promise callbacks and queueMicrotask() work, guaranteed to fully drain before the event loop runs the next macrotask.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Inside V8 · A companion deep-dive to <strong>Browser X-Ray</strong> in the OS Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same renderer process, one pill zoomed all the way in.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── COMPILER PIPELINE CANVAS ────────────────────────────────────────────────────
+const pipeStages=[
+  {key:'source', label:'Source', x:0.08},
+  {key:'preparse', label:'Pre-Parse', x:0.24},
+  {key:'ignition', label:'Ignition\n(bytecode)', x:0.42},
+  {key:'profile', label:'Profiling', x:0.6},
+  {key:'turbofan', label:'TurboFan', x:0.78},
+  {key:'optimized', label:'Optimized', x:0.94},
+];
+
+function drawPipeline(t,stageIdx,mode,caption){
+  const canvas=document.getElementById('pipeCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const trackY=H*0.42;
+  ctx.strokeStyle='rgba(122,155,191,.35)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(W*0.06,trackY);ctx.lineTo(W*0.96,trackY);ctx.stroke();
+
+  const nStages = mode==='cold' ? pipeStages.slice(0,3) : pipeStages;
+  nStages.forEach((s,i)=>{
+    const x=W*s.x, y=trackY;
+    const active = i<=stageIdx;
+    const col = i===4||i===5 ? C.gold : C.cyan;
+    ctx.beginPath();ctx.arc(x,y,20,0,Math.PI*2);
+    ctx.fillStyle = active ? col+'33' : 'rgba(122,155,191,.08)';
+    ctx.fill();
+    ctx.strokeStyle = active ? col : C.muted;
+    ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle = active ? col : C.muted;
+    ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    const lines=s.label.split('\n');
+    lines.forEach((l,li)=>ctx.fillText(l,x,y+H*0.14+li*11));
+  });
+
+  if(mode==='cold'){
+    ctx.fillStyle=C.muted;ctx.font='11px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText('A cold function called once never leaves Ignition — no need for anything heavier',W/2,H*0.78);
+  }
+
+  // moving dot
+  if(stageIdx>=0){
+    const stages = mode==='cold' ? pipeStages.slice(0,3) : pipeStages;
+    const from = stages[Math.max(0,stageIdx-1)] || stages[0];
+    const to = stages[stageIdx];
+    const fx=W*from.x, tx=W*to.x;
+    const dx = stageIdx===0 ? tx : fx+(tx-fx)*t;
+    ctx.beginPath();ctx.arc(dx,trackY,9,0,Math.PI*2);
+    ctx.fillStyle= stageIdx>=4 ? C.gold : C.cyan;
+    ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(caption||'',W/2,H*0.9);
+}
+
+function runPipeline(mode){
+  document.getElementById('pipeLabel').textContent = mode==='cold'
+    ? '▶ Running a function called exactly once…'
+    : '▶ Running a function called 100,000 times…';
+  const captions = mode==='cold'
+    ? ['Bytes arrive','Pre-parse finds boundaries','Full-parsed + interpreted once by Ignition — done']
+    : ['Bytes arrive','Pre-parse finds boundaries','Interpreted by Ignition, gathering type feedback','Call count crosses the "hot" threshold','TurboFan compiles a type-specialized version','Now running optimized native machine code'];
+  const stages = mode==='cold' ? [0,1,2] : [0,1,2,3,4,5];
+  let idx=0,start=performance.now();
+  function step(now){
+    const dur=550;
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur);
+    drawPipeline(t,stages[idx],mode,captions[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=stages.length){
+        document.getElementById('pipeLabel').textContent='▶ Complete — click a button to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetPipeline(){
+  document.getElementById('pipeLabel').textContent='▶ Watch a function move through V8\'s compiler tiers — click to run';
+  drawPipeline(0,-1,'hot','');
+}
+
+// ── DEOPT CANVAS ─────────────────────────────────────────────────────────────────
+function drawDeopt(phase,t){
+  const canvas=document.getElementById('deoptCanvas');
+  const W=gW(canvas),H=220;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=W*0.08, rightX=W*0.62;
+  // Ignition box
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;
+  ctx.strokeRect(leftX,H*0.28,W*0.32,H*0.42);
+  ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('IGNITION',leftX+W*0.16,H*0.24);
+  // TurboFan box
+  const tfCol = phase==='deopting'||phase==='deopted' ? C.red : C.gold;
+  ctx.strokeStyle=tfCol;
+  ctx.strokeRect(rightX,H*0.28,W*0.32,H*0.42);
+  ctx.fillStyle=tfCol;
+  ctx.fillText('TURBOFAN (optimized add)',rightX+W*0.16,H*0.24);
+
+  const captions={
+    idle:'Click to run add(1,2) many times, then add("1","2")',
+    warm:'add(1,2) × 100,000 — Ignition profiles: always small integers',
+    compiled:'TurboFan compiles a version specialized for small integers',
+    fast:'Optimized code runs — fast, guarded by a cheap type check',
+    deopting:'add("1","2") called — guard check fails, assumption broken',
+    deopted:'Optimized code discarded — execution falls back to Ignition'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H*0.92);
+
+  let dotX=leftX+W*0.16, dotY=H*0.49, col=C.cyan;
+  if(phase==='warm'){dotX=leftX+W*0.16;dotY=H*0.49;col=C.cyan;}
+  else if(phase==='compiled'){dotX=leftX+W*0.16+(rightX-leftX)*t;dotY=H*0.49;col=C.gold;}
+  else if(phase==='fast'){dotX=rightX+W*0.16;dotY=H*0.49;col=C.gold;}
+  else if(phase==='deopting'){dotX=rightX+W*0.16;dotY=H*0.49;col=C.red;}
+  else if(phase==='deopted'){dotX=rightX+W*0.16-(rightX-leftX)*t;dotY=H*0.49;col=C.red;}
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function runDeopt(){
+  const phases=['warm','compiled','fast','deopting','deopted'];
+  const durations=[500,500,450,500,550];
+  let idx=0,start=performance.now();
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDeopt(phases[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length) return;
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDeopt(){ drawDeopt('idle',0); }
+
+// ── EVENT LOOP CANVAS ────────────────────────────────────────────────────────────
+function drawEventLoop(lines,stackContent,microContent,macroContent,output,highlightIdx){
+  const canvas=document.getElementById('loopCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const colW=W*0.31, gap=W*0.02, x0=W*0.02;
+  const boxes=[
+    {label:'CALL STACK',x:x0,col:C.red,content:stackContent},
+    {label:'MICROTASK QUEUE',x:x0+colW+gap,col:C.gold,content:microContent},
+    {label:'MACROTASK QUEUE',x:x0+2*(colW+gap),col:C.cyan,content:macroContent},
+  ];
+  boxes.forEach(b=>{
+    ctx.strokeStyle=b.col;ctx.lineWidth=1.5;
+    ctx.strokeRect(b.x,H*0.06,colW,H*0.52);
+    ctx.fillStyle=b.col;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(b.label,b.x+colW/2,H*0.03+14);
+    ctx.font='11px Source Code Pro,monospace';
+    b.content.forEach((c,i)=>ctx.fillText(c,b.x+colW/2,H*0.14+i*18));
+  });
+
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('OUTPUT LOG:',x0,H*0.7);
+  ctx.fillStyle=C.green;ctx.font='bold 14px Source Code Pro,monospace';
+  ctx.fillText(output.join('  →  '),x0,H*0.78);
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(lines,W/2,H*0.93);
+}
+
+function runEventLoop(){
+  const label=document.getElementById('loopLabel');
+  const steps=[
+    {stack:['console.log(\'A\')'],micro:[],macro:[],out:[],cap:'Call stack runs console.log(\'A\') synchronously'},
+    {stack:[],micro:[],macro:[],out:['A'],cap:'\'A\' printed — stack empties'},
+    {stack:['setTimeout(...)'],micro:[],macro:[],out:['A'],cap:'setTimeout schedules callback B on the macrotask queue'},
+    {stack:[],micro:[],macro:['() => log(\'B\')'],out:['A'],cap:'Macrotask queue now holds B — not run yet'},
+    {stack:['Promise.then(...)'],micro:[],macro:['() => log(\'B\')'],out:['A'],cap:'.then() schedules callback C on the microtask queue'},
+    {stack:[],micro:['() => log(\'C\')'],macro:['() => log(\'B\')'],out:['A'],cap:'Microtask queue now holds C — not run yet'},
+    {stack:['console.log(\'D\')'],micro:['() => log(\'C\')'],macro:['() => log(\'B\')'],out:['A'],cap:'Call stack runs console.log(\'D\') synchronously'},
+    {stack:[],micro:['() => log(\'C\')'],macro:['() => log(\'B\')'],out:['A','D'],cap:'\'D\' printed — stack empties again, script\'s sync part is done'},
+    {stack:['() => log(\'C\')'],micro:[],macro:['() => log(\'B\')'],out:['A','D'],cap:'Stack is empty → microtask queue checked FIRST → C runs'},
+    {stack:[],micro:[],macro:['() => log(\'B\')'],out:['A','D','C'],cap:'\'C\' printed — microtask queue is now fully empty'},
+    {stack:['() => log(\'B\')'],micro:[],macro:[],out:['A','D','C'],cap:'Microtask queue empty → NOW take one macrotask → B runs'},
+    {stack:[],micro:[],macro:[],out:['A','D','C','B'],cap:'\'B\' printed last — final order: A, D, C, B'},
+  ];
+  let idx=0;
+  function step(){
+    const s=steps[idx];
+    drawEventLoop(s.cap,s.stack,s.micro,s.macro,s.out);
+    label.textContent='▶ Step '+(idx+1)+' of '+steps.length;
+    idx++;
+    if(idx<steps.length){ setTimeout(step,900); }
+    else{ label.textContent='▶ Complete — final order A, D, C, B — click Run to replay'; }
+  }
+  step();
+}
+function resetEventLoop(){
+  document.getElementById('loopLabel').textContent='▶ Run the snippet above and watch execution order — click to run';
+  drawEventLoop('Click "Run the Example" to step through the snippet above',[],[],[],[]);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetPipeline(); resetDeopt(); resetEventLoop(); });
+window.addEventListener('resize',()=>{ resetPipeline(); resetDeopt(); resetEventLoop(); });
+</script>
+</body>
+</html>

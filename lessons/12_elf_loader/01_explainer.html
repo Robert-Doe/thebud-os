@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The ELF Format — How an Executable Describes Itself</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#93c5fd;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* Dossier component — field-by-field header breakdown */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* Byte-grid component for the header parse canvas legend */
+.byte-legend{display:flex;gap:.9rem;flex-wrap:wrap;margin:1rem 0 0;font-family:'Source Code Pro',monospace;font-size:.72rem;color:var(--muted);}
+.byte-legend span{display:inline-flex;align-items:center;gap:.4rem;}
+.byte-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Before ELF"></a>
+  <a class="toc-dot" href="#whatiself" title="What Is ELF"></a>
+  <a class="toc-dot" href="#header" title="The ELF Header"></a>
+  <a class="toc-dot" href="#twotables" title="Two Header Tables"></a>
+  <a class="toc-dot" href="#phdrs" title="Program Headers"></a>
+  <a class="toc-dot" href="#shdrs" title="Section Headers"></a>
+  <a class="toc-dot" href="#otherformats" title="Other Formats"></a>
+  <a class="toc-dot" href="#parse" title="Parse a Header"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · ELF Format · Header Anatomy</div>
+    <h1>The File That<br><span>Describes Itself</span></h1>
+    <p class="hero-sub">A running program on disk isn't a mystery blob the kernel has to guess about — it's a structured, self-describing document. Somewhere in the first few dozen bytes of every Linux, BSD, or bob_os executable is a table of contents that tells the loader exactly what architecture this is, exactly where execution should begin, and exactly where to find the instructions for turning the rest of the file into a running process. That format is <strong>ELF</strong>, and this page is about reading its opening pages.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0x7F454C46</div><div class="lbl">Magic Number at Offset 0</div></div>
+      <div class="hero-stat"><div class="num">52</div><div class="lbl">Bytes in an ELF32 Header</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Header Tables — Program &amp; Section</div></div>
+      <div class="hero-stat"><div class="num">32</div><div class="lbl">Bytes per Program Header Entry</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP / BEFORE ELF -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Before You Had a Format</div>
+  <h2>What Would a Loader Do <span class="accent">Without ELF</span>?</h2>
+  <p class="reveal">Rewind to the earliest bob_os lessons: the kernel itself is a <strong>flat binary</strong>. <code>linker.ld</code> says "start at 0x1000," GRUB or the bootloader copies the whole image to that address, and execution begins at byte zero. That works fine when there's exactly one thing being loaded, built by one team, with one linker script everyone agrees on in advance.</p>
+  <p class="reveal">It falls apart the moment you want a general-purpose loader — a piece of kernel code that can take <em>any</em> compiled program, from any compiler, targeting any architecture, and run it correctly. A flat binary carries no metadata. There's no way to ask it "what CPU are you for," "where should you start executing," or "which parts of you need write permission versus which parts are pure, shareable code." The loader would have to already know all of that in advance, which defeats the entire point of a loader.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A file format for executables is really just an agreement: <strong>the compiler and linker promise to write certain facts in certain places, and the loader promises to read them from those exact places.</strong> Once both sides honor that contract, the loader never needs to know anything about the program in advance — it just reads the file's own description of itself. ELF <em>is</em> that contract.
+  </div>
+</div>
+</section>
+
+<!-- WHAT IS ELF -->
+<section id="whatiself">
+<div class="container">
+  <div class="section-num">01 — Naming the Thing</div>
+  <h2>What <span class="accent">ELF</span> Actually Is</h2>
+
+  <p class="reveal"><strong>ELF</strong> stands for <strong>Executable and Linkable Format</strong>. It's not a bob_os invention, and it's not a Linux invention either — it was standardized in the early 1990s (originally by Unix System Laboratories, later formalized in the System V ABI) specifically to replace a mess of incompatible, platform-specific executable formats. Today it's the format Linux uses for programs, shared libraries, kernel modules, and core dumps; the BSDs adopted it decades ago too; and it's exactly the format bob_os's own loader — <code>16_elf_loader/elf_loader.c</code> — parses to turn a file on BobFS into a running ring-3 process.</p>
+
+  <p class="reveal">Crucially, ELF is <em>one file format used for several different jobs</em>. The same overall structure — a header, followed by tables describing the rest of the file — is reused for:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">ET_EXEC</span><span class="fam-count">bob_os uses this</span></div>
+      <div class="fam-desc">A statically-linked, ready-to-run executable with a fixed load address. What this whole page and its companions are about.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">ET_DYN</span><span class="fam-count">shared libs / PIE</span></div>
+      <div class="fam-desc">A shared object (<code>.so</code>) or position-independent executable — same ELF shape, but built to be loaded at <em>any</em> address. Covered in the linking companion lesson.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">ET_REL</span><span class="fam-count">.o files</span></div>
+      <div class="fam-desc">A relocatable object file — a compiler's output before the linker has glued everything together. Not directly runnable.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">ET_CORE</span><span class="fam-count">crash dumps</span></div>
+      <div class="fam-desc">A snapshot of a crashed process's memory and registers, in the exact same container format, for post-mortem debugging.</div>
+    </div>
+  </div>
+
+  <p class="reveal">All four share the identical opening move: a fixed-layout <strong>ELF header</strong> at offset zero. That's where we're headed next.</p>
+</div>
+</section>
+
+<!-- THE ELF HEADER -->
+<section id="header">
+<div class="container">
+  <div class="section-num">02 — The File's Business Card</div>
+  <h2>The <span class="accent">ELF Header</span>, Field by Field</h2>
+
+  <p class="reveal">Every ELF file, no matter its purpose, opens with a header of fixed, known size — 52 bytes for ELF32 (the format bob_os targets, since its i686 cross-compiler is invoked with <code>-m32</code>), 64 bytes for ELF64. The loader doesn't need to guess this size or search for it; it's the very first thing at offset 0, always the same shape. That predictability is the entire trick: a loader can <code>memcpy</code> exactly 52 bytes into a known C struct and immediately have every field it needs.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Most Famous Four Bytes in Systems Programming</div>
+    Offset 0 always holds <code>0x7F 0x45 0x4C 0x46</code> — byte <code>0x7F</code> (a non-printable "delete" byte, chosen so the file can never be confused with plain text) followed by the ASCII characters <strong>'E' 'L' 'F'</strong>. Read as a little-endian 32-bit integer, that's <code>0x464C457F</code>. bob_os's own loader checks exactly this in <code>elf_load()</code> before trusting a single other byte of the file — if the magic doesn't match, loading aborts with an error code and the kernel is completely unaffected.
+  </div>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Elf32_Ehdr — 52 bytes, offset 0</span><span style="color:var(--muted);font-size:.7rem">from bob_os/16_elf_loader/elf.h</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">e_ident[0..3] — offset 0</div><div class="f-val">0x7F 'E' 'L' 'F'</div><div class="f-desc">The magic number. Confirms this is an ELF file before anything else is trusted.</div></div>
+      <div class="dossier-field"><div class="f-label">e_ident[4] — EI_CLASS</div><div class="f-val">1 = ELF32, 2 = ELF64</div><div class="f-desc">Which struct layout the rest of this header uses. bob_os only accepts 1.</div></div>
+      <div class="dossier-field"><div class="f-label">e_ident[5] — EI_DATA</div><div class="f-val">1 = little-endian</div><div class="f-desc">Byte order of every multi-byte field from here on. x86 is always 1.</div></div>
+      <div class="dossier-field"><div class="f-label">e_ident[6] — EI_VERSION</div><div class="f-val">1 (current)</div><div class="f-desc">ELF format version. There has only ever been one — this field exists for future-proofing.</div></div>
+      <div class="dossier-field"><div class="f-label">e_type — offset 16</div><div class="f-val">2 = ET_EXEC</div><div class="f-desc">What kind of ELF file this is. bob_os only accepts ET_EXEC (a static, fixed-address executable).</div></div>
+      <div class="dossier-field"><div class="f-label">e_machine — offset 18</div><div class="f-val">3 = EM_386</div><div class="f-desc">Target CPU architecture. Refusing a mismatched machine value is how a 32-bit kernel avoids trying to execute ARM or x86-64 opcodes.</div></div>
+      <div class="dossier-field"><div class="f-label">e_entry — offset 24</div><div class="f-val">0x00400000</div><div class="f-desc">The virtual address the CPU should jump to once loading is complete — where <code>main</code>'s ancestor, <code>_start</code>, actually lives.</div></div>
+      <div class="dossier-field"><div class="f-label">e_phoff — offset 28</div><div class="f-val">0x00000034</div><div class="f-desc">Byte offset from the start of the file to the Program Header table — usually right after this 52-byte header, i.e. offset 52.</div></div>
+      <div class="dossier-field"><div class="f-label">e_shoff — offset 32</div><div class="f-val">varies</div><div class="f-desc">Byte offset to the Section Header table. bob_os's loader reads this field but never follows it — sections don't matter at runtime.</div></div>
+      <div class="dossier-field"><div class="f-label">e_phentsize / e_phnum</div><div class="f-val">32 bytes × N entries</div><div class="f-desc">Size of one Program Header entry, and how many entries exist — everything the loader needs to walk the table without knowing N in advance.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">Notice what's <em>not</em> in that header: no function names, no variable names, no source-level information at all. The ELF header only answers "what am I, and where do I point?" — it's a table of contents, not the book itself.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">52</div><div class="lbl">ELF32 Header Size (Bytes)</div></div>
+    <div class="stat-card"><div class="val">64</div><div class="lbl">ELF64 Header Size (Bytes)</div></div>
+    <div class="stat-card"><div class="val">16</div><div class="lbl">Bytes in e_ident Alone</div></div>
+    <div class="stat-card"><div class="val">9</div><div class="lbl">Numeric Fields After e_ident</div></div>
+  </div>
+
+  <p class="reveal">ELF64's header carries the exact same fields in the exact same order — only <code>e_entry</code>, <code>e_phoff</code>, and <code>e_shoff</code> widen from 4 bytes to 8, to hold 64-bit addresses, which is the entire reason the header grows from 52 to 64 bytes. bob_os never needs to worry about that variant: its cross-compiler targets i686 with <code>-m32</code>, so every ELF file it ever produces or loads is ELF32, full stop.</p>
+</div>
+</section>
+
+<!-- TWO HEADER TABLES -->
+<section id="twotables">
+<div class="container">
+  <div class="section-num">03 — One File, Two Audiences</div>
+  <h2>Program Headers vs. <span class="accent">Section Headers</span></h2>
+
+  <p class="reveal">Here's the split that trips people up the first time, because both tables describe "how this file is organized," and both sit near the top of the file, and both have similarly-named entries. But they exist for two completely different readers, and only one of those readers matters while the program is actually running.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📦 Program Headers — for the loader</h4>
+      Answer the question <strong>"how do I get this file into memory and running?"</strong> Each entry describes one contiguous chunk of the file (a <em>segment</em>) that needs to be mapped at a specific virtual address with specific permissions. This is the table a kernel's ELF loader reads at runtime — the only one bob_os's loader touches at all.
+    </div>
+    <div class="compare-card bad">
+      <h4>🔧 Section Headers — for the linker &amp; debugger</h4>
+      Answer the question <strong>"how is this file organized internally, for people editing or debugging it?"</strong> Sections like <code>.text</code>, <code>.data</code>, <code>.symtab</code>, and <code>.debug_info</code> are the linker's and debugger's units of bookkeeping — used at build time and while poking at a binary with <code>gdb</code> or <code>objdump</code>, but almost entirely irrelevant to actually executing the program.
+    </div>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">The one-line rule</span>
+    Program Headers describe the process. Section Headers describe the file.
+    <span class="sub">A running program's address space is built entirely from PT_LOAD program header entries — a fully stripped binary (no section headers at all) still runs perfectly.</span>
+  </div>
+
+  <div class="sidenote reveal"><b>Try it yourself, conceptually.</b> This is exactly what the Unix tools <code>readelf -l</code> (lowercase L, "program headers") and <code>readelf -S</code> (capital S, "section headers") show you on any real Linux binary — two completely different tables, describing the same bytes for two completely different purposes.</div>
+</div>
+</section>
+
+<!-- PROGRAM HEADERS -->
+<section id="phdrs">
+<div class="container">
+  <div class="section-num">04 — The Load Plan</div>
+  <h2>Program Headers: <span class="accent">The Segments</span></h2>
+
+  <p class="reveal">A <strong>Program Header</strong> entry describes one <strong>segment</strong>: a contiguous range of bytes in the file that the loader must place at a specific virtual address, with specific read/write/execute permissions. A typical small executable has just two or three <code>PT_LOAD</code> segments — commonly one for code (readable + executable, never writable, so a bug can't overwrite instructions) and one for data (readable + writable, never executable, so injected data can't be run as code).</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field</th><th>Size</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">p_type</td><td class="center">4 bytes</td><td>What kind of segment this is. <code>PT_LOAD</code> (value 1) means "map me into memory" — the only type bob_os's loader acts on; every other type is skipped.</td></tr>
+        <tr><td class="hl">p_offset</td><td class="center">4 bytes</td><td>Where this segment's bytes begin <em>in the file</em>.</td></tr>
+        <tr><td class="hl">p_vaddr</td><td class="center">4 bytes</td><td>Where this segment must be mapped <em>in the process's virtual address space</em>.</td></tr>
+        <tr><td>p_paddr</td><td class="center">4 bytes</td><td>Physical address hint. Ignored by bob_os's loader — paging decides physical placement, not the ELF file.</td></tr>
+        <tr><td class="hl gold">p_filesz</td><td class="center">4 bytes</td><td>How many bytes of this segment actually exist <em>on disk</em>.</td></tr>
+        <tr><td class="hl gold">p_memsz</td><td class="center">4 bytes</td><td>How many bytes this segment occupies <em>in memory</em> — always ≥ <code>p_filesz</code>. The gap is zero-filled BSS space.</td></tr>
+        <tr><td class="hl">p_flags</td><td class="center">4 bytes</td><td>Permission bits: <code>PF_R</code>=4 (read), <code>PF_W</code>=2 (write), <code>PF_X</code>=1 (execute), OR'd together.</td></tr>
+        <tr><td>p_align</td><td class="center">4 bytes</td><td>Required alignment (typically the page size, 4096) — a hint, not a mandate the loader must obey byte-for-byte.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Eight fields, 4 bytes each — exactly 32 bytes, which is why <code>e_phentsize</code> in the header above always reads 32 for ELF32. That the two file-vs-memory-size fields can <em>differ</em> is the single most load-bearing detail in the whole format: it's how a program can declare "I need 4KB of zeroed global variables" without the compiler having to actually write 4KB of zero bytes to disk. We'll watch this exact mechanism run in the next lesson.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why Permissions Live Here, Not in the File System</div>
+    A regular file on disk has one set of permissions (readable, writable, by whom). But a single ELF file needs <em>different</em> in-memory permissions for different parts of itself simultaneously — code pages that must never be writable, data pages that must never be executable. That granularity can't come from the filesystem; it has to be declared inside the file, per-segment, which is exactly what <code>p_flags</code> is for.
+  </div>
+
+  <h3>Validating a header before trusting it</h3>
+  <p class="reveal">Before any of this matters, the loader has to actually confirm it's holding a real, well-formed header — the same discipline bob_os's <code>elf_load()</code> applies in exactly this order:</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>Cast the raw bytes</strong>Treat the start of the file buffer as an <code>Elf32_Ehdr *</code> — no parsing yet, just a pointer reinterpretation.</div></li>
+    <li><div class="step-body"><strong>Check the four magic bytes</strong>Reject immediately if <code>e_ident[0..3]</code> isn't exactly <code>0x7F 'E' 'L' 'F'</code> — nothing past this point can be trusted otherwise.</div></li>
+    <li><div class="step-body"><strong>Check class, type, and machine</strong>Confirm <code>e_ident[4] == 1</code> (32-bit), <code>e_type == ET_EXEC</code>, and <code>e_machine == EM_386</code> — three separate ways a well-formed-but-wrong-platform file gets rejected.</div></li>
+    <li><div class="step-body"><strong>Confirm e_phnum &gt; 0</strong>A file with zero program headers has nothing loadable in it at all — reject before the walking loop even begins.</div></li>
+  </div>
+</div>
+</section>
+
+<!-- SECTION HEADERS -->
+<section id="shdrs">
+<div class="container">
+  <div class="section-num">05 — The Part the Loader Skips</div>
+  <h2>Section Headers: <span class="accent">Present, But Irrelevant Here</span></h2>
+
+  <p class="reveal">Section headers describe a much finer-grained breakdown of the file: <code>.text</code> (code), <code>.rodata</code> (read-only constants, string literals), <code>.data</code> (initialized globals), <code>.bss</code> (uninitialized globals — takes up zero bytes on disk despite occupying real space at runtime), <code>.symtab</code> (symbol names for debugging), <code>.strtab</code> (the strings those symbols are named with), and often dozens more. Each has its own Section Header entry recording its name, type, file offset, and size.</p>
+
+  <p class="reveal">This is precisely the information a <strong>linker</strong> needs when combining several <code>.o</code> files into one executable (which sections merge, which symbols resolve against which), and precisely what a <strong>debugger</strong> needs to answer "what function is at this address" or "what's this variable's name." Neither of those jobs happens at process-launch time.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ bob_os Proves the Point</div>
+    Look back at the dossier above: bob_os's loader reads <code>e_shoff</code> out of the header — and then never uses it for anything. No code in <code>elf_loader.c</code> ever walks a section header. A binary can be fully <strong>stripped</strong> (all section headers and symbol tables deleted, a common step before shipping production software to shrink file size and hide internals) and still load and run identically, because everything the loader actually needs — the entry point and the <code>PT_LOAD</code> segments — lives in the ELF header and Program Headers, which stripping never touches.
+  </div>
+
+  <p class="reveal">So the honest mental model is: an executable file, at the moment it's launched, is really just <em>its Program Headers plus an entry point</em>. Everything else — section headers, symbol tables, debug info — is optional cargo carried along for humans and tools, not for the CPU.</p>
+</div>
+</section>
+
+<!-- OTHER FORMATS -->
+<section id="otherformats">
+<div class="container">
+  <div class="section-num">06 — Zooming Out</div>
+  <h2>Every OS Has One of <span class="accent">These</span></h2>
+
+  <p class="reveal">ELF isn't a uniquely clever idea — it's one answer to a question every operating system has to answer somehow: "given a file, how do I know what it is and how to run it?" Windows and macOS solve the exact same problem with their own formats, and every one of them opens the same way ELF does — a handful of unmistakable identifying bytes at offset 0, followed by a structured description of what to load and where.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Platform</th><th>Format</th><th>Magic Bytes (offset 0)</th><th>Load-Plan Table</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Linux / BSD / bob_os</td><td>ELF</td><td class="gold">0x7F 'E' 'L' 'F'</td><td>Program Headers (segments)</td></tr>
+        <tr><td class="hl">Windows</td><td>PE (Portable Executable)</td><td class="gold">'M' 'Z' (then a PE header further in)</td><td>Section table with load characteristics baked in</td></tr>
+        <tr><td class="hl">macOS / iOS</td><td>Mach-O</td><td class="gold">0xFEEDFACE / 0xFEEDFACF</td><td>Load Commands, including <code>LC_SEGMENT</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice the pattern repeats almost exactly: an unmistakable byte signature so the loader can bail out instantly on garbage input, then a structured, walkable table describing memory regions to map and permissions to apply. Even the terminology rhymes — Mach-O's <code>LC_SEGMENT</code> load commands are doing essentially the same job as ELF's <code>PT_LOAD</code> program headers. Once you understand ELF's shape deeply, recognizing the same shape in a different OS's executable format is mostly a vocabulary exercise, not a new concept.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why 'MZ'?</div>
+    Windows' PE magic bytes, <code>'M' 'Z'</code>, are the initials of Mark Zbikowski, one of the original MS-DOS engineers — a signature that has survived, for backward-compatibility reasons, in every Windows executable format since the 1980s. ELF's magic byte 0x7F was chosen more pragmatically: it's the ASCII "delete" control character, guaranteeing an ELF file can never be mistaken for readable text by a naive tool that only checks the first byte.
+  </div>
+</div>
+</section>
+
+<!-- INTERACTIVE PARSE CANVAS -->
+<section id="parse">
+<div class="container">
+  <div class="section-num">07 — See It Happen</div>
+  <h2>Parsing a Real Header, <span class="accent">Byte by Byte</span></h2>
+
+  <p class="reveal">Below is exactly the first 52 bytes of a real bob_os user ELF binary, rendered as a byte grid. Step through it and watch which bytes each field actually claims — this is the same read a loader performs with one <code>memcpy</code> and a cast, done here one field at a time so you can see it.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="parseLabel">▶ Press Parse to walk the header</div>
+    <canvas id="parseCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runParse()">▶ Parse Header</button>
+    <button class="ctrl-btn red" onclick="resetParse()">Reset</button>
+  </div>
+  <div class="byte-legend reveal">
+    <span><i style="background:#f5c842"></i> e_ident (16 bytes)</span>
+    <span><i style="background:#38bdf8"></i> e_type / e_machine / e_version</span>
+    <span><i style="background:#4ade80"></i> e_entry</span>
+    <span><i style="background:#a78bfa"></i> e_phoff / e_shoff</span>
+    <span><i style="background:#fb923c"></i> e_flags .. e_shstrndx</span>
+  </div>
+
+  <div class="sidenote reveal"><b>Why this matters for the next lesson.</b> Once <code>e_phoff</code> and <code>e_phnum</code> are known, the loader has everything it needs to find and walk every Program Header entry — which is exactly where <em>From File to Running Process</em>, the next lesson, picks up.</div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">ELF</div><div class="glossary-def">Executable and Linkable Format — the self-describing container format used for executables, shared libraries, object files, and core dumps on Linux, the BSDs, and bob_os.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Magic Number</div><div class="glossary-def">The fixed byte sequence <code>0x7F 'E' 'L' 'F'</code> at offset 0, used to confirm a file is really an ELF file before trusting any other field.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ELF Header (Ehdr)</div><div class="glossary-def">The fixed-size struct at offset 0 — 52 bytes for ELF32 — holding architecture, entry point, and pointers to the Program and Section Header tables.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Program Header (Phdr)</div><div class="glossary-def">One 32-byte entry describing a segment: where it lives in the file, where it must be mapped in memory, its size, and its permissions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segment</div><div class="glossary-def">A contiguous chunk of the file that a Program Header describes for loading — the unit the runtime loader actually cares about.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Section</div><div class="glossary-def">A finer-grained chunk (<code>.text</code>, <code>.data</code>, <code>.symtab</code>...) described by a Section Header, used by linkers and debuggers, irrelevant at launch time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">e_entry</div><div class="glossary-def">The ELF header field holding the virtual address execution should begin at once loading is complete.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ET_EXEC</div><div class="glossary-def">An ELF <code>e_type</code> value meaning "statically-linked executable with a fixed load address" — the only type bob_os's loader accepts.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Stripped Binary</div><div class="glossary-def">An ELF file with its Section Headers and symbol tables removed, to save space or hide internals — still fully runnable, since only Program Headers matter at launch.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EI_CLASS / EI_DATA</div><div class="glossary-def">Bytes 4 and 5 of <code>e_ident</code>, declaring 32- vs 64-bit layout and byte order (endianness) for every other field in the header.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PE (Portable Executable)</div><div class="glossary-def">Windows' equivalent executable format — opens with the 'MZ' magic bytes and a section table describing how to load the file, the same job ELF's Program Headers do.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mach-O</div><div class="glossary-def">macOS and iOS's executable format — identified by magic number 0xFEEDFACE/0xFEEDFACF, using Load Commands (including LC_SEGMENT) in place of ELF's Program Headers.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The ELF Format: How an Executable Describes Itself · Companion lesson for bob_os module 16_elf_loader</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: From File to Running Process — what a loader actually does with these headers.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── HEADER BYTE-PARSE CANVAS ────────────────────────────────────────────────
+// A real bob_os hello-world ELF32 header, 52 bytes, as hex.
+const HEADER_BYTES = [
+  0x7F,0x45,0x4C,0x46, 0x01,0x01,0x01,0x00, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // e_ident 0-15
+  0x02,0x00,                     // e_type    16-17
+  0x03,0x00,                     // e_machine 18-19
+  0x01,0x00,0x00,0x00,           // e_version 20-23
+  0x00,0x00,0x40,0x00,           // e_entry   24-27  -> 0x00400000
+  0x34,0x00,0x00,0x00,           // e_phoff   28-31  -> 52
+  0x00,0x00,0x00,0x00,           // e_shoff   32-35
+  0x00,0x00,0x00,0x00,           // e_flags   36-39
+  0x34,0x00,                     // e_ehsize  40-41  -> 52
+  0x20,0x00,                     // e_phentsize 42-43 -> 32
+  0x02,0x00,                     // e_phnum   44-45  -> 2
+  0x00,0x00,                     // e_shentsize 46-47
+  0x00,0x00,                     // e_shnum   48-49
+  0x00,0x00                      // e_shstrndx 50-51
+];
+
+const PARSE_PHASES = [
+  {range:[0,4],   color:C.gold,  field:'e_ident[0..3] — magic',      value:"0x7F 'E' 'L' 'F'"},
+  {range:[4,7],   color:C.gold,  field:'e_ident[4..6] — class/data/version', value:'32-bit · little-endian · v1'},
+  {range:[7,16],  color:C.gold,  field:'e_ident[7..15] — osabi + padding', value:'0x00 × 9 (unused by bob_os)'},
+  {range:[16,18], color:C.cyan,  field:'e_type',                     value:'2 = ET_EXEC'},
+  {range:[18,20], color:C.cyan,  field:'e_machine',                  value:'3 = EM_386'},
+  {range:[20,24], color:C.cyan,  field:'e_version',                  value:'1'},
+  {range:[24,28], color:C.green, field:'e_entry',                    value:'0x00400000'},
+  {range:[28,32], color:C.purple,field:'e_phoff',                    value:'52 (0x34) — right after this header'},
+  {range:[32,36], color:C.purple,field:'e_shoff',                    value:'0 (not used by bob_os)'},
+  {range:[36,52], color:C.orange,field:'e_flags .. e_shstrndx',      value:'ehsize=52 phentsize=32 phnum=2'}
+];
+
+function drawParse(activeIdx,t){
+  const canvas=document.getElementById('parseCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cols=13, rows=4, pad=16;
+  const cellW=(W-pad*2)/cols, cellH=34;
+  const gridTop=30;
+
+  ctx.font='10px Source Code Pro,monospace';
+  for(let i=0;i<52;i++){
+    const col=i%cols, row=Math.floor(i/cols);
+    const x=pad+col*cellW, y=gridTop+row*(cellH+8);
+    let fill='rgba(255,255,255,.04)', stroke=C.border, txt=C.muted, alpha=1;
+    for(let p=0;p<PARSE_PHASES.length;p++){
+      const ph=PARSE_PHASES[p];
+      if(i>=ph.range[0] && i<ph.range[1]){
+        const passed = p<activeIdx || (p===activeIdx);
+        if(p<activeIdx){ fill=hexA(ph.color,.22); stroke=ph.color; txt='#fff'; }
+        else if(p===activeIdx){ const a=.10+.35*t; fill=hexA(ph.color,a); stroke=ph.color; txt='#fff'; }
+      }
+    }
+    ctx.fillStyle=fill;ctx.fillRect(x,y,cellW-4,cellH);
+    ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.strokeRect(x,y,cellW-4,cellH);
+    ctx.fillStyle=txt;ctx.textAlign='center';
+    ctx.fillText(HEADER_BYTES[i].toString(16).padStart(2,'0'),x+(cellW-4)/2,y+15);
+    ctx.fillStyle=C.muted;ctx.font='8px Source Code Pro,monospace';
+    ctx.fillText(i,x+(cellW-4)/2,y+27);
+    ctx.font='10px Source Code Pro,monospace';
+  }
+
+  const capY=gridTop+rows*(cellH+8)+18;
+  if(activeIdx>=0 && activeIdx<PARSE_PHASES.length){
+    const ph=PARSE_PHASES[activeIdx];
+    ctx.textAlign='center';
+    ctx.fillStyle=ph.color;ctx.font='bold 13px Source Code Pro,monospace';
+    ctx.fillText(ph.field,W/2,capY);
+    ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';
+    ctx.fillText(ph.value,W/2,capY+20);
+  } else {
+    ctx.textAlign='center';ctx.fillStyle=C.muted;ctx.font='12px Lato,sans-serif';
+    ctx.fillText('Press Parse Header to begin walking the 52 bytes above',W/2,capY+8);
+  }
+}
+function hexA(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  const r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function runParse(){
+  let idx=0,start=performance.now();
+  const dur=650;
+  document.getElementById('parseLabel').textContent='▶ Parsing field '+(idx+1)+' of '+PARSE_PHASES.length;
+  function step(now){
+    const t=Math.min(1,(now-start)/dur);
+    drawParse(idx,t);
+    document.getElementById('parseLabel').textContent='▶ Parsing field '+(idx+1)+' of '+PARSE_PHASES.length+' — '+PARSE_PHASES[idx].field;
+    if(t>=1){
+      idx++;
+      if(idx>=PARSE_PHASES.length){
+        drawParse(PARSE_PHASES.length-1,1);
+        document.getElementById('parseLabel').textContent='▶ Done — all 52 bytes accounted for. Reset to replay.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetParse(){
+  document.getElementById('parseLabel').textContent='▶ Press Parse to walk the header';
+  drawParse(-1,0);
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetParse(); });
+window.addEventListener('resize',()=>{ resetParse(); });
+</script>
+</body>
+</html>

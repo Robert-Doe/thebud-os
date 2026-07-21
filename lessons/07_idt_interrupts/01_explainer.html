@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISRs and IRQs: What Actually Happens When Hardware Interrupts You</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:160px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)} h2 .accent.c{color:var(--cyan)} h2 .accent.r{color:var(--red)} h2 .accent.g{color:var(--green)} h2 .accent.gold{color:var(--gold)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;background:rgba(251,146,60,.1);padding:.1rem .4rem;border-radius:4px;color:var(--orange);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout code{background:rgba(0,0,0,.25)}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.6rem 1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre code{background:none;padding:0;color:#c4deff;font-size:.85rem;line-height:1.85;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.86rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.or{color:var(--orange);font-weight:600}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(251,146,60,.1);border:1.5px solid var(--orange);color:var(--orange);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(251,146,60,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.68rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.3);color:var(--orange);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.family-card.hot{border-color:var(--gold2)}
+.family-card.hot .fam-count{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#anatomy" title="Anatomy of an ISR"></a>
+  <a class="toc-dot" href="#saveregs" title="Save Every Register"></a>
+  <a class="toc-dot" href="#eoi" title="Send the EOI"></a>
+  <a class="toc-dot" href="#irqvsexc" title="IRQ vs Exception"></a>
+  <a class="toc-dot" href="#worked" title="Worked Example"></a>
+  <a class="toc-dot" href="#nested" title="Nested Interrupts"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Interrupts in Practice · Companion to the IDT Deep Dive</div>
+    <h1>What Actually Happens<br>When <span>Hardware Interrupts You</span></h1>
+    <p class="hero-sub">You already know how the CPU finds a handler: <code>idtr</code>, a vector number, a gate descriptor, a jump. This page is about what's waiting on the other end of that jump — a real function, written by you, that has about a microsecond to do its job without breaking anything the interrupted code was relying on, and that has one specific, easy-to-forget obligation before it's allowed to leave: telling the interrupt controller it's done.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Ways In — IRQ or CPU Exception</div></div>
+      <div class="hero-stat"><div class="num">8+</div><div class="lbl">Registers a Handler Must Not Clobber</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">EOI Byte That Must Be Sent</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Future IRQs If You Forget It</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The IDT Gets You <span class="accent">To</span> the Handler. Now What?</h2>
+  <p class="reveal">The IDT deep dive walked you through the entire dispatch mechanism: a vector number, <code>idtr</code>, a gate descriptor fetched via <code>idtr.base + vector×16</code>, a ring transition, a trap frame pushed to the kernel stack, and finally a jump to whatever address the kernel wired up for that vector. That's the CPU's half of the job, and it's genuinely elegant — a fixed, table-driven, hardware-enforced dispatch mechanism.</p>
+  <p class="reveal">But the CPU doesn't care what happens after the jump. It doesn't know if your handler is correct, whether it saves the registers it touches, or whether it ever tells anyone it's finished. All of that is <strong>your</strong> job, written in ordinary code, running with zero safety net. This page is about that code — the <strong>Interrupt Service Routine (ISR)</strong> — and about one specific contract every ISR handling a device interrupt has to honor, or the machine quietly stops receiving that class of interrupt forever.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📎 Quick Refresher, In One Line Each</div>
+    <strong>Vector number:</strong> the integer, 0–255, that indexes into the IDT. <strong>Gate descriptor:</strong> the 16-byte (64-bit mode) IDT entry naming the handler's segment selector and offset. <strong>Trap frame:</strong> the PC/flags/registers bundle the CPU pushes to the kernel stack the instant any of the three doors — syscall, exception, interrupt — fires. If any of those three sentences felt unfamiliar, the IDT companion lesson is worth a pass before continuing here.
+  </div>
+</div>
+</section>
+
+<!-- ANATOMY -->
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">01 — The Function Itself</div>
+  <h2>What Does an <span class="accent">ISR</span> Actually Look Like?</h2>
+  <p class="reveal">Here's the part most IDT explanations skip entirely: once the gate descriptor points at an address, <em>something has to actually live at that address</em>. Not a conceptual placeholder — real bytes, a real function, compiled or assembled and sitting in kernel memory before <code>lidt</code> ever runs. That function is the ISR.</p>
+  <p class="reveal">An ISR is unlike almost every other function you'll ever write, for one reason: it doesn't have a caller in the normal sense. Nothing called it with arguments on a stack the way <code>main()</code> gets called. The CPU jumped to it mid-instruction, from inside whatever code happened to be running, with whatever registers that code happened to be using at the time still sitting there, un-saved, un-announced. A regular function can assume the compiler's calling convention already protected the caller's important state. An ISR cannot assume anything of the sort.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>📞 A Normal Function Call</h4>
+      Caller and callee agree on a calling convention in advance — which registers the callee may clobber freely (caller-saved) and which it must preserve (callee-saved). The compiler generates both sides. Nobody is surprised by what changed.
+    </div>
+    <div class="compare-card good">
+      <h4>⚡ An Interrupt Arriving</h4>
+      There is no "callee" by agreement — there's a CPU that jumped mid-instruction because a device or a fault demanded it. The interrupted code never agreed to let <em>any</em> register change. Every single register the ISR path touches has to be put back exactly as it was, or the interrupted program resumes broken.
+    </div>
+  </div>
+
+  <p class="reveal">Because of this, a real ISR is almost never written as a single ordinary C function reached directly from the IDT gate. It's written as two layers: a thin <strong>assembly stub</strong>, one per vector, that does the register bookkeeping the CPU itself won't do — and a normal <strong>C handler function</strong> that the stub calls once it's safe to do so. This is exactly the split bob_os uses in <code>isr.asm</code> and <code>isr.c</code>:</p>
+
+  <pre><code>; isr.asm — one tiny stub per vector, all funneling into one C handler
+isr14:                    ; #PF Page Fault — CPU already pushed an error code
+    push dword 14         ; push the interrupt vector number
+    jmp  isr_common_stub
+
+irq1:                     ; IRQ1 Keyboard — CPU pushes no error code at all
+    push dword 0          ; push a dummy error code, keeps the frame uniform
+    push dword 33          ; vector = irq + 32, after the PIC remap
+    jmp  isr_common_stub</code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    An ISR is not a special kind of function the CPU understands — the CPU only understands "jump here." Everything that makes a jump target safe to resume from afterward — saving registers, restoring them, correctly unwinding the stack, returning via <code>iret</code> instead of <code>ret</code> — is ordinary code <strong>you</strong> write. The IDT gets you to the front door. What's behind the door is entirely your responsibility, and getting it wrong doesn't throw a compiler error — it corrupts a running program you weren't even trying to touch.
+  </div>
+</div>
+</section>
+
+<!-- SAVE REGISTERS -->
+<section id="saveregs">
+<div class="container">
+  <div class="section-num">02 — Obligation One</div>
+  <h2>Save <span class="accent">Every</span> Register You Touch</h2>
+  <p class="reveal">"Every register" is not hyperbole. A normal function only has to preserve the registers its calling convention marks callee-saved — on x86, historically <code>EBX</code>, <code>ESI</code>, <code>EDI</code>, <code>EBP</code>. It's free to trash <code>EAX</code>, <code>ECX</code>, <code>EDX</code> because the convention says the caller already assumed those might change. An ISR gets none of that courtesy: the "caller" is arbitrary interrupted code that made no such assumption about <em>anything</em>, because it never called an interrupt handler — the interrupt happened <em>to</em> it.</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>The stub saves everything, unconditionally</strong>bob_os's <code>isr_common_stub</code> opens with <code>pusha</code> (saves EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI in one instruction) followed by explicit pushes of DS, ES, FS, and GS. Nothing is skipped, because the stub has no way to know in advance which registers the interrupted code was actively relying on — the honest assumption is "all of them."</div></li>
+    <li><div class="step-body"><strong>Only then does kernel code get to run</strong>After the segment registers are pointed at the kernel's own data segment (so the handler isn't accidentally reading through whatever segment the interrupted user code had loaded), the stub passes a pointer to this saved state — the <code>interrupt_frame</code> — to the actual C handler.</div></li>
+    <li><div class="step-body"><strong>The C handler runs with an ordinary calling convention</strong>Once inside <code>interrupt_handler(struct interrupt_frame *frame)</code>, you're back in familiar territory — the compiler's normal ABI applies, because this function really was called, by the stub, like any other function. This is precisely why the split exists: raw assembly handles the part the compiler can't reason about, and C handles everything after.</div></li>
+    <li><div class="step-body"><strong>The stub restores everything, in reverse, before returning</strong><code>pop gs / pop fs / pop es / pop ds / popa</code>, then the vector number and error code are discarded from the stack, and only then does <code>iret</code> run — never a plain <code>ret</code>, because <code>iret</code> is the one instruction that knows how to restore EIP, CS, and EFLAGS from the CPU's own automatic pushes.</div></li>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field of <code>struct interrupt_frame</code></th><th>Who Pushed It</th><th>Why the Handler Needs It</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">edi, esi, ebp, esp_dummy, ebx, edx, ecx, eax</td><td class="or">Stub — <code>pusha</code></td><td>Full snapshot of every general-purpose register at the exact instant of interruption</td></tr>
+        <tr><td class="hl">ds, es, fs, gs</td><td class="or">Stub — explicit pushes</td><td>The segment registers the interrupted code had loaded, saved before the stub repoints them at kernel segments</td></tr>
+        <tr><td class="hl">int_no, err_code</td><td class="or">Stub — per-vector push</td><td>Which vector fired, and the CPU-supplied error code (or a dummy 0 for vectors that don't get one)</td></tr>
+        <tr><td class="hl">eip, cs, eflags</td><td class="gold">CPU — automatic</td><td>Exactly where to resume, and in what code segment and flag state</td></tr>
+        <tr><td class="hl">user_esp, user_ss</td><td class="gold">CPU — only on a ring change</td><td>The interrupted user-mode stack, present only when the interrupt crossed from Ring 3 into Ring 0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why "Just Write It In C" Doesn't Work</div>
+    You might reasonably ask: why not skip the assembly stub and point the IDT gate straight at a C function? The problem is that a normal C function's compiler-generated prologue only saves <em>callee-saved</em> registers — it assumes the caller took care of the rest, because in ordinary code, it did. An interrupt has no such caller. Point a gate directly at an unprotected C function and the first time it clobbers, say, <code>ECX</code> while the interrupted code was mid-calculation using <code>ECX</code>, that program silently gets wrong answers with no crash, no warning, and — for a timer interrupt firing constantly in the background — no realistic way to reproduce the bug on demand. Some toolchains offer an <code>interrupt</code> function attribute that generates the extra save/restore prologue for you, but on x86 that attribute is unreliable enough across compilers and calling conventions that most real kernels, bob_os included, just write the stub by hand in assembly where the behavior is exact and guaranteed.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What about a "naked" function?</b> Some architectures and compilers support a <code>naked</code> attribute — a function with no compiler-generated prologue or epilogue at all, leaving you to write 100% of the entry/exit code yourself in inline assembly. Conceptually, that's exactly what <code>isr_common_stub</code> already is, just written as a standalone assembly routine instead of an annotated C function. Either spelling gets you to the same place: a piece of code where <em>you</em>, not the compiler's default assumptions, control every register touched at entry.
+  </div>
+</div>
+</section>
+
+<!-- EOI -->
+<section id="eoi">
+<div class="container">
+  <div class="section-num">03 — Obligation Two</div>
+  <h2>Send the <span class="accent">EOI</span>, or the Line Goes Dead</h2>
+  <p class="reveal">Saving registers protects the interrupted program. It says nothing about protecting <em>future</em> interrupts — and this is the obligation that trips up nearly everyone the first time they write a hardware interrupt handler, because forgetting it doesn't crash anything. It just makes the machine quietly stop noticing that device ever again.</p>
+  <p class="reveal">Here's the mechanism. The interrupt controller sitting between devices and the CPU — the 8259 PIC, or its modern APIC successor — doesn't just fire an interrupt and forget about it. While a given IRQ line is "in service," the controller withholds any further interrupt on that same line (and, on the PIC, any lower-priority line too), on the reasonable assumption that the CPU is still busy handling the first one. The only way to tell the controller "I'm done, you can fire this line again" is to explicitly send it an <strong>End-Of-Interrupt (EOI)</strong> signal.</p>
+
+  <pre><code>/* pic.h */
+#define PIC1_CMD   0x20   /* master PIC command port */
+#define PIC2_CMD   0xA0   /* slave  PIC command port */
+#define PIC_EOI    0x20   /* the EOI command byte itself */
+
+/* pic.c — must run at the END of every hardware IRQ handler */
+void pic_send_eoi(uint8_t irq) {
+    if (irq >= 8) {
+        outb(PIC2_CMD, PIC_EOI);   /* IRQ8-15 came through the slave too */
+    }
+    outb(PIC1_CMD, PIC_EOI);       /* master always gets one */
+}</code></pre>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 What "Forgetting EOI" Actually Feels Like</div>
+    Not a crash. Not an error message. The keyboard just... stops working. Or the timer stops ticking and your scheduler never runs again. Everything else on the machine keeps executing perfectly normally, which is exactly what makes this bug so unpleasant to track down the first time — nothing failed loudly, one specific IRQ line simply went silent forever, because the PIC is still faithfully waiting for an acknowledgment that never came.
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="eoiLabel">▶ Watch two key presses — with and without the EOI</div>
+    <canvas id="eoiCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runEOI('correct')">▶ Handler sends EOI correctly</button>
+    <button class="ctrl-btn red" onclick="runEOI('buggy')">▶ Handler forgets the EOI</button>
+    <button class="ctrl-btn gold" onclick="resetEOI()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice where EOI sits relative to the rest of the handler. bob_os's <code>interrupt_handler()</code> sends it <em>before</em> dispatching to the device-specific handler function, not after:</p>
+
+  <pre><code>/* isr.c */
+uint8_t irq = (uint8_t)(vec - 32);
+
+/* EOI first, so the PIC can accept new interrupts on OTHER lines
+ * while we're still busy servicing this one. */
+pic_send_eoi(irq);
+
+if (irq_handlers[irq] != 0) {
+    irq_handlers[irq](frame);
+}</code></pre>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why Order Matters Here</div>
+    Sending EOI late — after a slow handler finishes — doesn't just delay the <em>same</em> device's next interrupt. On the PIC, a line "in service" also blocks every lower-priority line from firing at all until it's cleared. A handler that does real work before acknowledging can end up starving unrelated devices for however long it takes to finish, for no reason other than acknowledgment order. Sending EOI first, then doing the work, keeps the controller free to deliver everything else while your handler finishes at its own pace.
+  </div>
+</div>
+</section>
+
+<!-- IRQ VS EXCEPTION -->
+<section id="irqvsexc">
+<div class="container">
+  <div class="section-num">04 — Two Very Different Doors</div>
+  <h2>IRQs and Exceptions <span class="accent">Aren't</span> the Same Job</h2>
+  <p class="reveal">The IDT dispatches both through the identical mechanism — same table, same gate descriptors, same trap frame. But once you're inside the handler, what you're supposed to <em>do</em> diverges sharply depending on which kind of trap got you there, and conflating the two is a common source of real bugs.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Hardware IRQ</span><span class="fam-count">vectors 32–47 (remapped)</span></div>
+      <div class="fam-desc">Asynchronous, device-generated, routed through the PIC or APIC. Nothing about the interrupted code caused it — a key was pressed, a timer ticked, a disk finished. The handler's job: service the device, <strong>send EOI</strong>, and get out fast. The interrupted instruction was doing nothing wrong and simply resumes afterward.</div>
+    </div>
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">CPU Exception</span><span class="fam-count">vectors 0–31 (Intel-reserved)</span></div>
+      <div class="fam-desc">Synchronous, caused directly by the instruction that just tried to execute — divide by zero, invalid opcode, a page fault. There is no controller to acknowledge and <strong>no EOI to send</strong>, because no device is waiting to be told "clear to fire again." The handler's job is entirely different: decide whether the fault is recoverable (page it in, then resume) or fatal (kill the process, or panic if it's the kernel itself).</div>
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Question</th><th>Hardware IRQ</th><th>CPU Exception</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Caused by</td><td>An external device</td><td>The currently executing instruction</td></tr>
+        <tr><td class="hl">Timing</td><td class="pos">Asynchronous — any time</td><td class="or">Synchronous — this instruction, right now</td></tr>
+        <tr><td class="hl">Must send EOI?</td><td class="pos">Yes, always, to the PIC/APIC</td><td class="neg">No — there is no controller involved</td></tr>
+        <tr><td class="hl">Error code on the stack?</td><td>Never (stub pushes a dummy 0)</td><td>Sometimes — #DF, #TS, #NP, #SS, #GP, #PF, #AC push a real one</td></tr>
+        <tr><td class="hl">Can it be masked / disabled?</td><td class="pos">Yes — via the PIC's IMR, or <code>cli</code></td><td class="neg">No — faults are not optional</td></tr>
+        <tr><td class="hl">Typical resolution</td><td>Do device I/O, EOI, return — interrupted code resumes untouched</td><td>Fix the condition and retry (page fault), or terminate the offender</td></tr>
+        <tr><td class="hl">Where the address of interest lives</td><td>Wherever the device driver's own state is</td><td><code>CR2</code> for #PF specifically — the faulting linear address</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The One-Sentence Rule of Thumb</div>
+    If a device is involved, the controller is waiting on you — send EOI. If no device is involved and the CPU faulted on its own instruction, there's nothing to acknowledge — decide, instead, whether the interrupted program gets to continue at all.
+  </div>
+
+  <p class="reveal">bob_os's <code>interrupt_handler()</code> makes this branch explicit rather than leaving it implicit in per-vector code — vector number alone tells it which rulebook applies:</p>
+
+  <pre><code>void interrupt_handler(struct interrupt_frame *frame) {
+    uint32_t vec = frame->int_no;
+
+    if (vec < 32) {
+        /* CPU exception -- no controller, no EOI, no automatic recovery */
+        kernel_panic(frame);
+    } else if (vec < 48) {
+        /* Hardware IRQ -- a controller IS waiting on an acknowledgment */
+        uint8_t irq = (uint8_t)(vec - 32);
+        pic_send_eoi(irq);
+        if (irq_handlers[irq] != 0) irq_handlers[irq](frame);
+    }
+}</code></pre>
+</div>
+</section>
+
+<!-- WORKED EXAMPLE -->
+<section id="worked">
+<div class="container">
+  <div class="section-num">05 — Play By Play</div>
+  <h2>A Keypress, <span class="accent">Start to Finish</span></h2>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>You press a key</strong>The keyboard controller electrically asserts IRQ1. The PIC's master chip notices, checks that IRQ1 isn't masked in its Interrupt Mask Register, and — since it isn't — raises the CPU's interrupt line, presenting vector 33 (IRQ1's remapped vector, 32 + 1).</div></li>
+    <li><div class="step-body"><strong>The CPU dispatches through the IDT</strong>Exactly the mechanism from the companion lesson: <code>idtr.base + 33×16</code> locates the gate descriptor for <code>irq1</code>, the CPU switches stacks if needed, and pushes EIP/CS/EFLAGS automatically.</div></li>
+    <li><div class="step-body"><strong><code>irq1</code>'s stub runs first</strong>It pushes a dummy error code and the vector number 33, then falls into <code>isr_common_stub</code>, which saves every general-purpose and segment register with <code>pusha</code> plus explicit pushes, and repoints DS/ES/FS/GS at the kernel's own data segment.</div></li>
+    <li><div class="step-body"><strong>The C dispatcher takes over</strong><code>interrupt_handler()</code> sees <code>vec = 33</code>, which is <code>&gt;= 32</code>, so it computes <code>irq = 1</code> and immediately calls <code>pic_send_eoi(1)</code> — the PIC's IRQ1 line is now cleared to fire again, even though nothing has actually read the key yet.</div></li>
+    <li><div class="step-body"><strong>The registered keyboard handler runs</strong><code>irq_handlers[1]</code> — whatever function the keyboard driver registered via <code>irq_register(1, ...)</code> — reads the scancode out of the keyboard's data port, translates it, and stashes it wherever the input subsystem expects it.</div></li>
+    <li><div class="step-body"><strong>The stub unwinds and returns</strong>Registers are restored in reverse order, the dummy error code and vector number are popped off the stack, and <code>iret</code> resumes the interrupted program at exactly the instruction it was on — which never knew any of this happened.</div></li>
+  </ol>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Notice What Ties Together</div>
+    Step 4 happens <em>before</em> step 5 on purpose — the PIC is told "clear to fire again" before the driver even touches the hardware, so a second, unrelated interrupt (say, IRQ0, the timer) isn't kept waiting behind a keyboard handler doing its own work. Steps 3 and 6 are the register-save contract from the earlier section, executing on literally every keypress on the machine, whether you ever notice it or not.
+  </div>
+</div>
+</section>
+
+<!-- NESTED INTERRUPTS -->
+<section id="nested">
+<div class="container">
+  <div class="section-num">06 — One Sharp Edge</div>
+  <h2>Can an Interrupt Interrupt <span class="accent">Another</span> Interrupt?</h2>
+  <p class="reveal">Recall from the IDT lesson that an <strong>Interrupt Gate</strong> automatically clears the CPU's interrupt flag (IF) on entry — the default choice for the vectors covered on this page. That single detail is what keeps the story above simple: while <code>irq1</code>'s stub and handler are running, IF is clear, so the CPU won't accept another maskable interrupt in the middle of it, even if the PIC would otherwise be willing to deliver one.</p>
+  <p class="reveal">That protection is why the EOI-then-handle ordering from the previous section is safe rather than reckless: sending EOI early makes the PIC willing to raise a new interrupt, but IF being clear means the CPU won't actually act on it until the current handler finishes and <code>iret</code> restores the saved EFLAGS (and with it, IF) back to whatever it was before. The two mechanisms — PIC-level masking and CPU-level IF — work at different layers and both matter: EOI controls what the <em>controller</em> is willing to deliver, IF controls what the <em>CPU</em> is willing to accept right now.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Where This Bites: Long Handlers and Reentrancy</div>
+    A handler that takes too long — or one that deliberately re-enables interrupts mid-handler with <code>sti</code> to stay responsive — opens the door to a second interrupt arriving while the first is still on the stack. If both handlers touch the same shared, non-reentrant state (a global buffer, a linked list, a device register) without any locking, you've built a race condition inside code whose entire job was supposedly to run atomically. The safe default for most hobby-OS interrupt handlers, bob_os included at this stage, is: keep IF clear for the handler's duration (the Interrupt Gate default already does this), keep the handler short, and defer any slow work to be picked up later outside interrupt context.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">ISR (Interrupt Service Routine)</div><div class="glossary-def">The handler code that actually runs once the IDT has dispatched a trap — in practice, a raw assembly stub plus a normal C function it calls.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IRQ (Interrupt Request)</div><div class="glossary-def">A hardware interrupt line asserted by a device, routed through the PIC or APIC to a specific IDT vector — asynchronous and requires an EOI.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CPU Exception</div><div class="glossary-def">A synchronous trap the CPU raises on its own, caused by the instruction currently executing — no controller involved, no EOI to send.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EOI (End-Of-Interrupt)</div><div class="glossary-def">A command byte written back to the interrupt controller telling it the current IRQ has been serviced and it's free to deliver another on that line.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trap Frame / interrupt_frame</div><div class="glossary-def">The saved-register structure a stub builds on the kernel stack — general registers, segment registers, vector number, error code, plus the CPU's own EIP/CS/EFLAGS push.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ISR Stub</div><div class="glossary-def">The small, per-vector assembly routine that saves every register before calling a normal C handler, and restores them before executing iret.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IMR (Interrupt Mask Register)</div><div class="glossary-def">A per-PIC register with one bit per IRQ line; a set bit means that line is disabled and the PIC will not deliver it, EOI or not.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IF (Interrupt Flag)</div><div class="glossary-def">A bit in EFLAGS controlling whether the CPU will accept maskable interrupts at all; Interrupt Gates clear it automatically on entry.</div></div>
+    <div class="glossary-card"><div class="glossary-term">iret</div><div class="glossary-def">The instruction that ends an ISR, restoring EIP, CS, and EFLAGS from the CPU's own automatic pushes — never a plain ret.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>ISRs and IRQs · Companion lesson for bob_os module 05_idt_interrupts</p>
+  <p style="margin-top:.5rem;font-size:.78rem">The door was the easy part. What's behind it is on you.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0',teal:'#0d9488'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── EOI LIFECYCLE CANVAS ─────────────────────────────────────────────────
+const STAGES=['KEYBOARD','PIC (IRQ1)','CPU / IDT','ISR STUB','C HANDLER'];
+
+function stageBox(ctx,i,n,W,y,h,active,col){
+  const gap=14, w=(W-gap*(n+1))/n, x=gap+i*(w+gap);
+  ctx.fillStyle= active ? col+'22' : 'rgba(255,255,255,.03)';
+  ctx.strokeStyle= active ? col : C.border;
+  ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.roundRect ? ctx.roundRect(x,y,w,h,6) : ctx.rect(x,y,w,h);
+  ctx.fill();ctx.stroke();
+  ctx.fillStyle= active ? col : C.muted;
+  ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  const words=STAGES[i].split(' ');
+  words.forEach((word,li)=>ctx.fillText(word,x+w/2,y+h/2-6*(words.length-1)+li*13));
+  return {x,y,w,h,cx:x+w/2,cy:y+h/2};
+}
+
+function drawEOI(t,phase,mode){
+  const canvas=document.getElementById('eoiCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const rowY=70, rowH=64;
+  const boxes=[];
+  for(let i=0;i<STAGES.length;i++) boxes.push(stageBox(ctx,i,STAGES.length,W,rowY,rowH,false,C.orange));
+
+  // re-draw active boxes based on phase progress
+  const order=['fire','pic','cpu','stub','handler','eoi'];
+  let activeUpTo=-1;
+  if(phase==='fire')activeUpTo=0;
+  else if(phase==='pic')activeUpTo=1;
+  else if(phase==='cpu')activeUpTo=2;
+  else if(phase==='stub')activeUpTo=3;
+  else if(phase==='handler'||phase==='eoi_sent'||phase==='eoi_skipped')activeUpTo=4;
+  for(let i=0;i<=activeUpTo && i<STAGES.length;i++) stageBox(ctx,i,STAGES.length,W,rowY,rowH,true,C.orange);
+
+  // EOI arrow back to PIC box
+  if(phase==='eoi_sent'||phase==='done1'||phase==='fire2'||(phase==='pic2'&&mode==='correct')){
+    const pic=stageBox(ctx,1,STAGES.length,W,rowY,rowH,true,C.orange);
+    const hnd=stageBox(ctx,4,STAGES.length,W,rowY,rowH,true,C.orange);
+    ctx.strokeStyle=C.green;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(hnd.cx,hnd.y);ctx.lineTo(hnd.cx,hnd.y-30);ctx.lineTo(pic.cx,pic.y-30);ctx.lineTo(pic.cx,pic.y);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.green;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('EOI (0x20 → port 0x20)',(hnd.cx+pic.cx)/2,rowY-38);
+  }
+  if(phase==='eoi_skipped'||phase==='fire2_blocked'||phase==='pic2_blocked'){
+    const hnd=stageBox(ctx,4,STAGES.length,W,rowY,rowH,true,C.orange);
+    ctx.fillStyle=C.red;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('handler returns — no EOI sent',hnd.cx,rowY-14);
+  }
+
+  // moving dot for first cycle
+  let dotX=null,dotY=null,dotCol=C.orange;
+  const stageIdx={fire:0,pic:1,cpu:2,stub:3,handler:4};
+  if(stageIdx[phase]!==undefined){
+    const i=stageIdx[phase];
+    const b0=stageBox(ctx,Math.max(i-1,0),STAGES.length,W,rowY,rowH,false,C.orange);
+    const b1=stageBox(ctx,i,STAGES.length,W,rowY,rowH,false,C.orange);
+    const fromX = i===0? b1.x-20 : b0.cx;
+    dotX = fromX + (b1.cx-fromX)*t; dotY=b1.cy; dotCol=C.orange;
+  }
+
+  // second key press row
+  const row2Y=rowY+rowH+70;
+  ctx.fillStyle=C.muted;ctx.font='11px Lato,sans-serif';ctx.textAlign='left';
+  ctx.fillText('Second key press:',18,row2Y-14);
+
+  if(phase==='fire2'||phase==='pic2_ok'){
+    const b=stageBox(ctx,1,STAGES.length,W,row2Y,rowH,true,C.green);
+    stageBox(ctx,0,STAGES.length,W,row2Y,rowH,true,C.green);
+    const b0=stageBox(ctx,0,STAGES.length,W,row2Y,rowH,false,C.green);
+    dotX = b0.cx + (b.cx-b0.cx)*t; dotY=b.cy; dotCol=C.green;
+    if(phase==='pic2_ok'){
+      ctx.fillStyle=C.green;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('IRQ1 unmasked — PIC delivers it, dispatch continues normally',W/2,row2Y+rowH+22);
+    }
+  }
+  if(phase==='fire2_blocked'||phase==='pic2_blocked'){
+    const b0=stageBox(ctx,0,STAGES.length,W,row2Y,rowH,true,C.red);
+    const b1=stageBox(ctx,1,STAGES.length,W,row2Y,rowH,true,C.red);
+    dotX = b0.cx + (b1.cx-b0.cx)*Math.min(t,1); dotY=b1.cy; dotCol=C.red;
+    if(phase==='pic2_blocked'){
+      ctx.fillStyle=C.red;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('BLOCKED — IRQ1 still "in service", PIC never told otherwise',W/2,row2Y+rowH+22);
+      ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+      ctx.fillText('The keyboard is dead until reboot. No crash. No warning.',W/2,row2Y+rowH+40);
+    }
+  }
+
+  if(dotX!==null){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  const captions={
+    idle:'Choose a scenario above',
+    fire:'⚡ You press a key — the keyboard asserts IRQ1',
+    pic:'PIC checks its mask, raises vector 33 to the CPU',
+    cpu:'CPU dispatches through the IDT to irq1’s gate',
+    stub:'isr_common_stub saves every register (pusha + segment regs)',
+    handler: mode==='correct' ? 'C handler runs — reads the scancode' : 'C handler runs — reads the scancode, then just... returns',
+    eoi_sent:'pic_send_eoi(1) — outb(0x20, 0x20) — PIC clears IRQ1 “in service”',
+    eoi_skipped:'No EOI sent. The PIC still thinks IRQ1 is being handled.',
+    fire2:'You press another key...',
+    fire2_blocked:'You press another key...',
+    pic2_ok:'',
+    pic2_blocked:''
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function runEOI(mode){
+  const phasesCorrect=['fire','pic','cpu','stub','handler','eoi_sent','fire2','pic2_ok'];
+  const phasesBuggy=['fire','pic','cpu','stub','handler','eoi_skipped','fire2_blocked','pic2_blocked'];
+  const phases = mode==='correct'?phasesCorrect:phasesBuggy;
+  const durations=[380,420,420,420,480,480,460,500];
+  let idx=0,start=performance.now();
+  document.getElementById('eoiLabel').textContent = mode==='correct' ? '▶ Correct handler: EOI sent, IRQ1 works again' : '▶ Buggy handler: EOI forgotten, IRQ1 dies';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawEOI(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('eoiLabel').textContent='▶ Done — try the other scenario';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetEOI(){
+  document.getElementById('eoiLabel').textContent='▶ Watch two key presses — with and without the EOI';
+  drawEOI(0,'idle','');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetEOI(); });
+window.addEventListener('resize',()=>{ resetEOI(); });
+</script>
+</body>
+</html>

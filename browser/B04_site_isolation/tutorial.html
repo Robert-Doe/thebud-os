@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B04 — Site Isolation | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(251,146,60,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--orange);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--orange);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--orange);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--orange);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(251,146,60,0.08),rgba(245,200,66,0.08));border:1px solid rgba(251,146,60,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--orange);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .site-map{display:flex;flex-direction:column;gap:8px;margin:24px 0;}
+  .site-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:'Source Code Pro',monospace;font-size:13px;}
+  .site-key{color:var(--cyan);min-width:180px;}
+  .site-arrow{color:var(--muted);}
+  .site-pid{color:var(--orange);}
+  .site-tabs{color:var(--muted);font-size:12px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B04 — SITE ISOLATION</div>
+  <h1>One Process <span>Per Site</span></h1>
+  <p class="tagline">SOP is a software check — Spectre can bypass software. Site isolation enforces origin boundaries at the hardware level: different sites live in different OS processes with separate address spaces. Spectre can only leak what's in the same process.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">eTLD+1</div><div class="label">site key = scheme + registrable domain</div></div>
+    <div class="hero-stat"><div class="num">hashmap</div><div class="label">site → renderer PID</div></div>
+    <div class="hero-stat"><div class="num">Spectre</div><div class="label">mitigated by process boundary</div></div>
+    <div class="hero-stat"><div class="num">OOPIF</div><div class="label">out-of-process iframes</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-rings">CPU Rings</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>SOP is a rule enforced by a security guard standing inside a shared building (the renderer process). Spectre lets an attacker pick the guard's pocket while standing next to them — same address space, timing side-channel, game over.</p>
+      <p style="margin-top:10px;">Site isolation moves each website into its own separate building entirely. Even if an attacker has full Spectre capability inside their building, they can only steal furniture from that same building. Your bank data is across the street in a different building.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Site vs Origin</h2>
+    <pre><code>/* site_isolation.h
+   site key = scheme + eTLD+1 (not full host!)
+   eTLD+1: "google.com" from "mail.google.com"
+           "co.uk" is a public suffix, so "bbc.co.uk" is the eTLD+1
+*/
+const char *get_site_key(const char *url) {
+    origin_t o;
+    origin_parse(url, &o);
+    /* strip to registrable domain using public suffix list */
+    const char *etld1 = public_suffix_registrable(o.host);
+    static char key[256];
+    snprintf(key, sizeof(key), "%s://%s", o.scheme, etld1);
+    return key;
+}
+/*
+   https://mail.google.com  → "https://google.com"
+   https://docs.google.com  → "https://google.com"  (SAME renderer)
+   https://evil.com         → "https://evil.com"    (DIFFERENT renderer)
+   https://bbc.co.uk        → "https://bbc.co.uk"
+*/</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">Origin vs Site</div>
+      <p>Origin = scheme + host + port (fine-grained, B03). Site = scheme + eTLD+1 (coarser, for process allocation). <code>mail.google.com</code> and <code>docs.google.com</code> are different origins but the same site — they share a renderer process. This balances security (cross-site isolation) with memory cost (not one process per subdomain).</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — The Site-to-Renderer Map</h2>
+    <pre><code>/* site_isolation.c */
+#define MAX_SITES 64
+struct site_entry {
+    char site_key[256];
+    pid_t renderer_pid;
+    int   to_fd;
+    int   from_fd;
+} site_map[MAX_SITES];
+int n_sites = 0;
+
+/* Get or create a renderer for this site */
+struct site_entry *get_renderer_for_url(const char *url) {
+    const char *key = get_site_key(url);
+    /* look up existing renderer */
+    for (int i = 0; i < n_sites; i++)
+        if (strcmp(site_map[i].site_key, key) == 0)
+            return &site_map[i];
+    /* spawn new renderer for this site */
+    struct site_entry *e = &site_map[n_sites++];
+    strncpy(e->site_key, key, sizeof(e->site_key)-1);
+    e->renderer_pid = spawn_renderer(&e->to_fd, &e->from_fd);
+    printf("[browser] new renderer PID=%d for site=%s\n",
+           e->renderer_pid, key);
+    return e;
+}
+
+/* Navigate a tab to a new URL */
+void navigate(int tab_id, const char *url) {
+    struct site_entry *r = get_renderer_for_url(url);
+    tabs[tab_id].renderer = r;
+    ipc_send(r->to_fd, "LOAD", url);
+}</code></pre>
+
+    <div class="site-map">
+      <div class="site-row"><span class="site-key">https://google.com</span><span class="site-arrow">→</span><span class="site-pid">PID 1001</span><span class="site-tabs">(mail, docs, drive tabs)</span></div>
+      <div class="site-row"><span class="site-key">https://bank.com</span><span class="site-arrow">→</span><span class="site-pid">PID 1002</span><span class="site-tabs">(1 tab)</span></div>
+      <div class="site-row"><span class="site-key">https://evil.com</span><span class="site-arrow">→</span><span class="site-pid">PID 1003</span><span class="site-tabs">(1 tab)</span></div>
+      <div class="site-row"><span class="site-key">https://news.com</span><span class="site-arrow">→</span><span class="site-pid">PID 1004</span><span class="site-tabs">(2 tabs)</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Out-of-Process Iframes (OOPIF)</h2>
+    <pre><code>/* A page at https://news.com embeds:
+   &lt;iframe src="https://evil-ad.com/ad.html"&gt;&lt;/iframe&gt;
+
+   Without OOPIF: the iframe runs in news.com's renderer —
+   same process, Spectre can read news.com's data.
+
+   With OOPIF: the iframe gets its own renderer process. */
+
+void process_iframe(const char *parent_url, const char *iframe_url) {
+    const char *parent_site = get_site_key(parent_url);
+    const char *iframe_site = get_site_key(iframe_url);
+
+    if (strcmp(parent_site, iframe_site) != 0) {
+        /* cross-site iframe: put it in a separate renderer */
+        struct site_entry *r = get_renderer_for_url(iframe_url);
+        ipc_send(r->to_fd, "RENDER_IFRAME", iframe_url);
+        printf("[browser] OOPIF: %s in separate renderer PID=%d\n",
+               iframe_url, r->renderer_pid);
+    } else {
+        /* same site: iframe can share the parent's renderer */
+        struct site_entry *r = get_renderer_for_url(parent_url);
+        ipc_send(r->to_fd, "RENDER_IFRAME_INPROC", iframe_url);
+    }
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B04 — Site Isolation</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B04_site_isolation && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[browser] navigate tab0 → https://mail.google.com
+[browser] new renderer PID=1001 for site=https://google.com
+[browser] navigate tab1 → https://docs.google.com
+[browser] reusing renderer PID=1001 (same site google.com)
+[browser] navigate tab2 → https://bank.com
+[browser] new renderer PID=1002 for site=https://bank.com
+[browser] OOPIF: https://evil-ad.com in separate renderer PID=1003
+Site isolation: OK  (3 sites, 3 renderer processes)</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>Site isolation requires the browser to know the public suffix list (PSL) to compute eTLD+1. The PSL is a Mozilla-maintained list of all known public suffixes (<code>co.uk</code>, <code>com.au</code>, etc.). It's a plain text file with ~9000 entries.</p>
+      <p style="margin-top:14px;color:var(--muted);">What happens if a new country code TLD adds a new public suffix and the browser's bundled PSL hasn't been updated yet? Who has the wrong site grouping, and what's the security impact? Could an attacker register a domain to exploit this lag?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Does site isolation fully mitigate Spectre?</div>
+      <div class="a">It significantly reduces the risk. Spectre can read memory in the current process — with site isolation, that's only data from that one site's renderer. But the renderer still contains the browser's own code and data structures, so a sufficiently powerful Spectre attack in a renderer could still read rendering engine state. Full mitigation requires hardware fixes (retpoline, IBRS) and high-resolution timer reduction (SharedArrayBuffer/COOP restrictions).</div>
+      <div class="q">Q: How does the browser handle navigation from one site to another in the same tab?</div>
+      <div class="a">When you click a link from evil.com to bank.com, the browser does a "cross-site navigation." It creates a new renderer for bank.com (or reuses an existing one), transfers rendering to it, and discards the evil.com renderer state. This is called a "browse instance swap" — the tab keeps its history, but the process behind it changes.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B05 — HTML Tokenizer</div>
+      <p>The browser's front door: parsing raw HTML bytes into a DOM tree. The tokenizer is a state machine that must handle malformed input, nested tags, and the notorious "parser differentials" that enable mutation XSS — where the same HTML string is parsed differently by different parsers.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>site_isolation.c</code> · <code>site_map.h</code> · <code>oopif.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B04 of 18 &nbsp;|&nbsp; <a href="../B03_same_origin_policy/tutorial.html">← B03</a> &nbsp;·&nbsp; <a href="../B05_html_tokenizer/tutorial.html">B05 →</a></footer>
+</body>
+</html>

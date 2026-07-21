@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logical, Linear &amp; Physical Addresses — The Two-Stage Journey to RAM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)} h2 .accent.g{color:var(--gold)} h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2rem;margin:1.8rem 0;}
+@media(max-width:760px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.a h4{color:var(--cyan)} .compare-card.b h4{color:var(--gold)} .compare-card.c h4{color:var(--red)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#threekinds" title="Three Kinds"></a>
+  <a class="toc-dot" href="#logical" title="Logical Address"></a>
+  <a class="toc-dot" href="#linear" title="Linear Address"></a>
+  <a class="toc-dot" href="#physical" title="Physical Address"></a>
+  <a class="toc-dot" href="#mmu" title="The MMU Pipeline"></a>
+  <a class="toc-dot" href="#arbiter" title="Memory Arbiter"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Chapter 2 · x86 Address Translation</div>
+    <h1>One Address,<br><span>Three Disguises</span></h1>
+    <p class="hero-sub">When your instruction says "read the value at this address," that address is lying to you three times before it ever touches a memory chip. It starts as a <em>logical</em> address, gets translated into a <em>linear</em> address, and only then becomes a <em>physical</em> address — the one and only kind RAM actually understands. This is the story of that journey, and the two hardware circuits that make it happen on every single memory access, billions of times a second.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Kinds of Address</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Hardware Translation Units</div></div>
+      <div class="hero-stat"><div class="num">4GB</div><div class="lbl">Addressable via 32-bit Linear Space</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Software Involved in Translation</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="threekinds">
+<div class="container">
+  <div class="section-num">01 — Three Words People Use Loosely</div>
+  <h2>Programmers Say <span class="accent">"Address."</span> The CPU Hears Three Different Things.</h2>
+  <p class="reveal">Say you write <code>int x = arr[5];</code> in C. That "address of <code>arr[5]</code>" is not one fixed concept — it changes shape three times on its way to becoming an actual electrical signal on a RAM chip's pins. This isn't academic pedantry: Intel's 80×86 architecture builds this three-stage journey directly into silicon, and Linux's entire memory-protection story depends on understanding exactly where each stage happens.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card a"><h4>📫 Logical Address</h4>What your <em>instruction</em> actually contains: a segment + an offset. The "apartment number" — meaningless without knowing which building.</div>
+    <div class="compare-card b"><h4>🗺️ Linear Address</h4>A single flat 32-bit number, 0 to 4GB. The "citywide grid coordinate" — one unified numbering system, still not real RAM.</div>
+    <div class="compare-card c"><h4>⚡ Physical Address</h4>The actual signal sent down the address pins to a real memory chip. The "GPS coordinate" a memory cell physically sits at.</div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 The One-Sentence Version</div>
+    <strong>Logical → (Segmentation Unit) → Linear → (Paging Unit) → Physical.</strong> Two separate hardware circuits, wired in series, and your program — and even the OS, most of the time — never has to do this math by hand.
+  </div>
+</div>
+</section>
+
+<section id="logical">
+<div class="container">
+  <div class="section-num">02 — Stage Zero</div>
+  <h2>The <span class="accent">Logical Address</span>: Segment + Offset</h2>
+  <p class="reveal">Every machine-language instruction that touches memory doesn't embed one raw number — it embeds two pieces: which <strong>segment</strong> it's talking about, and the <strong>offset</strong> (distance) from the start of that segment. This is a direct fossil of the old 80×86 <em>segmented architecture</em> that MS-DOS and early Windows programmers had to think about explicitly.</p>
+  <p class="reveal">Think of a segment like a named building, and the offset like "the 12th room from the front door." <code>segment:offset</code> only makes sense once you know which building you're standing in front of — which is precisely why this can't be the final address. It's relative, not absolute.</p>
+  <div class="sidenote reveal"><b>Why keep segments at all?</b> They let the OS give a code segment, a data segment, and a stack segment separate identities, sizes, and — crucially, as you'll see in the GDT piece — separate privilege levels, all before paging-based protection even gets involved.</div>
+</div>
+</section>
+
+<section id="linear">
+<div class="container">
+  <div class="section-num">03 — Stage One</div>
+  <h2>The <span class="accent">Linear Address</span>: One Flat Number</h2>
+  <p class="reveal">The <strong>segmentation unit</strong> — a real hardware circuit inside the CPU, not a piece of OS code — takes your segment:offset pair and produces a single, unsigned 32-bit integer: the linear address, also called the <strong>virtual address</strong>. It ranges from <code>0x00000000</code> to <code>0xffffffff</code>, addressing up to 4,294,967,296 individual bytes (4 GB).</p>
+  <p class="reveal">This is the point where all the messy "which building" bookkeeping disappears into one uniform, flat numbering system — every byte in the process's addressable world now has exactly one linear address, full stop.</p>
+  <div class="formula cyan reveal">
+    <span class="label">What the segmentation unit computes</span>
+    Linear Address = Segment Base Address + Offset
+    <span class="sub">"Segment Base Address" comes from a Segment Descriptor — the subject of the next two pages in this series.</span>
+  </div>
+</div>
+</section>
+
+<section id="physical">
+<div class="container">
+  <div class="section-num">04 — Stage Two</div>
+  <h2>The <span class="accent">Physical Address</span>: What RAM Actually Sees</h2>
+  <p class="reveal">A linear address still isn't real — it's a coordinate in an abstract 4GB space that might not correspond 1-to-1 with where data actually lives in physical RAM (especially once swapping and multiple processes enter the picture). The <strong>paging unit</strong>, a second hardware circuit, transforms the linear address into a physical address: a 32-bit or 36-bit unsigned integer that corresponds directly to electrical signals sent along the microprocessor's address pins to the memory bus.</p>
+  <p class="reveal">This is the address a RAM chip actually receives. Nothing more abstract happens after this point — it's the end of the line.</p>
+</div>
+</section>
+
+<section id="mmu">
+<div class="container">
+  <div class="section-num">05 — Watch It Happen</div>
+  <h2>The Full Pipeline: <span class="accent">The MMU</span></h2>
+  <p class="reveal">Both circuits together — the segmentation unit and the paging unit — are collectively called the <strong>Memory Management Unit (MMU)</strong>. Every memory reference your CPU makes flows through both stages, in hardware, without a single instruction of OS code running in between (unless something goes wrong, like a page fault, which we've covered as an exception trap in the earlier piece on traps and PCBs).</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="mmuLabel">▶ Trace one memory access through the MMU — click to run</div>
+    <canvas id="mmuCanvas" height="260"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runMMU()">▶ Translate an address</button>
+    <button class="ctrl-btn red" onclick="resetMMU()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Instruction issues a logical address</strong>e.g. segment selector in <code>ds</code> + a 32-bit offset baked into the instruction.</div></li>
+    <li><div class="step-body"><strong>Segmentation unit adds the segment's base</strong>Looks up the segment's Segment Descriptor (from the GDT or LDT — next articles), reads its Base field, and adds it to the offset to produce a 32-bit linear address.</div></li>
+    <li><div class="step-body"><strong>Paging unit walks the page tables</strong>Splits the linear address into pieces used to walk in-memory page tables (owned by the currently running process, per its PCB's memory pointer) and resolve the actual physical page frame.</div></li>
+    <li><div class="step-body"><strong>Physical address hits the bus</strong>The final address is placed on the memory bus, the memory arbiter grants access, and the RAM chip responds with the actual byte(s).</div></li>
+  </ol>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why Two Separate Circuits Instead of One?</div>
+    Segmentation gives the OS a cheap way to express <em>logical groupings with different rights</em> (code vs. data vs. stack, at different privilege levels) — it's the first line of protection. Paging gives the OS a cheap way to express <em>flexible, page-granular physical placement</em> — letting physical RAM be scattered, shared, swapped, and remapped, invisibly to the running program. Linux, notably, uses segmentation minimally (flat segments covering the whole address space) and leans almost entirely on paging for real protection — but the segmentation stage still runs on every access, because the hardware pipeline is fixed.
+  </div>
+</div>
+</section>
+
+<section id="arbiter">
+<div class="container">
+  <div class="section-num">06 — The Detail Everyone Forgets</div>
+  <h2>The <span class="accent">Memory Arbiter</span>: Sharing One Chip</h2>
+  <p class="reveal">Here's a subtlety worth having: even a single-core machine has more than one thing trying to touch RAM. <strong>DMA controllers</strong> — specialized processors that move data (like a disk transfer) without bothering the CPU — operate concurrently with the CPU itself. In multiprocessor systems, multiple CPUs share the same RAM chips directly.</p>
+  <p class="reveal">Since a RAM chip can only actually service one read or write at a time, a hardware circuit called the <strong>memory arbiter</strong> sits between the bus and every RAM chip, granting access to whoever's free and delaying whoever's not — invisibly, entirely in hardware, never surfaced to the programmer.</p>
+  <div class="callout purple reveal"><div class="callout-title">🧠 Why This Matters Later</div>The memory arbiter is the unglamorous reason "shared memory between processes" (from the PCB/threads piece) doesn't cause electrical chaos even when two processes race to write the same physical page at the same instant — the arbiter serializes the raw electrical access, though it does nothing to stop the <em>logical</em> race condition, which is still the programmer's job to guard with a semaphore.</div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Logical Address</div><div class="glossary-def">A segment + offset pair embedded in a machine instruction — relative, meaningless without the segment's identity.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Linear Address (Virtual Address)</div><div class="glossary-def">A flat 32-bit unsigned integer (0x00000000–0xffffffff) produced by the segmentation unit.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Physical Address</div><div class="glossary-def">The final 32/36-bit address placed on the memory bus — what a RAM chip actually receives.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segmentation Unit</div><div class="glossary-def">Hardware circuit that adds a segment's base address to an offset, converting logical → linear.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Paging Unit</div><div class="glossary-def">Hardware circuit that walks page tables to convert linear → physical.</div></div>
+    <div class="glossary-card"><div class="glossary-term">MMU</div><div class="glossary-def">Memory Management Unit — the segmentation unit and paging unit together.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Memory Arbiter</div><div class="glossary-def">Hardware circuit serializing concurrent access requests (from CPUs and DMA controllers) to a single RAM chip.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DMA Controller</div><div class="glossary-def">A specialized processor moving data to/from memory independently of the CPU, still subject to the memory arbiter.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Logical, Linear &amp; Physical Addresses · Memory Addressing Series, Part 1</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: Segmentation in Hardware — segment selectors, registers, and descriptors.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+function drawMMU(t,phase){
+  const canvas=document.getElementById('mmuCanvas');
+  const W=gW(canvas),H=260;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const stages=[
+    {x:W*0.02,w:W*0.2,label:'LOGICAL',sub:'seg:offset',col:C.cyan},
+    {x:W*0.27,w:W*0.2,label:'SEGMENTATION',sub:'unit',col:C.gold},
+    {x:W*0.52,w:W*0.2,label:'LINEAR',sub:'32-bit flat',col:C.purple},
+    {x:W*0.77,w:W*0.2,label:'PAGING',sub:'unit',col:C.orange},
+  ];
+  const y=H*0.32,h=70;
+  stages.forEach(s=>{
+    ctx.fillStyle=s.col+'22';ctx.fillRect(s.x,y,s.w,h);
+    ctx.strokeStyle=s.col;ctx.lineWidth=1.5;ctx.strokeRect(s.x,y,s.w,h);
+    ctx.fillStyle=s.col;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(s.label,s.x+s.w/2,y+h/2-4);
+    ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+    ctx.fillText(s.sub,s.x+s.w/2,y+h/2+12);
+  });
+  // physical output box
+  ctx.fillStyle=C.green+'22';ctx.fillRect(W*0.4,y+h+40,W*0.2,50);
+  ctx.strokeStyle=C.green;ctx.strokeRect(W*0.4,y+h+40,W*0.2,50);
+  ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';
+  ctx.fillText('PHYSICAL',W*0.5,y+h+62);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('→ RAM chip',W*0.5,y+h+78);
+
+  const captions={
+    idle:'Click "Translate an address" to watch it flow',
+    s1:'Instruction issues logical address (segment selector + offset)',
+    s2:'Segmentation unit adds the segment base → produces linear address',
+    s3:'Paging unit walks page tables using the linear address',
+    s4:'Physical address hits the memory bus — memory arbiter grants access'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+
+  let dotX=stages[0].x+10,dotY=y+h/2,col=C.cyan;
+  if(phase==='s1'){dotX=stages[0].x+10+stages[0].w*0.6*t;col=C.cyan;}
+  else if(phase==='s2'){dotX=stages[1].x+stages[1].w*t;dotY=y+h/2;col=C.gold;}
+  else if(phase==='s3'){dotX=stages[2].x+stages[2].w+ (stages[3].x-(stages[2].x+stages[2].w))*t + stages[3].w*t*0.5;dotY=y+h/2;col=C.orange;}
+  else if(phase==='s4'){dotX=W*0.5;dotY=y+h+ (40)*t;col=C.green;}
+  ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+function runMMU(){
+  const phases=['s1','s2','s3','s4'];
+  const durations=[500,600,600,500];
+  let idx=0,start=performance.now();
+  document.getElementById('mmuLabel').textContent='▶ Translating…';
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[idx]);
+    drawMMU(t,phases[idx]);
+    if(t>=1){idx++;if(idx>=phases.length){document.getElementById('mmuLabel').textContent='▶ Done — click to run again';return;}start=now;}
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetMMU(){document.getElementById('mmuLabel').textContent='▶ Trace one memory access through the MMU — click to run';drawMMU(0,'idle');}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetMMU);
+window.addEventListener('resize',resetMMU);
+</script>
+</body>
+</html>

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POSIX Signals: The Kernel's Way of Tapping a Process on the Shoulder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:var(--purple)} .ty{color:var(--cyan)} .fn{color:var(--gold)} .cm{color:var(--muted);font-style:italic} .st{color:var(--green)} .nu{color:var(--orange)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:var(--red);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.family-card ul{padding-left:1.1rem;margin-bottom:0;}
+.family-card li{font-size:.85rem;color:var(--text);margin-bottom:.3rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2rem;margin:1.8rem 0;}
+@media(max-width:760px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)} .compare-card.neutral h4{color:var(--cyan)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#whatis" title="What Is a Signal"></a>
+  <a class="toc-dot" href="#sources" title="Where They Come From"></a>
+  <a class="toc-dot" href="#disposition" title="Three Choices"></a>
+  <a class="toc-dot" href="#demo" title="Watch One Land"></a>
+  <a class="toc-dot" href="#table" title="Signal Table"></a>
+  <a class="toc-dot" href="#code" title="Installing a Handler"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Signals · Asynchronous Notification</div>
+    <h1>A Tap On The<br><span>Shoulder</span></h1>
+    <p class="hero-sub">You already know a system call is a process deliberately knocking on the kernel's door. A signal is the opposite knock — the kernel (or another process entirely) reaching over and tapping a running process on the shoulder, completely uninvited, to say "something happened, deal with it." This page is about what signals are, where they come from, and the three things a process is allowed to do when one arrives.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">31</div><div class="lbl">Standard POSIX Signal Numbers</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Things a Process Can Do With One</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Signal No Process Can Ever Block</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Arguments a Signal Can Carry (just a number)</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>You've Met <span class="accent">Traps</span>. Meet Their Cousin.</h2>
+  <p class="reveal">From the PCB and IDT material, you already know the kernel gets involved in a running process through three doors: a deliberate <em>syscall</em>, an involuntary <em>fault</em> triggered by the CPU reacting to the current instruction, or an involuntary <em>hardware interrupt</em> from some device that has nothing to do with what's executing. All three are the CPU's business — they happen at the instruction level, dispatched through the IDT, and they're resolved (or not) before the CPU even finishes decoding whatever comes next.</p>
+  <p class="reveal">A <strong>signal</strong> is a different animal, living one layer up. It isn't a CPU mechanism at all — it's a kernel-level, <em>software</em> notification mechanism aimed at a specific process (or thread). Sometimes a signal gets <em>triggered by</em> one of those three hardware doors — a bad memory access turns into a page fault, which the kernel decides to turn into a <code>SIGSEGV</code> signal aimed at the offending process. But the signal itself — the numbered flag, the pending state, the delivery — is pure kernel bookkeeping, not silicon. That's the whole subject of this module.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The One Sentence to Remember</div>
+    A signal is a <strong>limited, numbered set of notifications</strong> the kernel can deliver to a process — some generated by the kernel itself reacting to what the process did, some sent deliberately by another process (or the user), and a couple set aside purely for the application to invent its own meaning.
+  </div>
+</div>
+</section>
+
+<!-- WHAT IS A SIGNAL -->
+<section id="whatis">
+<div class="container">
+  <div class="section-num">01 — First Principles</div>
+  <h2>What Is a <span class="accent">Signal</span>, Really?</h2>
+
+  <p class="reveal">Strip away everything else and a signal is astonishingly small: it's <strong>a number between 1 and 31</strong> (on Linux's original set — extended ranges exist for real-time signals, but ignore those for now). That's it. No payload, no attached data, no way to pass a string or a struct. When the kernel "sends process 4021 a SIGTERM," all that really happens is: somewhere in process 4021's kernel-side bookkeeping, a single bit gets set.</p>
+
+  <p class="reveal">You've already seen exactly where that bit lives, even if you didn't know its name yet. Go back to the PCB dossier — the kernel-only record the scheduler keeps per process. A real POSIX kernel keeps a small chunk of that dossier reserved specifically for signal state: which signals are currently <em>pending</em> (arrived but not yet delivered), which are currently <em>blocked</em> (more on this in the next lesson), and — critically — what this process wants done, per signal number, when it lands. bob_os models this with almost embarrassing directness:</p>
+
+  <pre class="reveal"><code><span class="cm">/* process.h — bob_os's actual signal bookkeeping */</span>
+<span class="kw">#define</span> NSIG    <span class="nu">32</span>
+<span class="kw">#define</span> SIG_DFL <span class="nu">0u</span>   <span class="cm">/* default action */</span>
+<span class="kw">#define</span> SIG_IGN <span class="nu">1u</span>   <span class="cm">/* ignore */</span>
+
+<span class="kw">struct</span> process {
+    <span class="cm">/* ... pid, state, registers, page table pointer ... */</span>
+    <span class="ty">uint32_t</span> pending_signals;          <span class="cm">/* bitmask: bit N = signal N pending */</span>
+    <span class="ty">uint32_t</span> signal_handlers[NSIG];    <span class="cm">/* handler addr, SIG_DFL, or SIG_IGN */</span>
+};</code></pre>
+
+  <p class="reveal">One 32-bit integer for "what's pending," and one small array for "what to do about each one." That's the entire data structure a signal-capable kernel needs to add to a PCB. Everything else in this module is about the <em>mechanics</em> of how those two fields get read, written, and acted on.</p>
+
+  <div class="sidenote reveal"><b>Why a bitmask and not a queue?</b> Standard POSIX signals deliberately don't queue. If someone sends a process ten <code>SIGUSR1</code>s before it gets a chance to handle even one, that counts as <em>one</em> pending SIGUSR1 — OR-ing a bit that's already set is a no-op. This surprises people coming from event-queue backgrounds. (Real-time signals, <code>SIGRTMIN</code> and up, do queue — but that's a different, rarer corner of POSIX most kernels including bob_os don't bother implementing.)</div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A signal carries no data because it was never designed to. It's not a message — it's a <strong>flag</strong>. The number itself is the entire payload: "this specific, pre-agreed-upon thing happened." If you need to pass real data between processes, you reach for pipes, shared memory, or sockets — signals are strictly for "something happened, and here's which of ~31 pre-registered somethings it was."
+  </div>
+</div>
+</section>
+
+<!-- SOURCES -->
+<section id="sources">
+<div class="container">
+  <div class="section-num">02 — Who Sends These, Anyway?</div>
+  <h2>Three <span class="accent">Origins</span>, One Mechanism</h2>
+
+  <p class="reveal">Every signal your process will ever receive traces back to one of exactly three sources. The delivery machinery downstream is identical no matter which one fired — but the <em>reason</em> a given signal number exists at all is always one of these three stories.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Kernel-Generated</span><span class="fam-count">reacting to a fault</span></div>
+      <div class="fam-desc">The kernel itself notices your process did something the hardware can't or won't let slide, and translates that into a signal aimed right back at you.</div>
+      <ul>
+        <li><code>SIGSEGV</code> — touched memory you don't own (bad pointer, stack overflow, null deref)</li>
+        <li><code>SIGFPE</code> — integer divide-by-zero, or an invalid floating-point operation</li>
+        <li><code>SIGILL</code> — the CPU tried to execute an instruction it doesn't recognize</li>
+        <li><code>SIGBUS</code> — a misaligned or otherwise invalid memory access at the bus level</li>
+      </ul>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Deliberately Sent</span><span class="fam-count">another actor's choice</span></div>
+      <div class="fam-desc">A human, a shell, or another process explicitly decides this process needs to know something — usually "stop" in some form.</div>
+      <ul>
+        <li><code>SIGINT</code> — you pressed Ctrl+C in the controlling terminal</li>
+        <li><code>SIGTERM</code> — a polite, catchable request: "please shut down"</li>
+        <li><code>SIGKILL</code> — an impolite, <em>uncatchable</em> demand: "you're gone, now"</li>
+        <li><code>SIGHUP</code> — the controlling terminal closed, or a daemon is asked to reload config</li>
+      </ul>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Application-Defined</span><span class="fam-count">yours to invent</span></div>
+      <div class="fam-desc">POSIX deliberately reserves a couple of numbers that mean nothing on their own — you decide what they mean inside your own program.</div>
+      <ul>
+        <li><code>SIGUSR1</code> — no built-in meaning; a common convention is "reload configuration"</li>
+        <li><code>SIGUSR2</code> — no built-in meaning; another process might use it as "dump your stats now"</li>
+        <li>Two processes that agree on a convention can use these as a crude, one-bit-of-data IPC channel</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ "Kernel-Generated" Doesn't Mean "No Process Involved"</div>
+    It's tempting to think of <code>SIGSEGV</code> as something the CPU does to you directly. It isn't. The CPU raises a <em>page fault</em> — one of the three hardware doors from the PCB/IDT material — and it's the kernel's page-fault handler that looks at the situation, decides "this access is genuinely invalid, not just a lazily-mapped page," and only <em>then</em> synthesizes a <code>SIGSEGV</code> and marks it pending on your process. The signal is a software decision layered on top of a hardware event, not the hardware event itself.
+  </div>
+
+  <p class="reveal">Notice that "deliberately sent" isn't limited to humans pressing keys. Any process with the right permissions can send any other process a signal directly through the <code>kill()</code> system call — a name that's historically accurate (it was originally only used to terminate things) but misleading today, since <code>kill()</code> can send <em>any</em> signal number, not just fatal ones.</p>
+
+  <pre class="reveal"><code><span class="cm">/* POSIX — send SIGUSR1 to process 4021 */</span>
+<span class="ty">int</span> <span class="fn">kill</span>(pid_t pid, <span class="ty">int</span> sig);
+
+kill(<span class="nu">4021</span>, SIGUSR1);   <span class="cm">// despite the name, nothing dies — SIGUSR1's default action just terminates</span>
+                       <span class="cm">// unless 4021 installed a handler for it</span></code></pre>
+</div>
+</section>
+
+<!-- DISPOSITION -->
+<section id="disposition">
+<div class="container">
+  <div class="section-num">03 — The Process's Side of the Deal</div>
+  <h2>Three Things You Can Do With a <span class="accent">Signal</span></h2>
+
+  <p class="reveal">Here's the part that makes signals genuinely useful rather than just a way for the kernel to kill you unpredictably: for almost every signal number, <strong>the target process gets a say</strong> in what happens when it arrives. That say comes down to exactly three options, and every signal you'll ever handle picks one of them.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1 — Do Nothing: Take the Default Action</strong>Every signal number ships with a kernel-defined default behavior, and if the process never says otherwise, that's exactly what happens. For most signals the default is "terminate the process" — sometimes with a core dump (<code>SIGSEGV</code>, <code>SIGABRT</code>), sometimes without (<code>SIGTERM</code>, <code>SIGINT</code>). A few signals default to something gentler: <code>SIGCHLD</code>'s default is simply "ignore," and <code>SIGSTOP</code>/<code>SIGCONT</code> default to pausing or resuming the process rather than killing it.</div></li>
+    <li><div class="step-body"><strong>2 — Explicitly Ignore It</strong>A process can tell the kernel "I never want to be interrupted for this one — just discard it silently, every time, forever" by setting that signal's disposition to <code>SIG_IGN</code>. This is different from never receiving the signal at all: the kernel still notices the signal arrived, it just throws it away instead of acting on it. This is genuinely useful — a network server, for instance, commonly sets <code>SIGPIPE</code> to <code>SIG_IGN</code> so that writing to a socket the other end already closed produces an error code instead of silently killing the whole process.</div></li>
+    <li><div class="step-body"><strong>3 — Install a Custom Handler</strong>The interesting option: a process can register its own ordinary function — a <strong>signal handler</strong> — to run instead of the default action, the moment this signal is delivered. The kernel doesn't just call it whenever convenient, either; it has to forcibly redirect the process's own execution into that function, then get it back out again afterward. That redirect-and-return mechanism is dense enough that it gets its own lesson next — for now, just know: writing a handler is you telling the kernel "when this happens, run <em>my</em> code instead of your default, then let me carry on."</div></li>
+  </ol>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The One Signal With No Vote</div>
+    <code>SIGKILL</code> (and its close cousin <code>SIGSTOP</code>) cannot be ignored and cannot be handled. Full stop — not "hard to," <em>structurally impossible</em>. The kernel doesn't even check the process's <code>signal_handlers</code> table for these two numbers; it hard-codes the behavior. This exists on purpose: no matter how broken, hung, or hostile a process is, the system administrator (or the kernel itself) needs at least one lever that is guaranteed to work. If <code>SIGKILL</code> were catchable, a buggy or malicious process could install a handler that just... never lets the process die.
+  </div>
+
+  <p class="reveal">This three-way choice is exactly why bob_os's <code>signal_handlers</code> array uses three possible states per slot — <code>SIG_DFL</code>, <code>SIG_IGN</code>, or a real function pointer — and why <code>SIGKILL</code> is checked and short-circuited before that array is even consulted, in the delivery code you'll trace through in the next lesson.</p>
+</div>
+</section>
+
+<!-- CANVAS DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>Same Signal, <span class="accent">Three Different Endings</span></h2>
+
+  <p class="reveal">Below is one signal, <code>SIGUSR1</code>, sent to the same target process three separate times — the only thing that changes between runs is what that process previously told the kernel to do with it. Watch how identical delivery leads to wildly different outcomes purely based on the disposition on file.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="sigLabel">▶ Choose a disposition to see how the same signal ends differently</div>
+    <canvas id="sigCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runSig('default')">▶ Disposition: SIG_DFL (default = terminate)</button>
+    <button class="ctrl-btn" onclick="runSig('ignore')">▶ Disposition: SIG_IGN (ignore)</button>
+    <button class="ctrl-btn gold" onclick="runSig('handler')">▶ Disposition: custom handler</button>
+    <button class="ctrl-btn green" onclick="resetSig()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal"><b>What to notice:</b> the first three phases — sender calls <code>kill()</code>, kernel sets the pending bit, kernel checks the disposition table — are <em>identical</em> in all three runs. Everything the process experiences differently happens only in the last step. The disposition table is the only fork in the road.</div>
+</div>
+</section>
+
+<!-- TABLE -->
+<section id="table">
+<div class="container">
+  <div class="section-num">05 — Quick Reference</div>
+  <h2>The Signals You'll <span class="accent">Actually</span> Meet</h2>
+
+  <p class="reveal">POSIX defines 31 standard signal numbers; most programs only ever deal with a handful. Here are the ones worth knowing cold, with their (Linux/x86) numbers, default action, and whether a handler can intercept them at all.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Signal</th><th>Num</th><th>Default Action</th><th>Catchable?</th><th>Typical Cause</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">SIGHUP</td><td class="center">1</td><td>Terminate</td><td class="pos">Yes</td><td>Controlling terminal closed / daemon reload convention</td></tr>
+        <tr><td class="hl">SIGINT</td><td class="center">2</td><td>Terminate</td><td class="pos">Yes</td><td>Ctrl+C from the terminal</td></tr>
+        <tr><td class="hl">SIGQUIT</td><td class="center">3</td><td>Terminate + core dump</td><td class="pos">Yes</td><td>Ctrl+\ from the terminal</td></tr>
+        <tr><td class="hl">SIGILL</td><td class="center">4</td><td>Terminate + core dump</td><td class="pos">Yes</td><td>Illegal / undefined CPU instruction</td></tr>
+        <tr><td class="hl">SIGABRT</td><td class="center">6</td><td>Terminate + core dump</td><td class="pos">Yes</td><td>Program called <code>abort()</code></td></tr>
+        <tr><td class="hl">SIGFPE</td><td class="center">8</td><td>Terminate + core dump</td><td class="pos">Yes</td><td>Divide-by-zero, invalid float op</td></tr>
+        <tr><td class="neg">SIGKILL</td><td class="center">9</td><td>Terminate</td><td class="neg">NO — never</td><td><code>kill -9</code>, admin force-kill</td></tr>
+        <tr><td class="hl">SIGUSR1</td><td class="center">10</td><td>Terminate</td><td class="pos">Yes</td><td>Whatever your application decides</td></tr>
+        <tr><td class="hl">SIGSEGV</td><td class="center">11</td><td>Terminate + core dump</td><td class="pos">Yes (carefully)</td><td>Invalid memory access</td></tr>
+        <tr><td class="hl">SIGUSR2</td><td class="center">12</td><td>Terminate</td><td class="pos">Yes</td><td>Whatever your application decides</td></tr>
+        <tr><td class="hl">SIGPIPE</td><td class="center">13</td><td>Terminate</td><td class="pos">Yes</td><td>Wrote to a pipe/socket with no reader left</td></tr>
+        <tr><td class="hl">SIGALRM</td><td class="center">14</td><td>Terminate</td><td class="pos">Yes</td><td><code>alarm()</code> timer expired</td></tr>
+        <tr><td class="hl">SIGTERM</td><td class="center">15</td><td>Terminate</td><td class="pos">Yes</td><td>Polite shutdown request (default of plain <code>kill</code>)</td></tr>
+        <tr><td class="hl">SIGCHLD</td><td class="center">17</td><td class="gold">Ignore</td><td class="pos">Yes</td><td>A child process exited or stopped</td></tr>
+        <tr><td class="neg">SIGSTOP</td><td class="center">19</td><td>Pause process</td><td class="neg">NO — never</td><td>Admin/job-control forced pause</td></tr>
+        <tr><td class="hl">SIGCONT</td><td class="center">18</td><td>Resume if stopped</td><td class="pos">Yes</td><td>Job-control resume</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal"><b>bob_os keeps it simple:</b> the tutorial's demo set is <code>SIGHUP</code>(1), <code>SIGINT</code>(2), <code>SIGKILL</code>(9), <code>SIGUSR1</code>(10), <code>SIGSEGV</code>(11), <code>SIGUSR2</code>(12), and <code>SIGTERM</code>(15) — enough to demonstrate every concept above without implementing all 31 numbers' worth of edge cases.</div>
+</div>
+</section>
+
+<!-- CODE -->
+<section id="code">
+<div class="container">
+  <div class="section-num">06 — Putting It in Code</div>
+  <h2>Installing a <span class="accent">Handler</span>, In Practice</h2>
+
+  <p class="reveal">On a real POSIX system, the classic (if slightly dated) way to register a disposition is the <code>signal()</code> function — three arguments' worth of information (which signal, what to do) collapse into a single call:</p>
+
+  <pre class="reveal"><code><span class="cm">#include &lt;signal.h&gt;</span>
+
+<span class="kw">void</span> <span class="fn">handle_sigint</span>(<span class="ty">int</span> signo) {
+    <span class="cm">/* signo will be SIGINT (2) every time — the kernel tells you which */</span>
+    <span class="ty">const</span> <span class="ty">char</span> *msg = <span class="st">"caught Ctrl+C, cleaning up...\n"</span>;
+    write(<span class="nu">1</span>, msg, <span class="nu">30</span>);  <span class="cm">/* more on why write(), not printf(), next lesson */</span>
+    _exit(<span class="nu">0</span>);
+}
+
+<span class="ty">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {
+    signal(SIGINT, handle_sigint);   <span class="cm">// install: SIGINT now runs our function</span>
+    signal(SIGPIPE, SIG_IGN);        <span class="cm">// explicitly ignore: never die from a broken pipe</span>
+    <span class="cm">// SIGTERM, SIGSEGV, etc. left untouched — they keep their SIG_DFL default</span>
+
+    <span class="kw">while</span> (<span class="nu">1</span>) { <span class="cm">/* do work forever, until Ctrl+C */</span> }
+}</code></pre>
+
+  <p class="reveal">And here's the bob_os equivalent — same three-way idea, expressed through this kernel's own syscall surface, matching the <code>struct process</code> fields you saw in section 01:</p>
+
+  <pre class="reveal"><code><span class="cm">/* user_prog.c — bob_os's signal_demo.elf */</span>
+<span class="kw">void</span> <span class="fn">sigusr1_handler</span>(<span class="ty">int</span> sig) {
+    <span class="cm">/* runs instead of SIG_DFL when SIGUSR1 lands */</span>
+}
+
+<span class="kw">void</span> <span class="fn">user_main</span>(<span class="kw">void</span>) {
+    <span class="ty">int</span> pid = sys_getpid();
+    sys_signal(SIGUSR1, sigusr1_handler);  <span class="cm">// install a custom handler</span>
+    sys_kill(pid, SIGUSR1);                <span class="cm">// send ourselves the signal</span>
+    sys_yield();     <span class="cm">// handler fires here on the way back to user mode, then returns</span>
+}</code></pre>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Notice What's Symmetric</div>
+    Both snippets do the exact same three things in the exact same order: (1) write a plain function that takes the signal number as its argument, (2) hand the kernel a pointer to that function for a specific signal number, (3) let normal program flow continue — the kernel is now responsible for interrupting it at the right moment. Whether that's glibc's <code>signal()</code> or bob_os's <code>sys_signal()</code>, the contract with the kernel is identical.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Signal</div><div class="glossary-def">A numbered, dataless, asynchronous notification the kernel can deliver to a process — one of ~31 standard POSIX numbers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Pending Signal</div><div class="glossary-def">A signal that has been sent (a bit is set in the target's PCB) but not yet delivered/acted upon.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Disposition</div><div class="glossary-def">What a process has told the kernel to do with a given signal number: SIG_DFL (default), SIG_IGN (ignore), or a handler function pointer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIG_DFL</div><div class="glossary-def">"Use the kernel-defined default action for this signal" — often terminate, sometimes ignore or pause, depending on the signal.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIG_IGN</div><div class="glossary-def">"Discard this signal silently every time" — an explicit, deliberate choice, distinct from never registering anything.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Signal Handler</div><div class="glossary-def">An ordinary user-space function the kernel forcibly redirects execution into the moment a signal is delivered, in place of the default action.</div></div>
+    <div class="glossary-card"><div class="glossary-term">kill()</div><div class="glossary-def">The POSIX system call used to send any signal (not just fatal ones) to any permitted target process.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIGKILL / SIGSTOP</div><div class="glossary-def">The two signals whose behavior is hard-coded in the kernel — they cannot be caught, blocked, or ignored by any process, by design.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIGUSR1 / SIGUSR2</div><div class="glossary-def">The two signal numbers POSIX deliberately leaves undefined, reserved purely for application-defined meaning.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>POSIX Signals: The Kernel's Way of Tapping a Process on the Shoulder · Companion lesson for bob_os module <code>18_signals</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: how delivery actually happens, and why handlers are dangerous.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── SIGNAL DISPOSITION CANVAS ───────────────────────────────────────────────
+function drawSigScene(t,phase,mode){
+  const canvas=document.getElementById('sigCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const senderX=W*0.12, targetX=W*0.5, endX=W*0.88;
+  const laneY=H*0.35;
+
+  // sender box
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;ctx.strokeRect(senderX-45,laneY-25,90,50);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Sender',senderX,laneY-32);
+  ctx.fillText('kill(pid,',senderX,laneY-4);
+  ctx.fillText('SIGUSR1)',senderX,laneY+10);
+
+  // target box
+  ctx.strokeStyle=C.gold;ctx.strokeRect(targetX-55,laneY-25,110,50);
+  ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';
+  ctx.fillText('Target Process',targetX,laneY-32);
+  ctx.fillText('pending_signals',targetX,laneY-4);
+  ctx.fillText('bit 10 → ?',targetX,laneY+10);
+
+  const captions={
+    idle:'Pick a disposition above to run the scenario',
+    sent:'kill(pid, SIGUSR1) called — kernel receives the request',
+    pending:'Kernel sets bit 10 in the target’s pending_signals bitmask',
+    check:'Next return-to-user-mode check: kernel reads signal_handlers[SIGUSR1]',
+    default_end:'Disposition = SIG_DFL → default action runs → process terminates',
+    ignore_end:'Disposition = SIG_IGN → bit is cleared, nothing else happens, process never even notices',
+    handler_end:'Disposition = handler → execution redirected into sigusr1_handler(), then back'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  // traveling packet
+  let px=senderX, py=laneY, col=C.cyan;
+  if(phase==='sent'){px=senderX+(targetX-senderX-55-senderX+45)*0+senderX+ (targetX-90-senderX)*t; py=laneY; col=C.orange;}
+  if(phase==='pending'){px=targetX; py=laneY+10; col=C.gold;}
+  if(phase==='check'){px=targetX; py=laneY+40+t*20; col=C.purple;}
+
+  if(phase==='sent'||phase==='pending'||phase==='check'){
+    ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  // outcome branch
+  const outY=H*0.72;
+  if(phase==='default_end'||phase==='ignore_end'||phase==='handler_end'){
+    let color=C.red, label='TERMINATED', sub='default action ran';
+    if(phase==='ignore_end'){color=C.muted;label='NOTHING HAPPENS';sub='signal silently discarded';}
+    if(phase==='handler_end'){color=C.green;label='HANDLER RAN';sub='then resumed normal code';}
+    const bx=targetX-70+ (140)*Math.min(1,t*1.3), by=outY;
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.strokeRect(targetX-70,outY-22,140,44);
+    ctx.fillStyle=color;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(label,targetX,outY-2);
+    ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+    ctx.fillText(sub,targetX,outY+14);
+    // arrow down from target
+    ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(targetX,laneY+25);ctx.lineTo(targetX,outY-22);ctx.stroke();
+  }
+}
+
+function runSig(mode){
+  const phases=['sent','pending','check', mode+'_end'];
+  const durations=[500,450,450,700];
+  let idx=0,start=performance.now();
+  const names={default:'SIG_DFL (default = terminate)',ignore:'SIG_IGN (ignore)',handler:'custom handler'};
+  document.getElementById('sigLabel').textContent='▶ Running with disposition: '+names[mode];
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawSigScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('sigLabel').textContent='▶ Done — try a different disposition';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetSig(){
+  document.getElementById('sigLabel').textContent='▶ Choose a disposition to see how the same signal ends differently';
+  drawSigScene(0,'idle','');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetSig(); });
+window.addEventListener('resize',()=>{ resetSig(); });
+</script>
+</body>
+</html>

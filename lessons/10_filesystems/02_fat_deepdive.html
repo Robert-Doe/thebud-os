@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAT12/16/32: The Filesystem Every OS-Dev Tutorial Starts With</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.gold{color:var(--gold)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.data-table-wrap + .sidenote{margin-top:-0.6rem}
+
+.step-list.compact li{margin-bottom:1rem}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* dossier, reused for the directory-entry breakdown */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#bigidea" title="The Big Idea"></a>
+  <a class="toc-dot" href="#bootsector" title="Boot Sector"></a>
+  <a class="toc-dot" href="#fattable" title="The FAT Table"></a>
+  <a class="toc-dot" href="#rootdir" title="Root Directory"></a>
+  <a class="toc-dot" href="#chainwalk" title="Walk a Chain"></a>
+  <a class="toc-dot" href="#whydiffer" title="12 vs 16 vs 32"></a>
+  <a class="toc-dot" href="#clustersize" title="Cluster Size Trade-off"></a>
+  <a class="toc-dot" href="#whyteach" title="Why Still Teach It"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Filesystems · FAT12/16/32 · On-Disk Format</div>
+    <h1>The Filesystem<br><span>Everyone Starts With</span></h1>
+    <p class="hero-sub">Before B-trees, before journaling, before permissions even existed, there was a filesystem so simple you can implement it in an evening: a flat array where <code style="color:var(--cyan)">table[N]</code> tells you what comes after cluster N. That's FAT — and forty-plus years later, it's still the format your BIOS boots from, your USB stick uses, and every OS on Earth can read without asking permission.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">12/16/32</div><div class="lbl">Bits Per FAT Table Entry — the whole family in one number</div></div>
+      <div class="hero-stat"><div class="num">0xFFF8+</div><div class="lbl">End-Of-Chain Marker Range</div></div>
+      <div class="hero-stat"><div class="num">8.3</div><div class="lbl">Classic Filename Format — 8 name, 3 extension</div></div>
+      <div class="hero-stat"><div class="num">512B</div><div class="lbl">Typical Sector Size the Whole Format Is Built On</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- BIG IDEA -->
+<section id="bigidea">
+<div class="container">
+  <div class="section-num">00 — The Big Idea</div>
+  <h2>A Filesystem Is Just a <span class="accent">Breadcrumb Trail</span></h2>
+
+  <p class="reveal">Strip away every detail and FAT is answering one question, over and over: "I'm looking at chunk of disk number N — where's the <em>next</em> chunk that belongs to this file?" The chunks are called <strong>clusters</strong> (a fixed group of sectors — say, 4 sectors of 512 bytes each). And the answer to "what comes next" lives in a big, flat, boring array called the <strong>File Allocation Table</strong> — the thing FAT is actually named after.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The entire idea, in one line</span>
+    table[N] = the cluster number that comes after cluster N in whatever file currently owns it
+    <span class="sub">Follow the chain until you hit a special "end of chain" value — that's the last cluster of the file.</span>
+  </div>
+
+  <p class="reveal">That's genuinely most of it. A file isn't stored as one contiguous blob — it's stored as a chain of clusters scattered wherever there was free space, linked together purely through this array. Cluster 5 might be followed by cluster 190, which might be followed by cluster 6. Physically scattered; logically one unbroken sequence, because the table says so.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">Why "Allocation Table," Specifically</div>
+    Two jobs, one array. First, it's the <strong>chain</strong>: reading <code>table[N]</code> tells you the next cluster of whatever file cluster N belongs to. Second, it's the <strong>free space bitmap</strong>, just encoded differently than a bitmap: a cluster whose table entry reads <code>0</code> is free, full stop. No separate free-list, no separate bitmap structure — the same array that links files together also tracks what's available to hand out next.
+  </div>
+</div>
+</section>
+
+<!-- BOOT SECTOR -->
+<section id="bootsector">
+<div class="container">
+  <div class="section-num">01 — The Metadata</div>
+  <h2>The Boot Sector Holds the <span class="accent">Instruction Manual</span></h2>
+
+  <p class="reveal">Before any of that chain-walking can happen, a driver needs to know basic geometry: how big is a sector, how big is a cluster, where does the FAT table even start on disk. All of that lives in sector 0 — the volume's boot sector — inside a small header block universally called the <strong>BIOS Parameter Block (BPB)</strong>. It's the same sector that (on a bootable disk) also contains the tiny bit of x86 machine code your BIOS jumps to at boot, which is exactly why bob_os's own bootloader lessons care about sector 0 in the first place.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>BPB Field</th><th>Typical Value</th><th>What It Tells the Driver</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Bytes Per Sector</td><td class="center">512</td><td>The atomic unit of disk I/O this volume assumes.</td></tr>
+        <tr><td class="hl">Sectors Per Cluster</td><td class="center">1, 4, 8…</td><td>How many sectors get grouped into one cluster — the FAT's actual unit of allocation.</td></tr>
+        <tr><td class="hl">Reserved Sector Count</td><td class="center">1 (FAT12/16), 32 (FAT32)</td><td>How many sectors (including the boot sector itself) come before the FAT table starts.</td></tr>
+        <tr><td class="hl">Number of FATs</td><td class="center">2</td><td>FAT is almost always duplicated on disk — a built-in backup copy in case one gets corrupted.</td></tr>
+        <tr><td class="hl">Root Entry Count</td><td class="center">512 (FAT12/16 only)</td><td>Fixed size of the root directory — FAT32 removes this limit entirely (see below).</td></tr>
+        <tr><td class="hl">Total Sectors</td><td class="center">volume-dependent</td><td>How big the whole volume is, in sectors — used to compute how many clusters exist.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Every other structure on the volume — where the FAT table sits, where the root directory sits, where cluster data begins — is computed from these few numbers. There's no separate "table of contents" pointing to each structure; the BPB is the whole map, and it fits in the first few dozen bytes of the disk.</p>
+</div>
+</section>
+
+<!-- FAT TABLE -->
+<section id="fattable">
+<div class="container">
+  <div class="section-num">02 — The Table Itself</div>
+  <h2>Reading a <span class="accent">Table Entry</span></h2>
+
+  <p class="reveal">Each slot in the FAT table is a fixed-width number — 12, 16, or 32 bits, depending on which FAT variant you're looking at — and its value means one of a small handful of things:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>table[N] Value</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">0x000</td><td>Cluster N is free — not part of any file, available to allocate.</td></tr>
+        <tr><td class="hl">0x002 – 0xFFEF (roughly)</td><td>Cluster N is used, and its value is the number of the <em>next</em> cluster in the chain.</td></tr>
+        <tr><td class="neg">0xFF7 (FAT12) / 0xFFF7 (FAT16) / 0x0FFFFFF7 (FAT32)</td><td>Cluster N is marked <strong>bad</strong> — the driver should never allocate it (a real disk defect, historically).</td></tr>
+        <tr><td class="pos">0xFF8–0xFFF (FAT12) / 0xFFF8–0xFFFF (FAT16) / 0x0FFFFFF8–0x0FFFFFFF (FAT32)</td><td><strong>End of chain</strong> — this is the last cluster of the file. Stop walking here.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice there's exactly one array doing double duty as both "which cluster comes next" and "is this cluster in use at all." A completely empty volume is just a FAT table full of zeros (after a couple of reserved entries at the start), plus an empty root directory. That's the entire "format the disk" operation — there is nothing else to initialize.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">A Directory Is Just Another File, Chain-Wise</div>
+    Past the tiny fixed-size root directory in FAT12/16, every FAT32 directory — including the root — is itself stored as a chain of clusters, exactly like a regular file's data, just interpreted differently: instead of raw bytes, its clusters hold a sequence of fixed-size directory-entry records. Walking a subdirectory's contents means following <em>its</em> starting cluster through the FAT table, precisely the same mechanism used for file data.
+  </div>
+</div>
+</section>
+
+<!-- ROOT DIRECTORY -->
+<section id="rootdir">
+<div class="container">
+  <div class="section-num">03 — Naming Things</div>
+  <h2>The Root Directory: Fixed-Size <span class="accent">Entries</span></h2>
+
+  <p class="reveal">The FAT table only knows about cluster numbers — it has no idea any given chain is called <code>readme.txt</code>. Names, sizes, and "where does this file's chain start" all live in a separate structure: the directory, made up of fixed-size 32-byte records, one per file or subdirectory.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Classic FAT Directory Entry — 32 bytes</span><span style="color:var(--muted);font-size:.7rem">one fixed-size record per file</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Filename (8 bytes)</div><div class="f-val">"README  "</div><div class="f-desc">Space-padded, uppercase, no dot — the "8" of "8.3".</div></div>
+      <div class="dossier-field"><div class="f-label">Extension (3 bytes)</div><div class="f-val">"TXT"</div><div class="f-desc">Space-padded, uppercase — the "3" of "8.3".</div></div>
+      <div class="dossier-field"><div class="f-label">Attributes (1 byte)</div><div class="f-val">read-only, hidden, directory…</div><div class="f-desc">Bit flags — FAT has no Unix-style permission bits, just a handful of flags like this.</div></div>
+      <div class="dossier-field"><div class="f-label">Timestamps</div><div class="f-val">created / modified / accessed</div><div class="f-desc">Packed date+time fields, a few bytes each.</div></div>
+      <div class="dossier-field"><div class="f-label">Starting Cluster</div><div class="f-val">e.g. 5</div><div class="f-desc">The first cluster of this file's chain — the entry point into the FAT table walk.</div></div>
+      <div class="dossier-field"><div class="f-label">File Size (4 bytes)</div><div class="f-val">bytes, exact</div><div class="f-desc">Stored explicitly here — clusters are allocated in whole units, so the last cluster is usually partly wasted padding.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">Reading a file by name, end to end, is therefore a two-stage lookup: scan the directory's 32-byte entries for a name match to get a <strong>starting cluster</strong>, then hand that starting cluster to the FAT table and walk the chain until end-of-chain, reading each cluster's data sectors along the way. No indirection blocks, no B-trees — just two flat structures used one after the other.</p>
+
+  <div class="sidenote reveal">
+    <b>Where "long filenames" come from:</b> the classic 8.3 format is brutally limiting — no lowercase, no spaces, 8+3 characters max. Windows 95 bolted on <strong>VFAT</strong>, which stores long names across extra directory entries marked with a special attribute combination that older DOS drivers simply ignore (they just see harmless-looking junk entries and skip past them). It's a genuinely clever backward-compatibility hack layered entirely on top of the original 32-byte entry format — nothing about the underlying FAT table changed at all.
+  </div>
+</div>
+</section>
+
+<!-- CHAIN WALK CANVAS -->
+<section id="chainwalk">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>Walking a <span class="accent">Cluster Chain</span></h2>
+
+  <p class="reveal">Here's the whole mechanism, animated. A directory entry for <code>notes.txt</code> says its data starts at cluster 5. Hit the button and watch the driver read <code>table[5]</code>, jump to whatever it points to, read <em>that</em> entry, and keep going until it lands on an end-of-chain marker.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="chainLabel">▶ Walk the chain for notes.txt (starts at cluster 5)</div>
+    <canvas id="chainCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runChain()">▶ Walk the chain</button>
+    <button class="ctrl-btn red" onclick="resetChain()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice the chain is <em>not</em> in numeric order — 5 → 8 → 12 → 13 → EOC. That's completely normal and, in fact, the common case on a disk that's had files created and deleted over time: free clusters get handed out from wherever they happen to be, and the table is what stitches them back into one logical sequence. This is also exactly why heavily-fragmented FAT volumes get slow — physically jumping the disk head around to satisfy one "sequential" file read.</p>
+</div>
+</section>
+
+<!-- WHY DIFFER -->
+<section id="whydiffer">
+<div class="container">
+  <div class="section-num">05 — One Family, Three Sizes</div>
+  <h2>Why FAT12, FAT16, and <span class="accent">FAT32</span> Even Exist</h2>
+
+  <p class="reveal">Here's the pleasant surprise: FAT12, FAT16, and FAT32 are not three different filesystems with different structures. They are <strong>the exact same design</strong> — boot sector, FAT table, directory entries, cluster chains, all of it — differing in exactly one number: <strong>how many bits wide each FAT table entry is.</strong> That single choice cascades into how many clusters the table can address, which caps how large a volume the format can describe.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Variant</th><th>Bits Per Entry</th><th>Max Addressable Clusters</th><th>Practical Max Volume Size</th><th>Where You'd See It</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">FAT12</td><td class="center">12</td><td class="center">~4,084</td><td class="center">~16 MB</td><td>Floppy disks, tiny boot partitions</td></tr>
+        <tr><td class="hl">FAT16</td><td class="center">16</td><td class="center">~65,524</td><td class="center">~2–4 GB</td><td>Old hard disks, early flash cards</td></tr>
+        <tr><td class="hl">FAT32</td><td class="center">32 (28 used)</td><td class="center">~268 million</td><td class="center">~2 TB (spec), often OS-capped smaller</td><td>USB sticks, EFI system partition, SD cards</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Fewer bits per entry means fewer distinct cluster numbers you can express, which means fewer clusters total, which — for a fixed cluster size — caps the maximum volume size. FAT12's 12 bits cap out around four thousand clusters; that's fine for a 1.44 MB floppy, hopeless for a modern drive. FAT32 only actually uses 28 of its 32 bits (the top 4 are reserved), but that's still enough addressable clusters to describe multi-terabyte volumes, which is why it's the variant still shipping on new hardware today.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">The One Real Structural Difference: The Root Directory</div>
+    There's a second wrinkle worth knowing: FAT12/16 give the root directory a <em>fixed</em> size, stored in its own reserved region right after the FAT tables — commonly capped at 512 entries. FAT32 removes that limit by making the root directory just another cluster chain, exactly like every other directory, so it can grow arbitrarily large. Every other structural idea — boot sector, FAT table, 32-byte directory entries, cluster chaining — carries over unchanged across all three variants.
+  </div>
+</div>
+</section>
+
+<!-- CLUSTER SIZE -->
+<section id="clustersize">
+<div class="container">
+  <div class="section-num">06 — A Trade-off Hiding in Plain Sight</div>
+  <h2>Cluster Size: The Knob <span class="accent">Nobody Warns You About</span></h2>
+
+  <p class="reveal">"Sectors per cluster," sitting quietly in the boot sector's BPB, is one of the more consequential numbers on the whole volume, and it's chosen once, at format time, and effectively baked in from then on. It controls a genuine trade-off between two kinds of waste that pull in opposite directions.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Cluster Size</th><th>FAT Table Size</th><th>Typical Wasted Space Per File</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Small (e.g. 512 B)</td><td class="neg">Large — more clusters to track means more table entries</td><td class="pos">Small — a file's last cluster wastes at most ~512 B</td></tr>
+        <tr><td class="hl">Large (e.g. 32 KB)</td><td class="pos">Small — fewer, bigger clusters means fewer table entries</td><td class="neg">Large — a file's last cluster can waste up to ~32 KB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Here's the mechanism behind that second column: FAT can only allocate whole clusters, never partial ones. A 1-byte file still consumes one entire cluster. On a volume formatted with 32 KB clusters, a directory full of tiny 1 KB text files can genuinely waste more space to rounding than the files themselves contain — every single one burns a full 32 KB cluster for barely 1 KB of real content. This is exactly why <code>mkfs.fat</code> and Windows' own formatting tool pick cluster size based on volume size: bigger volumes default to bigger clusters, because a FAT12/16-style table just can't stay small if it has to track millions of tiny clusters on a multi-gigabyte disk.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">Why Not Just Track Space in Bytes Instead of Clusters?</div>
+    Because the table itself would explode: addressing every individual byte on even a modest volume would require a table with one entry per byte — billions of entries for a multi-gigabyte disk, hopelessly large to keep in memory or scan. Grouping sectors into clusters is what keeps the table itself a manageable, cacheable size. The wasted "slack space" inside a file's last cluster is the price paid for a table that stays small enough to be practical in the first place — a genuine trade-off, not a design oversight.
+  </div>
+</div>
+</section>
+
+<!-- WHY TEACH -->
+<section id="whyteach">
+<div class="container">
+  <div class="section-num">07 — Why This, Still</div>
+  <h2>Why FAT Remains a <span class="accent">Genuinely Reasonable</span> Teaching Filesystem</h2>
+
+  <p class="reveal">FAT is, by any modern measure, ancient and limited: no permissions, no journaling, terrible fragmentation behavior, a filename scheme that needed a backward-compatibility hack bolted on within fifteen years of its own invention. And yet it keeps showing up as the very first "real" filesystem in nearly every OS-dev tutorial that exists — bob_os's own lesson cluster included. That's not laziness; it's a genuinely good pedagogical trade, for two concrete reasons.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Simple Enough to Implement By Hand</h4>
+      The entire read path is: parse a small fixed header, scan fixed-size 32-byte directory entries for a name match, then walk a flat array following integer links until a sentinel value. No B-trees, no journaling replay logic, no extent trees, no compression. A determined student can write a working FAT12 reader in an afternoon — genuinely not true of ext4 or NTFS.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ But Still Real Enough to Matter</h4>
+      Unlike a toy format invented purely for a tutorial, FAT is what your BIOS/UEFI firmware, every major OS, and every disk-imaging tool already speaks fluently. A FAT volume you build by hand is immediately readable by Windows Explorer, macOS Finder, and Linux's <code>mount</code> — no custom tooling required on the other end.
+    </div>
+  </div>
+
+  <p class="reveal">That second point is exactly why FAT earns its keep even in a project like bob_os. Module 12's own BobFS deliberately skips FAT's complexity entirely — no clusters, no 8.3 names, just a 32-entry superblock and raw sectors — because the point of that module is disk I/O and filesystem <em>concepts</em>, not FAT parsing. But the moment you want your bootable disk image to be mountable by an ordinary desktop OS without any bob_os-specific tooling — inspecting it, dragging files onto it, debugging it with tools you already have — FAT is what you'd reach for. It's the one on-disk format where "hand-rolled and simple" and "universally readable" are the same choice.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">The Takeaway</div>
+    FAT isn't taught first because it's the best filesystem — it's taught first because it's the smallest filesystem that's still a <em>real</em> one. Every concept you need for ext4, NTFS, or any modern format — metadata separate from data, a table mapping logical position to physical location, directories as structured data rather than magic — is present in FAT in its simplest possible form. Learn to walk a FAT chain by hand, and reading the ext4 or NTFS spec afterward is a matter of degree, not of kind.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">File Allocation Table (FAT)</div><div class="glossary-def">The flat array where table[N] holds either 0 (free), a bad-cluster marker, an end-of-chain marker, or the number of the next cluster in a file's chain.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cluster</div><div class="glossary-def">The smallest unit of allocation in FAT — a fixed group of sectors (e.g. 4 × 512 bytes) treated as one indivisible chunk when building a file's chain.</div></div>
+    <div class="glossary-card"><div class="glossary-term">BIOS Parameter Block (BPB)</div><div class="glossary-def">The metadata header in sector 0 recording bytes-per-sector, sectors-per-cluster, reserved sectors, and other geometry the driver needs to locate every other structure.</div></div>
+    <div class="glossary-card"><div class="glossary-term">End-Of-Chain (EOC) Marker</div><div class="glossary-def">A reserved high value (e.g. 0xFFF8–0xFFFF for FAT16) written into a table entry to mean "this is the last cluster of this file — stop walking here."</div></div>
+    <div class="glossary-card"><div class="glossary-term">8.3 Filename</div><div class="glossary-def">The classic FAT naming scheme: 8 characters of name, 3 of extension, uppercase, space-padded, stored in a fixed 32-byte directory entry.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VFAT / Long Filenames</div><div class="glossary-def">A backward-compatible extension storing long, mixed-case names across extra directory entries that older 8.3-only drivers simply skip over.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Root Directory</div><div class="glossary-def">The top-level directory; fixed-size and separately located in FAT12/16, an ordinary growable cluster chain in FAT32.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Fragmentation</div><div class="glossary-def">The condition where a file's clusters are scattered non-contiguously across the disk, forcing the FAT chain-walk to jump around physically to read what's logically one sequential file.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>FAT12/16/32: The Filesystem Every OS-Dev Tutorial Starts With · Companion lesson for bob_os modules <code>12_filesystem</code> and <code>19_vfs</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">One array. One breadcrumb trail. Forty years of USB sticks.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── FAT CHAIN WALK CANVAS ──────────────────────────────────────────────
+// 16 cells representing clusters 0-15. Chain: 5 -> 8 -> 12 -> 13 -> EOC
+const fatTable=[
+  /*0*/'-', /*1*/'-', /*2*/0, /*3*/0, /*4*/0,
+  /*5*/8, /*6*/0, /*7*/0, /*8*/12,
+  /*9*/0, /*10*/0, /*11*/0, /*12*/13,
+  /*13*/'EOC', /*14*/0, /*15*/0
+];
+const chainOrder=[5,8,12,13];
+
+function drawChain(highlightIdx, visitedCount){
+  const canvas=document.getElementById('chainCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // directory entry box at top
+  ctx.fillStyle=C.card||'#141c2e';
+  ctx.fillStyle='#141c2e';
+  ctx.fillRect(20,16,220,42);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(20,16,220,42);
+  ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('notes.txt',30,32);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('start_cluster = 5',30,48);
+
+  // grid of 16 cells, 4x4
+  const gridTop=90, cellW=Math.min(70,(W-40)/8), cellH=54, cols=8;
+  ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  for(let i=0;i<16;i++){
+    const col=i%cols, row=Math.floor(i/cols);
+    const x=20+col*(cellW+6), y=gridTop+row*(cellH+10);
+    const visited = chainOrder.slice(0,visitedCount).includes(i);
+    const isCurrent = highlightIdx===i;
+    ctx.fillStyle = isCurrent ? 'rgba(56,189,248,.28)' : visited ? 'rgba(74,222,128,.15)' : '#141c2e';
+    ctx.fillRect(x,y,cellW,cellH);
+    ctx.strokeStyle = isCurrent ? C.cyan : visited ? C.green : C.border;
+    ctx.lineWidth = isCurrent?2:1;
+    ctx.strokeRect(x,y,cellW,cellH);
+    ctx.fillStyle = isCurrent ? C.cyan : visited ? C.green : C.muted;
+    ctx.fillText('['+i+']',x+cellW/2,y+18);
+    ctx.fillStyle = isCurrent ? '#fff' : visited ? C.green : C.muted;
+    ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText(String(fatTable[i]),x+cellW/2,y+38);
+    ctx.font='11px Source Code Pro,monospace';
+  }
+
+  // arrow from directory entry to first cell
+  ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);ctx.beginPath();
+  ctx.moveTo(30,58);ctx.lineTo(30,gridTop-6);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // caption
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='left';
+  let caption='';
+  if(visitedCount===0) caption='Start: directory entry points to cluster 5';
+  else if(highlightIdx!==null){
+    const prevIdx=chainOrder[visitedCount-1];
+    caption='table['+prevIdx+'] = '+fatTable[prevIdx]+'  →  jump to cluster '+highlightIdx;
+  } else {
+    caption='table[13] = EOC — chain complete. File data lives in clusters 5, 8, 12, 13.';
+  }
+  ctx.fillText(caption,20,H-14);
+}
+
+let chainRunning=false;
+function runChain(){
+  if(chainRunning)return;
+  chainRunning=true;
+  document.getElementById('chainLabel').textContent='▶ Walking: cluster 5 → 8 → 12 → 13 → EOC';
+  let step=0;
+  function advance(){
+    if(step===0){
+      drawChain(5,0);
+    } else if(step<=chainOrder.length){
+      drawChain(chainOrder[step-1],step);
+    } else {
+      drawChain(null,chainOrder.length);
+      document.getElementById('chainLabel').textContent='▶ Done — 4 clusters read: 5, 8, 12, 13. Reset to walk again.';
+      chainRunning=false;
+      return;
+    }
+    step++;
+    setTimeout(advance,700);
+  }
+  advance();
+}
+function resetChain(){
+  chainRunning=false;
+  document.getElementById('chainLabel').textContent='▶ Walk the chain for notes.txt (starts at cluster 5)';
+  drawChain(null,0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetChain(); });
+window.addEventListener('resize',()=>{ resetChain(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Boot Sector — 512 Bytes to Rule Them All</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.map-row{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;margin:6px 0;font-size:15px;flex-wrap:wrap;}
+.map-row .addr{font-family:'Source Code Pro',monospace;font-size:13px;color:var(--gold);min-width:100px;}
+.map-row .what{color:var(--text);}
+.map-row .note{color:var(--muted);font-size:13px;margin-left:auto;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--gold);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#poweron" title="Power-On"></a>
+  <a class="toc-dot" href="#realmode" title="Real Mode"></a>
+  <a class="toc-dot" href="#512bytes" title="512 Bytes"></a>
+  <a class="toc-dot" href="#signature" title="Signature"></a>
+  <a class="toc-dot" href="#oneJob" title="One Job"></a>
+  <a class="toc-dot" href="#sim" title="Simulator"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Bootloader · Module 01 Companion · Real Mode · BIOS</div>
+    <h1>512 Bytes to<br><span>Rule Them All</span></h1>
+    <p class="hero-sub">Before Protected Mode, before paging, before a single line of C runs — there is exactly one sector of exactly 512 bytes, and it is entirely your problem. This is the mental model for that sector: why it's exactly that size, why it ends in two magic bytes, what the BIOS actually did before it ever handed you the CPU, and why a bootloader's entire philosophy of life is "load something bigger, then get out of the way."</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">512</div><div class="lbl">Bytes, No More No Less</div></div>
+      <div class="hero-stat"><div class="num">0x7C00</div><div class="lbl">Where BIOS Drops You</div></div>
+      <div class="hero-stat"><div class="num">55 AA</div><div class="lbl">The Bytes That Prove You're Bootable</div></div>
+      <div class="hero-stat"><div class="num">16-bit</div><div class="lbl">Real Mode, No Exceptions</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- POWER ON -->
+<section id="poweron">
+<div class="container">
+  <div class="section-num">01 — Before Your Code Ever Runs</div>
+  <h2>What the <span class="accent">BIOS</span> Does While You're Not Looking</h2>
+
+  <p class="reveal">Your <code>boot.asm</code> in <code>01_bootloader/</code> starts with a comment: "Loaded by BIOS at 0x7C00." That single sentence hides an enormous amount of work the machine already did before your first instruction ever executes. Think of it like arriving at a movie set as the star actor — by the time you walk in, someone already unlocked the building, turned on the lights, checked every camera, and cleared the room. You just don't see any of that happen.</p>
+
+  <p class="reveal">The moment power hits the CPU, it doesn't reset to address 0. It resets to <code>0xFFFFFFF0</code> — sixteen bytes below the very top of its addressable space. That address is deliberately mapped, by the motherboard's chipset, to the BIOS ROM chip, not to RAM. There is a reason for this: RAM is empty garbage on power-up, but ROM is permanent and always has valid code sitting there. The CPU's very first fetch is guaranteed to land on real instructions.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Reset vector fetch</strong>The CPU begins executing BIOS firmware at the fixed ROM address burned into the chipset. It boots in 16-bit real mode by hardware default — this has been true since the 8086, and it's true on your machine today even if it eventually runs 64-bit code.</div></li>
+    <li><div class="step-body"><strong>POST — Power-On Self-Test</strong>The BIOS runs a self-check: verify the CPU is sane, walk a test pattern across RAM to confirm it holds bits correctly, probe the keyboard controller, initialize the video card's own BIOS extension (that's the manufacturer splash screen you see for half a second). This is the "annoying startup screen" — it's the machine convincing itself it isn't broken.</div></li>
+    <li><div class="step-body"><strong>Device enumeration</strong>BIOS walks its known buses — legacy IDE/ATA controllers, then PCI — cataloging what hardware exists: disks, controllers, expansion cards. It builds internal tables describing what it found. None of this is visible to you yet; it's bookkeeping for BIOS's own service routines.</div></li>
+    <li><div class="step-body"><strong>Boot device scan</strong>BIOS consults its configured boot order (stored in CMOS/NVRAM — the thing a dead coin-cell battery used to reset on old desktops) and, for each candidate device in order, reads its very first sector into a scratch buffer and checks: do the last two bytes read <code>0x55</code> then <code>0xAA</code>? First device that passes wins.</div></li>
+    <li><div class="step-body"><strong>Load and jump</strong>BIOS copies that winning 512-byte sector verbatim into RAM at physical address <code>0x7C00</code>, sets <code>CS:IP</code> to point there, and executes a jump. From this instruction onward, BIOS is not driving anymore — <em>you</em> are, and BIOS has become a passive library of interrupt-based services (<code>INT 0x10</code> for video, <code>INT 0x13</code> for disk, <code>INT 0x16</code> for keyboard) that your code can still call, but nothing is calling you.</div></li>
+  </ol>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    Here's the detail that trips people up the first time: BIOS never parses, understands, or cares what's inside your 512 bytes. It doesn't check for a valid instruction stream, a sane stack, or anything resembling a "program." It performs exactly one structural check — do bytes 510 and 511 read <code>0x55</code> then <code>0xAA</code>? — and if that passes, it blindly jumps into byte 0. Everything from that point on is <em>your</em> problem, including the possibility that your "boot sector" is actually just 510 zero bytes followed by the signature, which BIOS will happily execute as 510 <code>ADD [BX+SI], AL</code> instructions (the opcode for <code>0x00 0x00</code>) before crashing into garbage.
+  </div>
+
+  <p class="reveal">POST failures deserve one more note, because they're the reason a genuinely dead machine still communicates with you even with no video output initialized yet. If POST finds something seriously wrong — bad or missing RAM, a failed keyboard controller — it can't print an error message, since the video card may not even be working yet. Instead, classic BIOS implementations fall back to a sequence of motherboard speaker beeps, a diagnostic code encoded in nothing more than timing and count.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Beep Pattern (classic AMI BIOS)</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">1 short beep</td><td class="pos">POST passed — this is actually the "success" signal, not a failure</td></tr>
+        <tr><td class="hl">2 short beeps</td><td>RAM parity error detected during the memory test</td></tr>
+        <tr><td class="hl">3 short beeps</td><td>Base 64KB RAM failure</td></tr>
+        <tr><td class="hl">1 long, 3 short beeps</td><td>Video adapter not found or failed initialization</td></tr>
+        <tr><td class="hl">Continuous beeping</td><td>RAM not seated correctly, or no RAM installed at all</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Beep codes vary by BIOS vendor.</b> AMI, Award, and Phoenix each defined their own patterns, and modern UEFI firmware mostly replaced audible codes with onboard LED diagnostic codes instead. The underlying idea hasn't changed in forty years, though: when nothing else on the machine can be trusted to work yet, encode the diagnosis in the one output device guaranteed to need no drivers or initialization — a speaker wired directly to the motherboard.
+  </div>
+
+  <p class="reveal">The boot device scan itself follows an ordered list, not a fixed rule — this is exactly the "Boot Order" or "Boot Priority" screen you've probably clicked through in a BIOS setup menu:</p>
+
+  <div class="map-row reveal"><div class="addr" style="color:var(--gold)">1st</div><div class="what">Optical drive (CD/DVD), if present and media inserted</div><div class="note">Common for OS installers</div></div>
+  <div class="map-row reveal"><div class="addr" style="color:var(--gold)">2nd</div><div class="what">USB removable media</div><div class="note">Where QEMU's -hda / a USB installer shows up</div></div>
+  <div class="map-row reveal"><div class="addr" style="color:var(--gold)">3rd</div><div class="what">Internal hard disk / SSD</div><div class="note">The everyday case — no install media present</div></div>
+  <div class="map-row reveal"><div class="addr" style="color:var(--gold)">4th</div><div class="what">Network boot (PXE)</div><div class="note">Diskless workstations, rare on personal machines</div></div>
+
+  <p class="reveal">BIOS tries each entry in order, running the exact same "read sector 0, check for 0x55AA" test on each, and stops at the first one that passes. This is precisely why, when you run <code>make run</code> for this project's QEMU setup, the virtual machine finds and boots <code>disk.img</code> — QEMU is presenting that file to the guest as though it were the highest-priority disk in this exact scan order.</p>
+</div>
+</section>
+
+<!-- REAL MODE -->
+<section id="realmode">
+<div class="container">
+  <div class="section-num">02 — The Constraints You're Stuck With</div>
+  <h2>Welcome to <span class="accent">Real Mode</span> — Population: You, in 1978</h2>
+
+  <p class="reveal">The tutorial for this module already told you real mode is "the same mode the 8086 from 1978 used." That's not a throwaway line — it's the single fact that explains almost every weird decision in <code>boot.asm</code>. Modern CPUs are staggeringly capable: 64-bit registers, paged virtual memory, hardware memory protection, gigabytes of flat address space. None of that exists yet. Right now, in this sector, you have exactly what a programmer had over four decades ago.</p>
+
+  <div class="formula reveal">
+    <span class="label">Real Mode Physical Address Formula</span>
+    physical address = (segment × 16) + offset
+    <span class="sub">Every memory access in this sector goes through this — there is no MMU, no page tables, nothing translating addresses for you.</span>
+  </div>
+
+  <p class="reveal">Look at the top of <code>boot.asm</code> again: <code>xor ax, ax</code> then <code>mov ds, ax</code> / <code>mov es, ax</code> / <code>mov ss, ax</code>. That's not decoration — it's forcing every segment register to zero so that "address" and "offset" mean the same thing, because otherwise every single memory reference would silently mean something different depending on whatever garbage BIOS left in those registers.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Constraint</th><th>What It Actually Means Here</th><th>Consequence for boot.asm</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">16-bit registers</td><td>AX, BX, CX, DX and friends are 16 bits wide, not 32 or 64</td><td>Sector counts, offsets, everything is capped low — see the AL sector-count limit in the disk lesson</td></tr>
+        <tr><td class="hl">1MB address ceiling</td><td>Segment:offset addressing tops out at roughly 0x10FFEF</td><td>Everything — BIOS, your code, the kernel you load — must fit below ~1MB</td></tr>
+        <tr><td class="hl">No memory protection</td><td>Any code can read or write any address, including BIOS's own data</td><td>A stray write past your buffer can silently corrupt the Interrupt Vector Table at 0x0000</td></tr>
+        <tr><td class="hl">No paging, no MMU</td><td>Addresses you write are the literal physical addresses used</td><td><code>ORG 0x7C00</code> exists purely so label addresses compile correctly for where you'll actually be loaded</td></tr>
+        <tr><td class="hl">IVT lives at 0x0000</td><td>256 interrupt vectors, 4 bytes each, occupying the first 1KB of RAM</td><td>This is why the memory map reserves 0x0000–0x03FF — BIOS's <code>INT 0x10</code> / <code>INT 0x13</code> handlers are pointed to from here</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧠 No C Runtime — What That Phrase Actually Costs You</div>
+    "No C runtime" sounds abstract until you list what a C program silently gets for free that you now have to build by hand or do without entirely: a stack already set up before <code>main()</code> runs, global variables zero-initialized (the BSS clear), a C library with <code>printf</code> and <code>malloc</code>, and a linker that resolves function addresses across files. None of it exists yet. That's precisely why line 23 of <code>boot.asm</code> — <code>mov sp, 0x7C00</code> — is <em>you</em> personally setting up the stack, and why printing text means hand-rolling <code>print_string</code> around <code>INT 0x10</code> instead of calling <code>printf("...")</code>. Module 02 (Kernel Entry) is precisely the module whose entire job is building enough scaffolding that C becomes usable — until then, everything is raw assembly talking directly to BIOS interrupts and raw registers.
+  </div>
+
+  <p class="reveal">This is also why NASM directives like <code>[BITS 16]</code> and <code>[ORG 0x7C00]</code> at the very top of <code>boot.asm</code> matter so much. There's no loader assigning your code an address at load time the way a modern OS assigns a program its virtual address space — you are telling the assembler, at compile time, "trust me, whatever labels you compute, add 0x7C00 to them," because that's the one and only address BIOS is contractually obligated to load you at.</p>
+
+  <h3>The Same Physical Byte, Written Two Different Ways</h3>
+  <p class="reveal">Segment:offset addressing has a strange property that trips people up the first time they see it: because the formula is a multiply-then-add, there is no single unique way to write most physical addresses. <code>0x7C00</code> itself is a perfect example.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">Two Segment:Offset Pairs, One Physical Address</span>
+    0000:7C00 → (0x0000 × 16) + 0x7C00 = 0x07C00
+    07C0:0000 → (0x07C0 × 16) + 0x0000 = 0x07C00
+    <span class="sub">Both notations land on the exact same physical byte. This is why some bootloaders set CS=0x07C0 and use offsets from 0 instead of CS=0x0000 with offsets from 0x7C00 — you'll see both conventions in the wild, and both are correct.</span>
+  </div>
+
+  <p class="reveal">This overlap is called <strong>aliasing</strong>, and it's a direct consequence of real mode having no single canonical address space — just a formula that happens to produce the same output from more than one input. It's harmless here, but it's the same underlying quirk responsible for the historical <strong>A20 line</strong> controversy: the original 8086 only had 20 physical address pins, so address calculations that "overflowed" past 1MB silently wrapped back around to 0 due to the same segment:offset arithmetic. Some early software accidentally depended on that wraparound behavior, so when the 80286 added a 21st address line (A20) and stopped wrapping, IBM had to add a special gate to keep older software working — a gate every protected-mode OS, including the one this project is building toward in Module 02, has to explicitly enable before it can safely address memory past the 1MB mark.</p>
+
+  <h3>The Interrupt Vector Table, By the Numbers</h3>
+  <p class="reveal">The data table above mentions the IVT occupies <code>0x0000</code>–<code>0x03FF</code>. Here's what's actually sitting in a handful of those 256 four-byte slots — the exact entries your bootloader (and every real-mode program) leans on constantly without ever touching them directly:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Vector</th><th>IVT Offset</th><th>Service</th><th>Used By</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">INT 0x10</td><td>0x0040</td><td>Video services (teletype output, set mode, cursor)</td><td><code>print_string</code> in boot.asm</td></tr>
+        <tr><td class="hl">INT 0x13</td><td>0x004C</td><td>Disk services (read/write sectors, get parameters)</td><td>Loading the kernel — covered in the next lesson</td></tr>
+        <tr><td class="hl">INT 0x16</td><td>0x0058</td><td>Keyboard services (read keypress, check buffer)</td><td>Interactive boot menus, "press any key" prompts</td></tr>
+        <tr><td class="hl">INT 0x19</td><td>0x0064</td><td>Bootstrap loader — BIOS's own re-entry point for reboot</td><td>Invoked internally if boot fails and BIOS retries</td></tr>
+        <tr><td class="hl">INT 0x1A</td><td>0x0068</td><td>Real-time clock services (get/set system time)</td><td>Timestamping, simple delay loops</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Sharpen your pencil.</b> <code>boot.asm</code>'s <code>print_string</code> routine sets <code>ah, 0x0E</code> before calling <code>int 0x10</code> — that's BIOS video sub-function "teletype output," one specific service living under the single INT 0x10 vector, selected by AH exactly the same way AH selects among INT 0x13's services. If IVT offset 0x0040 holds one single handler address for <em>all</em> of INT 0x10's sub-functions, where does the branching to the specific teletype-output code path happen? (Answer: entirely inside BIOS's own handler routine — it reads AH itself and dispatches internally, the same pattern INT 0x13 uses, and the same pattern your own kernel's interrupt handlers will use once you're past real mode.)
+  </div>
+</div>
+</section>
+
+<!-- 512 BYTES -->
+<section id="512bytes">
+<div class="container">
+  <div class="section-num">03 — Why Exactly 512</div>
+  <h2>The <span class="accent">512-Byte</span> Ceiling Isn't Arbitrary</h2>
+
+  <p class="reveal">Why 512, and not 256, or 1024, or "however many bytes your bootloader happens to need"? The answer isn't a design choice made for bootloaders at all — it's an inherited constraint from disk hardware that predates the PC. Floppy disks and early hard drives were physically formatted into fixed-size chunks called <strong>sectors</strong>, and the industry standard sector size, going back to the earliest IBM PC-compatible floppy controllers, was 512 bytes. That size was baked into disk controller hardware, not chosen by anyone writing bootloader code.</p>
+
+  <p class="reveal">BIOS's boot process reads exactly <strong>one sector</strong> — the very first sector of the boot device, sometimes called sector 0 or LBA 0 — into RAM and nothing more. Not "the first N bytes of a program," not "until it finds an end marker." One fixed-size disk sector, full stop. Since that hardware sector is 512 bytes, your bootloader's first-stage code is capped at 512 bytes, minus the 2 bytes reserved for the signature at the very end — 510 usable bytes for actual code and data.</p>
+
+  <div class="sidenote reveal">
+    <b>Modern disks quietly moved on.</b> Since roughly the 2010s, most hard drives and SSDs physically use 4096-byte ("4K") sectors internally, but almost all of them still expose a 512-byte <em>logical</em> sector size to software for backward compatibility — a scheme sometimes called 512e. The BIOS boot process, and your bootloader, never notice the difference; they still see, and are still capped at, exactly 512 logical bytes. You're relying on decades of an industry collectively agreeing to never break this.
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>💥 What 510 usable bytes rules out</h4>
+      <ul style="padding-left:16px;color:var(--text)">
+        <li>Parsing any real filesystem (FAT32's own boot sector code barely manages a minimal version of this)</li>
+        <li>Meaningful error handling or recovery logic</li>
+        <li>Loading more than a handful of hardcoded disk sectors</li>
+        <li>Any use of the stack-heavy conventions a C compiler would generate</li>
+      </ul>
+    </div>
+    <div class="compare-card good">
+      <h4>✅ What 510 bytes is plenty for</h4>
+      <ul style="padding-left:16px;color:var(--text)">
+        <li>Setting segment registers and a stack (a handful of instructions)</li>
+        <li>Printing a short status string via <code>INT 0x10</code></li>
+        <li>One disk-read call via <code>INT 0x13</code> to load something bigger</li>
+        <li>A far jump into whatever you just loaded</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="reveal">That second column is not a coincidence — it is a description of literally every real-world stage-1 bootloader ever written, including the one sitting in this project right now. 510 bytes was never meant to hold an operating system. It was only ever meant to hold enough code to go get something that could.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Medium</th><th>Sector Size</th><th>Total Capacity</th><th>Sectors on Disk</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">3.5" floppy (1.44MB)</td><td>512 bytes</td><td>1,474,560 bytes</td><td>2,880</td></tr>
+        <tr><td class="hl">This project's disk.img</td><td>512 bytes</td><td>varies by build</td><td>boot sector is always sector 0</td></tr>
+        <tr><td class="hl">Modern SSD (512e)</td><td>512 logical / 4096 physical</td><td>terabytes</td><td>billions</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- SIGNATURE -->
+<section id="signature">
+<div class="container">
+  <div class="section-num">04 — The Two Bytes That Matter Most</div>
+  <h2>0x55AA: The <span class="accent">Boot Signature</span></h2>
+
+  <p class="reveal">Look at the very bottom of <code>boot.asm</code>:</p>
+
+  <pre><code>times 510 - ($ - $$) db 0   ; Pad with zeros up to byte 510
+dw 0xAA55                    ; Boot signature (little-endian: stored as 55 AA)</code></pre>
+
+  <p class="reveal">The <code>times</code> directive is doing bookkeeping: <code>$</code> is "the current assembly position," <code>$$</code> is "the start of this section," so <code>$ - $$</code> is exactly how many bytes have been assembled so far. Whatever's left up to byte 510 gets padded with zeros. Then <code>dw 0xAA55</code> writes a 16-bit word — but because x86 is little-endian, the low byte is stored first, so the actual bytes on disk at offsets 510 and 511 are <code>0x55</code> then <code>0xAA</code>, exactly what BIOS checks for.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Byte Offset</th><th>Content</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0 – 509</td><td>Your code and data</td><td>Everything you actually wrote — instructions, the message string, padding</td></tr>
+        <tr><td class="hl">510</td><td class="gold">0x55</td><td>First signature byte — BIOS checks this exact value</td></tr>
+        <tr><td class="hl">511</td><td class="gold">0xAA</td><td>Second signature byte — both must match or the sector is skipped</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ It's a Sanity Check, Not a Checksum</div>
+    A checksum verifies the <em>contents</em> weren't corrupted. The boot signature verifies nothing of the sort — it's a fixed, content-independent marker meaning only "the author of this sector claims it's meant to be executed as boot code." A sector of 510 zero bytes followed by <code>0x55 0xAA</code> is, as far as BIOS is concerned, completely valid and bootable — it will load and jump into it exactly the same as a working bootloader, then immediately start executing whatever <code>0x00 0x00</code> decodes to (a harmless-looking but wrong instruction) until something crashes. This is precisely the failure mode the tutorial's "Gotcha" callout warns about: get the byte order backwards, and QEMU doesn't error out cleanly — it just hangs on a blank screen, because as far as the machine is concerned, nothing went wrong at all.
+  </div>
+
+  <p class="reveal">This also means the signature check tells you nothing about whether a disk is <em>safe</em> to boot, only whether it's <em>willing</em> to be. Historically, this is exactly the mechanism early boot-sector viruses exploited — infect the boot sector of a floppy, keep the two magic bytes intact, and the machine will faithfully execute your malicious code before the operating system ever gets a say. The check was designed to answer "is this disk bootable," and it answers exactly that question, no more.</p>
+
+  <h3>Reading the Assembled Sector Yourself</h3>
+  <p class="reveal">If you assemble <code>boot.asm</code> with NASM and open the resulting flat binary in a hex editor, you'd see something like this near the very end of the file — worth being able to recognize on sight, since you'll be staring at raw hex dumps constantly in low-level work:</p>
+
+  <pre><code>Offset  Bytes                                    ASCII
+000000  FA 33 C0 8E D8 8E C0 8E D0 BC 00 7C        .3..........
+...
+0001F0  00 00 00 00 00 00 00 00 00 00 00 00        ............
+000200  00 00 00 00 00 00 00 00 00 00 55 AA        ..........U.</code></pre>
+
+  <p class="reveal">That trailing <code>00 00 00 00 00 00 00 00 00 00 55 AA</code> on the last line is the <code>times 510 - ($ - $$) db 0</code> padding followed immediately by the signature — byte offset <code>0x200</code> is decimal 512, so the last two bytes of the sector, at offsets <code>0x1FE</code> and <code>0x1FF</code> (510 and 511 in decimal), read <code>55</code> then <code>AA</code>. If you ever suspect your bootloader isn't booting because of a signature problem, this is exactly where to look — the last two bytes of a 512-byte file, no more, no less.</p>
+</div>
+</section>
+
+<!-- ONE JOB -->
+<section id="oneJob">
+<div class="container">
+  <div class="section-num">05 — The Bootloader's Entire Philosophy</div>
+  <h2>Load Something Bigger, Then <span class="accent">Get Out of the Way</span></h2>
+
+  <p class="reveal">Here's the mental model worth keeping for the rest of this module, and honestly for every "chain of trust" system you'll ever meet in systems programming: a bootloader stage does not try to be the operating system. It does exactly one thing — locate and load the next, larger, more capable piece of code — and then it disappears, handing off control completely.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">⚡</div><div class="pipe-name">BIOS</div><div class="pipe-desc">Loads 512 bytes from LBA 0 to 0x7C00, jumps in</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">💾</div><div class="pipe-name">Stage 1 (boot.asm)</div><div class="pipe-desc">Sets up stack, reads more sectors via INT 0x13, loads kernel to 0x1000</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🧭</div><div class="pipe-name">kernel_entry.asm</div><div class="pipe-desc">Exits real mode, sets up C-friendly stack, zeroes BSS</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🏗️</div><div class="pipe-name">kernel_main()</div><div class="pipe-desc">Finally, actual C code — the OS proper begins</div></div>
+  </div>
+
+  <p class="reveal">Notice something about that pipeline: every stage is bigger, more capable, and less constrained than the one before it. BIOS is fixed firmware that can only understand "read a sector, jump." Stage 1 is 510 bytes of raw assembly that can read more sectors and do a far jump. <code>kernel_entry.asm</code> can finally afford to build the scaffolding a real language needs. Each link in the chain earns just enough trust and just enough capability to build the next link, then steps aside completely — it never comes back.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔁 This Pattern Has a Name: Chain-Loading</div>
+    Loading a small trusted program that in turn loads a bigger, more capable one is called <strong>chain-loading</strong>, and it's not unique to this project — GRUB does it (a tiny MBR stage loads GRUB's own larger core image from the filesystem), UEFI firmware does it (loads a bootloader off an EFI System Partition, which then loads a kernel), and even this project's own progression from <code>boot.asm</code> to <code>kernel_entry.asm</code> to <code>kernel_main()</code> is three links in exactly this chain. The deep dive on MBR vs GPT in this same lesson module goes further into how real-world partitioned disks make chain-loading a two-hop process before the kernel is even involved.
+  </div>
+
+  <p class="reveal">Right now, <code>boot.asm</code> as written in this repository doesn't load a kernel yet — it prints its message and executes <code>cli</code> / <code>hlt</code> to halt. That's deliberate: the tutorial's own "Brain Exercise" section is pointing you toward filling in the <code>INT 0x13</code> disk-read call and the far jump to <code>0x1000</code> yourself. The next lesson in this series, on BIOS disk services, is exactly the missing piece — the mechanism by which stage 1 actually goes and gets stage 2.</p>
+
+  <h3>Why Every Stage Wants Out of Real Mode Eventually</h3>
+  <p class="reveal">"Get out of the way" has a second meaning worth previewing here, even though the actual mode switch is Module 02's job, not this one's. Every constraint from the real-mode section earlier in this lesson — 16-bit registers, the 1MB ceiling, zero memory protection — is a constraint the <em>entire chain</em> is still operating under, all the way up through <code>kernel_entry.asm</code>, right up until the moment something finally executes the instruction that leaves real mode behind for good.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🕰️ Real Mode (where you are now)</h4>
+      16-bit registers, 1MB addressable, segment:offset addressing, zero memory protection, no paging — identical in spirit to an 8086 from 1978. Every byte of boot.asm runs here.
+    </div>
+    <div class="compare-card good">
+      <h4>🚀 Protected Mode (Module 02's destination)</h4>
+      32-bit registers, 4GB flat addressable per segment, a Global Descriptor Table replacing segment:offset tricks, hardware-enforced privilege levels, and — eventually — paging. This is the mode C code and the rest of this OS actually run in.
+    </div>
+  </div>
+
+  <p class="reveal">The reason this project's own module ordering puts "Kernel Entry" immediately after "Bootloader" is exactly this dependency: stage 1's last real job, once it has loaded the kernel image into memory, is to help set the stage for that mode switch — loading a GDT, setting the Protection Enable bit in CR0, and performing a far jump that flushes the CPU's instruction pipeline into 32-bit code. None of that is this lesson's focus, but it's worth knowing the destination: everything you've learned here about 512 bytes, signatures, and real-mode constraints describes a phase of the boot process that, by design, is meant to be brief.</p>
+</div>
+</section>
+
+<!-- SIMULATOR -->
+<section id="sim">
+<div class="container">
+  <div class="section-num">07 — Watch It Happen</div>
+  <h2>Power Button to <span class="accent">Ring 0</span>, Simulated</h2>
+
+  <p class="reveal">Run both scenarios below. One is the boot sequence succeeding — BIOS finds your signature and jumps in. The other is what happens when no attached device has a valid boot sector: BIOS exhausts its device list and has nowhere left to go.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="bootLabel">▶ Choose a scenario below</div>
+    <canvas id="bootCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runBoot('ok')">▶ Bootable disk found</button>
+    <button class="ctrl-btn cyan" onclick="runBoot('fail')">▶ No bootable device</button>
+    <button class="ctrl-btn red" onclick="resetBoot()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What "No Bootable Device" Actually Means</div>
+    When every candidate device fails the signature check, BIOS doesn't crash — it does exactly what it's designed to do: report failure back up. Classic BIOS implementations fall back to software interrupt <code>INT 0x18</code> ("boot failure," historically pointing at ROM BASIC on the original IBM PC) or print a message like <em>"No bootable device — insert boot disk and press any key."</em> Either way, the machine is completely fine — the outcome is identical in spirit to your own <code>boot.asm</code> hitting <code>jc disk_error</code> after a failed <code>INT 0x13</code> call: a clean, deliberate failure path, not a mystery hang.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">POST</div><div class="glossary-def">Power-On Self-Test — BIOS's initial hardware sanity checks (CPU, RAM, keyboard, video) before it looks for anything to boot.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reset Vector</div><div class="glossary-def">The fixed physical address (0xFFFFFFF0) the CPU begins fetching instructions from immediately after power-on, mapped to BIOS ROM.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Real Mode</div><div class="glossary-def">The 16-bit, unprotected, unpaged execution mode every x86 CPU boots into, unchanged in spirit since the 8086.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segment:Offset Addressing</div><div class="glossary-def">Real mode's memory scheme: physical address = segment × 16 + offset, giving a 1MB addressable range from 16-bit registers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt Vector Table (IVT)</div><div class="glossary-def">256 four-byte entries at physical address 0x0000, each pointing to a handler — this is what makes INT 0x10 / INT 0x13 / INT 0x16 work.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Boot Signature (0x55AA)</div><div class="glossary-def">The two fixed bytes BIOS checks at offsets 510–511 of a candidate sector to decide "treat this as bootable code."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sector</div><div class="glossary-def">The fixed-size chunk (512 bytes, logically, on virtually all disks) that storage hardware reads or writes as one atomic unit.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Chain-Loading</div><div class="glossary-def">The pattern of a small trusted stage loading a larger, more capable stage and handing off control completely — BIOS → stage 1 → stage 2 → kernel.</div></div>
+    <div class="glossary-card"><div class="glossary-term">A20 Line</div><div class="glossary-def">The 21st physical address line; historically gated off to preserve 8086-style 1MB address wraparound for compatibility, and must be enabled before addressing memory above 1MB.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Protected Mode</div><div class="glossary-def">The 32-bit CPU mode with a flat 4GB address space, GDT-based segmentation, and hardware privilege levels — the mode Module 02 switches into permanently.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The Boot Sector — 512 Bytes to Rule Them All · A companion lesson for bob_os module 01_bootloader</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: BIOS Disk Services — INT 13h and the CHS-to-LBA story.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── BOOT SEQUENCE CANVAS ──────────────────────────────────────────────
+function drawBootScene(t,phase,mode){
+  const canvas=document.getElementById('bootCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const stages=['RESET','POST','SCAN','LOAD','JUMP'];
+  const failStages=['RESET','POST','SCAN','FAIL'];
+  const list = mode==='fail' ? failStages : stages;
+  const laneY=H*0.4;
+  const stageW = W/(list.length);
+
+  ctx.strokeStyle=C.border;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(stageW*0.5,laneY);ctx.lineTo(W-stageW*0.5,laneY);ctx.stroke();
+
+  list.forEach((label,i)=>{
+    const x=stageW*(i+0.5);
+    ctx.beginPath();ctx.arc(x,laneY,7,0,Math.PI*2);
+    ctx.fillStyle = (label==='FAIL') ? C.red : C.bg3;
+    ctx.fill();ctx.strokeStyle=(label==='FAIL')?C.red:C.muted;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(label,x,laneY+28);
+  });
+
+  const captions={
+    idle:'Choose a scenario above',
+    reset:'⚡ Power applied — CPU fetches from the reset vector, 0xFFFFFFF0',
+    post:'🔧 POST — BIOS checks CPU, RAM, keyboard, initializes video',
+    scan_ok:'💽 BIOS reads sector 0 of the first disk — checking for 0x55AA...',
+    scan_fail:'💽 BIOS checks each device in turn — none carry a valid signature',
+    load:'✅ Signature matched! Copying 512 bytes to RAM at 0x7C00',
+    jump:'🚀 jmp 0x7C00 — BIOS steps aside, your code now owns the CPU',
+    fail:'🚫 No bootable device — BIOS falls back to INT 0x18 / error message'
+  };
+  let capKey='idle';
+  if(phase==='reset')capKey='reset';
+  else if(phase==='post')capKey='post';
+  else if(phase==='scan')capKey=(mode==='fail')?'scan_fail':'scan_ok';
+  else if(phase==='load')capKey='load';
+  else if(phase==='jump')capKey='jump';
+  else if(phase==='fail')capKey='fail';
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[capKey]||'',W/2,H-30);
+
+  // moving marker
+  const idxMap = mode==='fail' ? {reset:0,post:1,scan:2,fail:3} : {reset:0,post:1,scan:2,load:3,jump:4};
+  if(phase!=='idle'){
+    const curIdx = idxMap[phase];
+    const nextIdx = Math.min(curIdx+1, list.length-1);
+    const x = stageW*(curIdx+0.5) + (stageW*(nextIdx-curIdx))*t*0.6;
+    const col = (phase==='fail') ? C.red : (phase==='jump'?C.green:C.gold);
+    ctx.beginPath();ctx.arc(x,laneY,9,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+  }
+
+  // status readout at bottom
+  ctx.textAlign='left';ctx.font='11px Source Code Pro,monospace';
+  ctx.fillStyle=C.muted;
+  const readout = mode==='fail'
+    ? 'CS:IP = F000:E05B (BIOS ROM)   AH=0x02 INT 0x13 → CF=1 on every device'
+    : 'CS:IP after jump = 0000:7C00   Bytes[510..511] = 55 AA';
+  ctx.fillText(readout, 12, H-8);
+}
+
+function runBoot(mode){
+  const phases = mode==='fail' ? ['reset','post','scan','fail'] : ['reset','post','scan','load','jump'];
+  const durations = mode==='fail' ? [400,500,650,600] : [400,500,600,500,550];
+  let idx=0,start=performance.now();
+  document.getElementById('bootLabel').textContent = mode==='fail'
+    ? '▶ Scenario: every device fails the 0x55AA check'
+    : '▶ Scenario: BIOS finds a valid boot sector';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawBootScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('bootLabel').textContent='▶ Done — try the other scenario, or Reset';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetBoot(){
+  document.getElementById('bootLabel').textContent='▶ Choose a scenario above';
+  drawBootScene(0,'idle','ok');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetBoot(); });
+window.addEventListener('resize',()=>{ resetBoot(); });
+</script>
+</body>
+</html>

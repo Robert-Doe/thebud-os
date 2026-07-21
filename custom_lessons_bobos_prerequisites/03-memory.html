@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Memory & Stack — Assembly &amp; OS-from-Scratch Refresher</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: rgba(18,25,47,0.88); --panel-2: rgba(25,33,60,0.9);
+  --text: #e9edf7; --muted: #aab4cf; --soft: #7f8bb0; --line: rgba(255,255,255,0.08);
+  --blue: #7aa2ff; --blue-2: #5f87f8; --green: #4ade80; --red: #fb7185; --amber: #fbbf24; --purple: #a78bfa;
+  --cyan: #5eead4; --pink: #f472b6;
+  --shadow: 0 20px 60px rgba(0,0,0,0.35); --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: radial-gradient(circle at top, #121a35 0%, #09101f 55%, #060a14 100%); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { line-height: 1.6; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 28px; }
+.hero { padding: 28px; background: linear-gradient(180deg, rgba(119,157,255,0.15), rgba(255,255,255,0.03)); border:1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content:''; position:absolute; inset:auto -10% -45% auto; width:340px; height:340px; background: radial-gradient(circle, rgba(122,162,255,0.28), transparent 65%); pointer-events:none; }
+h1,h2,h3,h4 { margin:0 0 10px; line-height:1.2; }
+h1 { font-size: 34px; letter-spacing: -0.03em; }
+h2 { font-size: 23px; margin-top: 4px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 10px 0; color: var(--muted); }
+a { color: var(--blue); }
+.lede { max-width: 980px; font-size: 16px; }
+.grid-4, .grid-3, .grid-2, .grid-6 { display:grid; gap:16px; }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card.soft { background: var(--panel-2); }
+.stat-card { background: rgba(255,255,255,0.03); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.value { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.tag-row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 7px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.05); color: var(--text); border:1px solid var(--line); }
+.pill.blue { background: rgba(122,162,255,0.13); color:#cfdcff; }
+.pill.green { background: rgba(74,222,128,0.13); color:#bdf5d2; }
+.pill.amber { background: rgba(251,191,36,0.13); color:#ffe6ad; }
+.pill.red { background: rgba(251,113,133,0.13); color:#ffd0d6; }
+.pill.purple { background: rgba(167,139,250,0.13); color:#d4c6ff; }
+.pill.cyan { background: rgba(94,234,212,0.13); color:#bdf8ee; }
+.good { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+.section { margin-top: 22px; }
+.callout { padding: 16px 18px; border-radius: 14px; border:1px solid var(--line); background: rgba(122,162,255,0.08); color: var(--text); }
+.callout.warn { background: rgba(251,191,36,0.09); }
+.callout.red { background: rgba(251,113,133,0.09); }
+.callout.green { background: rgba(74,222,128,0.08); }
+.callout h4 { margin-top:0; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(0,0,0,0.28); border:1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 13.5px; overflow-x:auto; color: #e8eeff; white-space:pre; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 16px; margin-top: 14px; }
+table { width:100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+th, td { text-align:left; padding: 10px 13px; border-bottom:1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+th { position: sticky; top: 0; background: rgba(10,15,30,0.97); z-index: 1; color: var(--text); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.bytegrid { display:flex; gap:4px; flex-wrap:wrap; margin: 10px 0; }
+.byte { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.05); border:1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align:center; min-width: 64px; }
+.byte .addr { font-size: 10px; color: var(--soft); display:block; }
+.byte .v { font-size: 15px; font-weight:700; margin-top:3px; }
+.regbox { font-family: ui-monospace, monospace; display:flex; border:1px solid var(--line); border-radius: 10px; overflow:hidden; margin: 10px 0; }
+.regbox > div { padding: 10px 8px; text-align:center; font-size: 12px; border-right: 1px solid var(--line); }
+.regbox > div:last-child { border-right:none; }
+.qa { border-left: 3px solid var(--purple); padding: 6px 0 6px 14px; margin: 14px 0; }
+.qa .q { color: #d4c6ff; font-weight: 700; }
+.scenario { border:1px dashed rgba(122,162,255,0.4); border-radius: 14px; padding: 16px; background: rgba(122,162,255,0.05); }
+.scenario .tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--blue); font-weight:700; }
+.nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.nav a { text-decoration:none; }
+.navpill { display:inline-flex; align-items:center; gap:6px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,0.04); color: var(--muted); border:1px solid var(--line); transition: all .15s; }
+.navpill:hover { background: rgba(122,162,255,0.12); color: var(--text); }
+.navpill.active { background: rgba(122,162,255,0.18); color: var(--text); border-color: rgba(122,162,255,0.4); }
+.pagefoot { display:flex; justify-content:space-between; gap:16px; margin-top: 30px; }
+.pagefoot a { text-decoration:none; }
+.navbtn { display:block; padding:16px 20px; border-radius:16px; border:1px solid var(--line); background: var(--panel-2); flex:1; }
+.navbtn .label { margin-bottom:4px; }
+.navbtn .title { color: var(--text); font-size: 16px; font-weight:700; }
+.footer-note { margin-top: 24px; color: var(--soft); font-size: 13px; text-align:center; }
+.checklist { list-style:none; padding:0; margin: 10px 0; }
+.checklist li { padding: 8px 0 8px 30px; position:relative; border-bottom:1px solid var(--line); color: var(--muted); }
+.checklist li:last-child { border-bottom:none; }
+.checklist li::before { content:'✓'; position:absolute; left:0; top:8px; color: var(--green); font-weight:700; }
+.bitfield { display:flex; font-family:ui-monospace,monospace; font-size:12px; margin:10px 0; flex-wrap:wrap; }
+.bitfield .bit { border:1px solid var(--line); padding:8px 4px; text-align:center; min-width:34px; background: rgba(255,255,255,0.03); }
+.bitfield .bit .n { display:block; color:var(--soft); font-size:9px; }
+@media (max-width: 1100px) { .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .shell { padding: 16px; } h1 { font-size: 27px; }
+  .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr; }
+  .pagefoot { flex-direction:column; }
+}
+
+</style>
+</head>
+<body>
+<div class='shell'>
+<div class='nav'><a href='index.html'><span class='navpill'>Home</span></a><a href='01-registers.html'><span class='navpill'>Registers</span></a><a href='02-endianness.html'><span class='navpill'>Endianness</span></a><a href='03-memory.html'><span class='navpill active'>Memory & Stack</span></a><a href='04-instructions.html'><span class='navpill'>Instructions & Flow</span></a><a href='05-os-bootstrap.html'><span class='navpill'>Build an OS</span></a></div>
+
+<section class='hero'>
+  <div class='label'>Page 03</div>
+  <h1>Memory is just numbered mailboxes — addressing is just arithmetic</h1>
+  <p class='lede'>RAM is a long row of byte-sized mailboxes, each with a unique number (the address). Every "pointer," "array," and "struct field" you've ever used in a high-level language compiles down to: take a number, maybe do a little arithmetic on it, go look in that mailbox.</p>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Addressing modes: the menu of ways to say "go here"</h2>
+    <p>An instruction operand doesn't just say "memory" — it says exactly how to compute the address. x86's general addressing form is:</p>
+    <div class='formula'><span class='reg'>address</span> = base_register + (index_register &times; scale) + displacement</div>
+    <p>where <strong>scale</strong> is 1, 2, 4, or 8 (matching byte/word/dword/qword element sizes — perfect for indexing arrays without a separate multiply), and any piece you don't need is simply omitted.</p>
+    <div class='table-wrap'>
+      <table>
+        <thead><tr><th>Mode</th><th>Example</th><th>Plain English</th></tr></thead>
+        <tbody>
+          <tr><td>Immediate</td><td><code>mov eax, 5</code></td><td>The value 5 itself, no memory touched</td></tr>
+          <tr><td>Register</td><td><code>mov eax, ebx</code></td><td>Copy EBX's value into EAX</td></tr>
+          <tr><td>Direct</td><td><code>mov eax, [0x4000]</code></td><td>Read the dword at the fixed address 0x4000</td></tr>
+          <tr><td>Register indirect</td><td><code>mov eax, [ebx]</code></td><td>Treat EBX as a pointer; read what it points to</td></tr>
+          <tr><td>Base + displacement</td><td><code>mov eax, [ebx+8]</code></td><td>A struct field 8 bytes into the struct EBX points to</td></tr>
+          <tr><td>Base + index*scale + disp</td><td><code>mov eax, [ebx+esi*4+8]</code></td><td>arr[i] where arr starts at EBX+8, i is in ESI, elements are 4 bytes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class='card soft'>
+    <h3>Square brackets mean "go there," not "this number"</h3>
+    <div class='qa'>
+      <div class='q'>Q: What's the difference between <code>mov eax, ebx</code> and <code>mov eax, [ebx]</code>?</div>
+      <p>A: The first copies EBX's <em>value</em> into EAX directly — no memory access at all. The second treats EBX's value <em>as an address</em>, goes to memory, reads 4 bytes starting there, and puts those bytes into EAX. Brackets always mean "dereference" — go to the mailbox numbered by what's inside the brackets, don't just copy the number itself. This single distinction is where most assembly beginners get lost first.</p>
+    </div>
+    <div class='callout warn'>
+      <h4>Size matters even when the brackets look the same</h4>
+      <p><code>mov [ebx], al</code> writes 1 byte. <code>mov [ebx], ax</code> writes 2 bytes. <code>mov [ebx], eax</code> writes 4 bytes — all starting at the same address. The assembler infers the access size from which register you used; when there's no register on either side (e.g. moving an immediate to memory), you must say so explicitly: <code>mov byte [ebx], 5</code> vs <code>mov dword [ebx], 5</code>.</p>
+    </div>
+  </div>
+</section>
+
+<section class='section scenario'>
+  <span class='tag'>Scenario</span>
+  <p style='margin-top:8px'>You're indexing into an array of 4-byte integers. The array starts at address stored in EBX, and you want element <code>i</code> (stored in ECX). Without scaled indexing you'd write <code>mov eax, [ebx + ecx*4]</code> in one instruction — the CPU's address-generation hardware does the multiply-by-4 and the add for free, in parallel with everything else, costing no extra cycles versus a plain load. This is precisely why arrays in C compile to tight, fast code: "scale by element size" is something the hardware does, not something your program has to compute step by step.</p>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>The stack: a pile of plates, growing the "wrong" way</h2>
+    <p>The stack is just a region of memory accessed in last-in-first-out order, tracked by the <strong>ESP</strong> (stack pointer) register, which always points at the most-recently-pushed item. The critical, endlessly-confusing fact:</p>
+    <div class='callout red'>
+      <h4>The stack grows DOWN</h4>
+      <p>On x86, <code>push</code> <strong>decreases</strong> ESP before writing, and <code>pop</code> <strong>increases</strong> ESP after reading. "Pushing more stuff" moves you toward lower addresses, not higher ones. This is a historical convention, not a law of physics — but every x86 OS, compiler, and calling convention assumes it, so fighting it will only hurt you.</p>
+    </div>
+    <div class='formula'><span class='c'>; esp = 0x7FFC initially, stack region grows toward lower addresses</span>
+<span class='kw'>push</span> <span class='reg'>eax</span>   <span class='c'>; esp -= 4  -&gt; esp = 0x7FF8, [0x7FF8] = old eax</span>
+<span class='kw'>push</span> <span class='reg'>ebx</span>   <span class='c'>; esp -= 4  -&gt; esp = 0x7FF4, [0x7FF4] = old ebx</span>
+<span class='kw'>pop</span>  <span class='reg'>ecx</span>   <span class='c'>; ecx = [0x7FF4] (old ebx), then esp += 4 -&gt; esp = 0x7FF8</span></div>
+  </div>
+  <div class='card'>
+    <h2>Why "down" actually makes sense</h2>
+    <p>In a flat memory layout, code and static data conventionally sit at low addresses, and the stack starts near the top of available memory and grows downward toward the heap, which grows upward from just above the static data. Two regions growing toward each other from opposite ends use the available space efficiently — if they collide, you've genuinely run out of memory, rather than wasting a fixed split between them.</p>
+    <div class='bytegrid' style='flex-direction:column; align-items:stretch; gap:6px'>
+      <div class='byte' style='text-align:left'>high addresses — stack top, grows ↓</div>
+      <div class='byte' style='text-align:left; opacity:.5'>(free space in the middle)</div>
+      <div class='byte' style='text-align:left'>heap, grows ↑</div>
+      <div class='byte' style='text-align:left'>static data / code — low addresses</div>
+    </div>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>The stack frame: how function calls actually work</h2>
+  <p>A "function call" is three plain mechanisms working together: <code>call</code> pushes the return address and jumps; the callee sets up a frame using EBP as a fixed reference point; <code>ret</code> pops that return address back into EIP.</p>
+  <div class='formula'><span class='kw'>my_function</span>:
+    <span class='kw'>push</span> <span class='reg'>ebp</span>        <span class='c'>; save caller's frame pointer</span>
+    <span class='kw'>mov</span>  <span class='reg'>ebp</span>, <span class='reg'>esp</span>   <span class='c'>; ebp = fixed reference point for THIS call</span>
+    <span class='kw'>sub</span>  <span class='reg'>esp</span>, <span class='num'>16</span>    <span class='c'>; reserve 16 bytes of local variables</span>
+    <span class='c'>; ... body uses [ebp-4], [ebp-8] for locals, [ebp+8] for the first argument ...</span>
+    <span class='kw'>mov</span>  <span class='reg'>esp</span>, <span class='reg'>ebp</span>   <span class='c'>; deallocate locals: snap esp back</span>
+    <span class='kw'>pop</span>  <span class='reg'>ebp</span>        <span class='c'>; restore caller's frame pointer</span>
+    <span class='kw'>ret</span>             <span class='c'>; pop return address into eip, jump there</span></div>
+  <p>Notice why arguments live <em>above</em> EBP (positive offsets) and locals live <em>below</em> it (negative offsets): the caller pushed the arguments before executing <code>call</code>, so they're already on the stack at a higher address than anything the callee pushes afterward — and <code>call</code> itself then pushes the return address right above the arguments, with EBP set up one slot beyond that.</p>
+  <div class='grid-3' style='margin-top:14px'>
+    <div class='stat-card'><div class='label'>call</div><div class='value' style='font-size:18px'>push return addr, jump</div><div class='sub'>Pushes EIP's current value (the instruction right after the call), then jumps to the target.</div></div>
+    <div class='stat-card'><div class='label'>ret</div><div class='value' style='font-size:18px'>pop into eip</div><div class='sub'>Pops the top of stack and jumps there — works only if the stack is exactly as call left it.</div></div>
+    <div class='stat-card'><div class='label'>ebp / rbp</div><div class='value' style='font-size:18px'>frame anchor</div><div class='sub'>Doesn't move during the function body, so locals/args stay at fixed offsets even as esp wiggles.</div></div>
+  </div>
+  <div class='callout warn' style='margin-top:14px'>
+    <h4>Why mismatched push/pop crashes your OS specifically</h4>
+    <p>In application code, a stack imbalance usually just crashes one process. In <strong>kernel code</strong>, if an interrupt handler pushes one more thing than it pops before executing <code>iret</code>, the CPU pops garbage into EIP/CS/EFLAGS and jumps to a random address in privileged mode — often hard-locking or silently corrupting the whole machine. Stack discipline matters more, not less, the closer you get to the metal.</p>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Try this: trace the stack pointer</h2>
+  <p>ESP starts at <code>0x9000</code>. Walk through each instruction and write the new ESP value, plus what (if anything) gets written or read at which address.</p>
+  <div class='formula'><span class='kw'>push</span> <span class='reg'>eax</span>     <span class='c'>; ?</span>
+<span class='kw'>push</span> <span class='reg'>ebx</span>     <span class='c'>; ?</span>
+<span class='kw'>push</span> <span class='reg'>ecx</span>     <span class='c'>; ?</span>
+<span class='kw'>pop</span>  <span class='reg'>edx</span>     <span class='c'>; ? (which register's old value ends up in edx?)</span>
+<span class='kw'>add</span>  <span class='reg'>esp</span>, <span class='num'>8</span> <span class='c'>; ? (this is a common "pop without caring about the value" trick)</span></div>
+  <div class='callout green'>
+    <p><strong>Answer:</strong> After the three pushes, ESP = 0x8FF4 (0x9000 − 12), with [0x8FF8]=ecx, [0x8FFC]=ebx, [0x9000-4=0x8FFC] wait — careful: push order is eax at 0x8FFC, ebx at 0x8FF8, ecx at 0x8FF4, ESP=0x8FF4. <code>pop edx</code> reads [0x8FF4] = old ecx, EDX = old ECX, ESP becomes 0x8FF8. <code>add esp, 8</code> just adds 8 directly without reading memory — a fast way to discard two pushed values you don't need back — leaving ESP = 0x9000, right back where it started.</p>
+  </div>
+</section>
+
+<div class='pagefoot'><a href='02-endianness.html'><div class='navbtn'><div class='label'>&larr; previous</div><div class='title'>Endianness</div></div></a><a href='04-instructions.html'><div class='navbtn' style='text-align:right'><div class='label'>next &rarr;</div><div class='title'>Instructions & Flow</div></div></a></div>
+<div class='footer-note'>Assembly &amp; OS-from-Scratch Refresher — built the head-first way: scenario first, jargon second.</div>
+</div>
+</body>
+</html>

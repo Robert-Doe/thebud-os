@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VGA Text Mode — Painting the Screen by Writing to RAM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:var(--green);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--green);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(74,222,128,.15);border:1.5px solid var(--green);color:var(--green);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(74,222,128,.1);border:1.5px solid var(--green);color:var(--green);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(74,222,128,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.byte-strip{display:flex;flex-wrap:wrap;gap:.35rem;margin:1.2rem 0;font-family:'Source Code Pro',monospace;}
+.byte-box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.5rem .7rem;text-align:center;min-width:64px;}
+.byte-box .addr{font-size:.62rem;color:var(--muted);display:block;margin-bottom:.25rem;}
+.byte-box .val{font-size:.85rem;color:var(--text);}
+.byte-box.hit-char{border-color:var(--cyan);background:rgba(56,189,248,.12);}
+.byte-box.hit-attr{border-color:var(--green);background:rgba(74,222,128,.12);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#aha" title="The Aha"></a>
+  <a class="toc-dot" href="#grid" title="The Grid & Offset"></a>
+  <a class="toc-dot" href="#canvasdemo" title="Live Write Demo"></a>
+  <a class="toc-dot" href="#attribute" title="The Attribute Byte"></a>
+  <a class="toc-dot" href="#code" title="Real bob_os Code"></a>
+  <a class="toc-dot" href="#pitfalls" title="Pitfalls"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Bare-Metal Graphics · VGA Text Mode · Memory-Mapped I/O</div>
+    <h1>Painting the Screen<br>by <span>Writing to RAM</span></h1>
+    <p class="hero-sub">Your kernel can already compute — but it's completely blind. There's no <code>print()</code>, no driver stack, no OS underneath you to ask nicely. And yet the very next lines of C you write will make text appear on a monitor. Not through a syscall. Not through a function call into hardware. Through a plain, ordinary write to a byte in memory. That's the entire trick, and it's the same trick that runs everything from a boot-time debug message to a modern GPU's framebuffer.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0xB8000</div><div class="lbl">VGA text buffer physical address</div></div>
+      <div class="hero-stat"><div class="num">80×25</div><div class="lbl">Characters on screen</div></div>
+      <div class="hero-stat"><div class="num">2 bytes</div><div class="lbl">Per character cell</div></div>
+      <div class="hero-stat"><div class="num">4+4</div><div class="lbl">Bits: foreground + background</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>A Kernel That Can Think, But <span class="accent g">Can't Speak</span></h2>
+  <p class="reveal">By the time you reach this module, your bootloader has already dropped you into Protected Mode and jumped into C. That's a real achievement — but if something goes wrong right now, you have no way to know. No <code>printf</code>. No console. No error messages. You're debugging a black box with nothing but a debugger attached from outside, if you're lucky.</p>
+  <p class="reveal">Worse: the one tool Real Mode gave you for free — BIOS's <code>int 0x10</code> teletype interrupt, the thing every "Hello World" bootloader demo leans on — is <strong>gone</strong>. BIOS interrupts only work in Real Mode. The instant you flip the Protected Mode bit, that door slams shut forever. So how does every OS from here on out put text on the screen?</p>
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Punchline, Up Front</div>
+    You don't call the screen. You <strong>write to it</strong> — the same way you'd write to any array in memory. The VGA card has arranged for a chunk of your machine's physical address space to secretly <em>be</em> its own video memory. Store a byte there, and the hardware notices and redraws. No driver stack, no syscall, no cooperation required from anything except the CPU's ordinary <code>mov</code> instruction.
+  </div>
+</div>
+</section>
+
+<!-- THE AHA -->
+<section id="aha">
+<div class="container">
+  <div class="section-num">01 — The Core Idea</div>
+  <h2>Output Isn't a Function Call — It's <span class="accent g">Memory-Mapped I/O</span></h2>
+
+  <p class="reveal">Think about how you're used to talking to hardware in a normal application: you call <code>print()</code>, and somewhere far below you, an operating system, a driver, and eventually some hardware-specific protocol take your string and get it onto a screen. Dozens of layers, none of which you see.</p>
+
+  <p class="reveal">Bare-metal VGA text mode throws almost all of that away. Decades ago, IBM's original PC design decided that instead of screen output going through a special "port" that you send commands to, the video card would simply <strong>expose its own display memory as part of the normal physical address space</strong> the CPU already reads and writes. This trick has a name: <strong>Memory-Mapped I/O (MMIO)</strong>. A range of addresses that <em>look</em> like ordinary RAM to every CPU instruction, but are secretly wired to a device instead.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">🖼️ The Head First Analogy</div>
+    Picture a giant whiteboard bolted to the wall, with 2,000 sticky notes arranged in a grid — 80 across, 25 down. Every sticky note has two layers: the front layer says <em>which character</em> to show, the back layer says <em>what color</em> to show it in. You never "send a message" to the whiteboard. You just walk up and write directly on a sticky note. The whiteboard itself — not you — is responsible for constantly redrawing what's written on it, 60-plus times a second, whether you touched it a millisecond ago or an hour ago.
+  </div>
+
+  <p class="reveal">For the specific VGA hardware in "Mode 3" (the classic 80×25 16-color text mode every PC boots into), that whiteboard's sticky notes live at physical address <code>0xB8000</code>. This address isn't something you configure — it's <strong>hardwired</strong> into the PC platform's memory map, a legacy decision baked in since the original IBM PC and preserved by every VGA-compatible card since, precisely so old software (and OS-dev tutorials) keep working unmodified forty-plus years later.</p>
+
+  <div class="formula green reveal">
+    <span class="label">The Whole Trick, One Line</span>
+    *(volatile char *)0xB8000 = 'A';
+    <span class="sub">That single store instruction — no function call, no interrupt, no syscall — is enough to put the letter A in the top-left corner of the screen.</span>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why <code>volatile</code>?</b> Ordinarily, a C compiler is free to notice "you wrote to this address but never read it back" and optimize the write away entirely, or reorder it. <code>volatile</code> tells the compiler this memory has side effects the compiler can't see — a piece of hardware is watching — so every read and write must actually happen, in order, exactly as written. The real driver's buffer pointer, <code>vga_buf</code> in <code>vga.c</code>, is declared exactly this way for exactly this reason.
+  </div>
+
+  <p class="reveal">Compare this to the old Real Mode way of doing things, which routed every character through a BIOS interrupt handler:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>📼 Real Mode: BIOS Teletype (int 0x10)</h4>
+      You load a character into a register, trigger a software interrupt, and BIOS's own hidden routine decides how to get it on screen — possibly still just writing to <code>0xB8000</code> internally, but you never see that. Only works in Real Mode; unavailable the moment Protected Mode is enabled.
+    </div>
+    <div class="compare-card good">
+      <h4>🖥️ Protected Mode: Direct MMIO Write</h4>
+      You store bytes directly into the mapped video buffer yourself. No interrupt, no BIOS, no hidden routine — you <em>are</em> the driver now. This is strictly more work up front, but it's also the only option once BIOS is off the table, and it's dramatically faster since there's no interrupt/handler overhead per character.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- GRID / OFFSET -->
+<section id="grid">
+<div class="container">
+  <div class="section-num">02 — The Geometry</div>
+  <h2>The 80×25 Grid and the <span class="accent g">Offset Formula</span></h2>
+
+  <p class="reveal">The VGA text buffer isn't one blob of undifferentiated memory — it represents a very specific grid: <strong>80 columns wide, 25 rows tall</strong>, for exactly <strong>2,000 character cells</strong>. Every cell on that grid is <strong>2 bytes</strong>: one byte for the character, one byte for its color. That means the entire visible screen — every letter, every color, everything — lives in exactly <code>2000 × 2 = 4,000 bytes</code> of physical memory, starting at <code>0xB8000</code> and ending at <code>0xB8FA0</code>.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">80</div><div class="lbl">Columns</div></div>
+    <div class="stat-card"><div class="val">25</div><div class="lbl">Rows</div></div>
+    <div class="stat-card"><div class="val">2,000</div><div class="lbl">Total cells</div></div>
+    <div class="stat-card"><div class="val">4,000</div><div class="lbl">Total bytes</div></div>
+  </div>
+
+  <p class="reveal">Rows and columns are how <em>you</em> think about the screen. But memory doesn't have rows and columns — it has one long, flat line of addresses. So before you can write anything, you need a formula that converts a (row, col) position into a single byte offset from the start of the buffer.</p>
+
+  <div class="formula reveal">
+    <span class="label">The Offset Formula</span>
+    offset = (row × 80 + col) × 2
+    <span class="sub">"× 80" walks past every full row before yours. "+ col" walks across to your column. "× 2" converts cell-count to byte-count, since every cell is 2 bytes.</span>
+  </div>
+
+  <p class="reveal">Let's ground this in real numbers instead of leaving it abstract. Say you want to write a character at <strong>row 2, column 5</strong> — a little ways down and in from the top-left corner.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Step</th><th>Expression</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Cells before this row</td><td class="hl">row × 80</td><td>2 × 80 = 160</td></tr>
+        <tr><td>Plus this column</td><td class="hl">+ col</td><td>160 + 5 = 165</td></tr>
+        <tr><td>Cell index → byte offset</td><td class="hl">× 2</td><td>165 × 2 = 330</td></tr>
+        <tr><td class="gold">Final physical address</td><td class="hl">0xB8000 + offset</td><td class="gold">0xB8000 + 0x14A = <strong>0xB814A</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">In C, this is almost never written as raw pointer arithmetic on a <code>char*</code> — it's far cleaner to treat the buffer as an array of 16-bit values, one <code>uint16_t</code> per cell, where the low byte is the character and the high byte is the color:</p>
+
+  <pre><code>uint16_t *vga = (uint16_t *)0xB8000;
+
+/* index = row * 80 + col  — NOT multiplied by 2 here,
+   because pointer arithmetic on a uint16_t* already
+   steps 2 bytes at a time automatically */
+vga[row * 80 + col] = (attr &lt;&lt; 8) | ch;</code></pre>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Two Formulas, Same Answer</div>
+    If you index with a raw <code>char*</code> (byte pointer), you must multiply by 2 yourself: <code>(row*80+col)*2</code>. If you index with a <code>uint16_t*</code> (cell pointer), the compiler already scales by <code>sizeof(uint16_t) == 2</code> for you, so you just write <code>row*80+col</code>. Both compute the exact same physical address — the multiplication by 2 hasn't disappeared, it's just been absorbed into the pointer type. bob_os's <code>vga.c</code> uses the byte-pointer style explicitly, so the <code>*2</code> is visible right there in the source.
+  </div>
+</div>
+</section>
+
+<!-- CANVAS DEMO -->
+<section id="canvasdemo">
+<div class="container">
+  <div class="section-num">03 — See It Happen</div>
+  <h2>Writing a Cell Into <span class="accent g">0xB8000</span>, Live</h2>
+
+  <p class="reveal">Reading a formula is one thing. Watching the two actual byte-writes land — and watching the screen "just know" to update because the hardware is constantly rescanning that same memory — makes the whole idea click. Pick a target cell below and step through exactly what the CPU does.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="writeLabel">▶ Choose a target cell to write</div>
+    <canvas id="writeCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runWrite(2,5,'H','0A')">▶ Write 'H' at row 2, col 5 (green-on-black)</button>
+    <button class="ctrl-btn cyan" onclick="runWrite(10,40,'X','4E')">▶ Write 'X' at row 10, col 40 (gold-on-red)</button>
+    <button class="ctrl-btn red" onclick="resetWrite()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1 — Compute the offset</strong>The driver turns (row, col) into a byte offset using <code>(row*80+col)*2</code>, then adds it to the base address <code>0xB8000</code>. This is pure arithmetic — nothing has touched the screen yet.</div></li>
+    <li><div class="step-body"><strong>2 — Store the character byte</strong>The ASCII code for the character (e.g. <code>'H'</code> is <code>0x48</code>) is written to the low byte of that cell.</div></li>
+    <li><div class="step-body"><strong>3 — Store the attribute byte</strong>The color byte is written to the very next address — one byte higher. This is the foreground/background nibble pair you'll see broken down next.</div></li>
+    <li><div class="step-body"><strong>4 — The hardware just... shows it</strong>Nothing was "sent" to the screen. The VGA card continuously rescans <code>0xB8000</code>–<code>0xB8FA0</code> many times a second on its own initiative. The next time it happens to scan past your two bytes, the glyph appears — usually within a few milliseconds, invisibly fast to a human.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- ATTRIBUTE BYTE -->
+<section id="attribute">
+<div class="container">
+  <div class="section-num">04 — The Second Byte</div>
+  <h2>The Attribute Byte: <span class="accent g">4 Bits + 4 Bits</span></h2>
+
+  <p class="reveal">The character byte is the easy half — it's just ASCII. The color byte is where the actual design lives. VGA text mode packs both a foreground color and a background color into a <em>single</em> byte, by giving each one exactly one nibble (4 bits):</p>
+
+  <div class="formula green reveal">
+    <span class="label">Attribute Byte Layout (bit 7 → bit 0)</span>
+    [ blink | bg₂ bg₁ bg₀ | fg₃ fg₂ fg₁ fg₀ ]
+    <span class="sub">Bit 7: blink flag (or, on some configurations, a high-intensity background bit). Bits 6-4: background color (3 bits + palette convention → 8 base colors). Bits 3-0: foreground color (4 bits → all 16 colors, including bright variants).</span>
+  </div>
+
+  <p class="reveal">In practice, bob_os treats this as a clean 4-bit/4-bit split — background in the high nibble, foreground in the low nibble — which is exactly how the driver's macro builds it:</p>
+
+  <pre><code>/* vga.h */
+#define VGA_COLOR(bg, fg) (((unsigned char)(bg) &lt;&lt; 4) | (unsigned char)(fg))</code></pre>
+
+  <p class="reveal">Each nibble can independently hold any of the 16 standard VGA colors — the same 16 colors DOS-era software made an entire aesthetic out of:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Value</th><th>Name</th><th>Value</th><th>Name</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0x0</td><td>Black</td><td class="hl">0x8</td><td>Dark Grey</td></tr>
+        <tr><td class="hl">0x1</td><td>Blue</td><td class="hl">0x9</td><td>Light Blue</td></tr>
+        <tr><td class="hl">0x2</td><td>Green</td><td class="hl">0xA</td><td>Light Green</td></tr>
+        <tr><td class="hl">0x3</td><td>Cyan</td><td class="hl">0xB</td><td>Light Cyan</td></tr>
+        <tr><td class="hl">0x4</td><td>Red</td><td class="hl">0xC</td><td>Light Red</td></tr>
+        <tr><td class="hl">0x5</td><td>Magenta</td><td class="hl">0xD</td><td>Light Magenta</td></tr>
+        <tr><td class="hl">0x6</td><td>Brown</td><td class="hl">0xE</td><td>Yellow</td></tr>
+        <tr><td class="hl">0x7</td><td>Light Grey</td><td class="hl">0xF</td><td>White</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Now let's build two complete attribute bytes by hand, the same way <code>VGA_COLOR(bg, fg)</code> does internally.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Goal</th><th>bg</th><th>fg</th><th>(bg&lt;&lt;4) | fg</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Light green text, black background</td><td>0x0 (Black)</td><td>0xA (Light Green)</td><td>(0x0&lt;&lt;4) | 0xA</td><td class="gold">0x0A</td></tr>
+        <tr><td>Yellow warning text, red background</td><td>0x4 (Red)</td><td>0xE (Yellow)</td><td>(0x4&lt;&lt;4) | 0xE</td><td class="gold">0x4E</td></tr>
+        <tr><td>White text, black background (default)</td><td>0x0 (Black)</td><td>0xF (White)</td><td>(0x0&lt;&lt;4) | 0xF</td><td class="gold">0x0F</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Watch the Byte Order</div>
+    It's tempting to assume the color comes first since we "think" foreground-then-background. It doesn't. Looking at <code>buf_write()</code> in the real <code>vga.c</code>: <code>vga_buf[idx] = character; vga_buf[idx+1] = color;</code> — the <strong>character byte is always the lower address, the attribute byte is always the next byte up</strong>. Swap them and QEMU renders garbage glyphs in wrong colors, a classic first bug in this module.
+  </div>
+</div>
+</section>
+
+<!-- REAL CODE -->
+<section id="code">
+<div class="container">
+  <div class="section-num">05 — From Theory to bob_os</div>
+  <h2>Reading the Real <span class="accent g">Driver</span></h2>
+
+  <p class="reveal">Everything above is exactly what's implemented in bob_os's own <code>vga.c</code> and <code>vga.h</code> — module <code>03_vga_driver</code> in the tutorial track. Nothing here was simplified away; this <em>is</em> the driver, minus the scrolling and <code>kprintf</code> formatting logic layered on top.</p>
+
+  <pre><code>/* vga.h — the buffer address and the color macro */
+#define VGA_ADDRESS  0xB8000
+#define VGA_COLS     80
+#define VGA_ROWS     25
+#define VGA_COLOR(bg, fg) (((unsigned char)(bg) &lt;&lt; 4) | (unsigned char)(fg))
+
+/* vga.c — the actual write, byte by byte */
+static volatile unsigned char *vga_buf = (volatile unsigned char *)VGA_ADDRESS;
+
+static void buf_write(int row, int col, char c, unsigned char color) {
+    int idx = (row * VGA_COLS + col) * 2;
+    vga_buf[idx]     = (unsigned char)c;   /* character byte first  */
+    vga_buf[idx + 1] = color;              /* attribute byte second */
+}</code></pre>
+
+  <p class="reveal">Every single thing you've seen in this lesson maps directly onto this function: <code>VGA_ADDRESS</code> is the hardwired MMIO base, the <code>(row * VGA_COLS + col) * 2</code> line is the exact offset formula from Section 02, and the two writes to <code>vga_buf[idx]</code> / <code>vga_buf[idx+1]</code> are the two-byte cell layout from Section 03 — character low, attribute high. The <code>volatile</code> qualifier is the same one from the sidenote above, and it's load-bearing: without it, an aggressive compiler could legally decide these writes are dead code (nothing in the program ever reads them back) and delete them, leaving your kernel silently blind.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">vga_clear()</span><span class="fam-count">O(2000)</span></div>
+      <div class="fam-desc">Loops all 80×25 cells writing a space character in the current color — this is what resets the "whiteboard" to blank.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">vga_putchar()</span><span class="fam-count">O(1)</span></div>
+      <div class="fam-desc">Handles one character: special-cases <code>\n</code>, <code>\r</code>, <code>\t</code>, otherwise calls <code>buf_write()</code> at the current cursor and advances it.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">kprintf()</span><span class="fam-count">variadic</span></div>
+      <div class="fam-desc">A hand-rolled, allocation-free <code>printf</code> supporting <code>%c %s %d %u %x %X %%</code>, built entirely on top of <code>vga_putchar()</code>.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- PITFALLS -->
+<section id="pitfalls">
+<div class="container">
+  <div class="section-num">06 — Common Pitfalls</div>
+  <h2>Things That Bite Everyone <span class="accent g">Once</span></h2>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Off-By-One Row/Col → Writing Off Screen</div>
+    <code>VGA_COLS</code> and <code>VGA_ROWS</code> are 80 and 25 — meaning valid columns are <code>0..79</code> and valid rows are <code>0..24</code>. Forget the bound check and a scrolling loop can walk right past <code>0xB8FA0</code> into whatever physical memory happens to sit next — usually harmless in an identity-mapped early kernel, but a real, silent memory-corruption bug waiting to happen once other structures live nearby.
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🐢 Full-Screen Scroll Is O(rows×cols), Every Time</div>
+    bob_os's <code>scroll()</code> copies all 2,000 cells up by one row whenever text reaches the bottom — about 4,000 byte-copies per scroll. That's completely fine for a hobby kernel's debug output, but it's also exactly the kind of cost real hardware avoids. Module 02 of this lesson set covers the CRTC register that lets you scroll by changing a single hardware offset instead of copying anything at all.
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 It's Still Just RAM to the CPU</div>
+    Nothing about the instructions used to write <code>0xB8000</code> is special — it's the same <code>mov</code> your compiler emits for any array write. The "magic" is entirely on the video card's side: it happens to be listening on that address range and reacting to what it sees. This is the seed of a much bigger idea you'll meet again and again in OS dev — disks, network cards, and eventually GPUs are all, at some level, "just" memory ranges the CPU writes into.
+  </div>
+
+  <p class="reveal">One more subtlety worth flagging early, even though it won't bite you until much later in the course: once you enable <strong>paging</strong> (a future module), the CPU stops treating addresses as physical and starts translating every one of them through page tables first. <code>0xB8000</code> only keeps working after that point if your kernel deliberately keeps it <strong>identity-mapped</strong> — virtual <code>0xB8000</code> pointing at physical <code>0xB8000</code>. Forget that one mapping, and every <code>kprintf()</code> call silently starts writing into whatever unrelated physical frame paging happens to redirect it to, with no crash and no warning — just a screen that mysteriously stops updating.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent g">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Memory-Mapped I/O (MMIO)</div><div class="glossary-def">A hardware design where a device's registers or buffers are given addresses inside the normal physical address space, so the CPU can access them with ordinary load/store instructions instead of special I/O commands.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VGA Text Mode (Mode 3)</div><div class="glossary-def">The classic 80×25, 16-color character display mode every VGA-compatible PC boots into, backed by a fixed hardware font and the framebuffer at 0xB8000.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Framebuffer</div><div class="glossary-def">Any block of memory whose contents the display hardware reads directly to decide what to show — in text mode, character cells; in graphics modes, raw pixels.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Character Cell</div><div class="glossary-def">One on-screen character slot, represented by 2 bytes in VGA text mode: an ASCII code byte and an attribute (color) byte.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Attribute Byte</div><div class="glossary-def">The color byte of a cell — high nibble background, low nibble foreground (plus a blink bit), built with the VGA_COLOR(bg, fg) macro.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Nibble</div><div class="glossary-def">Half a byte — 4 bits. VGA text color splits one byte into exactly two nibbles, one per color channel.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Offset Formula</div><div class="glossary-def">(row × 80 + col) × 2 — converts a human (row, col) position into a byte offset from the start of the VGA buffer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">volatile</div><div class="glossary-def">A C qualifier telling the compiler a memory location may change or matter outside normal program logic, preventing it from optimizing away or reordering accesses to it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">BIOS Teletype (int 0x10)</div><div class="glossary-def">The Real Mode BIOS interrupt used to print characters before Protected Mode; unavailable once the CPU leaves Real Mode, which is why direct MMIO writes take over.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>VGA Text Mode: Painting the Screen by Writing to RAM · Companion lesson for bob_os module 03_vga_driver</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Every pixel starts as a byte somewhere.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── WRITE-A-CELL CANVAS ──────────────────────────────────────────────
+let lastTarget={row:2,col:5,ch:'H',attr:'0A'};
+
+function hexAddr(row,col){
+  const off=(row*80+col)*2;
+  return (0xB8000+off).toString(16).toUpperCase();
+}
+
+function drawWriteScene(t,phase,target){
+  const canvas=document.getElementById('writeCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const off=(target.row*80+target.col)*2;
+  const charAddr=(0xB8000+off).toString(16).toUpperCase();
+  const attrAddr=(0xB8000+off+1).toString(16).toUpperCase();
+
+  // top: memory strip
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('RAM near 0x'+charAddr+'  (the VGA framebuffer)',12,24);
+
+  const stripY=40, boxW=56, boxH=42, gap=6, n=9, startX=(W-(n*(boxW+gap)-gap))/2;
+  for(let i=0;i<n;i++){
+    const bx=startX+i*(boxW+gap);
+    const isChar = i===4;
+    const isAttr = i===5;
+    let fill='rgba(255,255,255,.03)', stroke=C.border, label='';
+    if(isChar){ label = phase==='writechar'||phase==='writeattr'||phase==='render' ? "'"+target.ch+"'" : '??'; }
+    if(isAttr){ label = phase==='writeattr'||phase==='render' ? '0x'+target.attr : '??'; }
+    if(isChar && phase==='writechar' && t<1){ fill='rgba(56,189,248,'+(0.15+0.25*t)+')'; stroke=C.cyan; }
+    else if(isChar && (phase==='writeattr'||phase==='render')){ fill='rgba(56,189,248,.18)'; stroke=C.cyan; }
+    if(isAttr && phase==='writeattr' && t<1){ fill='rgba(74,222,128,'+(0.15+0.25*t)+')'; stroke=C.green; }
+    else if(isAttr && phase==='render'){ fill='rgba(74,222,128,.18)'; stroke=C.green; }
+    ctx.fillStyle=fill;ctx.fillRect(bx,stripY,boxW,boxH);
+    ctx.strokeStyle=stroke;ctx.lineWidth=1.3;ctx.strokeRect(bx,stripY,boxW,boxH);
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    const addrLbl = isChar? '0x'+charAddr : isAttr? '0x'+attrAddr : '';
+    if(addrLbl) ctx.fillText(addrLbl,bx+boxW/2,stripY-6);
+    ctx.fillStyle= isChar?C.cyan:isAttr?C.green:C.muted;
+    ctx.font='12px Source Code Pro,monospace';
+    ctx.fillText(label||'·',bx+boxW/2,stripY+boxH/2+4);
+  }
+  ctx.fillStyle=C.cyan;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('char byte',startX+4*(boxW+gap)+boxW/2,stripY+boxH+16);
+  ctx.fillStyle=C.green;
+  ctx.fillText('attr byte',startX+5*(boxW+gap)+boxW/2,stripY+boxH+16);
+
+  // middle: offset math
+  const mathY=150;
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('offset = (row × 80 + col) × 2',12,mathY);
+  ctx.fillStyle= phase==='locate'? C.gold : C.text;
+  ctx.font='13px Source Code Pro,monospace';
+  ctx.fillText('= ('+target.row+' × 80 + '+target.col+') × 2 = '+off+'  →  0xB8000 + 0x'+off.toString(16).toUpperCase()+' = 0x'+charAddr,12,mathY+22);
+
+  // bottom: mini screen grid showing target cell
+  const gridY=200, cellW=Math.min(22,(W-40)/24), cellH=18, cols=24, rows=6;
+  const gx0=(W-cols*cellW)/2;
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('What you see (cropped view of the screen)',12,gridY-8);
+  const tr = Math.min(target.row, rows-1);
+  const tc = Math.min(target.col, cols-1);
+  for(let r=0;r<rows;r++){
+    for(let cIdx=0;cIdx<cols;cIdx++){
+      const cx=gx0+cIdx*cellW, cy=gridY+r*cellH;
+      let fill='rgba(255,255,255,.02)';
+      ctx.strokeStyle='rgba(255,255,255,.05)';
+      if(r===tr && cIdx===tc && phase==='render'){
+        fill= t>=1 ? 'rgba(74,222,128,.28)' : 'rgba(74,222,128,'+(0.06+0.22*t)+')';
+        ctx.strokeStyle=C.green;
+      }
+      ctx.fillStyle=fill;ctx.fillRect(cx,cy,cellW-1,cellH-1);
+      ctx.strokeRect(cx,cy,cellW-1,cellH-1);
+      if(r===tr && cIdx===tc && phase==='render' && t>=0.5){
+        ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+        ctx.fillText(target.ch,cx+cellW/2,cy+cellH/2+4);
+      }
+    }
+  }
+
+  const captions={
+    idle:'Pick a target cell above to begin',
+    locate:'Step 1 — computing the byte offset from (row, col)',
+    writechar:'Step 2 — storing the character byte at the low address',
+    writeattr:'Step 3 — storing the attribute byte at address + 1',
+    render:'Step 4 — VGA hardware rescans the buffer and the glyph appears'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+}
+
+function runWrite(row,col,ch,attr){
+  lastTarget={row,col,ch,attr};
+  const phases=['locate','writechar','writeattr','render'];
+  const durations=[550,500,500,650];
+  let idx=0,start=performance.now();
+  document.getElementById('writeLabel').textContent='▶ Writing "'+ch+'" at row '+row+', col '+col+' → address 0x'+hexAddr(row,col);
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawWriteScene(t,phases[idx],lastTarget);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('writeLabel').textContent='▶ Done — the glyph is now on screen. Try the other cell, or Reset.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetWrite(){
+  document.getElementById('writeLabel').textContent='▶ Choose a target cell to write';
+  drawWriteScene(0,'idle',lastTarget);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetWrite(); });
+window.addEventListener('resize',()=>{ resetWrite(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why x86 Even Has Segmentation — From the 8086's 20-bit Bus to Flat 64-bit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.32);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)} h2 .accent.g{color:var(--gold)} h2 .accent.r{color:var(--red)} h2 .accent.c{color:var(--cyan)} h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--orange);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;background:var(--code-bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;font-size:.9em;color:var(--orange);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.orn{color:var(--orange);font-weight:600}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(251,146,60,.1);border:1.5px solid var(--orange);color:var(--orange);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(251,146,60,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.6rem;font-weight:700;color:var(--orange);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.72rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.72rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.28);color:var(--orange);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.87rem;color:var(--muted);line-height:1.5;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2rem;margin:1.8rem 0;}
+@media(max-width:760px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.a h4{color:var(--cyan)} .compare-card.b h4{color:var(--gold)} .compare-card.c h4{color:var(--orange)}
+.compare-card p, .compare-card{font-size:.92rem;color:var(--muted);}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--orange);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+.legend{display:flex;gap:1.5rem;flex-wrap:wrap;font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--muted);margin:.8rem 0 0;padding:0 1rem 1rem;}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#problem" title="The 8086 Problem"></a>
+  <a class="toc-dot" href="#formula" title="The Formula & Aliasing"></a>
+  <a class="toc-dot" href="#models" title="16-bit Memory Models"></a>
+  <a class="toc-dot" href="#protected" title="80286 Protected Mode"></a>
+  <a class="toc-dot" href="#flat" title="80386 Flat Segmentation"></a>
+  <a class="toc-dot" href="#boot" title="Every Boot Starts in 1978"></a>
+  <a class="toc-dot" href="#family" title="The Whole Family"></a>
+  <a class="toc-dot" href="#a20" title="The A20 Gate"></a>
+  <a class="toc-dot" href="#longmode" title="x86-64 Closes the Arc"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Companion Deep-Dive · Why the Hardware Looks Like This</div>
+    <h1>Why x86 Even<br><span>Has Segmentation</span></h1>
+    <p class="hero-sub">The base module told you the segmentation unit runs on every single memory access, even though Linux sets it up to do nothing. That's a strange thing for a CPU to keep doing for free, billions of times a second. The answer isn't an abstract design principle — it's a 1978 engineering emergency involving a register that was four bits too small, and forty-five years of backward compatibility that never let the fix go away.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1978</div><div class="lbl">Year x86 Segmentation Was Born</div></div>
+      <div class="hero-stat"><div class="num">20-bit</div><div class="lbl">8086 Address Bus Width</div></div>
+      <div class="hero-stat"><div class="num">1MB</div><div class="lbl">What a 16-bit Register Pair Could Reach</div></div>
+      <div class="hero-stat"><div class="num">2003</div><div class="lbl">Year Segmentation Was Finally Neutered</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="problem">
+<div class="container">
+  <div class="section-num">01 — The Register That Was Too Small</div>
+  <h2>The 8086's Problem: <span class="accent">A 16-bit Register in a 20-bit World</span></h2>
+  <p class="reveal">Here's a question worth actually sitting with: how do you store a 20-bit number in a 16-bit box? That's not a riddle — it's the exact engineering wall Intel's designers hit in 1978 while building the 8086.</p>
+  <p class="reveal">Every general-purpose register on the 8086 — <code>AX</code>, <code>BX</code>, <code>CX</code>, <code>DX</code>, <code>SI</code>, <code>DI</code>, <code>BP</code>, <code>SP</code> — was 16 bits wide. The largest unsigned number any one of them could hold was <code>0xFFFF</code>, decimal 65,535. That's the entire universe a single register could describe.</p>
+  <p class="reveal">But Intel wanted the chip to reach further than that. The 8086's <strong>address bus</strong> — the actual physical wires carrying an address out to memory chips — had 20 lines, <code>A0</code> through <code>A19</code>. Twenty wires means 2<sup>20</sup> distinct addresses: <strong>1,048,576 bytes</strong>, one full megabyte, an enormous space by 1978 standards. And a single 16-bit register cannot count that high. Not close — 65,536 is only about 6% of 1,048,576.</p>
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">65,536</div><div class="lbl">Values one 16-bit register holds</div></div>
+    <div class="stat-card"><div class="val">1,048,576</div><div class="lbl">Bytes reachable via 20 address lines</div></div>
+    <div class="stat-card"><div class="val">16×</div><div class="lbl">How much bigger the address space is</div></div>
+    <div class="stat-card"><div class="val">0</div><div class="lbl">Registers that fit a 20-bit number natively</div></div>
+  </div>
+  <p class="reveal">Intel's fix wasn't to widen the registers — that would've meant redesigning the whole instruction set, the whole bus, the whole chip, on a much tighter 1970s transistor budget. Instead, they reached for a cheaper trick: <strong>use two 16-bit registers together</strong>, combined by a specific arithmetic formula, to reach any of the 1,048,576 addresses. That combined pair is exactly what programmers started calling a <em>segment:offset</em> address. This — not protection, not privilege levels, not anything conceptually elegant — is the actual reason segmentation exists on x86 at all.</p>
+  <div class="sidenote reveal"><b>About that "640K ought to be enough" line —</b> often attributed to Bill Gates (the attribution is widely disputed and likely apocryphal), the number 640KB isn't random either: IBM's original PC design carved the 8086's 1MB space into 640KB of usable "conventional" RAM plus 384KB reserved at the top for video memory and ROM. The 1MB ceiling that made 640KB feel cramped is the very same 20-address-line ceiling this section is about.</div>
+  <p class="reveal">One more wrinkle worth knowing: the chip IBM actually put in the original PC wasn't the 8086 — it was the <strong>8088</strong>, a cost-reduced sibling that kept the exact same 16-bit registers and 20-bit, 1MB-reaching address bus internally, but talked to the outside world over an 8-bit external data bus instead of 16. Cheaper motherboard, cheaper support chips, identical segmentation story. Every architectural decision this page walks through — the register/bus mismatch, the segment:offset formula, the 1MB ceiling — applies equally to both chips, because segmentation lives in how the 8086 <em>family</em> computes addresses internally, not in how many wires happen to carry data to the outside world.</p>
+</div>
+</section>
+
+<section id="formula">
+<div class="container">
+  <div class="section-num">02 — Segment × 16 + Offset</div>
+  <h2>The <span class="accent">Real-Mode Formula</span> — and the Aliasing Headache It Created</h2>
+  <p class="reveal">The base module in this series gave you the modern, protected-mode formula the segmentation unit computes today: <code>Linear Address = Segment Base + Offset</code>, where the base comes from a descriptor table. That formula is real and current — but it is <em>not</em> the formula that got segmentation invented. The original 1978 mechanism, called <strong>real mode</strong>, works differently, and it's worth seeing the actual arithmetic.</p>
+  <p class="reveal">In real mode, a segment register (<code>CS</code>, <code>DS</code>, <code>SS</code>, or <code>ES</code>) is not an index into any table — it's a raw 16-bit number. The CPU takes that number, shifts it left 4 bits (equivalent to multiplying by 16, i.e. appending one hex zero digit), and adds a 16-bit offset to get a 20-bit physical address:</p>
+  <p class="reveal">Why 16, specifically? Because shifting left 4 bits means every segment can only <em>start</em> at an address that's a multiple of 16 bytes — Intel called that 16-byte-aligned unit a <strong>paragraph</strong>. So a segment value doesn't point at an arbitrary byte, it points at the start of one of 65,536 possible 16-byte paragraphs scattered across the 1MB space, and the offset then walks up to 65,536 bytes forward from there. That paragraph-alignment rule is exactly what makes the aliasing below possible: nudge the segment up by one paragraph (+1, or +16 bytes worth) and you can nudge the offset down by 16 to land on the exact same byte.</p>
+  <div class="formula orange reveal">
+    <span class="label">Real-mode physical address (8086, 1978)</span>
+    Physical Address = (Segment × 16) + Offset
+    <span class="sub">Written as segment:offset, e.g. <code>1000:0010</code> — same visual shape as the base module's segment:offset, but this is raw shift-and-add, not a descriptor-table lookup.</span>
+  </div>
+  <p class="reveal">Sixteen bits of segment, shifted, plus sixteen bits of offset, lands anywhere across a 20-bit, 1MB range — problem solved. But this formula has a mathematical property that caused years of real-world pain: it is <strong>not one-to-one</strong>. Many different segment:offset pairs can add up to the exact same physical byte.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Pick a segment:offset pair</strong>Say <code>1000:0010</code> — segment <code>0x1000</code>, offset <code>0x0010</code>.</div></li>
+    <li><div class="step-body"><strong>Shift the segment left 4 bits</strong><code>0x1000 × 16 = 0x10000</code>. That's the base.</div></li>
+    <li><div class="step-body"><strong>Add the offset</strong><code>0x10000 + 0x0010 = 0x10010</code>. Physical address: <code>0x10010</code>.</div></li>
+    <li><div class="step-body"><strong>Now pick a completely different pair</strong><code>1001:0000</code> — segment <code>0x1001</code>, offset <code>0x0000</code>. Shift: <code>0x1001 × 16 = 0x10010</code>. Add offset: <code>0x10010 + 0 = 0x10010</code>. <em>Same physical byte.</em></div></li>
+  </ol>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="segLabel">▶ Run both examples to see them alias to the same physical byte</div>
+    <canvas id="segCanvas" height="320"></canvas>
+    <div class="legend">
+      <span><i style="background:#38bdf8"></i>Example A — 1000:0010</span>
+      <span><i style="background:#fb923c"></i>Example B — 1001:0000</span>
+    </div>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn cyan" onclick="runSeg('A')">▶ Translate 1000:0010</button>
+    <button class="ctrl-btn" onclick="runSeg('B')">▶ Translate 1001:0000</button>
+    <button class="ctrl-btn red" onclick="resetSeg()">Reset</button>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why "Aliasing" Was a Real Headache, Not Trivia</div>
+    Because up to 4,096 distinct segment:offset pairs can describe the same physical byte, two pointers that <em>look</em> completely different in memory can be logically equal. Naive 16-bit pointer comparison — just comparing the raw segment and offset bits — could report two pointers as "different" when they pointed at the identical byte. Compact/large-model C compilers of the era (Turbo C, Microsoft C) shipped special <strong>"huge pointer"</strong> types with normalization routines (functions like <code>_hnormalize</code>) that rewrote every pointer into one canonical segment:offset form before comparing, subtracting, or sorting them — extra CPU cycles spent solely to undo the ambiguity this formula created. Ordinary "far pointer" code leaned on companion macros like <code>MK_FP(seg,off)</code> to build a segment:offset pair, and <code>FP_SEG()</code> / <code>FP_OFF()</code> to pull the two halves back apart — a whole micro-toolkit that existed purely to manage a 20-bit address wearing two 16-bit costumes.
+  </div>
+</div>
+</section>
+
+<section id="models">
+<div class="container">
+  <div class="section-num">03 — What Programmers Actually Dealt With</div>
+  <h2>16-bit <span class="accent">Memory Models</span>: Living With a 64KB Ceiling</h2>
+  <p class="reveal">Aliasing wasn't the only tax segmentation levied on 1980s programmers. Because a single segment maxed out at 64KB, compilers for DOS and early Windows offered a menu of <strong>memory models</strong> — a compile-time choice about whether your code and your data were each allowed to spill across more than one segment. Pick wrong and your program either wasted performance on unnecessary far-pointer arithmetic, or hit a wall the moment an array grew past 64KB.</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Model</th><th>Code</th><th>Data</th><th>Default Pointer</th><th>Practical Ceiling</th></tr>
+      <tr><td class="hl">Tiny</td><td>1 segment</td><td>shared with code</td><td>near (16-bit)</td><td>64KB total — code + data combined</td></tr>
+      <tr><td class="hl">Small</td><td>1 segment</td><td>1 segment</td><td>near (16-bit)</td><td>64KB code, 64KB data</td></tr>
+      <tr><td class="hl">Medium</td><td>multiple</td><td>1 segment</td><td>far code / near data</td><td>Unlimited code, 64KB data</td></tr>
+      <tr><td class="hl">Compact</td><td>1 segment</td><td>multiple</td><td>near code / far data</td><td>64KB code, unlimited data (each object ≤64KB)</td></tr>
+      <tr><td class="hl">Large</td><td>multiple</td><td>multiple</td><td>far (32-bit)</td><td>Unlimited code and data (each object ≤64KB)</td></tr>
+      <tr><td class="orn">Huge</td><td>multiple</td><td>multiple</td><td>huge (normalized far)</td><td>Single objects can exceed 64KB via pointer normalization</td></tr>
+    </table>
+  </div>
+  <p class="reveal">Notice the pattern: every model is a negotiation with the same 64KB wall. "Near" pointers were fast — just a 16-bit offset, implicitly combined with whatever the current default segment register already held — but couldn't leave their segment. "Far" pointers carried an explicit segment:offset pair, could point anywhere, but were slower and, as the previous section showed, ambiguous under comparison. "Huge" pointers paid extra normalization overhead on every increment specifically so a single array could legitimately outgrow one segment. None of this complexity was about algorithms — it was entirely about the shape of the address space the 8086/80286 formula imposed.</p>
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why This Matters for Reading Old Code</div>
+    If you've ever seen <code>far</code> or <code>huge</code> keywords in ancient C code, or wondered why old Windows API declarations are littered with macros like <code>FAR</code> and <code>PASCAL</code>, this is why. Those keywords aren't stylistic — they were load-bearing instructions to the compiler about which segment-crossing strategy to use for that specific pointer, because the CPU itself couldn't make that decision for you.
+  </div>
+</div>
+</section>
+
+<section id="protected">
+<div class="container">
+  <div class="section-num">04 — 1982: The Lock Gets Installed</div>
+  <h2>The 80286: <span class="accent c">Segments Stop Being Raw Numbers</span></h2>
+  <p class="reveal">Four years after the 8086, Intel's 80286 (the chip inside the IBM PC/AT) introduced <strong>protected mode</strong> — and this is where the segmentation story bends toward the mechanism the base module actually describes in detail. In protected mode, the 16-bit value you load into a segment register is no longer raw address material to shift and add. It becomes a <strong>selector</strong>: a 13-bit index, a table-indicator bit (GDT or LDT), and a 2-bit requested privilege level, pointing into a table of 8-byte <strong>Segment Descriptors</strong> — precisely the Global Descriptor Table concept covered in this series' GDT piece.</p>
+  <p class="reveal">Each descriptor carries an arbitrary Base address, a Limit, and access-rights bits that encode privilege level. Now the CPU could genuinely <em>enforce</em> boundaries — code couldn't wander into data, ring-3 user code couldn't touch ring-0 kernel structures — instead of just doing unchecked arithmetic. This is the birth of hardware-enforced protection on x86.</p>
+  <p class="reveal">A 13-bit index caps a single descriptor table at 8,192 entries. That's why the architecture has two tables instead of one: the <strong>Global Descriptor Table (GDT)</strong> holds descriptors shared system-wide, while each task can also get its own private <strong>Local Descriptor Table (LDT)</strong> — the table-indicator bit in the selector just picks which of the two to consult. A task's segments could live in its own LDT, invisible to and unreachable by other tasks, which is a real form of isolation, years before paging-based protection existed on x86 at all.</p>
+  <p class="reveal">But the 80286 kept one crucial limitation: the offset field baked into an instruction was still only 16 bits. Max offset is <code>0xFFFF</code>, so a single segment could still only span <strong>64KB</strong> — the identical ceiling real mode had, for a completely different reason. Real programs routinely needed more than that, so the "large" and "huge" memory models from the previous section, far pointers, and constant segment-register reloading became a fact of life. Windows 3.x famously juggled discardable, moveable memory segments behind the scenes — selectors whose descriptors got quietly rewritten as blocks were swapped to disk and back, invisible to the app but a maintenance nightmare for the OS.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Same Two Words, Totally Different Machine</div>
+    "Segment:offset" sounds identical in real mode and protected mode, but underneath they're unrelated mechanisms. Real mode: segment value <em>is</em> the base, computed by shifting. Protected mode: segment value is a <em>lookup key</em> into a descriptor table, and the base can be any 24-bit number the OS wants. The 80286's protected-mode selectors are the direct ancestor of the descriptor-driven segmentation unit the base module of this series describes — this is where that machinery was actually born.
+  </div>
+</div>
+</section>
+
+<section id="flat">
+<div class="container">
+  <div class="section-num">05 — 1985: The Turning Point</div>
+  <h2>The 80386: <span class="accent">Segmentation Becomes Optional</span></h2>
+  <p class="reveal">Three years later, the 80386 changed everything twice at once. First, it widened the general-purpose registers to 32 bits (<code>EAX</code>, <code>EBX</code>, and friends) — which meant the offset field could now be a full 32-bit number. A single segment could span <strong>4GB</strong>, the entire addressable range of the chip. The 64KB ceiling that had shaped a decade of memory-model headaches simply evaporated.</p>
+  <p class="reveal">Second — and this is the detail that actually answers the question this whole page is built around — the 80386 added a brand-new hardware circuit: the <strong>paging unit</strong>. For the first time, x86 had two independent translation stages wired in series, exactly as the base module describes: segmentation unit first, paging unit second.</p>
+  <p class="reveal">Once offsets could reach 4GB on their own, OS designers realized something clever: what if every segment's descriptor just had <strong>Base = 0</strong> and <strong>Limit = 0xFFFFFFFF</strong> (the maximum)? Run the formula: <code>Linear = Base(0) + Offset = Offset</code>. Segmentation becomes a mathematical no-op — an identity function. Every real translation and protection decision then happens entirely in the paging unit: page tables, present bits, read/write bits, user/supervisor bits, all operating on 4KB pages instead of variable-size segments. This configuration has a name: the <strong>flat memory model</strong>.</p>
+  <p class="reveal">The paging unit's own internals are exactly what the base module gestured at without detailing: a linear address gets split into a page-directory index, a page-table index, and a byte offset within a 4KB page. The processor walks a two-level tree — a Page Directory of 1,024 entries, each pointing to a Page Table of 1,024 entries, each pointing to a 4KB physical frame — to resolve the final physical address. That tree is what lets physical RAM be scattered, shared between processes, and swapped to disk, none of which flat segmentation on its own could ever do.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card a"><h4>🧮 Real Mode (8086, 1978)</h4>Segment is a raw number, shifted ×16 and added to offset. No protection. Max 1MB total, 64KB per segment.</div>
+    <div class="compare-card b"><h4>🔐 Protected Segments (80286, 1982)</h4>Segment is a selector indexing a descriptor with real protection bits. Max 16MB total, still 64KB per segment.</div>
+    <div class="compare-card c"><h4>📐 Flat Model (80386+, 1985)</h4>Segment descriptor set to Base=0, Limit=max — segmentation stage becomes a no-op. Paging does the real work. Up to 4GB, later far more.</div>
+  </div>
+
+  <p class="reveal">This is exactly the setup the base module described when it said Linux uses "segmentation minimally — flat segments covering the whole address space." Now you know <em>why</em> that's the design: it isn't that paging is abstractly superior to segmentation. It's that the 80386's instruction set still requires every memory reference to specify a segment (implicitly through <code>CS</code>/<code>DS</code>/<code>SS</code> defaults, if not explicitly) — that requirement can never be removed without breaking every 8086 and 80286 program ever compiled. So instead of removing it, OS designers simply neutralize it, and let paging — the newer, more flexible circuit — do all the actual work.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 Not "Better." Just Load-Bearing Forever.</div>
+    Backward compatibility is the entire reason this two-stage pipeline still exists in 2026 hardware. The segmentation unit runs on every single memory access on every x86 chip sold today — even though, on a flat-model OS, its answer is always just "the offset, unchanged." It's a 1978 gear still spinning inside a 21st-century engine, quietly doing a no-op addition billions of times a second so a 47-year-old assumption never technically breaks.
+  </div>
+</div>
+</section>
+
+<section id="boot">
+<div class="container">
+  <div class="section-num">06 — The Detail That Proves the Fossil Is Real</div>
+  <h2>Every Boot Still <span class="accent">Starts in 1978</span></h2>
+  <p class="reveal">If the "fossil, not a design choice" framing feels like a stretch, here's the proof: every x86 PC — the one you're reading this on included — powers on in <strong>real mode</strong>. Not flat protected mode, not long mode. The exact segment×16+offset real mode an 8086 used in 1978, with the exact same 1MB ceiling and the exact same 64KB segments, because firmware still has to be compatible with decades of code that assumes the CPU wakes up exactly the way an 8086 did.</p>
+  <p class="reveal">Getting from that 1978 starting point to a modern flat or long-mode OS is a deliberate, ordered handoff, not a switch the CPU flips on its own:</p>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Reset vector, real mode</strong>The CPU begins executing firmware at a fixed real-mode address, exactly as an 8086 would, with segmentation doing real shift-and-add arithmetic.</div></li>
+    <li><div class="step-body"><strong>Firmware builds a GDT</strong>Before anything else, boot code constructs a Global Descriptor Table in memory — the same descriptor-table structure the 80286 introduced in 1982 — including flat-model descriptors ready to use.</div></li>
+    <li><div class="step-body"><strong>Set the PE bit</strong>Boot code writes a single bit — the Protection Enable (PE) bit in control register <code>CR0</code> — to 1. This one bit is the actual on/off switch between real mode and protected mode.</div></li>
+    <li><div class="step-body"><strong>Far jump to flush the pipeline</strong>Immediately after setting PE, code performs a far jump (reloading <code>CS</code> with a fresh selector). This isn't stylistic — it forces the CPU to discard any real-mode instructions it had already prefetched and start decoding in protected mode.</div></li>
+    <li><div class="step-body"><strong>Optionally, enter long mode</strong>A 64-bit OS goes one step further: it builds page tables, sets the paging-enable and long-mode-enable bits, and only then is it running in the flat, 64-bit world this whole page has been building toward.</div></li>
+  </ol>
+  <p class="reveal">Notice step 2 has a quiet dependency on the earlier section of this page: enabling the A20 line has to happen somewhere in this same early sequence too, or addresses above 1MB would still wrap the moment protected mode starts trusting them. Three completely different fossils — segment:offset arithmetic, descriptor tables, and the A20 toggle — all have to be handled, in order, on every single boot, before a modern flat or long-mode OS gets to run a single line of its own code.</p>
+</div>
+</section>
+
+<section id="family">
+<div class="container">
+  <div class="section-num">07 — The Whole Family, Side by Side</div>
+  <h2>Four Chips, <span class="accent">Four Decades of the Same Fossil</span></h2>
+  <p class="reveal">Line them up and the pattern is obvious: each generation got a wider register, and the segmentation baggage from the generation before had to be carried along anyway.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Intel 8086</span><span class="fam-count">1978</span></div><div class="fam-desc">Segmentation invented to stretch 16-bit registers across a 20-bit bus. Real mode, no protection, 1MB ceiling.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">Intel 80286</span><span class="fam-count">1982</span></div><div class="fam-desc">Segmentation repurposed for protection. Selectors + descriptor tables. Still capped at 64KB per segment.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--orange)">Intel 80386</span><span class="fam-count">1985</span></div><div class="fam-desc">32-bit offsets plus a brand-new paging unit let segmentation be flattened into a no-op. Real work moves to paging.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--purple)">AMD64 / x86-64</span><span class="fam-count">2003</span></div><div class="fam-desc">Long mode hard-wires the flattening into silicon. CS/SS/DS/ES base forced to zero. Only FS/GS survive with a real job.</div></div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Chip</th><th>Year</th><th>Address Bus</th><th>Max Memory</th><th>Register Width</th><th>Segmentation Mechanism</th><th>Max Segment Size</th><th>Protection Model</th></tr>
+      <tr><td class="hl">8086 / 8088</td><td>1978</td><td>20-bit (A0–A19)</td><td class="gold">1 MB</td><td>16-bit</td><td>Real mode: Segment × 16 + Offset</td><td>64 KB</td><td>None</td></tr>
+      <tr><td class="hl">80286</td><td>1982</td><td>24-bit (A0–A23)</td><td class="gold">16 MB</td><td>16-bit</td><td>Protected mode: selector → GDT/LDT descriptor</td><td>64 KB</td><td>4 rings (0–3), descriptor-based</td></tr>
+      <tr><td class="hl">80386</td><td>1985</td><td>32-bit (A0–A31)</td><td class="gold">4 GB</td><td>32-bit</td><td>Selector + descriptor, OS sets Base=0/Limit=max → flat</td><td class="pos">4 GB (flat)</td><td>Paging: present / R-W / U-S bits, 4KB pages</td></tr>
+      <tr><td class="orn">x86-64 (long mode)</td><td>2003</td><td>40–52-bit physical (impl.-defined)</td><td class="gold">TB-scale physical, PB-scale virtual</td><td>64-bit</td><td>CS/SS/DS/ES base forced to 0; FS/GS base still settable</td><td class="pos">Effectively unlimited</td><td>4/5-level paging, NX bit, SMEP/SMAP</td></tr>
+    </table>
+  </div>
+</div>
+</section>
+
+<section id="a20">
+<div class="container">
+  <div class="section-num">08 — A Bug, Preserved on Purpose</div>
+  <h2>The <span class="accent g">A20 Gate</span>: Emulating a Rounding Error for 20 Years</h2>
+  <p class="reveal">Here's a genuinely strange footnote. The 8086 only had 20 physical address wires. If real-mode arithmetic ever produced a result at or above <code>0x100000</code> (1MB) — for example <code>FFFF:FFFF</code>, which computes to <code>0x10FFEF</code> — the chip had no 21st wire to carry that high bit. It just got dropped. The address silently <strong>wrapped around</strong> to just below the 1MB mark, near address zero. Not a documented feature — a side effect of running out of wires.</p>
+  <p class="reveal">A handful of real-world programs, deliberately or by accident, ended up depending on that wraparound behavior. Then the 80286 shipped in the IBM PC/AT with a genuine 24-bit address bus — line <code>A20</code> and beyond finally existed for real. Addresses above 1MB stopped wrapping and started landing where the math actually said they should. That broke the old programs that had quietly assumed otherwise.</p>
+  <p class="reveal">IBM's fix has become a famous piece of PC trivia: they routed the new 21st address line through a spare pin on the keyboard controller chip (an Intel 8042), letting software flip that line on or off — "gating" it. With the gate closed, the machine faked 8086-style wraparound for old software. With it open, the full 24-bit range worked correctly. Later chipsets added a faster toggle through I/O port <code>0x92</code> ("Fast A20"), but the underlying control bit — <strong>Gate A20</strong> — stuck around in PC architecture for <em>decades</em> after anyone genuinely needed the old wraparound behavior, because boot firmware and early OS boot code kept touching it out of habit and caution.</p>
+  <p class="reveal">The habit runs deep. Well into the era of 64-bit chips with gigabytes of RAM, PC firmware still powers on with A20 masked off by default, purely so ancient boot code that assumes 8086 wraparound doesn't break on modern silicon. Every mainstream operating system's boot sequence — Linux's boot protocol included — has to explicitly ask the keyboard controller (or, on newer chipsets, a simpler port-0x92 write) to enable A20 as one of its very first acts, before it can trust that a 32-bit or 64-bit address will actually go where the math says. Intel even added a dedicated pin, <strong>A20M#</strong>, purely to let firmware assert this same masking behavior in hardware.</p>
+  <div class="sidenote reveal"><b>The twist:</b> DOS's <code>HIMEM.SYS</code> driver actually wanted A20 <em>enabled</em>, not disabled — enabling it gave real-mode programs access to a genuinely useful 64KB-minus-16-bytes region just above the 1MB line, nicknamed the <strong>High Memory Area (HMA)</strong>, reachable via segment:offset pairs like <code>FFFF:0010</code>. So the same toggle served two masters: closed for backward-compatible wraparound, open for squeezing out extra usable memory. Modern OSes just resolve A20 to "on" during early boot and never think about it again.</div>
+</div>
+</section>
+
+<section id="longmode">
+<div class="container">
+  <div class="section-num">09 — 2003: The Arc Closes</div>
+  <h2>x86-64: <span class="accent p">Segmentation Finally Goes to Sleep</span></h2>
+  <p class="reveal">AMD's x86-64 architecture (AMD64, what Intel calls Intel 64) introduced <strong>long mode</strong> in 2003 with the Opteron processor. This is where the story that started with a too-small 8086 register finally resolves. In 64-bit long mode, for the four "everyday" segment registers — <code>CS</code>, <code>SS</code>, <code>DS</code>, and <code>ES</code> — the processor doesn't just <em>let</em> the OS configure Base=0 and treat the Limit as irrelevant, the way an 80386 OS chose to. It <strong>forces</strong> it. You cannot give those four registers a nonzero base anymore, no matter what a descriptor claims. Segmentation for them isn't flattened by convention; it's flattened by hardware fiat.</p>
+  <p class="reveal">Two registers survive with a real job: <code>FS</code> and <code>GS</code>. They still carry a genuine, software-settable base address — accessible through model-specific registers (<code>FSBASE</code>/<code>GSBASE</code>) or dedicated instructions — and operating systems put that surviving sliver of segmentation to good use for <strong>thread-local storage</strong>. Linux points the FS base at each thread's TLS block; Windows points the GS base at the Thread Environment Block (TEB) for the currently running thread. That's it — that's the entire remaining job of x86 segmentation on a modern 64-bit machine.</p>
+  <p class="reveal">GS gets one more piece of active duty: the <code>SWAPGS</code> instruction. Since a syscall or interrupt can land the CPU in kernel code with GS still holding whatever base the interrupted user-mode thread had set, the kernel's very first move on entry is often <code>SWAPGS</code> — an atomic exchange between the current GS base and a shadow value stashed in the <code>IA32_KERNEL_GS_BASE</code> MSR — so the kernel immediately has its own per-CPU data reachable through GS, without racing the thread it just interrupted. It's a small piece of syscall-entry plumbing, but it exists purely because segmentation kept just enough of a job to be useful for exactly this.</p>
+  <p class="reveal">Long mode also tightened what counts as a legal address at all. A 64-bit register can technically hold a full 64-bit pattern, but current hardware only implements 48 (and, on newer chips with 5-level paging, 57) of those bits for real addressing. To keep the unused high bits from meaning something ambiguous, the architecture demands <strong>canonical addresses</strong>: every bit from the top implemented bit up to bit 63 must all match bit 47 (or bit 56, on 57-bit systems) — effectively a sign-extension rule. Reference a non-canonical address and the CPU raises a general-protection fault before the paging unit even gets involved. It's a smaller, stricter cousin of the same idea that started this whole page: hardware imposing a specific shape on what an address is allowed to look like.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">Long mode, CS / SS / DS / ES</span>
+    Linear Address = 0 + Offset = Offset
+    <span class="sub">Base is hard-wired to zero. The segmentation unit still technically runs — it just always answers "no change."</span>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🔁 The Whole Arc, in One Paragraph</div>
+    1978: a 16-bit register can't hold a 20-bit address, so Intel invents segment:offset arithmetic to bridge the gap. 1982: the 80286 repurposes that same segment:offset syntax into selectors and descriptor tables, adding real protection — but keeps the cramped 64KB-per-segment limit. 1985: the 80386 widens offsets to 32 bits and adds a paging unit, letting OS designers set every segment to Base=0/Limit=max and make segmentation a no-op, doing all real work through paging instead. 2003: x86-64 hard-wires that no-op directly into the silicon for four of six segment registers, leaving FS/GS as the only working survivors, repurposed for thread-local storage. What the base module presents as "the segmentation unit runs on every access" isn't an abstract design choice at all — it's a fossil, preserved gear-by-gear, because turning it off completely would mean the chip could no longer run the software that made x86 dominant in the first place.
+  </div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Real Mode</div><div class="glossary-def">The 8086-compatible CPU mode where segment registers are raw numbers combined with offsets by shift-and-add, not looked up in any descriptor table.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Paragraph</div><div class="glossary-def">A 16-byte-aligned unit in real mode — the granularity a segment's starting address is restricted to, a direct consequence of the ×16 shift.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segment:Offset Notation</div><div class="glossary-def">Written as e.g. <code>1000:0010</code> — a segment value and an offset value, meaning different arithmetic depending on whether the CPU is in real or protected mode.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segment Aliasing</div><div class="glossary-def">The real-mode property that multiple distinct segment:offset pairs can compute to the identical physical address, since segment×16+offset is not one-to-one.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Huge Pointer</div><div class="glossary-def">A 16-bit-era C pointer type with built-in normalization logic, used to make aliased pointers comparable and arithmetic-safe across segment boundaries.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Memory Model</div><div class="glossary-def">A compile-time choice (tiny/small/medium/compact/large/huge) governing whether a 16-bit program's code and data could each span more than one 64KB segment.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Selector</div><div class="glossary-def">A 16-bit protected-mode value loaded into a segment register: an index into the GDT/LDT, a table-indicator bit, and a 2-bit requested privilege level.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segment Descriptor</div><div class="glossary-def">An 8-byte structure in the GDT/LDT holding a segment's Base, Limit, and access-rights/privilege bits — what a selector actually points to.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Flat Memory Model</div><div class="glossary-def">A segmentation configuration where Base=0 and Limit=maximum for every segment, making the segmentation stage mathematically a no-op.</div></div>
+    <div class="glossary-card"><div class="glossary-term">A20 Gate</div><div class="glossary-def">A hardware toggle for the 21st address line, added so post-8086 chips could optionally fake the 8086's 1MB address wraparound for compatibility.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Long Mode</div><div class="glossary-def">x86-64's native 64-bit operating mode, where CS/SS/DS/ES segment bases are hard-wired to zero and only FS/GS retain a settable base.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Canonical Address</div><div class="glossary-def">A 64-bit address whose unimplemented high bits all match the highest implemented bit (sign-extended); non-canonical addresses fault before paging runs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Thread-Local Storage (TLS)</div><div class="glossary-def">Per-thread private data reached via the FS or GS base register on x86-64 — the last surviving practical use of x86 segmentation.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Why x86 Even Has Segmentation · A Companion Deep-Dive to "Logical, Linear &amp; Physical Addresses" · OS Sweet Stories, Memory Addressing Series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Read alongside Part 1's segmentation unit and paging unit — now you know why the pipeline is shaped the way it is.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+function hex(n,d){return '0x'+n.toString(16).toUpperCase().padStart(d,'0');}
+
+let segMarkers=[];
+
+function drawSeg(t,phase,ex){
+  const canvas=document.getElementById('segCanvas');
+  const W=gW(canvas), H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const seg = ex==='A' ? 0x1000 : 0x1001;
+  const off = ex==='A' ? 0x0010 : 0x0000;
+  const base = seg*16;
+  const phys = base+off;
+  const activeCol = ex==='A' ? C.cyan : C.orange;
+
+  const boxes=[
+    {x:W*0.02,w:W*0.15,label:'SEGMENT',sub:hex(seg,4)},
+    {x:W*0.19,w:W*0.13,label:'× 16',sub:'shift <<4'},
+    {x:W*0.34,w:W*0.15,label:'BASE',sub:hex(base,5)},
+    {x:W*0.51,w:W*0.15,label:'+ OFFSET',sub:hex(off,4)},
+    {x:W*0.68,w:W*0.30,label:'PHYSICAL ADDR',sub:hex(phys,5)},
+  ];
+  const boxY=30,h=64;
+  boxes.forEach(b=>{
+    ctx.fillStyle=activeCol+'1e';ctx.fillRect(b.x,boxY,b.w,h);
+    ctx.strokeStyle=activeCol;ctx.lineWidth=1.4;ctx.strokeRect(b.x,boxY,b.w,h);
+    ctx.fillStyle=activeCol;ctx.font='bold 10.5px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(b.label,b.x+b.w/2,boxY+h/2-6);
+    ctx.font='11px Source Code Pro,monospace';ctx.fillStyle=C.text;
+    ctx.fillText(b.sub,b.x+b.w/2,boxY+h/2+13);
+  });
+  // connecting arrows
+  ctx.strokeStyle=C.muted;ctx.lineWidth=1;
+  for(let i=0;i<boxes.length-1;i++){
+    const x0=boxes[i].x+boxes[i].w, x1=boxes[i+1].x, y=boxY+h/2;
+    ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();
+  }
+
+  // number line
+  const lineY=230, lineX0=W*0.05, lineX1=W*0.95;
+  ctx.strokeStyle=C.muted;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(lineX0,lineY);ctx.lineTo(lineX1,lineY);ctx.stroke();
+  const ticks=[0x00000,0x40000,0x80000,0xC0000,0xFFFFF];
+  ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.muted;ctx.textAlign='center';
+  ticks.forEach(tk=>{
+    const x=lineX0+(tk/0xFFFFF)*(lineX1-lineX0);
+    ctx.beginPath();ctx.moveTo(x,lineY-5);ctx.lineTo(x,lineY+5);ctx.stroke();
+    ctx.fillText(hex(tk,5),x,lineY+20);
+  });
+  ctx.fillStyle=C.muted;ctx.font='9px Lato,sans-serif';
+  ctx.fillText('1MB real-mode address space',W/2,lineY+38);
+
+  // persisted markers
+  segMarkers.forEach(m=>{
+    const x=lineX0+(m.addr/0xFFFFF)*(lineX1-lineX0);
+    ctx.beginPath();ctx.arc(x,lineY,6,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle=m.color;ctx.font='bold 9px Source Code Pro,monospace';
+    ctx.fillText(m.label,x,lineY - (m.ex==='A'?14:-24));
+  });
+
+  // moving dot during animation
+  if(phase!=='idle'&&phase!=='done'){
+    const c=boxes.map(b=>b.x+b.w/2);
+    let dotX=c[0],dotY=boxY+h/2;
+    if(phase==='s1'){dotX=c[0];dotY=boxY+h/2;}
+    else if(phase==='s2'){dotX=c[0]+(c[2]-c[0])*t;dotY=boxY+h/2;}
+    else if(phase==='s3'){dotX=c[2]+(c[3]-c[2])*t;dotY=boxY+h/2;}
+    else if(phase==='s4'){
+      const targetX=lineX0+(phys/0xFFFFF)*(lineX1-lineX0);
+      if(t<0.5){dotX=c[3]+(c[4]-c[3])*(t/0.5);dotY=boxY+h/2;}
+      else{const tt=(t-0.5)/0.5;dotX=c[4]+(targetX-c[4])*tt;dotY=(boxY+h/2)+(lineY-(boxY+h/2))*tt;}
+    }
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=activeCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  const captions={
+    idle:'Click a button to translate a segment:offset pair into a physical address',
+    s1:'Segment register loaded: '+hex(seg,4),
+    s2:'Segment × 16 → base '+hex(base,5),
+    s3:'Base + offset '+hex(off,4)+' → physical address',
+    s4:'Physical address lands on the number line: '+hex(phys,5),
+    done:'Done — '+hex(seg,4)+':'+hex(off,4)+' → physical '+hex(phys,5)
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function runSeg(ex){
+  const phases=['s1','s2','s3','s4'];
+  const durations=[400,500,450,650];
+  let idx=0,start=performance.now();
+  document.getElementById('segLabel').textContent='▶ Translating '+(ex==='A'?'1000:0010':'1001:0000')+' …';
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[idx]);
+    drawSeg(t,phases[idx],ex);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        const seg=ex==='A'?0x1000:0x1001, off=ex==='A'?0x0010:0x0000, phys=seg*16+off;
+        segMarkers=segMarkers.filter(m=>m.ex!==ex);
+        segMarkers.push({addr:phys,ex:ex,color:ex==='A'?C.cyan:C.orange,label:ex});
+        const aliasNote = segMarkers.length>1 ? ' — same spot as the other example! That is aliasing.' : '';
+        document.getElementById('segLabel').textContent='▶ Done — '+hex(seg,4)+':'+hex(off,4)+' → physical '+hex(phys,5)+aliasNote;
+        drawSeg(1,'done',ex);
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetSeg(){segMarkers=[];document.getElementById('segLabel').textContent='▶ Run both examples to see them alias to the same physical byte';drawSeg(0,'idle','A');}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetSeg);
+window.addEventListener('resize',resetSeg);
+</script>
+</body>
+</html>

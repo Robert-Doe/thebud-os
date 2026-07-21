@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Certificate Chains — Why Your Browser Trusts a Server It's Never Met</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,4rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--gold)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--gold);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--gold);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--gold);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#whatis" title="What a Certificate Is"></a>
+  <a class="toc-dot" href="#chain" title="The Chain of Trust"></a>
+  <a class="toc-dot" href="#verify" title="How the Browser Verifies"></a>
+  <a class="toc-dot" href="#climb" title="Walk the Chain"></a>
+  <a class="toc-dot" href="#whyworks" title="Why It Works"></a>
+  <a class="toc-dot" href="#revocation" title="Revocation"></a>
+  <a class="toc-dot" href="#types" title="Certificate Types"></a>
+  <a class="toc-dot" href="#caa" title="CAA Records"></a>
+  <a class="toc-dot" href="#hsts" title="HSTS"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">X.509 Certificates · Chain of Trust · bob_os Networking</div>
+    <h1>Why Your Browser Trusts<br><span>a Server It's Never Met</span></h1>
+    <p class="hero-sub">The last lesson showed how TLS lets two strangers derive a shared secret without ever sending it across the wire — but a shared secret with an <em>impostor</em> is worthless. Something has to prove the server on the other end of that key exchange is genuinely <code>example.com</code>, not an attacker sitting in the middle. That something is a chain of digital signatures ending at a root your browser already, unconditionally, trusts.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Typical chain depth: leaf → intermediate → root</div></div>
+      <div class="hero-stat"><div class="num">~130</div><div class="lbl">Root CAs pre-installed in a browser trust store</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Checks: signature, expiry, hostname</div></div>
+      <div class="hero-stat"><div class="num">OCSP</div><div class="lbl">Revocation — the still-hard problem</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Pick Up</div>
+  <h2>Encryption <span class="accent">Without Identity Is Empty</span></h2>
+
+  <p class="reveal">The TLS handshake lesson ended on a deliberately uncomfortable note: encryption by itself proves nothing about <em>who</em> you're encrypting to. An attacker running a man-in-the-middle position can complete a perfectly valid-looking ECDHE key exchange with your browser, derive a perfectly real shared secret, and read every byte of your "encrypted" HTTP request — as long as they can get your browser to accept <em>their</em> certificate as belonging to the site you meant to visit.</p>
+
+  <p class="reveal">So the entire security of HTTPS ultimately rests on one question your browser has to answer correctly, every single connection: <strong>is this certificate, presented by whoever I'm talking to right now, actually the real one for this domain?</strong> Answering that without ever having met the server before, and without a human checking manually, is what the certificate chain of trust is built to do.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔗 One Sentence Version</div>
+    A TLS certificate is a <strong>signed statement</strong> — "this public key belongs to this domain" — and your browser trusts that statement not because it trusts the server, but because it trusts <em>whoever signed the statement</em>, transitively, all the way up to an authority it was configured to trust before you ever opened your browser.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: WHAT A CERTIFICATE IS -->
+<section id="whatis">
+<div class="container">
+  <div class="section-num">01 — The Object Itself</div>
+  <h2>A Certificate Is a <span class="accent">Signed Binding</span></h2>
+
+  <p class="reveal">Strip away the X.509 formatting and a TLS certificate is conceptually simple: a data structure that binds a <strong>public key</strong> to an <strong>identity</strong> (a domain name, typically), and is <strong>digitally signed</strong> by someone vouching for that binding. Here's roughly what one contains, matching the fields real code has to check — grounded in <code>cert_validation.h</code> from <strong>B16_tls_handshake</strong>:</p>
+
+  <pre class="reveal"><span class="tag">cert_validation.h — real struct from B16_tls_handshake</span><code><span class="kw">struct</span> <span class="cls">cert</span> {
+    <span class="kw">char</span> common_name[<span class="num">128</span>];   <span class="cm">/* e.g. "www.example.com" */</span>
+    <span class="kw">char</span> issuer[<span class="num">128</span>];        <span class="cm">/* who signed THIS cert */</span>
+    <span class="kw">char</span> san[<span class="num">256</span>];           <span class="cm">/* comma-separated Subject Alt Names */</span>
+    <span class="kw">long</span> not_before;         <span class="cm">/* unix timestamp — validity start */</span>
+    <span class="kw">long</span> not_after;          <span class="cm">/* unix timestamp — validity end */</span>
+    <span class="kw">int</span>  is_ca;              <span class="cm">/* can this cert sign OTHER certs? */</span>
+    <span class="kw">int</span>  is_self_signed;     <span class="cm">/* true only for root CAs */</span>
+};
+
+<span class="kw">struct</span> <span class="cls">cert_chain</span> {
+    <span class="kw">struct</span> cert certs[<span class="num">8</span>];  <span class="cm">/* [0]=leaf (the server's cert), [last]=root */</span>
+    <span class="kw">int</span> count;
+};</code></pre>
+
+  <p class="reveal">The critical field, cryptographically, isn't shown as raw bytes here but is implied by <code>issuer</code>: every certificate also carries a signature, produced by the issuer's <em>private</em> key, over the rest of the certificate's contents. Anyone holding the issuer's matching <em>public</em> key can verify that signature — confirming "yes, whoever holds the issuer's private key really did vouch for this exact name-to-key binding, and nothing in it has been altered since."</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Notary Analogy</div>
+    A certificate is structurally identical to a notarized document. The document (the key-to-domain binding) means nothing on its own — its weight comes entirely from the notary's stamp and signature, and <em>your</em> trust in that specific notary's judgment. A certificate authority is a notary whose "stamp" is a cryptographic signature nobody can forge without its private key, and whose judgment your browser was configured, in advance, to accept.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: THE CHAIN -->
+<section id="chain">
+<div class="container">
+  <div class="section-num">02 — Nobody Signs Directly for the Root</div>
+  <h2>The <span class="accent">Chain of Trust</span>, Link by Link</h2>
+
+  <p class="reveal">In principle, a single trusted authority could sign every certificate on the internet directly. In practice, that authority's private key would then be an irresistible target — steal it once, forge certificates for any domain forever. So instead, trust is delegated through intermediate links, each one a step removed from the most precious key:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Leaf Certificate</span><span class="fam-count">1 per domain</span></div>
+      <div class="fam-desc">The certificate the server actually presents during the TLS handshake. Binds a public key to <code>example.com</code> (and possibly other SANs). Signed by an intermediate CA. Cannot sign other certificates.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Intermediate CA Certificate</span><span class="fam-count">1 or more</span></div>
+      <div class="fam-desc">Signed the leaf certificate. Is itself a certificate, signed in turn by the root (or by another intermediate). Its private key lives in more actively-used, higher-risk infrastructure — so it's kept separate from the root precisely so it can be revoked/rotated without touching the root's trust.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Root CA Certificate</span><span class="fam-count">~130 in a browser</span></div>
+      <div class="fam-desc">Self-signed — its own issuer field points to itself. Never presented over the wire by ordinary servers. Pre-installed directly into the browser's or OS's trust store, shipped with the software itself, implicitly trusted with no signature to verify against anything higher.</div>
+    </div>
+  </div>
+
+  <p class="reveal">The server sends its <strong>leaf</strong> certificate plus the <strong>intermediate(s)</strong> during the handshake (recall <code>Certificate</code> from the last lesson's step 4) — but critically, it does <em>not</em> send the root. The root doesn't need to be transmitted at all, because the client is expected to already have it, baked into the trust store that shipped with the browser or operating system.</p>
+
+  <div class="formula reveal">
+    <span class="label">The chain, formally</span>
+    leaf.signature verifies with intermediate.public_key<br>
+    intermediate.signature verifies with root.public_key<br>
+    root ∈ trust store (pre-installed, no further verification needed)
+    <span class="sub">Break any one link — wrong signature, untrusted root, wrong domain — and the whole chain is worthless.</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: HOW THE BROWSER VERIFIES -->
+<section id="verify">
+<div class="container">
+  <div class="section-num">03 — What the Browser Actually Checks</div>
+  <h2>Walking the Chain: <span class="accent">Three Real Checks</span></h2>
+
+  <p class="reveal">When your browser receives a certificate chain during the TLS handshake, it runs a specific, ordered validation — not "does this look official," but concrete, falsifiable checks against real fields:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. Signature Chain Integrity</strong> Starting from the leaf, verify its signature against the next certificate's public key. Then verify that certificate's signature against the next one's public key. Repeat until reaching a certificate that is both self-signed <em>and</em> present in the local trust store — at which point the chain is anchored and no further verification is needed upward.</div></li>
+    <li><div class="step-body"><strong>2. Expiry Window</strong> For every certificate in the chain, confirm the current time falls between <code>not_before</code> and <code>not_after</code>. An expired intermediate or leaf invalidates the whole chain even if every signature is mathematically perfect — expiry exists specifically to bound how long a compromised-but-undetected key can keep doing damage.</div></li>
+    <li><div class="step-body"><strong>3. Hostname Match</strong> Confirm the domain you're actually trying to reach (from the URL bar, sent as SNI during ClientHello) appears in the leaf certificate's Subject Alternative Names (or legacy Common Name). A perfectly valid, perfectly signed certificate for <code>totally-different-site.com</code> must still be rejected if you asked for <code>example.com</code> — the signature proves authenticity of the <em>binding</em>, not that the binding matches what you wanted.</div></li>
+  </ol>
+
+  <pre class="reveal"><span class="tag">cert_validation.h — the real check, in order</span><code><span class="kw">cert_result_t</span> <span class="fn">cert_validate</span>(<span class="kw">const struct</span> cert_chain *chain,
+                             <span class="kw">const char</span> *hostname, <span class="kw">long</span> now) {
+    <span class="cm">/* 1. chain each signature up to a root already in the trust store */</span>
+    <span class="kw">if</span> (!chain_to_trusted_root(chain)) <span class="kw">return</span> CERT_ERR_CHAIN_BROKEN;
+
+    <span class="cm">/* 2. every certificate must currently be within its validity window */</span>
+    <span class="kw">if</span> (any_cert_expired(chain, now))  <span class="kw">return</span> CERT_ERR_EXPIRED;
+
+    <span class="cm">/* 3. the leaf's SAN/CN must actually match the hostname we asked for */</span>
+    <span class="kw">if</span> (!leaf_matches_hostname(chain, hostname)) <span class="kw">return</span> CERT_ERR_HOSTNAME;
+
+    <span class="cm">/* 4. optionally, check it hasn't been revoked since issuance — see §07 */</span>
+    <span class="kw">if</span> (is_revoked(chain))  <span class="kw">return</span> CERT_ERR_REVOKED;
+
+    <span class="kw">return</span> CERT_OK;
+}</code></pre>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Skipping Any One Check Is a Full Break</div>
+    Code like <code>return CERT_OK;</code> unconditionally — "accept any certificate" — is exactly the bug demonstrated in <strong>B16_tls_handshake</strong>'s <code>cert_validation.c</code> insecure path. It doesn't weaken security; it eliminates it entirely. An attacker with any man-in-the-middle position presents a self-signed certificate for the target domain, the client accepts it with no complaint, and the padlock icon shows up in the address bar while every byte flows through the attacker in plaintext-equivalent form.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: CLIMB THE CHAIN CANVAS -->
+<section id="climb">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>Climbing the Chain <span class="accent">to a Trusted Root</span></h2>
+
+  <p class="reveal">Here's the verification walk visualized: start at the leaf certificate the server actually sent, verify its signature against the intermediate above it, then verify the intermediate's signature against the root — and stop the moment that root is found already sitting in the local trust store.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="chainLabel">▶ Click to walk the chain of trust</div>
+    <canvas id="chainCanvas" height="420"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runChain()">▶ Verify Chain</button>
+    <button class="ctrl-btn red" onclick="resetChain()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why does the root need no verification at all?</b> Because trusting it isn't a cryptographic conclusion — it's a starting assumption, installed by whoever shipped your browser or OS, based on that vendor's own audit of the CA's practices (governed by programs like the CA/Browser Forum). Every chain of trust has to bottom out somewhere in an assumption nothing else proves; roots are where HTTPS chose to put that floor.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: WHY IT WORKS -->
+<section id="whyworks">
+<div class="container">
+  <div class="section-num">05 — The Trust Argument, Made Explicit</div>
+  <h2>Why This Actually <span class="accent">Works as a Trust Mechanism</span></h2>
+
+  <p class="reveal">Here's the part worth sitting with, because it's not obvious at first: <strong>you have never met <code>example.com</code>'s server before, and you never will directly verify its identity yourself.</strong> So how can trusting a chain of signatures possibly be safe?</p>
+
+  <p class="reveal">The answer is that you're not trusting <code>example.com</code> at all, at any point in this process. You're trusting exactly one thing: <strong>the root CA's judgment</strong>, formed once, when it (or its delegated intermediate) issued that certificate — that whoever requested a certificate for <code>example.com</code> genuinely controlled that domain at issuance time (typically proven via domain control validation: putting a specific token in DNS, or serving a specific file at a well-known URL, something only the real domain owner could do). Every certificate you ever encounter chaining to that root is, transitively, the root vouching: "I checked this once, so you don't have to."</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What Actually Scales</h4>
+      Your browser ships with roughly 130 root CA public keys, installed once. From that finite, pre-vetted set, it can validate certificates for the entire web — billions of domains it has never seen — without ever needing a direct relationship with any of them. The trust doesn't grow linearly with the number of sites; it's bootstrapped once and reused everywhere.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚡ What Breaks the Model</h4>
+      If any single trusted root (or an intermediate under it) is compromised or issues a certificate carelessly, every domain that root's chain touches is at risk — which is exactly why CA misissuance incidents (like DigiNotar in 2011, or various Symantec distrust events) result in browsers pulling roots from the trust store entirely, not just warning about individual bad certificates.
+    </div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Whole Argument, Compressed</div>
+    You trust the root not because you inspected it yourself, but because the people who built your browser inspected the <em>organization behind the root</em> and vetted its issuance practices before shipping it as a trust anchor. Everything downstream — every intermediate, every leaf, every domain you've never visited before — inherits that one upfront decision, transitively, through nothing but verifiable signatures.
+  </div>
+
+  <p class="reveal">This also explains why a <strong>self-signed certificate</strong> — one whose issuer field points to itself, with no chain above it at all — triggers a hard browser warning instead of a silent connection. A self-signed certificate is, structurally, a certificate with zero delegated trust behind it: nobody vetted the binding between that key and that domain except the entity presenting it, which is exactly the scenario where you can't distinguish a legitimate internal tool from an attacker who simply generated their own key pair and claimed to be <code>your-bank.com</code>. Self-signed certificates are genuinely fine for a private, internal network where you control distribution of the certificate out-of-band — they're dangerous precisely when used for public-facing sites, because the entire chain-of-trust argument this section just made collapses to nothing.</p>
+</div>
+</section>
+
+<!-- SECTION 6: REVOCATION -->
+<section id="revocation">
+<div class="container">
+  <div class="section-num">06 — The Part Nobody Has Fully Solved</div>
+  <h2><span class="accent">Revocation</span>: When a Certificate Needs to Die Early</h2>
+
+  <p class="reveal">Expiry handles the easy case: certificates are valid for a bounded window (often 90 days to a year now, deliberately shortened over time), and eventually they simply stop being accepted. But what about a certificate that needs to be invalidated <em>immediately</em> — because the server's private key leaked, the company was acquired, or a CA discovers it issued the certificate in error? The certificate's <code>not_after</code> date might still be a year away. This is revocation, and it's a genuinely hard, still-imperfect problem.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Mechanism</th><th>How it works</th><th>The real-world limitation</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">CRL (Certificate Revocation List)</td><td class="hl">CA publishes a signed list of all revoked serial numbers; clients download and check it</td><td class="neg">Lists grow huge; downloading one on every connection is far too slow, so it's rarely fetched fresh</td></tr>
+        <tr><td class="gold">OCSP (Online Certificate Status Protocol)</td><td class="hl">Client (or browser vendor, on its behalf) asks the CA in real time: "is serial #X still valid?"</td><td class="neg">Adds a live round trip and a new privacy leak (the CA learns every site you visit); if the OCSP responder is down, clients historically "soft-fail" and connect anyway</td></tr>
+        <tr><td class="gold">OCSP Stapling</td><td class="hl">Server periodically fetches its own signed OCSP response and attaches ("staples") it to the handshake</td><td class="pos">Fixes the privacy leak and the round trip — but adoption is inconsistent, and it only proves the leaf wasn't revoked, not the whole chain</td></tr>
+        <tr><td class="gold">CRLSets / Short-Lived Certs</td><td class="hl">Browser vendors ship a compressed list of the most critical revocations directly with browser updates; or CAs issue certs valid for only days</td><td class="pos">Practical and fast, but CRLSets only cover a curated subset, not every revocation everywhere</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">The uncomfortable truth is that no deployed revocation mechanism gives browsers a fast, complete, privacy-preserving, always-available answer to "has this specific certificate been revoked, right now?" — every option trades off at least one of those properties. This is why the industry's actual direction has increasingly been to make the problem <em>smaller</em> rather than solve it perfectly: shortening certificate lifetimes (so a leaked key is only dangerous for days, not years) reduces how much damage an imperfect revocation story can cause.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ The Padlock Still Doesn't Mean "Currently Safe"</div>
+    Even a fully chain-validated, non-expired, hostname-matching certificate might be a revoked one that soft-fail revocation checking simply let through. This is the same lesson as the previous module's "the padlock means encrypted, not safe" — here it sharpens to: the padlock means the chain validated <em>at some point recently checked</em>, which in the worst case might mean revocation wasn't checked at all.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: CERT TYPES -->
+<section id="types">
+<div class="container">
+  <div class="section-num">07 — Not All Certificates Vouch for the Same Thing</div>
+  <h2>Certificate Types: <span class="accent">DV, OV, and EV</span></h2>
+
+  <p class="reveal">The chain-of-trust mechanism this lesson has covered proves one specific thing: whoever requested the certificate controlled the domain at issuance time. That's <strong>Domain Validation (DV)</strong> — the baseline, and by far the most common type today, often issued automatically and for free (Let's Encrypt popularized fully automated DV issuance). It says nothing about who or what organization is behind the domain.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🔍 DV — Domain Validation</h4>
+      Proves domain control only, via automated DNS or HTTP challenge. Fast, cheap, often free, renewed automatically. What almost every HTTPS site uses today, including this one.
+    </div>
+    <div class="compare-card bad">
+      <h4>🏢 OV / EV — Organization / Extended Validation</h4>
+      Additionally verify the legal existence and identity of the requesting organization through manual human review — business registry checks, phone verification. Slower and costlier to obtain. Browsers largely stopped giving EV certificates special UI treatment (like a green company-name bar) around 2019, after research found users rarely noticed or relied on the indicator.
+    </div>
+  </div>
+
+  <p class="reveal">A separate axis entirely is <strong>scope</strong>: a certificate can be issued for exactly one hostname, for a <strong>wildcard</strong> (<code>*.example.com</code>, covering any single-level subdomain), or as a <strong>multi-domain (SAN) certificate</strong> listing several unrelated hostnames in one certificate's Subject Alternative Name field. None of these change what the chain of trust actually proves — they only change how many names one signed statement covers.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Important Takeaway</div>
+    A valid, chain-verified, non-expired certificate for <code>example.com</code> tells your browser exactly one thing with certainty: <strong>the entity that requested it controlled that domain when it was issued.</strong> It does not, by itself, tell you the site is trustworthy, safe, or run by a legitimate business — DV certificates are issued to phishing domains constantly, precisely because domain control is all DV certificates ever claimed to verify in the first place.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: CAA RECORDS -->
+<section id="caa">
+<div class="container">
+  <div class="section-num">08 — Restricting Who's Even Allowed to Issue</div>
+  <h2>CAA Records: <span class="accent">Telling CAs No</span> in Advance</h2>
+
+  <p class="reveal">The chain-of-trust model has an uncomfortable implication: <em>any</em> of the roughly 130 trusted root CAs (through their intermediates) can, in principle, issue a valid certificate for <em>your</em> domain — not just the one CA you actually use. If a CA is compromised, careless, or coerced, it could mis-issue a certificate for <code>example.com</code> that your browser would accept exactly as readily as the legitimate one, because the chain-verification logic in section 03 has no concept of "the wrong, but still validly-signed, CA."</p>
+
+  <p class="reveal"><strong>CAA (Certification Authority Authorization)</strong> DNS records close part of this gap. A domain owner publishes a DNS record explicitly listing which CAs are permitted to issue certificates for that domain; a compliant CA is required to check for a CAA record before issuing and refuse if the requester isn't on the list.</p>
+
+  <pre class="reveal"><span class="tag">DNS zone file — CAA record</span><code>example.com.  IN  CAA  0 issue "letsencrypt.org"
+example.com.  IN  CAA  0 issue "digicert.com"
+example.com.  IN  CAA  0 iodef "mailto:security@example.com"</code></pre>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why This Doesn't Fully Close the Gap</div>
+    CAA is enforced by CAs at issuance time, checked against DNS — which means it only helps if the CA actually checks it correctly, and it does nothing to stop an attacker who has compromised DNS itself (at which point they can simply remove or rewrite the CAA record before requesting a rogue certificate). It's a genuinely useful additional layer, not a replacement for the trust-store model — one more speed bump in a system that, as the revocation section showed, still has real, unresolved gaps.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8b: HSTS -->
+<section id="hsts">
+<div class="container">
+  <div class="section-num">09 — Closing the First-Visit Gap</div>
+  <h2>HSTS: <span class="accent">Refusing to Downgrade</span></h2>
+
+  <p class="reveal">Everything so far assumes the browser is already trying to use HTTPS. But a browser's very first connection attempt to a domain — before it's ever seen a certificate, ever run a handshake — often starts as plain HTTP, either because the user typed a bare domain or clicked an old <code>http://</code> link. If a server always redirects HTTP to HTTPS, that first plaintext request is a real opportunity: an attacker in a man-in-the-middle position can simply intercept it and never let the redirect happen, keeping the victim on plaintext HTTP indefinitely while silently relaying to the real site — a classic SSL-stripping attack.</p>
+
+  <p class="reveal"><strong>HSTS (HTTP Strict-Transport-Security)</strong> closes this specific gap. A server sends a response header telling the browser: "for the next N seconds, never attempt plain HTTP to this domain again — rewrite every request to HTTPS internally, before it ever leaves the machine."</p>
+
+  <pre class="reveal"><span class="tag">wire format — HSTS response header</span><code><span class="cls">HTTP/1.1</span> <span class="num">200</span> <span class="str">OK</span>
+<span class="var">Strict-Transport-Security</span>: <span class="str">max-age=31536000; includeSubDomains; preload</span></code></pre>
+
+  <p class="reveal">Once a browser has seen this header once, every future navigation attempt to that domain (and its subdomains, if <code>includeSubDomains</code> is set) is upgraded to HTTPS internally — no network request, no redirect to intercept, nothing for an attacker sitting on the network to strip. The <code>preload</code> flag goes further: it lets a site submit itself to a list baked directly into browser source code, so even the <em>very first</em> connection ever made — before any HSTS header could have been seen — is HTTPS-only from the start.</p>
+
+  <div class="sidenote reveal">
+    <b>Why can't HSTS just be the default for every domain, always?</b> Because HSTS is opt-in per domain specifically to avoid breaking sites that genuinely don't support HTTPS yet, or support it inconsistently across subdomains. The preload list exists precisely to offer an "opt in permanently, unconditionally" path for domains willing to commit — trading flexibility for closing the first-visit gap entirely.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 9: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">X.509 Certificate</div><div class="glossary-def">The standard data format binding a public key to an identity, signed by an issuer, with a defined validity window.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Leaf / Intermediate / Root</div><div class="glossary-def">The three roles in a chain: the server's own certificate, the CA that signed it, and the self-signed authority pre-installed in the trust store.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trust Store</div><div class="glossary-def">The set of root CA certificates shipped with a browser or OS and implicitly trusted with no further verification.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Subject Alternative Name (SAN)</div><div class="glossary-def">The field listing every hostname a certificate is valid for — the modern replacement for relying on Common Name alone.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Domain Control Validation</div><div class="glossary-def">The process a CA uses to confirm a certificate requester actually controls the domain before issuing, e.g. via a DNS TXT record or a file at a well-known path.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Revocation</div><div class="glossary-def">Invalidating a certificate before its natural expiry, typically after a key leak or misissuance.</div></div>
+    <div class="glossary-card"><div class="glossary-term">OCSP</div><div class="glossary-def">Online Certificate Status Protocol — a live query to check whether a specific certificate has been revoked.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CRL</div><div class="glossary-def">Certificate Revocation List — a CA-signed, downloadable list of revoked certificate serial numbers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Certificate Transparency</div><div class="glossary-def">Public, append-only logs that every publicly trusted certificate must appear in, so misissuance can be detected and audited.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DV / OV / EV</div><div class="glossary-def">Domain, Organization, and Extended Validation — increasing (and increasingly manual) levels of identity checking a CA performs before issuing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Wildcard Certificate</div><div class="glossary-def">A certificate valid for any single-level subdomain of a domain, e.g. <code>*.example.com</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CAA Record</div><div class="glossary-def">A DNS record listing which Certificate Authorities are authorized to issue certificates for a domain.</div></div>
+    <div class="glossary-card"><div class="glossary-term">HSTS</div><div class="glossary-def">Strict-Transport-Security — a header telling the browser to never attempt plain HTTP to a domain again, closing the SSL-stripping window.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SSL Stripping</div><div class="glossary-def">A downgrade attack where a man-in-the-middle intercepts a plaintext HTTP request before it can be redirected to HTTPS.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Certificate Chains: Why Your Browser Trusts a Server It's Never Met · A companion lesson for bob_os/browser modules <a href="../../browser/B15_http_parser/tutorial.html">B15_http_parser</a> and <a href="../../browser/B16_tls_handshake/tutorial.html">B16_tls_handshake</a></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Encryption plus identity plus a chain of vouching signatures — that's the whole padlock, end to end.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CERTIFICATE CHAIN CLIMB CANVAS ──────────────────────────────────────────────
+const CHAIN_NODES=[
+  {label:'LEAF',sub:'example.com',detail:'issued to the actual server',col:C.cyan},
+  {label:'INTERMEDIATE',sub:"issuer's CA",detail:'signed the leaf',col:C.purple},
+  {label:'ROOT',sub:'self-signed',detail:'in trust store — implicitly trusted',col:C.gold}
+];
+
+function drawChain(stage,t){
+  // stage 0: idle. odd stages = arrow animating between nodes. even stages(2,4)=node confirmed.
+  const canvas=document.getElementById('chainCanvas');
+  const W=gW(canvas),H=420;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cx=W/2;
+  const ys=[H-70,H/2,90]; // leaf bottom, intermediate middle, root top
+  const r=52;
+
+  // trust-store box around root
+  ctx.strokeStyle='rgba(245,200,66,.35)';ctx.setLineDash([4,4]);ctx.lineWidth=1.5;
+  ctx.strokeRect(cx-140,ys[2]-80,280,150);
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('LOCAL TRUST STORE (pre-installed)',cx,ys[2]-88);
+
+  // connecting lines (signature checks)
+  function drawLink(i,progress,ok){
+    const y1=ys[i]-r, y2=ys[i+1]+r;
+    const curY=y1-(y1-y2)*progress;
+    ctx.strokeStyle=ok?C.green:C.gold;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(cx,y1);ctx.lineTo(cx,curY);ctx.stroke();
+    if(progress>0.1){
+      ctx.fillStyle=ok?C.green:C.gold;
+      ctx.beginPath();ctx.moveTo(cx,curY);ctx.lineTo(cx-5,curY-8);ctx.lineTo(cx+5,curY-8);ctx.closePath();ctx.fill();
+    }
+  }
+
+  // determine what's confirmed based on stage
+  // stages: 0=idle,1=verifying link0(leaf->int),2=link0 done,3=verifying link1(int->root),4=link1 done,5=trusted glow
+  let link0Progress=0, link0Ok=false, link1Progress=0, link1Ok=false, trustGlow=0;
+  if(stage>=1){ link0Progress = stage===1?t:1; }
+  if(stage>=2){ link0Ok=true; link0Progress=1; }
+  if(stage>=3){ link1Progress = stage===3?t:1; }
+  if(stage>=4){ link1Ok=true; link1Progress=1; }
+  if(stage>=5){ trustGlow = stage===5?t:1; }
+
+  drawLink(0,link0Progress,link0Ok);
+  drawLink(1,link1Progress,link1Ok);
+
+  // nodes
+  CHAIN_NODES.forEach((n,i)=>{
+    const y=ys[i];
+    const confirmed = (i===0) || (i===1&&link0Ok) || (i===2&&link1Ok);
+    ctx.beginPath();ctx.arc(cx,y,r,0,Math.PI*2);
+    ctx.fillStyle=confirmed? n.col+'2e' : 'rgba(122,155,191,.08)';
+    ctx.fill();
+    ctx.strokeStyle=confirmed?n.col:'rgba(122,155,191,.4)';
+    ctx.lineWidth=confirmed?2.5:1.5;
+    ctx.stroke();
+    if(i===2 && trustGlow>0){
+      ctx.strokeStyle=C.green;ctx.lineWidth=2+3*trustGlow;
+      ctx.globalAlpha=trustGlow;
+      ctx.beginPath();ctx.arc(cx,y,r+6,0,Math.PI*2);ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    ctx.fillStyle=confirmed?n.col:C.muted;
+    ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(n.label,cx,y-4);
+    ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText(n.sub,cx,y+12);
+    // side detail
+    ctx.textAlign='left';ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+    ctx.fillText(n.detail, cx+r+16, y+4);
+  });
+
+  const captions=[
+    'Click "Verify Chain" to walk from the leaf up to a trusted root',
+    'Verifying: leaf signature against the intermediate’s public key…',
+    '✓ Leaf signature verified against intermediate',
+    'Verifying: intermediate signature against the root’s public key…',
+    '✓ Intermediate signature verified against root',
+    '✓ Root found in local trust store — chain is fully trusted, no further checks needed'
+  ];
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[stage]||'',cx,H-14);
+}
+
+function runChain(){
+  const stages=[1,2,3,4,5];
+  const durations=[700,300,700,300,600];
+  let idx=0,start=performance.now();
+  document.getElementById('chainLabel').textContent='▶ Walking the chain of trust…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawChain(stages[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=stages.length){
+        document.getElementById('chainLabel').textContent='▶ Trusted — click again to replay';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetChain(){
+  document.getElementById('chainLabel').textContent='▶ Click to walk the chain of trust';
+  drawChain(0,0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetChain(); });
+window.addEventListener('resize',()=>{ resetChain(); });
+</script>
+</body>
+</html>

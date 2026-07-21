@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BobOS — Prerequisites: Everything You Need Before Module 01</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+  /* ─── HERO ─── */
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:80px 40px 70px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(245,200,66,0.08) 0%,transparent 70%);pointer-events:none;}
+  .prereq-badge{display:inline-block;background:var(--gold);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:700;font-size:13px;padding:5px 18px;border-radius:20px;letter-spacing:1.5px;margin-bottom:24px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.4rem,5vw,3.8rem);font-weight:900;color:#fff;margin-bottom:18px;line-height:1.15;}
+  .hero h1 span{color:var(--gold);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:700px;margin:0 auto 36px;}
+  .toc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;max-width:900px;margin:0 auto;}
+  .toc-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;text-align:left;}
+  .toc-item a{color:var(--cyan);text-decoration:none;font-family:'Source Code Pro',monospace;font-size:13px;}
+  .toc-item a:hover{color:var(--gold);}
+  .toc-num{color:var(--muted);margin-right:6px;font-size:12px;}
+
+  /* ─── LAYOUT ─── */
+  .container{max-width:860px;margin:0 auto;padding:0 28px 100px;}
+  section{margin-top:80px;}
+  .section-anchor{display:block;height:80px;margin-top:-80px;visibility:hidden;}
+
+  /* ─── HEADINGS ─── */
+  h2{font-family:'Playfair Display',serif;font-size:2rem;color:#fff;margin-bottom:8px;padding-bottom:12px;border-bottom:2px solid var(--border);display:flex;align-items:center;gap:14px;}
+  h2 .sec-num{font-family:'Source Code Pro',monospace;font-size:14px;background:var(--gold);color:#0b0f1a;padding:3px 10px;border-radius:6px;font-weight:700;flex-shrink:0;}
+  h3{font-family:'Playfair Display',serif;font-size:1.25rem;color:var(--gold);margin:32px 0 10px;}
+  h4{font-family:'Source Code Pro',monospace;font-size:14px;color:var(--cyan);margin:20px 0 8px;text-transform:uppercase;letter-spacing:0.5px;}
+
+  p{margin-bottom:16px;}
+  strong{color:#fff;}
+
+  /* ─── CALLOUTS ─── */
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+
+  /* ─── CODE ─── */
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;position:relative;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;font-size:13.5px;line-height:1.65;}
+  .inline-code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;background:rgba(56,189,248,0.08);padding:1px 6px;border-radius:4px;}
+
+  /* ─── REGISTER TABLE ─── */
+  .reg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin:20px 0;}
+  .reg-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .reg-name{font-family:'Source Code Pro',monospace;font-size:15px;font-weight:700;color:var(--cyan);margin-bottom:4px;}
+  .reg-full{font-size:12px;color:var(--muted);margin-bottom:6px;}
+  .reg-desc{font-size:14px;color:var(--text);line-height:1.5;}
+  .reg-card.special{border-color:var(--gold);}
+  .reg-card.special .reg-name{color:var(--gold);}
+  .reg-card.control{border-color:var(--red);}
+  .reg-card.control .reg-name{color:var(--red);}
+
+  /* ─── HEX TABLE ─── */
+  .hex-table{width:100%;border-collapse:collapse;margin:20px 0;font-family:'Source Code Pro',monospace;font-size:14px;}
+  .hex-table th{background:var(--bg3);color:var(--muted);padding:8px 14px;text-align:left;font-size:12px;letter-spacing:0.5px;}
+  .hex-table td{padding:9px 14px;border-bottom:1px solid var(--border);}
+  .hex-table tr:last-child td{border-bottom:none;}
+  .hex-table .col-hex{color:var(--cyan);}
+  .hex-table .col-dec{color:var(--orange);}
+  .hex-table .col-bin{color:var(--purple);}
+  .hex-table .col-note{color:var(--muted);font-family:'Lato',sans-serif;font-size:13px;}
+
+  /* ─── ASM INSTRUCTION TABLE ─── */
+  .asm-table{width:100%;border-collapse:collapse;margin:20px 0;}
+  .asm-table th{background:var(--bg3);color:var(--muted);padding:8px 14px;text-align:left;font-size:12px;letter-spacing:0.5px;}
+  .asm-table td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .asm-table tr:last-child td{border-bottom:none;}
+  .asm-table .col-instr{font-family:'Source Code Pro',monospace;color:var(--green);font-size:14px;white-space:nowrap;}
+  .asm-table .col-example{font-family:'Source Code Pro',monospace;color:var(--cyan);font-size:13px;}
+  .asm-table .col-means{color:var(--text);font-size:14px;}
+
+  /* ─── MEMORY MAP ─── */
+  .mem-map{margin:24px 0;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+  .mem-row{display:flex;align-items:stretch;border-bottom:1px solid var(--border);}
+  .mem-row:last-child{border-bottom:none;}
+  .mem-addr{font-family:'Source Code Pro',monospace;font-size:12px;color:var(--cyan);background:var(--bg3);padding:10px 14px;min-width:130px;display:flex;align-items:center;}
+  .mem-label{padding:10px 14px;flex:1;font-size:14px;display:flex;align-items:center;}
+  .mem-label.bios{color:var(--muted);}
+  .mem-label.special{color:var(--gold);}
+  .mem-label.kernel{color:var(--green);}
+  .mem-label.user{color:var(--purple);}
+  .mem-label.empty{color:var(--border);}
+
+  /* ─── STACK VIS ─── */
+  .stack-vis{font-family:'Source Code Pro',monospace;font-size:13px;margin:20px 0;}
+  .stack-row{display:flex;gap:0;margin-bottom:2px;}
+  .stack-addr{color:var(--muted);min-width:110px;text-align:right;padding-right:12px;}
+  .stack-box{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 14px;flex:1;}
+  .stack-box.top{border-color:var(--green);background:rgba(74,222,128,0.07);}
+  .stack-box.filled{color:var(--text);}
+  .stack-box.esp{border-color:var(--gold);background:rgba(245,200,66,0.07);color:var(--gold);}
+  .stack-label{color:var(--muted);padding-left:10px;font-size:12px;align-self:center;}
+
+  /* ─── RING DIAGRAM ─── */
+  .ring-diagram{display:flex;flex-direction:column;gap:8px;margin:24px auto;max-width:480px;}
+  .ring{border-radius:10px;padding:14px 20px;text-align:center;font-family:'Source Code Pro',monospace;font-size:13px;}
+  .ring-0{background:rgba(248,113,113,0.1);border:2px solid var(--red);color:var(--red);}
+  .ring-3{background:rgba(167,139,250,0.1);border:2px solid var(--purple);color:var(--purple);}
+  .ring-label{font-weight:700;font-size:15px;margin-bottom:4px;}
+  .ring-desc{color:var(--muted);font-size:12px;font-family:'Lato',sans-serif;}
+
+  /* ─── QA ─── */
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:12px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:14px;border-left:2px solid var(--border);font-size:15px;}
+  .qa .a:last-child{margin-bottom:0;}
+
+  /* ─── BRAIN ─── */
+  .brain{background:linear-gradient(135deg,rgba(245,200,66,0.07),rgba(251,146,60,0.07));border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:12px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+
+  /* ─── USED IN badge ─── */
+  .used-in{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 24px;}
+  .mod-tag{font-family:'Source Code Pro',monospace;font-size:11px;padding:3px 10px;border-radius:12px;background:var(--bg3);border:1px solid var(--border);color:var(--muted);}
+  .mod-tag.active{background:rgba(56,189,248,0.1);border-color:var(--cyan);color:var(--cyan);}
+
+  /* ─── FOOTER ─── */
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HERO ═══════════════════════════════ -->
+<div class="hero">
+  <div class="prereq-badge">READ THIS FIRST</div>
+  <h1>BobOS <span>Prerequisites</span></h1>
+  <p class="tagline">Every term, register, tool, and number system you'll encounter across all 42 modules — explained once, in plain English with real analogies. Read this before Module 01. Each concept is introduced exactly once so you never hit an unexplained term mid-tutorial.</p>
+
+  <div class="toc-grid">
+    <div class="toc-item"><span class="toc-num">01.</span><a href="#sec-tools">Tools: QEMU, NASM, GCC, Make</a></div>
+    <div class="toc-item"><span class="toc-num">02.</span><a href="#sec-numbers">Number Systems: hex, binary, decimal</a></div>
+    <div class="toc-item"><span class="toc-num">03.</span><a href="#sec-cpu">The CPU: what it actually does</a></div>
+    <div class="toc-item"><span class="toc-num">04.</span><a href="#sec-registers">Registers: the CPU's hands</a></div>
+    <div class="toc-item"><span class="toc-num">05.</span><a href="#sec-asm">Assembly language: talking to the CPU</a></div>
+    <div class="toc-item"><span class="toc-num">06.</span><a href="#sec-memory">Memory addresses &amp; layout</a></div>
+    <div class="toc-item"><span class="toc-num">07.</span><a href="#sec-stack">The stack &amp; function calls</a></div>
+    <div class="toc-item"><span class="toc-num">08.</span><a href="#sec-bits">Bits, bytes &amp; bitwise ops</a></div>
+    <div class="toc-item"><span class="toc-num">09.</span><a href="#sec-rings">CPU rings &amp; privilege levels</a></div>
+    <div class="toc-item"><span class="toc-num">10.</span><a href="#sec-interrupts">Interrupts &amp; exceptions</a></div>
+    <div class="toc-item"><span class="toc-num">11.</span><a href="#sec-io">Port I/O: talking to hardware</a></div>
+    <div class="toc-item"><span class="toc-num">12.</span><a href="#sec-build">The build pipeline: compile → link → run</a></div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════ 01 TOOLS ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-tools"></span>
+  <h2><span class="sec-num">01</span> The Tools You'll Use</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Building an OS is like building a house in the middle of the ocean — you can't live in it while you build it, and you can't test it on your real computer without destroying what you're typing on. You need a <strong>fake computer inside your real computer</strong>. That's QEMU.</p>
+  </div>
+
+  <h3>QEMU — The Fake Computer</h3>
+  <p>QEMU is a <strong>hardware emulator</strong>. It pretends to be a complete x86 PC: it has a fake CPU, fake RAM, a fake hard disk, and a fake screen. When we say <span class="inline-code">make run</span>, your BobOS boots inside QEMU. If it crashes, QEMU crashes — not your real Windows machine. You can also pause it, inspect its registers mid-execution, and restart it in under a second.</p>
+
+  <div class="callout cyan">
+    <div class="label">Why x86?</div>
+    <p>x86 is the instruction set used by nearly every Windows and Linux desktop CPU (Intel and AMD). It's also the architecture that most OS books and tutorials target — so there's a huge community, tons of documentation, and your CPU already knows how to run what you build natively. When we say "32-bit x86", we mean the version of x86 where memory addresses are 4 bytes wide (up to 4 GB of RAM).</p>
+  </div>
+
+  <pre><code># The command you'll run for every OS module:
+make disk.img    # builds the OS into a disk image file
+make run         # starts QEMU booting from that disk image
+
+# What QEMU actually executes:
+qemu-system-i386 -drive format=raw,file=disk.img -m 128M</code></pre>
+
+  <p>The flag <span class="inline-code">-drive format=raw,file=disk.img</span> tells QEMU "treat this file as if it were a physical hard disk." The flag <span class="inline-code">-m 128M</span> says "give the fake computer 128 megabytes of RAM."</p>
+
+  <h3>NASM — The Assembly Compiler</h3>
+  <p>NASM stands for <em>Netwide Assembler</em>. Assembly is the language closest to raw machine instructions — one line of assembly is usually one CPU instruction. NASM reads your <span class="inline-code">.asm</span> files and produces raw binary bytes that the CPU can execute directly. We use NASM for the bootloader (Module 01) and a few other files where we must control the exact binary output.</p>
+
+  <div class="callout teal">
+    <div class="label">NASM vs GCC</div>
+    <p>GCC is the C compiler we use for everything else. You write C (higher-level, readable) and GCC translates it to assembly, then to binary. NASM is for the rare cases where we can't trust GCC to produce exactly the right bytes — like the bootloader, which must be exactly 512 bytes and end with <span class="inline-code">0x55 0xAA</span>.</p>
+  </div>
+
+  <h3>Make — The Automated Build Script</h3>
+  <p>Typing <span class="inline-code">nasm -f bin bootloader.asm -o boot.bin</span> and then <span class="inline-code">gcc -c kernel.c -o kernel.o</span> and then linking them together every time you change a file would be exhausting. Make reads a <span class="inline-code">Makefile</span> and figures out exactly which commands need to re-run based on what changed. <span class="inline-code">make run</span> = "build everything that's out of date, then start QEMU."</p>
+
+  <h3>WSL — Windows Subsystem for Linux</h3>
+  <p>The OS tools we use (GCC for cross-compilation, NASM, GNU LD the linker) are Linux tools. WSL lets you run a real Linux environment inside Windows. When you see <span class="inline-code">wsl -d Ubuntu -- bash -c "..."</span> in a command, it means "run this command in your Ubuntu Linux environment." The path <span class="inline-code">/mnt/c/Users/...</span> is how Linux inside WSL sees your Windows C: drive.</p>
+
+  <div class="used-in">
+    <span class="mod-tag active">All OS modules</span>
+    <span class="mod-tag active">All Browser modules</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 02 NUMBER SYSTEMS ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-numbers"></span>
+  <h2><span class="sec-num">02</span> Number Systems: Hex, Binary, Decimal</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Humans count in base 10 because we have 10 fingers. CPUs count in base 2 because transistors have two states: on and off. Programmers use base 16 (hex) because it maps cleanly onto groups of 4 binary bits. Same number, three different ways to write it.</p>
+  </div>
+
+  <h3>Why Hex Everywhere?</h3>
+  <p>When you see <span class="inline-code">0xB8000</span> or <span class="inline-code">0x55AA</span> in the tutorials, those are <strong>hexadecimal (base 16) numbers</strong>. The <span class="inline-code">0x</span> prefix is just C's way of saying "this is hex, not decimal." Hex uses digits 0–9 plus letters A–F, where A=10, B=11, C=12, D=13, E=14, F=15.</p>
+
+  <table class="hex-table">
+    <tr><th>Hex</th><th>Decimal</th><th>Binary</th><th>Where you'll see it</th></tr>
+    <tr><td class="col-hex">0x0</td><td class="col-dec">0</td><td class="col-bin">0000</td><td class="col-note">null, zero, false</td></tr>
+    <tr><td class="col-hex">0xF</td><td class="col-dec">15</td><td class="col-bin">1111</td><td class="col-note">4 bits all on</td></tr>
+    <tr><td class="col-hex">0xFF</td><td class="col-dec">255</td><td class="col-bin">11111111</td><td class="col-note">one byte, all 8 bits on</td></tr>
+    <tr><td class="col-hex">0x55</td><td class="col-dec">85</td><td class="col-bin">01010101</td><td class="col-note">alternating bits — part of boot signature</td></tr>
+    <tr><td class="col-hex">0xAA</td><td class="col-dec">170</td><td class="col-bin">10101010</td><td class="col-note">alternating bits — part of boot signature</td></tr>
+    <tr><td class="col-hex">0x1000</td><td class="col-dec">4096</td><td class="col-bin">1 0000 0000 0000</td><td class="col-note">one page (4 KB) — key size in paging</td></tr>
+    <tr><td class="col-hex">0xB8000</td><td class="col-dec">753664</td><td class="col-bin">—</td><td class="col-note">VGA text buffer address (see Module 03)</td></tr>
+    <tr><td class="col-hex">0xFFFFFFFF</td><td class="col-dec">4,294,967,295</td><td class="col-bin">32× 1s</td><td class="col-note">maximum 32-bit address (4 GB − 1)</td></tr>
+  </table>
+
+  <h3>Converting Hex to Decimal in Your Head</h3>
+  <pre><code>0x10  = 1×16 + 0×1            = 16
+0x100 = 1×256 + 0×16 + 0×1   = 256
+0x1000 = 1×4096               = 4096  (one page!)
+0xFF  = 15×16 + 15×1          = 240 + 15 = 255</code></pre>
+
+  <h3>Why Memory Addresses Are in Hex</h3>
+  <p>A memory address like <span class="inline-code">0xB8000</span> looks cryptic, but in hex every 2 digits = 1 byte = 8 bits. So <span class="inline-code">0xB8000</span> is 3 bytes wide and tells you exactly where in the CPU's 4 GB address range you are. In decimal it would be 753,664 — harder to compare at a glance.</p>
+
+  <div class="callout green">
+    <div class="label">The Rule of Thumb</div>
+    <p>One hex digit = 4 bits. Two hex digits = 1 byte (8 bits). Eight hex digits = 4 bytes = one 32-bit address. So when you see <span class="inline-code">0x00000000</span> through <span class="inline-code">0xFFFFFFFF</span>, that's the entire 4 GB address space of a 32-bit CPU.</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 01 — 0x55AA boot signature</span>
+    <span class="mod-tag active">Module 03 — 0xB8000 VGA</span>
+    <span class="mod-tag active">Module 04 — GDT entries</span>
+    <span class="mod-tag active">All paging modules</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 03 THE CPU ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-cpu"></span>
+  <h2><span class="sec-num">03</span> The CPU: What It Actually Does</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>The CPU is a machine with one job: <strong>fetch an instruction from memory, execute it, move to the next one, repeat forever</strong>. That's the entire loop. Power on the CPU and it starts at a fixed address in memory, reads one instruction, does what it says (add two numbers, jump somewhere, write to a port), then reads the next one. Your OS is just a long list of instructions that this loop executes.</p>
+  </div>
+
+  <h3>The Fetch-Decode-Execute Cycle</h3>
+  <pre><code>while (power_on) {
+    instruction = memory[EIP];   /* FETCH: read bytes at current address */
+    EIP += instruction.length;   /* ADVANCE: move to next instruction */
+    execute(instruction);        /* EXECUTE: do the thing */
+}</code></pre>
+  <p><span class="inline-code">EIP</span> is the <strong>Instruction Pointer</strong> — the CPU's "bookmark" for where it is in the program. Every instruction execution either increments EIP to the next instruction, or a jump/call replaces it with a new address.</p>
+
+  <h3>Real Mode vs Protected Mode</h3>
+  <p>When your PC powers on, the x86 CPU starts in <strong>Real Mode</strong> — a 1970s compatibility mode where memory addresses are only 20 bits wide (1 MB maximum), there's no memory protection, and any program can access any address. This is the mode BIOS and the bootloader run in.</p>
+  <p>Module 02 switches the CPU to <strong>Protected Mode</strong> — the modern mode where addresses are 32 bits (4 GB), memory is protected between programs, and the CPU enforces privilege rings. This switch is a one-way door: you flip bit 0 of a control register (<span class="inline-code">CR0</span>) and never go back.</p>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 01 — bootloader runs in Real Mode</span>
+    <span class="mod-tag active">Module 02 — switch to Protected Mode</span>
+    <span class="mod-tag active">Modules 04–24 — everything runs in Protected Mode</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 04 REGISTERS ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-registers"></span>
+  <h2><span class="sec-num">04</span> Registers: The CPU's Hands</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Think of registers as the CPU's hands — tiny storage slots built directly into the chip. There are only about 16 of them but they're the fastest storage that exists (faster than RAM by 100×). Every operation the CPU does reads from and writes to registers. RAM is the desk; registers are what you're holding in your hands right now.</p>
+  </div>
+
+  <h3>General-Purpose Registers (the Workhorses)</h3>
+  <div class="reg-grid">
+    <div class="reg-card">
+      <div class="reg-name">EAX</div>
+      <div class="reg-full">Extended Accumulator</div>
+      <div class="reg-desc">The primary math register. Addition, multiplication, return values from functions all land here. Syscall number goes in EAX before <span class="inline-code">int 0x80</span>.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">EBX</div>
+      <div class="reg-full">Extended Base</div>
+      <div class="reg-desc">General purpose. Used as first argument to syscalls in BobOS (<span class="inline-code">int 0x80</span>). Often holds a base address for memory access.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">ECX</div>
+      <div class="reg-full">Extended Counter</div>
+      <div class="reg-desc">Loop counter by convention. The <span class="inline-code">rep</span> prefix instruction uses ECX to know how many times to repeat. Second syscall argument.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">EDX</div>
+      <div class="reg-full">Extended Data</div>
+      <div class="reg-desc">Overflow from multiplication goes here. Third syscall argument. Also used for I/O port numbers with the <span class="inline-code">in</span>/<span class="inline-code">out</span> instructions.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">ESI</div>
+      <div class="reg-full">Extended Source Index</div>
+      <div class="reg-desc">Source address for memory copy operations (<span class="inline-code">movs</span>). Often used as a general pointer.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">EDI</div>
+      <div class="reg-full">Extended Destination Index</div>
+      <div class="reg-desc">Destination address for memory copy. Pair with ESI for <span class="inline-code">rep movsd</span> (copy blocks of memory).</div>
+    </div>
+  </div>
+
+  <h3>Special-Purpose Registers (the Control Panel)</h3>
+  <div class="reg-grid">
+    <div class="reg-card special">
+      <div class="reg-name">ESP</div>
+      <div class="reg-full">Extended Stack Pointer</div>
+      <div class="reg-desc">Always points to the top of the stack. <span class="inline-code">PUSH</span> decrements ESP then writes; <span class="inline-code">POP</span> reads then increments. This is how function calls work.</div>
+    </div>
+    <div class="reg-card special">
+      <div class="reg-name">EBP</div>
+      <div class="reg-full">Extended Base Pointer</div>
+      <div class="reg-desc">Stack frame anchor. At the start of a function, EBP is set to ESP — giving a stable "floor" to reference local variables and arguments even as ESP moves.</div>
+    </div>
+    <div class="reg-card special">
+      <div class="reg-name">EIP</div>
+      <div class="reg-full">Extended Instruction Pointer</div>
+      <div class="reg-desc">The CPU's bookmark — address of the NEXT instruction to execute. You can't write to it directly; <span class="inline-code">JMP</span>, <span class="inline-code">CALL</span>, and <span class="inline-code">RET</span> change it.</div>
+    </div>
+    <div class="reg-card special">
+      <div class="reg-name">EFLAGS</div>
+      <div class="reg-full">Flags Register</div>
+      <div class="reg-desc">32 individual bits, each a flag. After a <span class="inline-code">CMP</span>, the Zero Flag (ZF) is set if results were equal. Conditional jumps like <span class="inline-code">JE</span> check these flags.</div>
+    </div>
+  </div>
+
+  <h3>Control Registers (the Boss Registers — Ring 0 Only)</h3>
+  <div class="reg-grid">
+    <div class="reg-card control">
+      <div class="reg-name">CR0</div>
+      <div class="reg-full">Control Register 0</div>
+      <div class="reg-desc"><strong>Bit 0 (PE)</strong>: set to 1 = enter Protected Mode. <strong>Bit 31 (PG)</strong>: set to 1 = enable paging. Flipping these bits is the biggest moment in Modules 02 and 07.</div>
+    </div>
+    <div class="reg-card control">
+      <div class="reg-name">CR2</div>
+      <div class="reg-full">Page Fault Address</div>
+      <div class="reg-desc">When a page fault occurs, the CPU stores the address that caused the fault here. Your page fault handler reads CR2 to know what address was accessed.</div>
+    </div>
+    <div class="reg-card control">
+      <div class="reg-name">CR3</div>
+      <div class="reg-full">Page Directory Base</div>
+      <div class="reg-desc">Holds the physical address of the Page Directory for the current process. Switch CR3 = switch address spaces. Writing CR3 also flushes the TLB (CPU's address translation cache).</div>
+    </div>
+  </div>
+
+  <h3>Segment Registers (Historical Relics Still Used)</h3>
+  <div class="reg-grid">
+    <div class="reg-card">
+      <div class="reg-name">CS</div>
+      <div class="reg-full">Code Segment</div>
+      <div class="reg-desc">Which segment the currently-executing code lives in. In Protected Mode, this holds a <strong>selector</strong> — an index into the GDT (Module 04). CS selector 0x08 = kernel code.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">DS / ES / FS / GS</div>
+      <div class="reg-full">Data Segments</div>
+      <div class="reg-desc">Point to the data segment. In BobOS (flat memory model) we set all data segment registers to 0x10 (kernel data selector) and forget about them.</div>
+    </div>
+    <div class="reg-card">
+      <div class="reg-name">SS</div>
+      <div class="reg-full">Stack Segment</div>
+      <div class="reg-desc">Which segment the stack lives in. In a flat model, same as DS (0x10). When ESP points to something, it's relative to SS — in our setup that's always the whole 4 GB space.</div>
+    </div>
+  </div>
+
+  <h3>Sub-Registers (Parts of the Big Ones)</h3>
+  <p>Each 32-bit register (EAX, EBX, etc.) can be accessed in smaller pieces. You'll see these in legacy or tight code:</p>
+  <pre><code>EAX = 32 bits  [bits 31–0]  — the whole thing
+ AX = 16 bits  [bits 15–0]  — low 16 bits of EAX
+ AH =  8 bits  [bits 15–8]  — high byte of AX
+ AL =  8 bits  [bits  7–0]  — low byte of AX (most commonly used sub)
+
+Example: if EAX = 0x12345678
+   AX  = 0x5678
+   AH  = 0x56
+   AL  = 0x78</code></pre>
+
+  <div class="qa">
+    <h4>There Are No Dumb Questions</h4>
+    <div class="q">Q: Why are registers named EAX, EBX etc. with "E"?</div>
+    <div class="a">The "E" stands for "Extended." The original 8086 (1978) had 16-bit registers called AX, BX, CX, DX. When 32-bit CPUs arrived in 1985, they extended the registers to 32 bits and added the "E" prefix. 64-bit CPUs (x86-64) extended them again and added an "R" prefix: RAX, RBX. In BobOS we use 32-bit (E-prefixed) throughout.</div>
+    <div class="q">Q: What does "volatile" mean in asm volatile("...")?</div>
+    <div class="a">It tells the compiler "don't optimize this away or move it around." The C optimizer sometimes removes or reorders code it thinks has no effect. For hardware access (writing to CR0, reading from ports, issuing interrupts), that reordering would be catastrophic. <span class="inline-code">volatile</span> is a stop sign for the optimizer.</div>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 02 — CR0 for Protected Mode</span>
+    <span class="mod-tag active">Module 04 — CS/DS selectors</span>
+    <span class="mod-tag active">Module 07 — CR0 PG bit, CR2, CR3</span>
+    <span class="mod-tag active">Module 10 — ESP/EBP context switch</span>
+    <span class="mod-tag active">Module 11 — EAX for syscall numbers</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 05 ASSEMBLY ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-asm"></span>
+  <h2><span class="sec-num">05</span> Assembly Language: Talking to the CPU</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>C is like giving instructions to a very capable employee: "sort this list." Assembly is like telling that employee exactly which hand to move, exactly where to reach, exactly how many inches to move their arm. Verbose, precise, and unavoidable when you need exact control — like the bootloader, which must be exactly 512 bytes.</p>
+  </div>
+
+  <h3>The Most Common Instructions — Plain English</h3>
+  <table class="asm-table">
+    <tr><th>Instruction</th><th>Example</th><th>What it means in English</th></tr>
+    <tr>
+      <td class="col-instr">MOV</td>
+      <td class="col-example">mov eax, 5</td>
+      <td class="col-means">Put the value 5 into register EAX. ("Move" is a misnomer — it copies, not moves.)</td>
+    </tr>
+    <tr>
+      <td class="col-instr">MOV</td>
+      <td class="col-example">mov eax, [ebx]</td>
+      <td class="col-means">Read 4 bytes from memory at the address stored in EBX, put the result in EAX. The brackets <span class="inline-code">[]</span> mean "the value AT this address" (dereference).</td>
+    </tr>
+    <tr>
+      <td class="col-instr">ADD</td>
+      <td class="col-example">add eax, ecx</td>
+      <td class="col-means">EAX = EAX + ECX. Sets flags (ZF if result is 0, CF if overflow).</td>
+    </tr>
+    <tr>
+      <td class="col-instr">SUB</td>
+      <td class="col-example">sub esp, 16</td>
+      <td class="col-means">ESP = ESP − 16. This is how functions allocate local variables on the stack.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">CMP</td>
+      <td class="col-example">cmp eax, 0</td>
+      <td class="col-means">Subtract (EAX − 0) but throw the result away — only keep the flags. Used before conditional jumps.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">JMP</td>
+      <td class="col-example">jmp 0x7C00</td>
+      <td class="col-means">Unconditionally set EIP to 0x7C00. Execution continues there.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">JE / JZ</td>
+      <td class="col-example">je done</td>
+      <td class="col-means">Jump if Equal (or Zero flag set). Only jumps if the previous CMP said "equal."</td>
+    </tr>
+    <tr>
+      <td class="col-instr">JNE / JNZ</td>
+      <td class="col-example">jne loop</td>
+      <td class="col-means">Jump if Not Equal. Keep looping until values match.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">JL / JG</td>
+      <td class="col-example">jl too_small</td>
+      <td class="col-means">Jump if Less / Greater than. Uses signed comparison flags.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">PUSH</td>
+      <td class="col-example">push eax</td>
+      <td class="col-means">ESP -= 4 (grow stack down), then write EAX to memory at [ESP]. The stack grows downward in x86 — this surprises everyone the first time.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">POP</td>
+      <td class="col-example">pop ebx</td>
+      <td class="col-means">Read 4 bytes from [ESP] into EBX, then ESP += 4 (shrink stack). The reverse of PUSH.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">CALL</td>
+      <td class="col-example">call my_func</td>
+      <td class="col-means">PUSH EIP (the return address), then JMP to my_func. When the function does RET, it POPs that address back into EIP.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">RET</td>
+      <td class="col-example">ret</td>
+      <td class="col-means">POP the saved return address off the stack into EIP. Execution resumes after the CALL that called this function.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">INT</td>
+      <td class="col-example">int 0x80</td>
+      <td class="col-means">Trigger software interrupt number 0x80. This is how user programs call the kernel in BobOS (Module 11). The CPU looks up the handler address in the IDT and jumps to it.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">INT</td>
+      <td class="col-example">int 0x13</td>
+      <td class="col-means">BIOS interrupt 0x13 = disk services. The bootloader uses this to read sectors from disk into RAM (only works in Real Mode).</td>
+    </tr>
+    <tr>
+      <td class="col-instr">IRET</td>
+      <td class="col-example">iret</td>
+      <td class="col-means">Interrupt RETurn. Used at the end of interrupt handlers and to jump to user mode (Module 14). Pops EIP, CS, and EFLAGS off the stack — restoring the CPU state from before the interrupt.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">CLI / STI</td>
+      <td class="col-example">cli</td>
+      <td class="col-means">CLear Interrupts / SeT Interrupts. CLI temporarily disables hardware interrupts (like the keyboard or timer) so a critical section of kernel code can't be interrupted mid-way through.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">HLT</td>
+      <td class="col-example">hlt</td>
+      <td class="col-means">Halt the CPU until the next interrupt arrives. Used in the kernel idle loop to save power instead of spinning pointlessly.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">NOP</td>
+      <td class="col-example">nop</td>
+      <td class="col-means">No Operation. Does nothing for exactly one CPU cycle. Used for alignment, timing, or padding.</td>
+    </tr>
+    <tr>
+      <td class="col-instr">LGDT</td>
+      <td class="col-example">lgdt [gdt_ptr]</td>
+      <td class="col-means">Load Global Descriptor Table. Tells the CPU where in memory the GDT lives. Used once during boot (Module 04).</td>
+    </tr>
+    <tr>
+      <td class="col-instr">LIDT</td>
+      <td class="col-example">lidt [idt_ptr]</td>
+      <td class="col-means">Load Interrupt Descriptor Table. Tells the CPU where interrupt handler addresses are stored (Module 05).</td>
+    </tr>
+    <tr>
+      <td class="col-instr">OR / AND</td>
+      <td class="col-example">or eax, 1</td>
+      <td class="col-means">Bitwise OR. <span class="inline-code">or eax, 1</span> sets bit 0 of EAX without touching other bits. Used to flip individual bits in control registers.</td>
+    </tr>
+  </table>
+
+  <h3>GCC Inline Assembly — The Hybrid</h3>
+  <p>Sometimes you need one or two assembly instructions inside a C function. GCC lets you embed them using <span class="inline-code">asm volatile("...")</span>:</p>
+  <pre><code>/* Read a value from CR0 into a C variable */
+uint32_t cr0;
+asm volatile("mov %%cr0, %0" : "=r"(cr0));
+
+/* The %% means a literal % (register prefix in AT&T syntax)
+   The %0 is a placeholder for the first output operand
+   "=r"(cr0) means "store the result in any register, then in cr0" */
+
+/* Write to CR0 */
+asm volatile("mov %0, %%cr0" :: "r"(cr0));
+
+/* Read EFLAGS */
+uint32_t flags;
+asm volatile("pushf; pop %0" : "=r"(flags));</code></pre>
+
+  <div class="callout orange">
+    <div class="label">AT&T vs Intel Syntax</div>
+    <p>There are two ways to write x86 assembly. NASM uses <strong>Intel syntax</strong>: <span class="inline-code">mov eax, 5</span> (destination first). GCC inline asm uses <strong>AT&T syntax</strong>: <span class="inline-code">movl $5, %eax</span> (source first, % before registers, $ before constants). The tutorials use Intel syntax in <span class="inline-code">.asm</span> files and AT&T syntax inside <span class="inline-code">asm volatile()</span> blocks. The meaning is identical; only the notation differs.</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 01 — INT 0x13, JMP</span>
+    <span class="mod-tag active">Module 02 — MOV CR0, LGDT, far JMP</span>
+    <span class="mod-tag active">Module 05 — IRET in interrupt stubs</span>
+    <span class="mod-tag active">Module 07 — CR2/CR3 read/write</span>
+    <span class="mod-tag active">Module 10 — ESP context switch</span>
+    <span class="mod-tag active">Module 11 — INT 0x80</span>
+    <span class="mod-tag active">Module 14 — IRET to user mode</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 06 MEMORY ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-memory"></span>
+  <h2><span class="sec-num">06</span> Memory Addresses &amp; The Memory Map</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>RAM is like a giant row of numbered mailboxes — 4,294,967,296 of them in a 32-bit system (4 billion = 4 GB). Each mailbox holds exactly 1 byte. An "address" is just a mailbox number. When the CPU says "read from 0xB8000," it's asking "what's in mailbox number 753,664?" The layout of who owns which mailboxes is called the memory map.</p>
+  </div>
+
+  <h3>The x86 Physical Memory Map</h3>
+  <p>When a PC powers on, certain address ranges are pre-assigned to specific hardware — even before your OS loads. This is fixed by the PC standard:</p>
+
+  <div class="mem-map">
+    <div class="mem-row"><div class="mem-addr">0x00000000</div><div class="mem-label bios">Interrupt Vector Table (IVT) — first 1KB in Real Mode</div></div>
+    <div class="mem-row"><div class="mem-addr">0x00000400</div><div class="mem-label bios">BIOS Data Area — 256 bytes of BIOS variables</div></div>
+    <div class="mem-row"><div class="mem-addr">0x00007C00</div><div class="mem-label special">★ BOOTLOADER LOAD ADDRESS — BIOS always loads 512 bytes here</div></div>
+    <div class="mem-row"><div class="mem-addr">0x00007E00</div><div class="mem-label kernel">Free RAM — where our kernel loads (after the bootloader)</div></div>
+    <div class="mem-row"><div class="mem-addr">0x000A0000</div><div class="mem-label bios">VGA graphics memory (VESA modes)</div></div>
+    <div class="mem-row"><div class="mem-addr">0x000B8000</div><div class="mem-label special">★ VGA TEXT BUFFER — write here to print to screen (Module 03)</div></div>
+    <div class="mem-row"><div class="mem-addr">0x000C0000</div><div class="mem-label bios">Video BIOS ROM</div></div>
+    <div class="mem-row"><div class="mem-addr">0x000F0000</div><div class="mem-label bios">System BIOS ROM</div></div>
+    <div class="mem-row"><div class="mem-addr">0x00100000</div><div class="mem-label kernel">Extended RAM starts (1 MB+) — where most of our kernel lives</div></div>
+    <div class="mem-row"><div class="mem-addr">0x00400000</div><div class="mem-label user">User programs load here (ELF base address, Module 16)</div></div>
+    <div class="mem-row"><div class="mem-addr">0xBFFFFFFF</div><div class="mem-label user">Top of user space (below kernel)</div></div>
+    <div class="mem-row"><div class="mem-addr">0xC0000000</div><div class="mem-label kernel">Kernel virtual address space (top 1 GB)</div></div>
+    <div class="mem-row"><div class="mem-addr">0xFFFFFFFF</div><div class="mem-label bios">Top of 32-bit address space</div></div>
+  </div>
+
+  <h3>Why 0x7C00?</h3>
+  <p>The BIOS always loads the bootloader at address 0x7C00. This is a historical accident from the original IBM PC (1981). The designers reserved the bottom 32 KB for the OS, then the bootloader at 0x7C00, leaving exactly 512 bytes for it and 512 bytes below 0x8000 for the stack. Every x86 PC still does this in 2025.</p>
+
+  <h3>Physical vs Virtual Addresses</h3>
+  <p>Before paging (Module 07): every address you use is a <strong>physical address</strong> — the actual mailbox number in RAM. After paging: every address in a program is a <strong>virtual address</strong> — the CPU's Memory Management Unit (MMU) translates it to a physical address using a table of your choosing. Two programs can both use address <span class="inline-code">0x400000</span> in their virtual space — they map to different physical frames. This is how process isolation works.</p>
+
+  <div class="callout teal">
+    <div class="label">What "Identity Mapping" Means</div>
+    <p>In early paging setup (Module 07), we create a page table where virtual address X maps to physical address X. This is called "identity mapping" — like a map where every road on the map corresponds exactly to the same road in real life, same scale, 1:1. We do this for the kernel so that addresses don't change when we enable paging.</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 01 — 0x7C00 load address</span>
+    <span class="mod-tag active">Module 03 — 0xB8000 VGA buffer</span>
+    <span class="mod-tag active">Module 07 — physical vs virtual, paging</span>
+    <span class="mod-tag active">Module 15 — per-process address spaces</span>
+    <span class="mod-tag active">Module 16 — ELF loads at 0x400000</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 07 STACK ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-stack"></span>
+  <h2><span class="sec-num">07</span> The Stack &amp; Function Calls</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>The stack is a region of RAM used like a spring-loaded plate dispenser at a cafeteria. You push a plate (PUSH) and the spring compresses — the top of the stack goes down in memory. You pop a plate (POP) and it springs back up. The important rule: <strong>x86 stacks grow downward</strong>. High addresses are the "bottom" of the stack; low addresses are the "top."</p>
+  </div>
+
+  <h3>Visualizing the Stack</h3>
+  <div class="stack-vis">
+    <div class="stack-row"><div class="stack-addr">0xBFFFFFFC</div><div class="stack-box filled">return address (pushed by CALL)</div><div class="stack-label">← old EBP</div></div>
+    <div class="stack-row"><div class="stack-addr">0xBFFFFFF8</div><div class="stack-box filled">saved EBP</div><div class="stack-label">← frame base</div></div>
+    <div class="stack-row"><div class="stack-addr">0xBFFFFFF4</div><div class="stack-box filled">local variable: int x = 42</div><div class="stack-label">[EBP - 4]</div></div>
+    <div class="stack-row"><div class="stack-addr">0xBFFFFFF0</div><div class="stack-box filled">local variable: int y = 7</div><div class="stack-label">[EBP - 8]</div></div>
+    <div class="stack-row"><div class="stack-addr">0xBFFFFFEC</div><div class="stack-box esp">← ESP (top of stack, currently empty)</div><div class="stack-label">grows ↓</div></div>
+    <div class="stack-row"><div class="stack-addr">0xBFFFFFE8</div><div class="stack-box top">next PUSH goes here</div><div class="stack-label"></div></div>
+  </div>
+
+  <h3>The Call Convention (How C Functions Work in Assembly)</h3>
+  <pre><code>; Calling: result = add(3, 4);
+push 4          ; push second argument
+push 3          ; push first argument
+call add        ; PUSH EIP (return addr), JMP to add
+
+; Inside add():
+push ebp        ; save caller's frame pointer
+mov ebp, esp    ; set new frame base
+sub esp, 8      ; reserve 8 bytes for local vars
+
+; Access arguments:  [ebp + 8] = first arg (3), [ebp + 12] = second arg (4)
+; Access locals:     [ebp - 4] = first local,   [ebp - 8] = second local
+
+mov eax, [ebp + 8]    ; EAX = 3
+add eax, [ebp + 12]   ; EAX = 3 + 4 = 7
+; return value is in EAX
+
+mov esp, ebp    ; restore stack pointer (discard locals)
+pop ebp         ; restore caller's frame pointer
+ret             ; POP return address → EIP</code></pre>
+
+  <div class="callout purple">
+    <div class="label">Why Does Context Switching Save ESP?</div>
+    <p>When BobOS switches from process A to process B (Module 10), it saves A's ESP value and loads B's ESP. Each process has its own kernel stack. Saving/restoring ESP is all that's needed to "save" and "restore" the entire call chain — because all the local variables, return addresses, and saved registers are already on that stack. ESP is the thread's entire state.</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 05 — interrupt handler saves registers on stack</span>
+    <span class="mod-tag active">Module 10 — context switch saves/restores ESP</span>
+    <span class="mod-tag active">Module 14 — fake iret stack frame for user mode</span>
+    <span class="mod-tag active">Module 18 — signal delivery pushes frame on user stack</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 08 BITS ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-bits"></span>
+  <h2><span class="sec-num">08</span> Bits, Bytes &amp; Bitwise Operations</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>A bit is a light switch: 0 = off, 1 = on. Eight switches together = 1 byte. Bitwise operations let you flip individual switches without touching the others. This is how OS code packs multiple yes/no flags into a single number — and how you read/write specific fields in hardware registers.</p>
+  </div>
+
+  <h3>The Four Bitwise Operations</h3>
+  <pre><code>/* OR: set specific bits (turn switches ON) */
+cr0 = cr0 | 0x1;    /* set bit 0 (PE = protected mode) */
+cr0 |= 0x80000000;  /* set bit 31 (PG = paging) — same thing, shorthand */
+/* Before: cr0 = 0000...0000 */
+/* After:  cr0 = 0000...0001 — only bit 0 changed, nothing else touched */
+
+/* AND: clear specific bits (turn switches OFF) */
+pte = pte & ~0x2;   /* clear bit 1 (remove WRITE permission) */
+/* ~0x2 = NOT 0x2 = 0xFFFFFFFD = 1111...1101 — AND keeps everything except bit 1 */
+
+/* XOR: toggle bits (flip a switch) */
+flags ^= 0x200;  /* toggle bit 9 (interrupt enable flag) */
+/* XOR with 1 flips the bit: 0→1, 1→0 */
+
+/* NOT: invert all bits */
+mask = ~0x2;     /* 0xFFFFFFFD — used as a mask in AND above */</code></pre>
+
+  <h3>Bit Shifting</h3>
+  <pre><code>/* Left shift: multiply by 2^n  */
+1 << 3  = 8      (0001 → 1000 = move bit 3 positions left)
+1 << 12 = 4096   (= one page size!)
+
+/* Right shift: divide by 2^n or extract a field */
+address >> 12    /* throw away bottom 12 bits = page number */
+address & 0xFFF  /* keep only bottom 12 bits = offset within page */
+
+/* Extracting bit fields from a register */
+uint32_t pde = page_directory[index];
+uint32_t frame_addr = pde & 0xFFFFF000;  /* top 20 bits = frame number */
+int present = pde & 1;                   /* bit 0 = is page present? */
+int writable = (pde >> 1) & 1;          /* bit 1 = is page writable? */</code></pre>
+
+  <h3>Paging Uses Bit Fields Everywhere</h3>
+  <p>A page directory entry (32 bits) packs multiple fields into one 4-byte number:</p>
+  <pre><code>Bits 31–12:  Physical frame address (the page it points to)
+Bit 11–9:    Available for OS use (we use bit 9 for CoW flag!)
+Bit 8:       Global
+Bit 7:       Page size (0=4KB, 1=4MB)
+Bit 6:       Dirty (CPU sets this when page is written)
+Bit 5:       Accessed (CPU sets this when page is read/written)
+Bit 4:       Cache disable
+Bit 3:       Write-through
+Bit 2:       User/Supervisor (PAGE_USER — must be set for user access!)
+Bit 1:       Read/Write (PAGE_WRITE)
+Bit 0:       Present (PAGE_PRESENT — must be 1 for CPU to use this entry)
+
+#define PAGE_PRESENT  0x001   /* 0000 0000 0001 */
+#define PAGE_WRITE    0x002   /* 0000 0000 0010 */
+#define PAGE_USER     0x004   /* 0000 0000 0100 */
+#define PAGE_COW      0x200   /* 0010 0000 0000 (our custom bit 9) */</code></pre>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 02 — set CR0 bit 0 (PE) and bit 31 (PG)</span>
+    <span class="mod-tag active">Module 06 — bitmap allocator: test_bit, set_bit, clear_bit</span>
+    <span class="mod-tag active">Module 07 — page entry flags</span>
+    <span class="mod-tag active">Module 21 — CoW bit (bit 9 of PTE)</span>
+    <span class="mod-tag active">Module 18 — signal bitmask: pending_signals</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 09 RINGS ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-rings"></span>
+  <h2><span class="sec-num">09</span> CPU Privilege Rings</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Imagine a nuclear power plant. The control room (Ring 0) has operators who can flip any switch — shut down the reactor, redirect power, override safety systems. Visitors in the observation gallery (Ring 3) can only watch through glass. The hardware enforces this — visitors physically cannot reach the control panel. CPU rings work the same way: the hardware prevents user programs from issuing privileged instructions.</p>
+  </div>
+
+  <div class="ring-diagram">
+    <div class="ring ring-0">
+      <div class="ring-label">Ring 0 — Kernel Mode</div>
+      <div class="ring-desc">Can execute ANY instruction. Can read/write CR0, CR3. Can use LGDT, LIDT, CLI, STI, HLT. Can access all memory. This is where BobOS kernel code runs.</div>
+    </div>
+    <div class="ring ring-3">
+      <div class="ring-label">Ring 3 — User Mode</div>
+      <div class="ring-desc">Can only execute safe instructions. Any attempt to read CR0, use LGDT, or access kernel memory → immediate hardware exception (General Protection Fault). Shell, user programs, and test apps run here.</div>
+    </div>
+  </div>
+
+  <p>Rings 1 and 2 exist in the x86 spec but are never used by modern OSes (Linux, Windows, BobOS). The real divide is always Ring 0 vs Ring 3.</p>
+
+  <h3>How the CPU Knows What Ring You're In</h3>
+  <p>The bottom 2 bits of the <span class="inline-code">CS</span> (Code Segment) register are the <strong>Current Privilege Level (CPL)</strong>. CS=0x08 means you're in Ring 0 (kernel); CS=0x1B means you're in Ring 3 (user). The CPU checks CPL against every instruction you execute. This is why the GDT (Module 04) has separate entries for kernel code (0x08, CPL=0) and user code (0x1B, CPL=3).</p>
+
+  <pre><code>/* GDT selector encoding:
+   Bits 15–3: Index into GDT (which descriptor)
+   Bit  2:    Table indicator (0=GDT, 1=LDT)
+   Bits 1–0:  Requested Privilege Level (RPL)
+
+   0x08 = 0000 1000b = index 1, GDT, RPL=0 → kernel code (Ring 0)
+   0x10 = 0001 0000b = index 2, GDT, RPL=0 → kernel data
+   0x1B = 0001 1011b = index 3, GDT, RPL=3 → user  code (Ring 3)
+   0x23 = 0010 0011b = index 4, GDT, RPL=3 → user  data            */</code></pre>
+
+  <div class="callout cyan">
+    <div class="label">How a Syscall Crosses the Ring Boundary</div>
+    <p>A user program (Ring 3) executes <span class="inline-code">int 0x80</span>. The CPU looks up interrupt 0x80 in the IDT, sees it has a DPL=3 gate (a special field that says "user programs are allowed to trigger this"), and automatically: saves the user stack pointer and instruction pointer, switches CS to 0x08 (Ring 0), switches the stack to the kernel stack (from TSS.esp0), and jumps to the handler. The kernel runs in Ring 0. When it's done, <span class="inline-code">iret</span> reverses all of this in one instruction.</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 04 — GDT has Ring 0 and Ring 3 entries</span>
+    <span class="mod-tag active">Module 05 — IDT gate DPL=3 for syscall</span>
+    <span class="mod-tag active">Module 11 — int 0x80 crosses Ring 3 → Ring 0</span>
+    <span class="mod-tag active">Module 14 — iret drops from Ring 0 → Ring 3</span>
+    <span class="mod-tag active">B02 — seccomp sandbox = software version of ring enforcement</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 10 INTERRUPTS ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-interrupts"></span>
+  <h2><span class="sec-num">10</span> Interrupts &amp; Exceptions</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Interrupts are how hardware gets the CPU's attention. Without them, the CPU would have to constantly ask "has a key been pressed? how about now? now?" (polling). With interrupts, the keyboard says "HEY!" and the CPU immediately pauses whatever it's doing, runs the keyboard handler, then resumes — like a surgeon being paged in the middle of an operation. The CPU saves its exact state, handles the emergency, and picks up exactly where it left off.</p>
+  </div>
+
+  <h3>Three Types of Interrupts</h3>
+  <pre><code>/* 1. HARDWARE INTERRUPTS (IRQs) — from physical devices */
+IRQ 0  → Timer (fires 100 times/second — drives the scheduler)
+IRQ 1  → Keyboard (key pressed or released)
+IRQ 14 → ATA Primary Hard Disk (read/write complete)
+
+/* After PIC remapping (Module 05), these arrive as: */
+IRQ 0  → IDT vector 32 (0x20)
+IRQ 1  → IDT vector 33 (0x21)
+/* Why remap? Vectors 0–31 are reserved for CPU exceptions */
+
+/* 2. CPU EXCEPTIONS — the CPU itself triggered this */
+Vector 0  → Divide by Zero
+Vector 13 → General Protection Fault (Ring 3 tried a privileged instruction)
+Vector 14 → Page Fault (accessed unmapped/protected memory — CR2 has the address)
+
+/* 3. SOFTWARE INTERRUPTS — your code triggered this deliberately */
+int 0x80  → System call (BobOS kernel entry point)</code></pre>
+
+  <h3>The IDT — The Interrupt Lookup Table</h3>
+  <p>The <strong>Interrupt Descriptor Table</strong> is an array of 256 entries. Each entry says "when interrupt N fires, jump to this address." When the keyboard fires IRQ 1 (mapped to vector 33), the CPU looks up IDT[33], finds the address of your keyboard handler, and jumps there. Module 05 builds this table.</p>
+
+  <h3>The Interrupt Handler Pattern</h3>
+  <pre><code>; Every interrupt handler does the same thing:
+isr_keyboard:
+    pushad              ; save ALL 8 general-purpose registers
+    push ds             ; save segment registers
+    push es
+
+    ; ... do the actual work (read keyboard port, etc.) ...
+
+    ; Send EOI (End of Interrupt) to PIC — REQUIRED after hardware IRQ
+    mov al, 0x20
+    out 0x20, al        ; tells PIC "I handled it, send more"
+
+    pop es
+    pop ds
+    popad               ; restore all registers (in reverse order)
+    iret                ; restore EIP, CS, EFLAGS — resume where we left off</code></pre>
+
+  <div class="callout red">
+    <div class="label">Forgetting EOI Breaks Everything</div>
+    <p>The PIC (Programmable Interrupt Controller) will not send any more IRQs until you send an EOI (0x20 to port 0x20). Forget it and your keyboard stops working after the first keypress, your timer stops firing, and everything freezes. This is one of the most common beginner bugs in OS development.</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 05 — IDT setup, PIC remapping, EOI</span>
+    <span class="mod-tag active">Module 07 — #PF (vector 14) reads CR2</span>
+    <span class="mod-tag active">Module 09 — IRQ 1 keyboard handler</span>
+    <span class="mod-tag active">Module 10 — IRQ 0 timer drives scheduler</span>
+    <span class="mod-tag active">Module 11 — INT 0x80 syscall gate</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 11 PORT I/O ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-io"></span>
+  <h2><span class="sec-num">11</span> Port I/O: Talking to Hardware</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Imagine the CPU has 65,536 post boxes, numbered 0 to 0xFFFF. Each hardware device owns one or more boxes. To send the keyboard controller a command, you drop a letter in its box (OUT instruction). To read the last key pressed, you pick up what's in its mailbox (IN instruction). These "boxes" are called I/O ports and they're completely separate from memory addresses.</p>
+  </div>
+
+  <pre><code>/* Reading from a port (IN instruction) */
+uint8_t inb(uint16_t port) {
+    uint8_t val;
+    asm volatile("inb %1, %0" : "=a"(val) : "Nd"(port));
+    return val;
+}
+
+/* Writing to a port (OUT instruction) */
+void outb(uint16_t port, uint8_t val) {
+    asm volatile("outb %0, %1" :: "a"(val), "Nd"(port));
+}</code></pre>
+
+  <h4>Key Port Addresses You'll Encounter</h4>
+  <pre><code>0x60   — Keyboard data port: read the scancode of the last pressed key
+0x64   — Keyboard status/command port
+0x20   — PIC1 command port: send EOI (0x20) here after IRQ 0–7
+0x21   — PIC1 data port: set IRQ mask (which IRQs to allow)
+0xA0   — PIC2 command port: send EOI (0x20) here after IRQ 8–15
+0x70   — CMOS/RTC index register (real-time clock)
+0x1F0  — ATA Primary drive data port (read/write disk sectors)
+0x1F7  — ATA Primary drive command/status port</code></pre>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 05 — PIC remapping via ports 0x20/0x21/0xA0/0xA1</span>
+    <span class="mod-tag active">Module 09 — keyboard: read port 0x60</span>
+    <span class="mod-tag active">Module 12 — ATA disk: ports 0x1F0–0x1F7</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ 12 BUILD PIPELINE ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-build"></span>
+  <h2><span class="sec-num">12</span> The Build Pipeline: Compile → Link → Run</h2>
+
+  <div class="callout gold">
+    <div class="label">Head First Moment</div>
+    <p>Your OS source code is just text. Turning it into something QEMU can boot requires a chain of transformations: the assembler converts <span class="inline-code">.asm</span> to raw machine bytes; the compiler converts <span class="inline-code">.c</span> to object files; the linker combines them all, assigns final addresses, and produces the bootable binary. Each step has a specific tool and specific flags.</p>
+  </div>
+
+  <h3>Step by Step</h3>
+  <pre><code># 1. NASM assembles the bootloader to raw binary
+nasm -f bin bootloader.asm -o boot.bin
+# -f bin = output raw bytes, no extra headers
+
+# 2. GCC compiles C files to object files
+i686-elf-gcc -c kernel.c -o kernel.o -ffreestanding -nostdlib
+# -ffreestanding = don't assume a standard C library exists
+# -nostdlib      = don't link standard libraries (we have none)
+# -c             = compile only, don't link yet
+# i686-elf-gcc   = cross compiler targeting 32-bit x86 (not your host CPU)
+
+# 3. GNU LD links everything together
+i686-elf-ld -T linker.ld boot.o kernel.o -o kernel.bin
+# -T linker.ld = use our custom linker script
+
+# 4. Combine bootloader + kernel into a disk image
+cat boot.bin kernel.bin > disk.img
+# QEMU reads disk.img as if it were a physical hard disk</code></pre>
+
+  <h3>The Linker Script (linker.ld)</h3>
+  <p>The linker needs to know "put the kernel at address 0x1000 in memory." The linker script tells it where to place each section:</p>
+  <pre><code>SECTIONS {
+    . = 0x1000;          /* start placing code at address 0x1000 */
+
+    .text : {            /* .text = executable code section */
+        *(.text)         /* include .text from ALL object files */
+    }
+
+    .data : {            /* .data = initialized global variables */
+        *(.data)
+    }
+
+    .bss : {             /* .bss = zero-initialized globals */
+        *(.bss)
+        *(COMMON)
+    }
+}</code></pre>
+
+  <div class="callout teal">
+    <div class="label">What is BSS?</div>
+    <p><strong>BSS</strong> stands for Block Started by Symbol — a section for global variables that start as zero. Instead of storing 10,000 zeros in the binary (wasting disk space), the BSS section just records how many bytes need to be zeroed. The bootloader or kernel startup code zeroes this region at boot. You'll see <span class="inline-code">bss_start</span> and <span class="inline-code">bss_end</span> symbols used in Module 02's startup code.</p>
+  </div>
+
+  <h3>Cross-Compiler — Why i686-elf-gcc Instead of Just gcc?</h3>
+  <p>Your Windows machine's GCC compiles programs for Windows (64-bit). We need to compile programs for a bare-metal 32-bit x86 PC with no operating system. A <strong>cross-compiler</strong> is a compiler that runs on machine A (your Windows PC) but produces code for machine B (the bare-metal QEMU PC). The prefix <span class="inline-code">i686-elf-</span> means "target: i686 (32-bit x86), file format: ELF." Without a cross-compiler, GCC would produce code that assumes Windows libraries exist — which they don't in our bare-metal world.</p>
+
+  <div class="callout orange">
+    <div class="label">The 0x55AA Boot Signature</div>
+    <p>The BIOS checks the last 2 bytes of the 512-byte boot sector. If they're <span class="inline-code">0x55 0xAA</span>, it says "this is a bootable disk" and jumps to 0x7C00. If those bytes are wrong, the BIOS ignores the disk. This is why every bootloader ends with: <span class="inline-code">times 510-($-$$) db 0</span> (pad to byte 510 with zeros) followed by <span class="inline-code">dw 0xAA55</span> (write the signature — note: stored little-endian, so 0x55 comes first in memory).</p>
+  </div>
+
+  <div class="used-in">
+    <span class="mod-tag active">Module 01 — bootloader: NASM, 0x55AA, 0x7C00</span>
+    <span class="mod-tag active">Module 02 — kernel: GCC -ffreestanding, linker.ld, BSS zeroing</span>
+    <span class="mod-tag active">Module 16 — ELF format: same ideas, for user programs</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ QUICK REFERENCE ═══════════════════ -->
+<section>
+  <span class="section-anchor" id="sec-ref"></span>
+  <h2><span class="sec-num">★</span> Quick Reference Card</h2>
+
+  <div class="callout green">
+    <div class="label">Keep This Open While Working</div>
+    <p>The most common things you'll look up:</p>
+  </div>
+
+  <h3>Address Quick Lookup</h3>
+  <pre><code>0x00007C00  → bootloader start
+0x000B8000  → VGA text buffer (80×25 chars, 2 bytes each)
+0x00100000  → 1 MB mark — where kernel lives
+0x00400000  → default user program base address (ELF)
+0xC0000000  → kernel virtual space start (top 1 GB)
+
+0x1000      → 4096 = one page (4 KB)
+0xFFF       → 4095 = page offset mask (12 bits)
+0xFFFFF000  → page address mask (top 20 bits)
+
+PAGE_PRESENT = 0x001   PAGE_WRITE = 0x002   PAGE_USER = 0x004</code></pre>
+
+  <h3>Register Roles at a Glance</h3>
+  <pre><code>EAX  → return values, syscall number (int 0x80)
+EBX  → 1st syscall arg
+ECX  → 2nd syscall arg / loop counter
+EDX  → 3rd syscall arg / I/O ports
+ESP  → stack top (grows DOWN)
+EBP  → stack frame base (stable reference inside a function)
+EIP  → next instruction address (CPU's bookmark — you can't write directly)
+CR0  → bit 0 = Protected Mode, bit 31 = Paging
+CR2  → address that caused the last page fault
+CR3  → physical address of Page Directory (write to switch address spaces)</code></pre>
+
+  <h3>Interrupt Vectors</h3>
+  <pre><code>0x00  Divide by Zero          0x0E  Page Fault (read CR2!)
+0x08  Double Fault            0x0D  General Protection Fault
+0x20  Timer IRQ0 (scheduler)  0x21  Keyboard IRQ1
+0x80  System call gate (DPL=3, user programs call this)</code></pre>
+
+  <h3>GDT Selectors Used in BobOS</h3>
+  <pre><code>0x00  Null descriptor (required, never used)
+0x08  Kernel code  (Ring 0, CS = 0x08)
+0x10  Kernel data  (Ring 0, DS/ES/SS = 0x10)
+0x18  TSS          (Task State Segment — holds kernel stack pointer)
+0x1B  User code    (Ring 3, CS = 0x1B)
+0x23  User data    (Ring 3, DS/SS = 0x23)</code></pre>
+
+  <div class="brain">
+    <div class="brain-label">Before You Start Module 01 — Self Check</div>
+    <p>You're ready to start if you can answer these without looking:</p>
+    <p>1. What address does the BIOS always load the bootloader at? <em style="color:var(--muted)">(0x7C00)</em></p>
+    <p>2. What are the last 2 bytes of a valid boot sector? <em style="color:var(--muted)">(0x55, 0xAA)</em></p>
+    <p>3. What register holds the address of the next instruction? <em style="color:var(--muted)">(EIP)</em></p>
+    <p>4. What does <span class="inline-code">0x1000</span> equal in decimal? <em style="color:var(--muted)">(4096 = one page)</em></p>
+    <p>5. Which register is the stack pointer? Which direction does the stack grow? <em style="color:var(--muted)">(ESP, grows downward)</em></p>
+    <p>6. What is QEMU? <em style="color:var(--muted)">(A hardware emulator — a fake PC running inside your real PC)</em></p>
+    <p>7. What instruction switches from user mode (Ring 3) to kernel mode (Ring 0) in BobOS? <em style="color:var(--muted)">(INT 0x80)</em></p>
+    <p>8. What does <span class="inline-code">or eax, 1</span> do? <em style="color:var(--muted)">(Sets bit 0 of EAX, leaves all other bits unchanged)</em></p>
+  </div>
+</section>
+
+</div><!-- /container -->
+
+<footer>
+  BobOS Prerequisites — read before Module 01 &nbsp;|&nbsp;
+  <a href="01_bootloader/tutorial.html">Start with Module 01 →</a>
+</footer>
+
+</body>
+</html>

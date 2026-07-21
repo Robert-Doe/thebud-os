@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How a Packet Gets From the Wire Into the Kernel — bob_os</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.t{color:var(--teal)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.gd{color:var(--gold)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.teal{border-color:var(--teal);color:var(--teal);background:rgba(13,148,136,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#wiretonic" title="Wire to NIC"></a>
+  <a class="toc-dot" href="#dma" title="DMA Into Kernel Memory"></a>
+  <a class="toc-dot" href="#interrupt" title="The Interrupt Fires"></a>
+  <a class="toc-dot" href="#quickisr" title="The Quick ISR"></a>
+  <a class="toc-dot" href="#deferred" title="Deferred Work"></a>
+  <a class="toc-dot" href="#txpath" title="Transmit: The Reverse"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">NIC Drivers · DMA · Interrupts · Deferred Work</div>
+    <h1>From the Wire<br><span>Into the Kernel</span></h1>
+    <p class="hero-sub">A packet's first few microseconds inside your machine are almost entirely a hardware story, not a software one. By the time your interrupt handler even starts running, an electrical signal has already become a frame sitting in memory the CPU can read directly — no software copied it there. This lesson is about that handoff: how a dumb piece of wire becomes bytes the kernel can act on, and why the code that reacts to "a packet is ready" is deliberately written to do almost nothing at all.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">CPU Copies During a True DMA Transfer</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Hardware Interrupt Per Packet (Ideally)</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Halves: Quick ISR + Deferred Work</div></div>
+      <div class="hero-stat"><div class="num">16KB</div><div class="lbl">NE2000's On-Card Ring Buffer</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Link Layer <span class="accent">Lives Here</span></h2>
+  <p class="reveal">Lesson 1 of this cluster told you the link layer — Ethernet, the NIC — is kernel-owned driver code, the very bottom of the network stack. This lesson zooms into exactly that layer and answers the question a diagram never can: mechanically, moment to moment, how does a signal on a wire turn into something your kernel's <code>ip_input()</code> function can call a pointer at?</p>
+  <p class="reveal">You've already met two of the ideas this lesson leans on hardest. From the IDT/interrupts module: the CPU can be interrupted mid-instruction by a device, completely independent of anything a running program is doing. From that same module's design philosophy: an interrupt handler should do the <em>absolute minimum</em> necessary before returning, because the CPU can't service other interrupts efficiently while stuck inside one. We're about to see exactly why that rule exists, using a network card as the motivating example.</p>
+
+  <div class="sidenote reveal">
+    <b>Grounding note:</b> bob_os's real <code>ne2000.c</code> (module <code>26_network</code>) currently uses <strong>polled I/O</strong> — the scheduler calls <code>net_poll()</code> every timer tick and it asks the card "anything new?" — specifically so the module can be understood without interrupts and DMA in the picture yet. Everything below describes the general, production-grade pattern (what Linux, Windows, and every real NIC driver actually do) that <code>ne2000.c</code> would grow into if it were extended with interrupt support.
+  </div>
+</div>
+</section>
+
+<!-- WIRE TO NIC -->
+<section id="wiretonic">
+<div class="container">
+  <div class="section-num">01 — Before Software Gets Involved</div>
+  <h2>The Wire → The <span class="accent">NIC's Own Memory</span></h2>
+
+  <p class="reveal">An Ethernet frame arrives as a sequence of electrical (or optical, or radio) transitions. The NIC's physical layer circuitry decodes that signal, checks a frame check sequence (a CRC) to make sure it wasn't corrupted in transit, and — critically — does all of this <strong>without any CPU involvement whatsoever</strong>. Your processor could be busy compiling a kernel, deep in a tight loop, or halted in the idle task; none of that matters. The NIC is an independent piece of hardware with its own clock, and it assembles the frame into its own on-board buffer memory entirely on its own.</p>
+
+  <p class="reveal">On the NE2000 specifically, that on-board memory is a 16&nbsp;KB SRAM chip living <em>on the card itself</em>, split into a small transmit region and a much larger receive ring. The CPU cannot address this memory the way it addresses RAM — there's no pointer you can dereference to read it. That's the whole reason the next step exists at all.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why the NIC Even Has Its Own Memory</div>
+    Frames can arrive faster than the CPU can be interrupted to process them, especially under load. A small on-card buffer acts as shock absorption — the NIC keeps accepting frames from the wire even if the kernel is momentarily busy, up to the buffer's capacity. Without it, a slow interrupt response would mean dropped frames on every burst of traffic, not just under extreme load.
+  </div>
+</div>
+</section>
+
+<!-- DMA -->
+<section id="dma">
+<div class="container">
+  <div class="section-num">02 — Getting the Frame Into RAM</div>
+  <h2>DMA: <span class="accent">No CPU Copy Required</span></h2>
+
+  <p class="reveal">So the frame is sitting in the NIC's own memory. The kernel needs it in <em>its</em> memory — a buffer the CPU can actually read with ordinary load instructions, and that <code>ip_input()</code> can eventually be handed a pointer to. On any modern NIC (PCI, PCIe — anything built in roughly the last 25 years), this transfer is done by <strong>Direct Memory Access (DMA)</strong>: the NIC itself, not the CPU, drives a transfer straight into a pre-arranged region of RAM.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The whole point of DMA, in one line</span>
+    NIC hardware writes the frame directly into RAM — the CPU is not involved in moving a single byte
+    <span class="sub">The kernel's only job beforehand is to tell the NIC where its receive buffers live in physical memory. After that, transfers happen without the CPU copying anything.</span>
+  </div>
+
+  <p class="reveal">Concretely, this works through a <strong>descriptor ring</strong>: the driver allocates a fixed number of fixed-size buffers in kernel memory ahead of time, and hands the NIC a small array of descriptors — physical addresses and lengths — pointing at each one. As frames arrive, the NIC's DMA engine writes each one into the next free buffer in the ring and marks that descriptor "ready," completely independent of the CPU's attention. The driver's job, once notified, is simply to walk the ring and hand off whichever buffers are marked ready.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 "Remote DMA" Is a Misleading Name Worth Knowing</div>
+    The NE2000's registers are literally named <code>RSAR</code> (Remote Start Address Register) and the transfer is documented as "Remote DMA" — but on real ISA-era hardware like this, that name is aspirational. bob_os's own <code>ne_remote_read()</code> loops, reading one 16-bit word at a time from the NIC's <code>DATA</code> port with <code>inw()</code>, with the <strong>CPU</strong> driving every single word. That's <em>programmed I/O (PIO)</em>, not true DMA — the CPU is fully occupied for the whole transfer. True bus-mastering DMA, where the device autonomously writes into RAM with zero CPU involvement per byte, is what PCI and later NICs actually provide. The concepts rhyme, but only one of them frees the CPU.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Transfer Method</th><th>Who Drives Each Word/Byte</th><th>CPU Busy For Whole Transfer?</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Programmed I/O (PIO)</td><td>CPU, via <code>in</code>/<code>out</code> instructions in a loop</td><td class="neg">Yes</td><td>NE2000 "Remote DMA" (misnamed), old serial ports</td></tr>
+        <tr><td class="hl">Bus-Mastering DMA</td><td>The device itself, writing straight into RAM</td><td class="pos">No — CPU is free the entire time</td><td>Virtually every modern PCI/PCIe NIC, disk controller, GPU</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">The reason this distinction matters for an OS course, not just a trivia fact: the entire justification for "interrupt-driven, not polled" networking depends on the CPU being free to do other work while a transfer happens. Programmed I/O undermines that promise partially; bus-mastering DMA delivers on it fully. Real kernels are designed around the DMA assumption — buffers described by physical address, handed to the device once, filled in asynchronously.</p>
+</div>
+</section>
+
+<!-- INTERRUPT -->
+<section id="interrupt">
+<div class="container">
+  <div class="section-num">03 — "A Packet Is Ready"</div>
+  <h2>The Interrupt <span class="accent">Fires</span></h2>
+
+  <p class="reveal">Once a frame has landed in a kernel-owned DMA buffer, something still has to tell the kernel it's there. The NIC does this the same way a keyboard, a disk, or a timer chip does: it asserts a <strong>hardware interrupt</strong> line, which the PIC (or APIC on newer machines) turns into a specific interrupt vector the CPU jumps to — completely asynchronously, exactly like the timer ticks you met in the scheduling lessons.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="rxLabel">▶ Walk through one received packet, hardware to handler</div>
+    <canvas id="rxCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runRX()">▶ Animate: Wire → DMA → IRQ → Kernel</button>
+    <button class="ctrl-btn red" onclick="resetRX()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice what has and hasn't happened by the time the CPU is forced into the interrupt handler: the frame's bytes are <em>already</em> sitting in RAM, fully transferred. The interrupt isn't a request to fetch data — it's a notification that data has already arrived. This ordering is exactly why DMA-plus-interrupt beats polling: the CPU spends zero cycles checking a mailbox that's usually empty, and only gets involved once there's guaranteed to be something to do.</p>
+</div>
+</section>
+
+<!-- QUICK ISR -->
+<section id="quickisr">
+<div class="container">
+  <div class="section-num">04 — Do Almost Nothing, On Purpose</div>
+  <h2>The <span class="accent">Quick ISR</span> Pattern</h2>
+
+  <p class="reveal">Here's the trap a first-time driver author falls into: the interrupt handler just told you a packet arrived, so why not just... parse it right there? Strip the Ethernet header, hand it to <code>ip_input()</code>, let UDP match the port, copy it into the socket buffer — all inside the interrupt handler, while you have the CPU's undivided attention?</p>
+
+  <p class="reveal">Because interrupts are usually <strong>masked</strong> (temporarily blocked) for at least the highest-priority ones while a handler runs, and even when they're not, a long-running handler starves every other device's interrupts of timely service. A NIC ISR that takes even a few hundred microseconds to fully parse a packet means the keyboard, the disk, and the timer tick can all be sitting there waiting. Do that on every single packet during a burst of network traffic, and the whole machine's responsiveness falls apart — not because of a bug, but because of where the work was done.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Rule From the IDT/Interrupts Lesson, Now With a Villain</div>
+    An interrupt service routine should acknowledge the interrupt, capture the absolute minimum state needed to act on it later, and get out — the same "trap frame, not full context switch, unless truly necessary" discipline you saw with the scheduler's timer interrupt. A network card under heavy load is the textbook case where ignoring this rule has a real, measurable cost: dropped keystrokes, jittery audio, missed timer ticks, all because one ISR overstayed its welcome.
+  </div>
+
+  <p class="reveal">bob_os's actual interrupt dispatcher already embodies this discipline, even for the interrupts it does handle today — look at how little happens in <code>isr.c</code>'s central handler before control is handed off:</p>
+
+  <pre><code>/* isr.c — the entire body of every hardware-IRQ dispatch */
+if (vec &lt; 48u) {
+    uint8_t irq = (uint8_t)(vec - 32u);
+    pic_send_eoi(irq);                        /* ack immediately */
+
+    if (irq == 0 &amp;&amp; scheduler_hook != 0) {
+        uint32_t new_esp = scheduler_hook((uint32_t)frame);
+        if (irq_handlers[0] != 0) irq_handlers[0](frame);
+        return new_esp;
+    }
+    if (irq_handlers[irq] != 0) irq_handlers[irq](frame);  /* one function call, no parsing here */
+}</code></pre>
+
+  <p class="reveal">Notice the shape: acknowledge the PIC first (so the hardware knows it can raise the next interrupt), then dispatch to exactly one registered handler function and return. A hypothetical <code>ne2000_irq_handler()</code> registered via <code>irq_register(NE_IRQ, ne2000_irq_handler)</code> would follow the same law: read the NIC's interrupt status register, note "RX complete," and get out — not walk the ring buffer and call into IP and UDP from inside the handler.</p>
+</div>
+</section>
+
+<!-- DEFERRED WORK -->
+<section id="deferred">
+<div class="container">
+  <div class="section-num">05 — Finishing the Job Safely</div>
+  <h2>Deferred Work: <span class="accent">The Bottom Half</span></h2>
+
+  <p class="reveal">If the actual parsing can't happen inside the interrupt, where does it happen? The answer is a second, separate mechanism that real kernels build specifically for this: work that was <em>triggered</em> by an interrupt but <em>runs</em> later, outside interrupt context, where it's safe to take longer and where other interrupts aren't blocked. Different kernels give this a different name — Linux calls it a <strong>softirq</strong> (or the closely related <em>tasklet</em>), Windows calls it a <strong>DPC</strong> (Deferred Procedure Call) — but the shape is identical everywhere.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>⏱️ Top Half — Inside the ISR</h4>
+      Runs with (some) interrupts masked, on the interrupt stack, for as few instructions as possible. Job: acknowledge the device, note "there's work to do," schedule the bottom half, return immediately.
+    </div>
+    <div class="compare-card good">
+      <h4>🧵 Bottom Half — Deferred Work</h4>
+      Runs later, with interrupts re-enabled, free to take as long as it actually needs. Job: walk the ring buffer, strip Ethernet/IP/UDP headers, dispatch to the right socket — everything section 04 said not to do up top.
+    </div>
+  </div>
+
+  <div class="callout teal reveal">
+    <div class="callout-title">🔑 Why Two Halves Instead of One</div>
+    Splitting the work isn't extra ceremony for its own sake — it's the only way to get both properties you actually want simultaneously: <strong>fast interrupt response</strong> (so no device gets starved) <em>and</em> <strong>unhurried, safe packet processing</strong> (so parsing a malformed header or copying a large payload doesn't hold the whole system hostage). One function trying to do both jobs can only be good at one of them.
+  </div>
+
+  <p class="reveal">bob_os's current polled design sidesteps this whole split — <code>net_poll()</code> runs from ordinary scheduled context on every timer tick, which is already "outside interrupt context" by construction, so there's no top-half/bottom-half distinction to make yet. That's a legitimate reason introductory network stacks often start polled: you get the safety property of deferred work for free, at the cost of the latency and CPU-efficiency properties true interrupt-driven DMA gives you. Linux's actual receive path, <strong>NAPI</strong>, mentioned in the module 26 tutorial's own Q&amp;A, is a hybrid of exactly these two ideas: an interrupt wakes the driver, but then it switches to a budgeted polling loop to drain a burst of packets before re-arming the interrupt — the best of both under load.</p>
+</div>
+</section>
+
+<!-- TX PATH -->
+<section id="txpath">
+<div class="container">
+  <div class="section-num">06 — Sending Is Roughly the Mirror</div>
+  <h2>Transmit: <span class="accent">The Reverse Journey</span></h2>
+
+  <p class="reveal">Everything above described receiving (RX). Sending (TX) is close to the same story run backwards, with the kernel now on the initiating end instead of reacting to hardware:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Kernel builds the frame</strong>UDP, IP, and Ethernet headers get prepended to the payload (this is the "journey down" from lesson 1), producing a complete frame sitting in a kernel buffer.</div></li>
+    <li><div class="step-body"><strong>Kernel queues it in a driver-owned TX ring</strong>Instead of handing bytes to the NIC one at a time, the driver places a descriptor — address and length of the frame — into its own transmit ring buffer. This is the same descriptor-ring idea as RX, just running in the opposite direction.</div></li>
+    <li><div class="step-body"><strong>NIC's DMA engine reads the frame out on its own schedule</strong>The kernel "kicks" the NIC (a single register write saying "new work is queued") and returns immediately — it does not wait for transmission to finish. The NIC's DMA engine then reads the frame directly out of RAM at its own pace, again without CPU involvement, and shifts it out onto the wire.</div></li>
+    <li><div class="step-body"><strong>NIC fires a TX-complete interrupt</strong>Once the frame is fully sent, the NIC raises another interrupt so the driver can free that descriptor slot for reuse. This handler follows the exact same "quick ISR, defer the rest" discipline as the RX path — it has no urgent parsing to do, just bookkeeping.</div></li>
+  </ol>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    RX and TX are mirror images built from the same two primitives: a <strong>descriptor ring</strong> the driver and NIC both read and write (in opposite roles), and an <strong>interrupt</strong> that fires only at the moment one side needs the other's attention. Everything in between — the actual byte movement — is DMA, invisible to the CPU. Once you see the ring-plus-interrupt pattern once, you'll recognize it in disk drivers, GPU command queues, and virtually every other high-throughput device interface.
+  </div>
+
+  <p class="reveal">bob_os's own <code>ne2000.c</code> TX path (module 26) does this today, minus interrupts: <code>ne2000_send()</code> writes the frame into the card's fixed TX page range via Remote DMA (the PIO-style transfer from section 02), then issues the <code>NE_CR_TXP</code> command bit to start transmission — the same "kick and let the hardware take it from here" shape, just with a synchronous wait for completion instead of an asynchronous TX-complete interrupt.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">DMA (Direct Memory Access)</div><div class="glossary-def">A device transferring data directly to or from RAM without the CPU copying each byte or word — the CPU is free to do other work during the transfer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Programmed I/O (PIO)</div><div class="glossary-def">A transfer where the CPU itself reads or writes each byte/word via I/O instructions in a loop. Simpler to implement than DMA, but keeps the CPU busy the entire time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Descriptor Ring</div><div class="glossary-def">A fixed-size circular array of buffer addresses and lengths shared between driver and device, used to hand off many buffers without a syscall or interrupt per buffer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hardware Interrupt</div><div class="glossary-def">An asynchronous signal from a device that forces the CPU to stop what it's doing and run a specific handler — used here to say "a DMA transfer just completed."</div></div>
+    <div class="glossary-card"><div class="glossary-term">ISR (Interrupt Service Routine)</div><div class="glossary-def">The handler that runs immediately when an interrupt fires. Kept deliberately short — acknowledge, note the work, defer the rest.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Softirq / Bottom Half / DPC</div><div class="glossary-def">Kernel-specific names for work scheduled by an ISR but executed later, outside interrupt context, where it's safe to take longer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">NAPI</div><div class="glossary-def">Linux's hybrid RX strategy: an interrupt wakes the driver, which then polls in a budgeted loop to drain a burst efficiently before re-arming the interrupt.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PIC / APIC</div><div class="glossary-def">The Programmable Interrupt Controller (or its modern Advanced successor) that routes hardware interrupt lines to CPU interrupt vectors and must be acknowledged (EOI) once a handler is done.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>How a Packet Gets From the Wire Into the Kernel · Companion lesson for bob_os module 26_network</p>
+  <p style="margin-top:.5rem;font-size:.78rem">DMA moves the bytes. An interrupt just says so. A quick ISR gets out of the way.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY=y-(lines.length-1)*lh/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lh));
+}
+
+// ── RX PIPELINE CANVAS ──────────────────────────────────────────────────────
+const rxStages = [
+  {name:'Wire signal',      lane:0, color:C.muted},
+  {name:'NIC decodes frame',lane:0, color:C.orange},
+  {name:'DMA → kernel buf', lane:1, color:C.cyan},
+  {name:'IRQ fires',        lane:2, color:C.red},
+  {name:'Quick ISR',        lane:2, color:C.gold},
+  {name:'Deferred work',    lane:1, color:C.teal},
+  {name:'ip_input() etc.',  lane:1, color:C.green},
+];
+
+function drawRX(t,idx,pulseT){
+  const canvas=document.getElementById('rxCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const lanes=[
+    {y:H*0.22,label:'HARDWARE (NIC)',color:C.orange},
+    {y:H*0.48,label:'KERNEL MEMORY / DEFERRED WORK',color:C.teal},
+    {y:H*0.74,label:'INTERRUPT CONTEXT (CPU forced here)',color:C.red},
+  ];
+  lanes.forEach(l=>{
+    ctx.fillStyle=l.color;ctx.globalAlpha=0.06;ctx.fillRect(0,l.y-24,W,48);ctx.globalAlpha=1;
+    ctx.fillStyle=l.color;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText(l.label,10,l.y-30);
+  });
+
+  const n=rxStages.length;
+  const marginX=60, usableW=W-marginX*2;
+  ctx.textAlign='center';
+  for(let i=0;i<n;i++){
+    const x=marginX+usableW*(i/(n-1));
+    const st=rxStages[i];
+    const y=lanes[st.lane].y;
+    const active=i===idx;
+    ctx.beginPath();ctx.arc(x,y,active?13:8,0,Math.PI*2);
+    ctx.fillStyle= active? st.color : 'rgba(255,255,255,.08)';
+    ctx.fill();
+    ctx.strokeStyle= i<=idx? st.color : C.border;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle= i<=idx? '#fff':C.muted;
+    ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText(st.name,x,y+ (st.lane===2? 26 : -20));
+  }
+  // connecting lines between consecutive stages (may cross lanes)
+  for(let i=0;i<n-1;i++){
+    const x1=marginX+usableW*(i/(n-1)), y1=lanes[rxStages[i].lane].y;
+    const x2=marginX+usableW*((i+1)/(n-1)), y2=lanes[rxStages[i+1].lane].y;
+    ctx.strokeStyle= i<idx? rxStages[i].color : C.border;
+    ctx.lineWidth=1.5;ctx.setLineDash(i<idx?[]:[3,3]);
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  if(idx>=0 && idx<n){
+    const x=marginX+usableW*(idx/(n-1)), y=lanes[rxStages[idx].lane].y;
+    const pulse=6*Math.sin(pulseT*Math.PI);
+    ctx.beginPath();ctx.arc(x,y,16+pulse,0,Math.PI*2);
+    ctx.strokeStyle=rxStages[idx].color;ctx.globalAlpha=.5;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;
+  }
+
+  const captions=[
+    'Electrical signal decoded by the NIC — no CPU involvement at all',
+    'NIC assembles a complete frame in its own on-board SRAM',
+    'DMA engine writes the frame straight into a kernel ring buffer',
+    'NIC asserts IRQ — CPU is forced out of whatever it was doing',
+    'ISR runs: acknowledge PIC, note "RX ready," schedule deferred work, return FAST',
+    'Bottom half runs later, interrupts re-enabled: walk the ring, strip headers',
+    'Fully parsed payload finally reaches ip_input() → udp_input() → socket buffer'
+  ];
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,captions[idx],W/2,H-34,W-80,17);
+}
+
+let rxAnim=null;
+function runRX(){
+  if(rxAnim) cancelAnimationFrame(rxAnim);
+  document.getElementById('rxLabel').textContent='▶ Animating — watch which lane each stage runs in';
+  let step=0,start=performance.now();
+  const dur=700;
+  function frame(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur);
+    drawRX(t,step,t);
+    if(t>=1){
+      step++;
+      if(step>=rxStages.length){
+        document.getElementById('rxLabel').textContent='▶ Done — press again to replay';
+        return;
+      }
+      start=now;
+    }
+    rxAnim=requestAnimationFrame(frame);
+  }
+  rxAnim=requestAnimationFrame(frame);
+}
+function resetRX(){
+  if(rxAnim) cancelAnimationFrame(rxAnim);
+  document.getElementById('rxLabel').textContent='▶ Walk through one received packet, hardware to handler';
+  drawRX(0,0,0);
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRX(); });
+window.addEventListener('resize',()=>{ resetRX(); });
+</script>
+</body>
+</html>

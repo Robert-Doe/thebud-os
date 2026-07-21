@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Home — Assembly &amp; OS-from-Scratch Refresher</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: rgba(18,25,47,0.88); --panel-2: rgba(25,33,60,0.9);
+  --text: #e9edf7; --muted: #aab4cf; --soft: #7f8bb0; --line: rgba(255,255,255,0.08);
+  --blue: #7aa2ff; --blue-2: #5f87f8; --green: #4ade80; --red: #fb7185; --amber: #fbbf24; --purple: #a78bfa;
+  --cyan: #5eead4; --pink: #f472b6;
+  --shadow: 0 20px 60px rgba(0,0,0,0.35); --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: radial-gradient(circle at top, #121a35 0%, #09101f 55%, #060a14 100%); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { line-height: 1.6; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 28px; }
+.hero { padding: 28px; background: linear-gradient(180deg, rgba(119,157,255,0.15), rgba(255,255,255,0.03)); border:1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content:''; position:absolute; inset:auto -10% -45% auto; width:340px; height:340px; background: radial-gradient(circle, rgba(122,162,255,0.28), transparent 65%); pointer-events:none; }
+h1,h2,h3,h4 { margin:0 0 10px; line-height:1.2; }
+h1 { font-size: 34px; letter-spacing: -0.03em; }
+h2 { font-size: 23px; margin-top: 4px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 10px 0; color: var(--muted); }
+a { color: var(--blue); }
+.lede { max-width: 980px; font-size: 16px; }
+.grid-4, .grid-3, .grid-2, .grid-6 { display:grid; gap:16px; }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card.soft { background: var(--panel-2); }
+.stat-card { background: rgba(255,255,255,0.03); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.value { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.tag-row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 7px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.05); color: var(--text); border:1px solid var(--line); }
+.pill.blue { background: rgba(122,162,255,0.13); color:#cfdcff; }
+.pill.green { background: rgba(74,222,128,0.13); color:#bdf5d2; }
+.pill.amber { background: rgba(251,191,36,0.13); color:#ffe6ad; }
+.pill.red { background: rgba(251,113,133,0.13); color:#ffd0d6; }
+.pill.purple { background: rgba(167,139,250,0.13); color:#d4c6ff; }
+.pill.cyan { background: rgba(94,234,212,0.13); color:#bdf8ee; }
+.good { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+.section { margin-top: 22px; }
+.callout { padding: 16px 18px; border-radius: 14px; border:1px solid var(--line); background: rgba(122,162,255,0.08); color: var(--text); }
+.callout.warn { background: rgba(251,191,36,0.09); }
+.callout.red { background: rgba(251,113,133,0.09); }
+.callout.green { background: rgba(74,222,128,0.08); }
+.callout h4 { margin-top:0; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(0,0,0,0.28); border:1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 13.5px; overflow-x:auto; color: #e8eeff; white-space:pre; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 16px; margin-top: 14px; }
+table { width:100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+th, td { text-align:left; padding: 10px 13px; border-bottom:1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+th { position: sticky; top: 0; background: rgba(10,15,30,0.97); z-index: 1; color: var(--text); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.bytegrid { display:flex; gap:4px; flex-wrap:wrap; margin: 10px 0; }
+.byte { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.05); border:1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align:center; min-width: 64px; }
+.byte .addr { font-size: 10px; color: var(--soft); display:block; }
+.byte .v { font-size: 15px; font-weight:700; margin-top:3px; }
+.regbox { font-family: ui-monospace, monospace; display:flex; border:1px solid var(--line); border-radius: 10px; overflow:hidden; margin: 10px 0; }
+.regbox > div { padding: 10px 8px; text-align:center; font-size: 12px; border-right: 1px solid var(--line); }
+.regbox > div:last-child { border-right:none; }
+.qa { border-left: 3px solid var(--purple); padding: 6px 0 6px 14px; margin: 14px 0; }
+.qa .q { color: #d4c6ff; font-weight: 700; }
+.scenario { border:1px dashed rgba(122,162,255,0.4); border-radius: 14px; padding: 16px; background: rgba(122,162,255,0.05); }
+.scenario .tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--blue); font-weight:700; }
+.nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.nav a { text-decoration:none; }
+.navpill { display:inline-flex; align-items:center; gap:6px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,0.04); color: var(--muted); border:1px solid var(--line); transition: all .15s; }
+.navpill:hover { background: rgba(122,162,255,0.12); color: var(--text); }
+.navpill.active { background: rgba(122,162,255,0.18); color: var(--text); border-color: rgba(122,162,255,0.4); }
+.pagefoot { display:flex; justify-content:space-between; gap:16px; margin-top: 30px; }
+.pagefoot a { text-decoration:none; }
+.navbtn { display:block; padding:16px 20px; border-radius:16px; border:1px solid var(--line); background: var(--panel-2); flex:1; }
+.navbtn .label { margin-bottom:4px; }
+.navbtn .title { color: var(--text); font-size: 16px; font-weight:700; }
+.footer-note { margin-top: 24px; color: var(--soft); font-size: 13px; text-align:center; }
+.checklist { list-style:none; padding:0; margin: 10px 0; }
+.checklist li { padding: 8px 0 8px 30px; position:relative; border-bottom:1px solid var(--line); color: var(--muted); }
+.checklist li:last-child { border-bottom:none; }
+.checklist li::before { content:'✓'; position:absolute; left:0; top:8px; color: var(--green); font-weight:700; }
+.bitfield { display:flex; font-family:ui-monospace,monospace; font-size:12px; margin:10px 0; flex-wrap:wrap; }
+.bitfield .bit { border:1px solid var(--line); padding:8px 4px; text-align:center; min-width:34px; background: rgba(255,255,255,0.03); }
+.bitfield .bit .n { display:block; color:var(--soft); font-size:9px; }
+@media (max-width: 1100px) { .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .shell { padding: 16px; } h1 { font-size: 27px; }
+  .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr; }
+  .pagefoot { flex-direction:column; }
+}
+
+</style>
+</head>
+<body>
+<div class='shell'>
+<div class='nav'><a href='index.html'><span class='navpill active'>Home</span></a><a href='01-registers.html'><span class='navpill'>Registers</span></a><a href='02-endianness.html'><span class='navpill'>Endianness</span></a><a href='03-memory.html'><span class='navpill'>Memory & Stack</span></a><a href='04-instructions.html'><span class='navpill'>Instructions & Flow</span></a><a href='05-os-bootstrap.html'><span class='navpill'>Build an OS</span></a></div>
+
+<section class='hero'>
+  <div class='label'>Assembly &amp; OS-from-Scratch Refresher</div>
+  <h1>You're not "writing assembly." You're driving the CPU by hand.</h1>
+  <p class='lede'>Every high-level language you've used has been lying to you a little — kindly. <code>x = x + 1</code> hides a register, a load, an add, and a store. An OS has nowhere to hide that. This refresher rebuilds the picture from the silicon up: register sizes, byte order, addressing, the stack, control flow, and finally the exact sequence of instructions that takes a CPU from "just powered on, confused, 16-bit" to "running your kernel in 32-bit protected mode with paging on."</p>
+  <div class='tag-row'>
+    <span class='pill blue'>x86 / x86-64 focused</span>
+    <span class='pill purple'>NASM syntax</span>
+    <span class='pill green'>head-first style: scenario → model → drill</span>
+    <span class='pill amber'>ends with a real boot sector</span>
+  </div>
+  <div class='grid-2' style='margin-top:22px'>
+    <div class='card soft'>
+      <h3>The promise of this refresher</h3>
+      <p>You will be able to look at a line like <strong>mov [ebx+esi*4+8], al</strong> and immediately know: which register, what size, what address is being computed, and what byte ends up where. That single skill is 80% of reading OS source code.</p>
+    </div>
+    <div class='card'>
+      <div class='label'>Why this matters for OS dev specifically</div>
+      <div class='value'>No runtime, no stdlib, no safety net</div>
+      <div class='sub'>When you write an OS, there's no C runtime to set up your stack, no malloc, no "the OS will handle that" — because you ARE the OS. Assembly is how you do the first few hundred instructions before C even has a stack to stand on.</div>
+    </div>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>The five stops on this tour</h2>
+  <p>Read them in order the first time — each page assumes you've internalized the one before it. After that, treat it as a reference and jump around.</p>
+  <div class='grid-3' style='margin-top:14px'>
+    <div class='stat-card'>
+      <div class='label'>01 — Registers</div>
+      <div class='value' style='font-size:19px'>The CPU's scratchpad</div>
+      <div class='sub'>Why <code>al</code>, <code>ax</code>, <code>eax</code>, and <code>rax</code> are the same physical box at four different zoom levels, and why that fact alone explains half of x86's weirdness.</div>
+    </div>
+    <div class='stat-card'>
+      <div class='label'>02 — Endianness</div>
+      <div class='value' style='font-size:19px'>Which end goes first</div>
+      <div class='sub'>The number 1 doesn't change. The bytes that represent it in memory absolutely do, depending on who's writing them down.</div>
+    </div>
+    <div class='stat-card'>
+      <div class='label'>03 — Memory &amp; Stack</div>
+      <div class='value' style='font-size:19px'>Addresses are just math</div>
+      <div class='sub'>Addressing modes, the stack as a return-address diary, and why "the stack grows down" trips up every beginner exactly once.</div>
+    </div>
+    <div class='stat-card'>
+      <div class='label'>04 — Instructions &amp; Flow</div>
+      <div class='value' style='font-size:19px'>Flags, jumps, calls</div>
+      <div class='sub'>How <code>if</code>, <code>while</code>, and function calls actually compile down to comparisons, flag bits, and conditional jumps.</div>
+    </div>
+    <div class='stat-card'>
+      <div class='label'>05 — Build an OS</div>
+      <div class='value' style='font-size:19px'>Boot sector to protected mode</div>
+      <div class='sub'>A real, byte-for-byte walkthrough: BIOS hands you 16-bit real mode and 1MB of address space; you fight your way to 32-bit flat memory with a GDT.</div>
+    </div>
+    <div class='stat-card'>
+      <div class='label'>Throughout</div>
+      <div class='value' style='font-size:19px'>"Try this" drills</div>
+      <div class='sub'>Every page has at least one hand-trace exercise. Do them on paper. Your eyes will lie to you; your hand tracing the bytes won't.</div>
+    </div>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>The one mental model to hold onto</h2>
+    <p>A CPU core, at any instant, is just:</p>
+    <div class='formula'>a handful of registers (very fast, very few)
+        +
+a giant flat array of bytes called memory (slower, huge)
+        +
+one instruction pointer saying "execute this byte sequence next"</div>
+    <p>Every single thing your OS does — printing a character, switching processes, handling a keyboard interrupt — is some combination of: move bytes between registers and memory, do arithmetic/logic on registers, and conditionally change where the instruction pointer points next. That's it. There is no fourth thing.</p>
+  </div>
+  <div class='card soft'>
+    <h3>A note on "headfirst style"</h3>
+    <p>You'll see boxed <strong>scenarios</strong> before formal definitions, lots of "wait, why would it do that?" moments answered immediately, and repetition of the same idea from different angles. This is intentional — the goal is for the ideas to survive contact with actual OS source code next week, not just to sound right today.</p>
+    <div class='callout'>
+      <h4>Before you start</h4>
+      <p>You don't need to have ever written assembly. You do need to be comfortable with hexadecimal and binary — if "0x2A is 00101010 is 42" doesn't feel obvious, spend ten minutes with a base-converter first. Everything downstream assumes that's automatic.</p>
+    </div>
+  </div>
+</section>
+
+<div class='pagefoot'><div></div><a href='01-registers.html'><div class='navbtn' style='text-align:right'><div class='label'>next &rarr;</div><div class='title'>Registers</div></div></a></div>
+<div class='footer-note'>Assembly &amp; OS-from-Scratch Refresher — built the head-first way: scenario first, jargon second.</div>
+</div>
+</body>
+</html>

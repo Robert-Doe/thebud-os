@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The PS/2 Keyboard Controller — Scancodes, Not Letters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:var(--green);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--green);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--green);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--green)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--green);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--green);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.green{border-color:var(--green);color:var(--green)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#93c5fd;}
+pre code{color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--green);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.cy{color:var(--cyan)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(74,222,128,.15);border:1.5px solid var(--green);color:var(--green);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(74,222,128,.1);border:1.5px solid var(--green);color:var(--green);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(74,222,128,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--green);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:var(--green);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--green);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* bit register readout */
+.bitreg{display:flex;gap:.4rem;justify-content:center;margin:1.4rem 0;flex-wrap:wrap;}
+.bit{width:52px;height:52px;border:1.5px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--card);font-family:'Source Code Pro',monospace;}
+.bit .bv{font-size:1.1rem;font-weight:700;color:var(--muted);}
+.bit .bl{font-size:.55rem;color:var(--muted);letter-spacing:.02em;margin-top:2px;}
+.bit.on{border-color:var(--green);background:rgba(74,222,128,.12);}
+.bit.on .bv{color:var(--green);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#aha" title="The Aha"></a>
+  <a class="toc-dot" href="#controller" title="The Controller"></a>
+  <a class="toc-dot" href="#ports" title="I/O Ports"></a>
+  <a class="toc-dot" href="#reading" title="Reading a Byte"></a>
+  <a class="toc-dot" href="#status" title="Status Register"></a>
+  <a class="toc-dot" href="#sets" title="Scancode Sets"></a>
+  <a class="toc-dot" href="#layouts" title="Layouts Are Software"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">bob_os · Module 09 · Keyboard Driver · Part 1</div>
+    <h1>Scancodes,<br><span>Not Letters</span></h1>
+    <p class="hero-sub">When you press the "A" key, the keyboard does not send the letter "A" to your computer. It has no idea what a letter is. It sends a small number identifying a physical switch, and it is entirely up to your kernel to decide what that number means. This is the single idea that unlocks everything else about keyboard drivers — and it's why QWERTY, Dvorak, and every non-US layout on Earth are pieces of software, not pieces of hardware.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0x60</div><div class="lbl">Data Port — Read the Scancode</div></div>
+      <div class="hero-stat"><div class="num">0x64</div><div class="lbl">Status / Command Port</div></div>
+      <div class="hero-stat"><div class="num">8042</div><div class="lbl">Classic PS/2 Controller Chip</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Letters the Hardware Actually Sends</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- AHA -->
+<section id="aha">
+<div class="container">
+  <div class="section-num">00 — The Idea Everything Else Rests On</div>
+  <h2>A Keyboard Reports <span class="accent">Positions</span>, Not Characters</h2>
+
+  <p class="reveal">Here's a genuinely surprising fact once you sit with it: the physical keyboard sitting on your desk contains no concept of the letter "A." It doesn't know English exists. It doesn't know what a QWERTY layout is. What it <em>does</em> know, deep in its own tiny onboard microcontroller, is a grid of switches — rows and columns wired underneath the keycaps — and it constantly scans that grid asking "is anything pressed right now?" That's not a metaphor; it's literally where the word <strong>scancode</strong> comes from.</p>
+
+  <p class="reveal">When switch position number 30 (decimal) closes, the keyboard's own tiny processor packages up a message that means, roughly, <em>"physical position 30 just went down"</em> — and sends that message down the wire. It does not send "A". It has no way to send "A", because "A" isn't a concept it has access to. The mapping from "position 30" to "the character A" happens entirely somewhere else: in your operating system.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Aha Moment</div>
+    A key press generates a <strong>scancode</strong> — a raw numeric identifier for a physical key position. Translating that number into a character is a software decision, made fresh every single time, by a lookup table your driver owns. The keyboard is a position-reporting device. Your kernel is the thing that decides what those positions <em>mean</em>.
+  </div>
+
+  <p class="reveal">Once that clicks, a pile of things that used to seem like separate facts snap into one picture. Why can you remap Caps Lock to Ctrl in software with no hardware change? Because the mapping was always software. Why does a French AZERTY keyboard produce a "Q" on the physical key most English speakers would call "A"? Because it's the exact same physical position, reporting the exact same scancode, being fed through a <em>different</em> lookup table. Nothing about the wire, the chip, or the electrical signal changed at all.</p>
+</div>
+</section>
+
+<!-- CONTROLLER -->
+<section id="controller">
+<div class="container">
+  <div class="section-num">01 — Meet the Middleman</div>
+  <h2>The <span class="accent">PS/2 Controller</span>, Not the Keyboard, Talks to Your CPU</h2>
+
+  <p class="reveal">There's actually a small chain of hardware between "finger presses key" and "byte shows up for your driver to read," and it's worth naming each link once so nothing later feels like magic.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">⌨️</div><div class="pipe-name">Key Switch</div><div class="pipe-desc">Physical contact closes under a specific keycap.</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🧠</div><div class="pipe-name">Keyboard's Own MCU</div><div class="pipe-desc">Scans the switch matrix, generates a scancode byte, serializes it onto the PS/2 wire.</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🔌</div><div class="pipe-name">8042 Controller</div><div class="pipe-desc">Lives on the motherboard. Receives the serial signal, buffers one byte, raises IRQ1.</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🗄️</div><div class="pipe-name">I/O Ports 0x60 / 0x64</div><div class="pipe-desc">Where your kernel actually reaches in and grabs the byte.</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">💾</div><div class="pipe-name">Your Driver</div><div class="pipe-desc">Translates the number into a character, or a modifier-key state change.</div></div>
+  </div>
+
+  <p class="reveal">That middle box — historically an Intel <strong>8042</strong> chip, and on every modern PC an emulated equivalent baked into the chipset (or, in QEMU's case, software-emulated for you) — is the actual thing your kernel code talks to. You never touch the keyboard directly. You touch the <em>controller</em>, and the controller happens to be sitting between you and whatever's plugged in.</p>
+
+  <div class="sidenote reveal">
+    <b>Why "PS/2"?</b> The name comes from IBM's Personal System/2 line of computers (1987), which standardized the small round mini-DIN connector and protocol that keyboards (and later mice) used for the next two decades. USB has mostly replaced the physical PS/2 port on real hardware, but the <em>logical</em> interface — a controller chip exposing ports 0x60 and 0x64 to the CPU — lives on inside every PC's chipset for legacy compatibility, and it's exactly what QEMU emulates for bob_os. Real USB keyboards go through an entirely different, far more complex stack (a USB host controller driver, the USB protocol, and a HID class driver) — one reason this course starts with PS/2.
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">Why This Matters for Driver Code</div>
+    Because your kernel talks to the <strong>controller</strong>, not the keyboard, the exact same port-level code works whether a real PS/2 keyboard, a USB keyboard being translated by the chipset's legacy support, or QEMU's emulated keyboard is attached. The controller is the stable interface. That's the whole point of it existing.
+  </div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">1981</div><div class="lbl">Original IBM PC Keyboard Interface</div></div>
+    <div class="stat-card"><div class="val">1987</div><div class="lbl">PS/2 Mini-DIN Standard Introduced</div></div>
+    <div class="stat-card"><div class="val">2</div><div class="lbl">Devices One 8042 Serves (kbd + mouse)</div></div>
+    <div class="stat-card"><div class="val">0</div><div class="lbl">Native USB Awareness in the 8042</div></div>
+  </div>
+</div>
+</section>
+
+<!-- PORTS -->
+<section id="ports">
+<div class="container">
+  <div class="section-num">02 — The Two Doors</div>
+  <h2>I/O Ports <span class="accent">0x60</span> and <span class="accent">0x64</span></h2>
+
+  <p class="reveal">The 8042 controller exposes exactly two x86 I/O ports. Everything your keyboard driver does boils down to reading and occasionally writing these two addresses with the <code>inb</code> / <code>outb</code> instructions — the same port I/O mechanism used for the PIC, the PIT, and every other classic PC peripheral.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Port</th><th>Direction</th><th>Name</th><th>What You Get / Send</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0x60</td><td class="pos">Read</td><td>Data Port</td><td>The next scancode byte waiting from the keyboard.</td></tr>
+        <tr><td class="hl">0x60</td><td class="neg">Write</td><td>Data Port</td><td>Commands/data sent <em>to</em> the keyboard itself (e.g. set the LED state) — not used by the minimal bob_os driver.</td></tr>
+        <tr><td class="cy">0x64</td><td class="pos">Read</td><td>Status Register</td><td>A byte of status flags — most importantly, "is there a byte waiting at 0x60 right now?"</td></tr>
+        <tr><td class="cy">0x64</td><td class="neg">Write</td><td>Command Register</td><td>Commands sent to the 8042 controller chip itself (e.g. "run self-test," "disable port 2") — controller-level, not keyboard-level.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">The Detail That Trips People Up</div>
+    Port <strong>0x60</strong> means two different things depending on whether you read it or write it, and port <strong>0x64</strong> means two <em>completely different</em> things depending on read vs. write — one gives you status flags, the other accepts controller commands. Same address, opposite meaning, purely based on direction. This is common in old PC hardware and is exactly why <code>io.h</code>'s <code>inb</code>/<code>outb</code> take a port number but nothing about "which register" — the register <em>is</em> the combination of port number and direction.
+  </div>
+
+  <p class="reveal">For a minimal driver like the one in this module, you can go remarkably far using only the read side of 0x60. The keyboard fires an interrupt (covered fully in the next lesson) precisely when there's a fresh byte sitting at 0x60 ready to be picked up — so in the common case, you don't even need to check the status register before reading; the interrupt itself is the signal.</p>
+
+  <div class="sidenote reveal">
+    <b>The write side isn't unused forever.</b> <code>outb(0x60, 0xED)</code> followed by a second byte is the real PS/2 command to set the Num Lock / Caps Lock / Scroll Lock LEDs, and <code>0xF3</code> sets the typematic repeat rate and delay. bob_os's Module 09 driver never sends these — it only reads — but the capability lives at the exact same port, just flowing the other direction. A driver that wanted its Caps Lock LED to actually light up when toggled would write to 0x60, not just read from it.
+  </div>
+</div>
+</section>
+
+<!-- READING A BYTE -->
+<section id="reading">
+<div class="container">
+  <div class="section-num">03 — Mechanics</div>
+  <h2>What Happens When You <span class="accent">Read a Byte</span></h2>
+
+  <p class="reveal">Walk through the full sequence once, slowly, with an actual key press. Say the physical "A" key goes down.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. The switch closes.</strong>Underneath the "A" keycap, a physical contact makes a connection in the keyboard's internal switch matrix.</div></li>
+    <li><div class="step-body"><strong>2. The keyboard's own tiny processor notices.</strong>It's continuously scanning the matrix (typically hundreds of times per second) and detects this specific row/column intersection just changed state.</div></li>
+    <li><div class="step-body"><strong>3. A scancode byte is generated and serialized.</strong>Under the PS/2 protocol's default numbering (Scancode Set 1), the position conventionally called "A" produces the byte <code>0x1E</code>. The keyboard clocks this out one bit at a time over the PS/2 data line.</div></li>
+    <li><div class="step-body"><strong>4. The 8042 controller receives it and buffers it.</strong>The controller deserializes the bits back into a byte, places that byte into its output buffer (which is exactly what you'll read at port 0x60), and sets a "output buffer full" flag in its status register.</div></li>
+    <li><div class="step-body"><strong>5. The controller asserts IRQ1.</strong>This is the hardware interrupt line dedicated to the keyboard — the CPU gets interrupted, control jumps into your kernel's interrupt-handling machinery. (Precisely how IRQ1 turns into a running ISR is the subject of the next lesson — for now, just know it fires whenever there's a byte waiting.)</div></li>
+    <li><div class="step-body"><strong>6. Your code reads port 0x60.</strong>A single <code>inb(0x60)</code> pulls the waiting byte — <code>0x1E</code> — out of the controller's output buffer. That read also clears the "buffer full" flag, telling the controller it's safe to accept the next byte.</div></li>
+    <li><div class="step-body"><strong>7. Translation happens — in software.</strong>Your driver looks <code>0x1E</code> up in a table it owns, and only <em>there</em> does the number become the character <code>'a'</code>.</div></li>
+  </ol>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="rbLabel">▶ Press "Send a Key" to trace one scancode from switch to software</div>
+    <canvas id="readByteCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runReadByte()">▶ Send a Key</button>
+    <button class="ctrl-btn red" onclick="resetReadByte()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">Notice What's Missing</div>
+    Nowhere in steps 1 through 6 does anything know what a "letter" is. Position, byte, buffer, interrupt, read — all pure hardware and raw numbers. The character <code>'a'</code> doesn't exist until step 7, entirely inside code your kernel wrote. If you deleted your lookup table but kept everything else running, the driver would still correctly receive <code>0x1E</code> every time that key is pressed — it just wouldn't know it meant anything.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Held keys repeat, and that's the hardware's doing too.</b> Hold a key down and characters keep appearing — that's <em>typematic repeat</em>, and on a real PS/2 keyboard it's handled by the keyboard's own onboard microcontroller, not your driver: after an initial delay, it starts re-sending fresh make codes for the still-held key at a configurable rate, entirely on its own. Your ISR has no way to tell "this is a genuinely new press" from "this is the keyboard auto-repeating" — both look exactly like an ordinary make code arriving at port 0x60. That distinction, if a driver needs it at all, has to be inferred in software from timing, not from anything the byte itself carries.
+  </div>
+</div>
+</section>
+
+<!-- STATUS REGISTER -->
+<section id="status">
+<div class="container">
+  <div class="section-num">04 — The Status Byte</div>
+  <h2>What Port <span class="accent">0x64</span> Actually Tells You</h2>
+
+  <p class="reveal">Reading port 0x64 doesn't give you a scancode — it gives you a byte of independent status flags describing the controller's current state. Interrupt-driven drivers (like the one in bob_os) rarely need to poll this, since IRQ1 already tells you a byte is ready, but understanding the register matters for anything that talks to the controller more directly, including its own initialization sequence.</p>
+
+  <div class="bitreg reveal">
+    <div class="bit on"><div class="bv">1</div><div class="bl">bit 0<br>OBF</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 1<br>IBF</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 2<br>SYS</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 3<br>A2</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 4<br>—</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 5<br>—</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 6<br>TO</div></div>
+    <div class="bit"><div class="bv">0</div><div class="bl">bit 7<br>PAR</div></div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Bit</th><th>Name</th><th>Meaning When Set (1)</th></tr></thead>
+      <tbody>
+        <tr><td class="center hl">0</td><td>Output Buffer Full (OBF)</td><td>There's a byte waiting at 0x60 for the CPU to read. This is the flag IRQ1 corresponds to.</td></tr>
+        <tr><td class="center">1</td><td>Input Buffer Full (IBF)</td><td>The controller hasn't yet consumed the last byte the CPU wrote to it — don't write again until this clears.</td></tr>
+        <tr><td class="center">2</td><td>System Flag</td><td>Set by the controller's own power-on self-test; mostly firmware bookkeeping.</td></tr>
+        <tr><td class="center">3</td><td>Command/Data (A2)</td><td>Distinguishes whether the last byte written to 0x60 was data for the keyboard vs. a command for the controller.</td></tr>
+        <tr><td class="center">6</td><td>Timeout Error</td><td>A device on the bus failed to respond in time.</td></tr>
+        <tr><td class="center">7</td><td>Parity Error</td><td>The last byte received failed a parity check — a transmission error occurred.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">Why Interrupt-Driven Beats Polling Here</div>
+    A polling driver would sit in a loop reading port 0x64, checking bit 0 over and over, burning CPU cycles waiting for a human to press a key — which, on a keyboard timescale, is an eternity between events. An interrupt-driven driver (what bob_os uses) does none of that: it does nothing at all until IRQ1 physically fires, which only happens the instant bit 0 actually becomes set. The status register still exists and still means the same thing — you're just letting the hardware tap you on the shoulder instead of asking it "are we there yet?" in a tight loop.
+  </div>
+</div>
+</section>
+
+<!-- SCANCODE SETS -->
+<section id="sets">
+<div class="container">
+  <div class="section-num">05 — Numbers About Numbers</div>
+  <h2>Scancodes Aren't Even <span class="accent">One Fixed Numbering</span></h2>
+
+  <p class="reveal">If "the keyboard sends numbers, not letters" was the first surprise, here's a second one that tends to catch people off guard: there isn't even a single, universal numbering scheme for those numbers. The PS/2 world defines three distinct <strong>scancode sets</strong>, and the byte for "the A key went down" is different in each one.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Scancode Set 1</span><span class="fam-count">A = 0x1E</span></div>
+      <div class="fam-desc">The original IBM PC/XT numbering from 1981. Still the set the 8042 controller presents to software by default on real hardware and in QEMU — which is why it's the set bob_os's driver and the next lesson are built around.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Scancode Set 2</span><span class="fam-count">A = 0x1C</span></div>
+      <div class="fam-desc">Introduced with the IBM AT (1984) and, in practice, what almost every modern PS/2-protocol keyboard actually speaks natively over the wire today, regardless of when your motherboard was made.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Scancode Set 3</span><span class="fam-count">rarely used</span></div>
+      <div class="fam-desc">Also from the AT era; adds per-key configurability (which keys auto-repeat, for instance). Supported by the controller but essentially unused by mainstream operating systems.</div>
+    </div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">So Why Does Software Only Ever See Set 1?</div>
+    Because the 8042 controller itself performs a <strong>translation</strong>: even though the physical keyboard is very likely speaking Set 2 on the wire, the controller's default "translation mode" quietly converts every incoming Set 2 byte into its Set 1 equivalent before placing it at port 0x60. Your driver never has to know or care — it always sees Set 1 unless it explicitly reprograms the controller's command byte to disable translation. This is one more layer of exactly the same idea from earlier in this lesson: a controller sitting in the middle, presenting a simplified, stable interface over whatever the actual hardware happens to be doing underneath.
+  </div>
+
+  <p class="reveal">This is also a useful preview of what's coming in the next lesson: because bob_os's driver assumes Set 1 (the controller's translated output), the make/break convention it relies on — <code>break = make | 0x80</code> — is specifically a Set 1 property. Set 2 encodes press and release completely differently (a distinct 0xF0 prefix byte for releases, rather than a single flipped bit), which is exactly why "which scancode set am I looking at" is a question worth asking early, not an afterthought.</p>
+</div>
+</section>
+
+<!-- LAYOUTS -->
+<section id="layouts">
+<div class="container">
+  <div class="section-num">06 — The Payoff</div>
+  <h2>This Is Why Keyboard <span class="accent">Layouts</span> Are Pure Software</h2>
+
+  <p class="reveal">Now the earlier claim can be made precise. A "keyboard layout" — QWERTY, Dvorak, AZERTY, a German QWERTZ layout, a Japanese JIS layout — is nothing more than a choice of lookup table mapping scancode numbers to characters. The physical hardware underneath is frequently <em>identical</em> or near-identical across all of these. What differs is which table the operating system consults.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What Changes Between Layouts</h4>
+      Only the contents of the scancode → character table your driver owns. Position 0x1E can map to <code>'a'</code> (QWERTY), <code>'a'</code> in the same physical spot for Dvorak too (it happens to coincide there), or a completely different letter for AZERTY, where the physical position conventionally labeled "A" on a US keyboard sits under a "Q" keycap in the French layout and is expected to produce <code>'q'</code>-equivalent behavior.
+    </div>
+    <div class="compare-card bad">
+      <h4>🚫 What Never Changes Between Layouts</h4>
+      The scancode itself. The switch matrix. The wire protocol. The controller. Port 0x60. IRQ1. None of these know or care what layout you've selected — they report the exact same numbers for the exact same physical positions no matter what software choice sits on top.
+    </div>
+  </div>
+
+  <div class="formula green reveal">
+    <span class="label">The one-line summary</span>
+    character = layout_table[ scancode ]
+    <span class="sub">Swap the table, and you've swapped the entire keyboard layout — with zero hardware changes, zero firmware changes, not even a reboot.</span>
+  </div>
+
+  <p class="reveal">This also explains a detail that used to confuse a lot of people switching between US and UK keyboards: the physical keys can be in genuinely different places on some non-US layouts (an extra key near Enter, for instance), but that's a difference in the physical <em>matrix wiring</em>, not the software layer — the OS still just receives whatever scancode that new physical position happens to generate, and maps it through a layout table built for that hardware.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">A Common Misconception, Corrected</div>
+    It's tempting to think "the keyboard knows it's a UK keyboard, so it sends different codes for UK-specific keys." In reality the keyboard just reports whatever position closed — it's the operating system's layout table, selected by the user in software settings, that decides what those reports mean. Two keyboards with identical physical wiring can behave completely differently depending purely on which OS-level layout is active. bob_os's driver, as you'll see in the next lesson, ships with exactly one hardcoded table — a US QWERTY Scancode Set 1 map — which is a deliberate simplification, not a hardware limitation.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Scancode</div><div class="glossary-def">A raw numeric code identifying which physical key position changed state — not a character, and not tied to any language or layout.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PS/2</div><div class="glossary-def">The serial protocol and mini-DIN connector standard, from IBM's Personal System/2 line, still emulated by every PC chipset (and QEMU) for keyboard/mouse I/O.</div></div>
+    <div class="glossary-card"><div class="glossary-term">8042 Controller</div><div class="glossary-def">The (historically Intel) chip sitting between the keyboard and the CPU, exposing ports 0x60 and 0x64 and buffering incoming scancode bytes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Data Port (0x60)</div><div class="glossary-def">Read to retrieve the next waiting scancode byte; write to send data/commands to the keyboard device itself.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Status/Command Port (0x64)</div><div class="glossary-def">Read for controller status flags (like "byte waiting"); write to send commands to the controller chip itself.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Output Buffer Full (OBF)</div><div class="glossary-def">Status register bit 0 — set when a byte is waiting at port 0x60 for the CPU to read; corresponds to IRQ1 firing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">I/O Port</div><div class="glossary-def">A dedicated hardware address, separate from RAM, accessed via the CPU's <code>in</code>/<code>out</code> instructions (<code>inb</code>/<code>outb</code> in bob_os's <code>io.h</code>).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Keyboard Layout / Keymap</div><div class="glossary-def">A software-defined lookup table mapping scancodes to characters — QWERTY, Dvorak, AZERTY, and every non-US layout are all just different tables over identical hardware signals.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Scancode Set</div><div class="glossary-def">One of three distinct PS/2 numbering schemes (Set 1, 2, 3) for the same physical keys. The 8042 controller translates Set 2 (what most keyboards speak) into Set 1 by default.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Polling</div><div class="glossary-def">Repeatedly reading a status register in a loop to check if data is ready — wasteful compared to letting an interrupt notify you instead.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IRQ1</div><div class="glossary-def">The hardware interrupt line dedicated to the keyboard controller — fires whenever a fresh byte is waiting at port 0x60. Fully covered in the next lesson.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The PS/2 Keyboard Controller: Scancodes, Not Letters · Companion lesson for bob_os module 09_keyboard</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: IRQ1, scancode sets, and turning bytes into characters →</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── READ-A-BYTE PIPELINE CANVAS ─────────────────────────────────────────────
+function drawReadByte(t,phase){
+  const canvas=document.getElementById('readByteCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const stages=[
+    {x:0.08,label:'Key Switch',icon:'A'},
+    {x:0.28,label:'Keyboard MCU',icon:'μ'},
+    {x:0.48,label:'8042 Ctrl',icon:'⛭'},
+    {x:0.68,label:'Port 0x60',icon:'▭'},
+    {x:0.88,label:'Driver',icon:'⌘'}
+  ];
+  const cy=H*0.38, r=34;
+
+  ctx.strokeStyle=C.border;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(W*stages[0].x,cy);ctx.lineTo(W*stages[stages.length-1].x,cy);ctx.stroke();
+
+  stages.forEach((s,i)=>{
+    ctx.beginPath();ctx.arc(W*s.x,cy,r,0,Math.PI*2);
+    ctx.fillStyle=C.bg2;ctx.fill();
+    ctx.strokeStyle=C.border;ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=C.muted;ctx.font='bold 18px Source Code Pro,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(s.icon,W*s.x,cy);
+    ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+    ctx.fillText(s.label,W*s.x,cy+r+16);
+  });
+
+  const capt={
+    idle:'Click "Send a Key" to simulate pressing the physical A key',
+    move1:'Switch closes under the A keycap — a physical contact, nothing electronic yet',
+    move2:"Keyboard's own MCU scans the matrix, builds scancode byte 0x1E",
+    move3:'8042 controller receives + buffers the byte, sets OBF flag, fires IRQ1',
+    move4:'Driver executes inb(0x60) — pulls 0x1E out of the buffer',
+    done:'Scancode 0x1E now sits in kernel memory — translation to ‘a’ is a separate software step'
+  };
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(capt[phase]||'',W/2,H-60);
+
+  // moving packet
+  let idx=0;
+  if(phase==='move1')idx=0; else if(phase==='move2')idx=1; else if(phase==='move3')idx=2; else if(phase==='move4')idx=3; else if(phase==='done')idx=4;
+  if(phase!=='idle'){
+    let fromI=idx, toI=Math.min(idx+1,stages.length-1);
+    let x;
+    if(phase==='done'){ x=W*stages[4].x; } else { x=W*(stages[fromI].x+(stages[toI].x-stages[fromI].x)*t); }
+    ctx.beginPath();ctx.arc(x,cy,9,0,Math.PI*2);
+    ctx.fillStyle=phase==='done'?C.green:C.gold;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  // byte readout box
+  ctx.fillStyle=C.code_bg||C.bg;
+  const boxY=H*0.72,boxW=220,boxX=W/2-boxW/2,boxH=64;
+  ctx.strokeStyle=(phase==='move4'||phase==='done')?C.green:C.border;
+  ctx.lineWidth=1.5;
+  ctx.strokeRect(boxX,boxY,boxW,boxH);
+  ctx.fillStyle='rgba(56,189,248,.04)';ctx.fillRect(boxX,boxY,boxW,boxH);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('scancode = inb(0x60)',W/2,boxY+18);
+  ctx.font='bold 22px Source Code Pro,monospace';
+  ctx.fillStyle=(phase==='move4'||phase==='done')?C.green:C.muted;
+  ctx.fillText((phase==='move4'||phase==='done')?'0x1E':'0x??',W/2,boxY+44);
+}
+
+function runReadByte(){
+  const phases=['move1','move2','move3','move4','done'];
+  const durations=[450,500,550,450,10];
+  let idx=0,start=performance.now();
+  document.getElementById('rbLabel').textContent='▶ Tracing scancode 0x1E from key switch to kernel memory…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawReadByte(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('rbLabel').textContent='▶ Done — press again, or see how translation happens in the next lesson';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetReadByte(){
+  document.getElementById('rbLabel').textContent='▶ Press "Send a Key" to trace one scancode from switch to software';
+  drawReadByte(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetReadByte(); });
+window.addEventListener('resize',()=>{ resetReadByte(); });
+</script>
+</body>
+</html>

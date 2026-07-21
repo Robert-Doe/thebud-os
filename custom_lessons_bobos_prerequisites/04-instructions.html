@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Instructions & Flow — Assembly &amp; OS-from-Scratch Refresher</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: rgba(18,25,47,0.88); --panel-2: rgba(25,33,60,0.9);
+  --text: #e9edf7; --muted: #aab4cf; --soft: #7f8bb0; --line: rgba(255,255,255,0.08);
+  --blue: #7aa2ff; --blue-2: #5f87f8; --green: #4ade80; --red: #fb7185; --amber: #fbbf24; --purple: #a78bfa;
+  --cyan: #5eead4; --pink: #f472b6;
+  --shadow: 0 20px 60px rgba(0,0,0,0.35); --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: radial-gradient(circle at top, #121a35 0%, #09101f 55%, #060a14 100%); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { line-height: 1.6; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 28px; }
+.hero { padding: 28px; background: linear-gradient(180deg, rgba(119,157,255,0.15), rgba(255,255,255,0.03)); border:1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content:''; position:absolute; inset:auto -10% -45% auto; width:340px; height:340px; background: radial-gradient(circle, rgba(122,162,255,0.28), transparent 65%); pointer-events:none; }
+h1,h2,h3,h4 { margin:0 0 10px; line-height:1.2; }
+h1 { font-size: 34px; letter-spacing: -0.03em; }
+h2 { font-size: 23px; margin-top: 4px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 10px 0; color: var(--muted); }
+a { color: var(--blue); }
+.lede { max-width: 980px; font-size: 16px; }
+.grid-4, .grid-3, .grid-2, .grid-6 { display:grid; gap:16px; }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card.soft { background: var(--panel-2); }
+.stat-card { background: rgba(255,255,255,0.03); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.value { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.tag-row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 7px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.05); color: var(--text); border:1px solid var(--line); }
+.pill.blue { background: rgba(122,162,255,0.13); color:#cfdcff; }
+.pill.green { background: rgba(74,222,128,0.13); color:#bdf5d2; }
+.pill.amber { background: rgba(251,191,36,0.13); color:#ffe6ad; }
+.pill.red { background: rgba(251,113,133,0.13); color:#ffd0d6; }
+.pill.purple { background: rgba(167,139,250,0.13); color:#d4c6ff; }
+.pill.cyan { background: rgba(94,234,212,0.13); color:#bdf8ee; }
+.good { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+.section { margin-top: 22px; }
+.callout { padding: 16px 18px; border-radius: 14px; border:1px solid var(--line); background: rgba(122,162,255,0.08); color: var(--text); }
+.callout.warn { background: rgba(251,191,36,0.09); }
+.callout.red { background: rgba(251,113,133,0.09); }
+.callout.green { background: rgba(74,222,128,0.08); }
+.callout h4 { margin-top:0; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(0,0,0,0.28); border:1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 13.5px; overflow-x:auto; color: #e8eeff; white-space:pre; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 16px; margin-top: 14px; }
+table { width:100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+th, td { text-align:left; padding: 10px 13px; border-bottom:1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+th { position: sticky; top: 0; background: rgba(10,15,30,0.97); z-index: 1; color: var(--text); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.bytegrid { display:flex; gap:4px; flex-wrap:wrap; margin: 10px 0; }
+.byte { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.05); border:1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align:center; min-width: 64px; }
+.byte .addr { font-size: 10px; color: var(--soft); display:block; }
+.byte .v { font-size: 15px; font-weight:700; margin-top:3px; }
+.regbox { font-family: ui-monospace, monospace; display:flex; border:1px solid var(--line); border-radius: 10px; overflow:hidden; margin: 10px 0; }
+.regbox > div { padding: 10px 8px; text-align:center; font-size: 12px; border-right: 1px solid var(--line); }
+.regbox > div:last-child { border-right:none; }
+.qa { border-left: 3px solid var(--purple); padding: 6px 0 6px 14px; margin: 14px 0; }
+.qa .q { color: #d4c6ff; font-weight: 700; }
+.scenario { border:1px dashed rgba(122,162,255,0.4); border-radius: 14px; padding: 16px; background: rgba(122,162,255,0.05); }
+.scenario .tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--blue); font-weight:700; }
+.nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.nav a { text-decoration:none; }
+.navpill { display:inline-flex; align-items:center; gap:6px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,0.04); color: var(--muted); border:1px solid var(--line); transition: all .15s; }
+.navpill:hover { background: rgba(122,162,255,0.12); color: var(--text); }
+.navpill.active { background: rgba(122,162,255,0.18); color: var(--text); border-color: rgba(122,162,255,0.4); }
+.pagefoot { display:flex; justify-content:space-between; gap:16px; margin-top: 30px; }
+.pagefoot a { text-decoration:none; }
+.navbtn { display:block; padding:16px 20px; border-radius:16px; border:1px solid var(--line); background: var(--panel-2); flex:1; }
+.navbtn .label { margin-bottom:4px; }
+.navbtn .title { color: var(--text); font-size: 16px; font-weight:700; }
+.footer-note { margin-top: 24px; color: var(--soft); font-size: 13px; text-align:center; }
+.checklist { list-style:none; padding:0; margin: 10px 0; }
+.checklist li { padding: 8px 0 8px 30px; position:relative; border-bottom:1px solid var(--line); color: var(--muted); }
+.checklist li:last-child { border-bottom:none; }
+.checklist li::before { content:'✓'; position:absolute; left:0; top:8px; color: var(--green); font-weight:700; }
+.bitfield { display:flex; font-family:ui-monospace,monospace; font-size:12px; margin:10px 0; flex-wrap:wrap; }
+.bitfield .bit { border:1px solid var(--line); padding:8px 4px; text-align:center; min-width:34px; background: rgba(255,255,255,0.03); }
+.bitfield .bit .n { display:block; color:var(--soft); font-size:9px; }
+@media (max-width: 1100px) { .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .shell { padding: 16px; } h1 { font-size: 27px; }
+  .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr; }
+  .pagefoot { flex-direction:column; }
+}
+
+</style>
+</head>
+<body>
+<div class='shell'>
+<div class='nav'><a href='index.html'><span class='navpill'>Home</span></a><a href='01-registers.html'><span class='navpill'>Registers</span></a><a href='02-endianness.html'><span class='navpill'>Endianness</span></a><a href='03-memory.html'><span class='navpill'>Memory & Stack</span></a><a href='04-instructions.html'><span class='navpill active'>Instructions & Flow</span></a><a href='05-os-bootstrap.html'><span class='navpill'>Build an OS</span></a></div>
+
+<section class='hero'>
+  <div class='label'>Page 04</div>
+  <h1>Flags, comparisons, and jumps: how "if" actually happens</h1>
+  <p class='lede'>There is no <code>if</code> instruction. There's "do some arithmetic, notice some leftover facts about the result as single bits, then optionally jump based on those bits." Every loop and branch you've ever written boils down to exactly that.</p>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>EFLAGS: the CPU's sticky notes</h2>
+    <p>Almost every arithmetic and logic instruction silently updates a set of single-bit flags describing the result. Compare and jump instructions just <em>read</em> those bits — they don't recompute anything.</p>
+    <div class='table-wrap'>
+      <table>
+        <thead><tr><th>Flag</th><th>Set when…</th></tr></thead>
+        <tbody>
+          <tr><td><strong>ZF</strong> (Zero)</td><td>the result was exactly zero</td></tr>
+          <tr><td><strong>SF</strong> (Sign)</td><td>the result's top bit is 1 (negative, if signed)</td></tr>
+          <tr><td><strong>CF</strong> (Carry)</td><td>an unsigned add overflowed past the top, or unsigned subtract borrowed</td></tr>
+          <tr><td><strong>OF</strong> (Overflow)</td><td>a <em>signed</em> add/subtract produced a result that can't fit — sign flipped wrongly</td></tr>
+          <tr><td><strong>PF</strong> (Parity)</td><td>the low byte of the result has an even number of 1 bits (rarely used directly)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class='callout'>
+      <h4>CF vs OF — the question every beginner gets backwards</h4>
+      <p>CF is about <strong>unsigned</strong> wraparound (255+1 wraps to 0, CF=1). OF is about <strong>signed</strong> wraparound (127+1 as signed bytes becomes -128, OF=1). The exact same addition can set one, both, or neither — it depends entirely on whether <em>you</em>, the programmer, intended the bits as signed or unsigned. The hardware computes both every time and lets the chosen jump instruction decide which one matters.</p>
+    </div>
+  </div>
+  <div class='card soft'>
+    <h3>cmp is just sub that throws away the answer</h3>
+    <p><code>cmp a, b</code> internally computes <code>a − b</code>, sets the flags exactly as a real subtraction would, and discards the numeric result — only the flags survive. This is the single fact that makes the whole system click:</p>
+    <div class='formula'><span class='kw'>cmp</span> <span class='reg'>eax</span>, <span class='reg'>ebx</span>
+<span class='c'>; if eax == ebx: result of (eax-ebx) is 0  -&gt; ZF=1</span>
+<span class='c'>; if eax &lt; ebx (unsigned): subtraction borrows -&gt; CF=1</span>
+<span class='c'>; if eax &lt; ebx (signed):   SF != OF</span></div>
+    <p><code>test a, b</code> is the same idea but for bitwise AND instead of subtraction — handy for checking individual bits without modifying anything: <code>test eax, eax</code> followed by a jump-if-zero is the idiomatic way to check "is EAX zero?"</p>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Conditional jumps: reading flags, not values</h2>
+  <p>A conditional jump like <code>je</code> doesn't compare anything itself — it just asks "is ZF currently 1?" That's why <code>cmp</code> (or any flag-setting instruction) must come immediately before the jump that depends on it.</p>
+  <div class='table-wrap'>
+    <table>
+      <thead><tr><th>Mnemonic</th><th>Meaning</th><th>Flags checked</th><th>Use signed or unsigned?</th></tr></thead>
+      <tbody>
+        <tr><td><code>je</code> / <code>jz</code></td><td>jump if equal / zero</td><td>ZF=1</td><td>either</td></tr>
+        <tr><td><code>jne</code> / <code>jnz</code></td><td>jump if not equal / not zero</td><td>ZF=0</td><td>either</td></tr>
+        <tr><td><code>jg</code> / <code>jnle</code></td><td>jump if greater</td><td>ZF=0 and SF=OF</td><td><strong>signed</strong></td></tr>
+        <tr><td><code>jl</code> / <code>jnge</code></td><td>jump if less</td><td>SF≠OF</td><td><strong>signed</strong></td></tr>
+        <tr><td><code>ja</code> / <code>jnbe</code></td><td>jump if above</td><td>CF=0 and ZF=0</td><td><strong>unsigned</strong></td></tr>
+        <tr><td><code>jb</code> / <code>jnae</code></td><td>jump if below</td><td>CF=1</td><td><strong>unsigned</strong></td></tr>
+        <tr><td><code>jc</code></td><td>jump if carry</td><td>CF=1</td><td>raw flag check</td></tr>
+        <tr><td><code>jo</code></td><td>jump if overflow</td><td>OF=1</td><td>raw flag check</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class='callout warn'>
+    <h4>Why jg/jl vs ja/jb both exist — and why mixing them up is a real bug class</h4>
+    <p>x86 gives you a <strong>signed</strong> family (<code>jg</code>, <code>jl</code>, <code>jge</code>, <code>jle</code>) and a separate <strong>unsigned</strong> family (<code>ja</code>, <code>jb</code>, <code>jae</code>, <code>jbe</code>) because the bit pattern <code>0xFFFFFFFF</code> means "-1" if signed and "4,294,967,295" if unsigned — same bits, opposite ordering. Using <code>jl</code> when you meant "unsigned less than" is a classic OS-dev bug, especially when comparing pointers or sizes (which are inherently unsigned) — the comparison silently does the wrong thing instead of erroring.</p>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>From C-like control flow to raw jumps</h2>
+    <p>A <code>while</code> loop is nothing but a comparison and a conditional jump back to the top:</p>
+    <div class='formula'><span class='c'>// while (count != 0) { ... count--; }</span>
+<span class='kw'>loop_top</span>:
+    <span class='kw'>cmp</span>  <span class='reg'>ecx</span>, <span class='num'>0</span>
+    <span class='kw'>je</span>   <span class='kw'>loop_end</span>
+    <span class='c'>; ... loop body ...</span>
+    <span class='kw'>dec</span>  <span class='reg'>ecx</span>
+    <span class='kw'>jmp</span>  <span class='kw'>loop_top</span>
+<span class='kw'>loop_end</span>:</div>
+    <p>And an <code>if/else</code> is a comparison, a conditional jump <em>over</em> the "then" block, with an unconditional jump at the end of "then" to skip "else":</p>
+    <div class='formula'><span class='c'>// if (a == b) { x(); } else { y(); }</span>
+    <span class='kw'>cmp</span>  <span class='reg'>eax</span>, <span class='reg'>ebx</span>
+    <span class='kw'>jne</span>  <span class='kw'>else_branch</span>
+    <span class='c'>; call x()</span>
+    <span class='kw'>jmp</span>  <span class='kw'>end_if</span>
+<span class='kw'>else_branch</span>:
+    <span class='c'>; call y()</span>
+<span class='kw'>end_if</span>:</div>
+  </div>
+  <div class='card'>
+    <h2>The dedicated loop counter: ECX + <code>loop</code></h2>
+    <p>x86 has a single instruction, <code>loop</code>, that decrements ECX and jumps if ECX is still nonzero — combining <code>dec</code> + <code>jnz</code> into one opcode. It exists purely because counted loops are so common:</p>
+    <div class='formula'><span class='kw'>mov</span> <span class='reg'>ecx</span>, <span class='num'>10</span>     <span class='c'>; loop 10 times</span>
+<span class='kw'>again</span>:
+    <span class='c'>; ... body ...</span>
+    <span class='kw'>loop</span> <span class='kw'>again</span>    <span class='c'>; ecx-- ; if ecx != 0, jump to again</span></div>
+    <p>It's rarely used in modern hand-tuned code (a separate <code>dec</code>/<code>jnz</code> pair is often faster on current CPUs), but you'll see it constantly in textbook examples and old boot code, so recognizing it instantly is worth the five seconds it takes to memorize.</p>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Calling conventions: the unwritten contract</h2>
+  <p>The CPU doesn't enforce "argument 1 goes in this register" — that's a software agreement between caller and callee, called a <strong>calling convention</strong>. Mismatch the convention between two pieces of code and you get garbage, not an error.</p>
+  <div class='grid-2'>
+    <div class='stat-card'>
+      <div class='label'>cdecl (classic 32-bit C)</div>
+      <div class='value' style='font-size:17px'>args on the stack, caller cleans up</div>
+      <div class='sub'>Arguments pushed right-to-left before <code>call</code>; return value in EAX; the <em>caller</em> adjusts ESP afterward (so functions can take a variable number of args, like <code>printf</code>).</div>
+    </div>
+    <div class='stat-card'>
+      <div class='label'>System V AMD64 (modern 64-bit Linux)</div>
+      <div class='value' style='font-size:17px'>first 6 args in registers</div>
+      <div class='sub'>RDI, RSI, RDX, RCX, R8, R9 hold the first six integer/pointer arguments, in that order; only overflow args go on the stack. Far fewer memory accesses than cdecl.</div>
+    </div>
+  </div>
+  <div class='callout' style='margin-top:14px'>
+    <h4>Why this matters the moment you write an OS</h4>
+    <p>Your kernel's interrupt handlers, your bootloader-to-kernel handoff, and any C code you link against assembly all depend on agreeing about a calling convention. Get it wrong and arguments silently land in the wrong register or at the wrong stack offset — the classic "it compiles and then does something insane" bug.</p>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Try this: predict the flags and the jump</h2>
+  <div class='formula'><span class='kw'>mov</span> <span class='reg'>eax</span>, <span class='num'>5</span>
+<span class='kw'>mov</span> <span class='reg'>ebx</span>, <span class='num'>5</span>
+<span class='kw'>cmp</span> <span class='reg'>eax</span>, <span class='reg'>ebx</span>
+<span class='kw'>jne</span> <span class='kw'>somewhere</span>   <span class='c'>; taken or not?</span>
+<span class='kw'>mov</span> <span class='reg'>ecx</span>, <span class='num'>0xFFFFFFFF</span>  <span class='c'>; this is -1 if read as signed</span>
+<span class='kw'>cmp</span> <span class='reg'>ecx</span>, <span class='num'>0</span>
+<span class='kw'>jl</span>  <span class='kw'>label_a</span>      <span class='c'>; taken or not? (signed)</span>
+<span class='kw'>jb</span>  <span class='kw'>label_b</span>      <span class='c'>; taken or not? (unsigned)</span></div>
+  <div class='callout green'>
+    <p><strong>Answer:</strong> <code>jne somewhere</code> is <strong>not taken</strong> — EAX equals EBX so ZF=1, and jne fires on ZF=0. The compare of ECX (0xFFFFFFFF) against 0: as a <strong>signed</strong> comparison, 0xFFFFFFFF means -1, which is less than 0, so <code>jl label_a</code> <strong>is taken</strong>. As an <strong>unsigned</strong> comparison, 0xFFFFFFFF is the largest possible value (4,294,967,295), which is not below 0, so <code>jb label_b</code> is <strong>not taken</strong>. Same bits, same cmp, opposite answers depending only on which jump family you read them with.</p>
+  </div>
+</section>
+
+<div class='pagefoot'><a href='03-memory.html'><div class='navbtn'><div class='label'>&larr; previous</div><div class='title'>Memory & Stack</div></div></a><a href='05-os-bootstrap.html'><div class='navbtn' style='text-align:right'><div class='label'>next &rarr;</div><div class='title'>Build an OS</div></div></a></div>
+<div class='footer-note'>Assembly &amp; OS-from-Scratch Refresher — built the head-first way: scenario first, jargon second.</div>
+</div>
+</body>
+</html>

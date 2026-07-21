@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turning a Line of Text Into an argv Array</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.bug{color:var(--red);font-weight:700}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* argv boxes */
+.argv-array{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.8rem 0;font-family:'Source Code Pro',monospace;}
+.argv-cell{background:var(--card);border:1.5px solid var(--cyan);border-radius:8px;padding:.7rem 1rem;text-align:center;min-width:90px;}
+.argv-cell .idx{font-size:.65rem;color:var(--muted);margin-bottom:.3rem;letter-spacing:.1em;}
+.argv-cell .val{color:var(--cyan);font-size:.9rem;}
+.argv-cell.null{border-color:var(--red);}
+.argv-cell.null .val{color:var(--red);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#whyargv" title="Why argv, Not A String"></a>
+  <a class="toc-dot" href="#tokenizing" title="Tokenizing"></a>
+  <a class="toc-dot" href="#quoting" title="Quotes & Escapes"></a>
+  <a class="toc-dot" href="#building" title="Building argv"></a>
+  <a class="toc-dot" href="#metachars" title="Metacharacters"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Shells · Parsing · argv · Tokenizing</div>
+    <h1>One Line Of Text.<br><span>One Array Of Strings.</span></h1>
+    <p class="hero-sub">You've already seen <code>execve("/bin/ls", args, environ)</code> in the fork/exec deep-dive, with <code>args</code> just handed to you, fully formed. This lesson is about the work nobody showed you yet: how a shell turns the raw line you typed — spaces, quotes, backslashes and all — into that clean, NULL-terminated array of C strings the exec family actually demands.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Line of text in</div></div>
+      <div class="hero-stat"><div class="num">N+1</div><div class="lbl">argv slots out, including the trailing NULL</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Quote characters a real shell must track: ' and "</div></div>
+      <div class="hero-stat"><div class="num">5</div><div class="lbl">Common shell metacharacters: | &gt; &lt; &amp; ;</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The <span class="accent">Parse</span> Step, Zoomed In</h2>
+  <p class="reveal">The previous lesson drew the shell's whole loop as five boxes — prompt, read, parse, execute, repeat — and treated "parse" as a single arrow you pass through without stopping. This lesson stops there. And it deliberately does <em>not</em> re-explain how <code>fork()</code> or <code>execve()</code> work — you already have that from the fork/exec deep-dive, including the worked example of a shell forking a child that execs into <code>/bin/ls</code>. What that lesson glossed over is where <code>args[]</code> in <code>execve("/bin/ls", args, environ)</code> actually comes from. It doesn't fall out of the sky — the shell builds it, by hand, from your raw keystrokes, every single time.</p>
+</div>
+</section>
+
+<!-- WHY ARGV -->
+<section id="whyargv">
+<div class="container">
+  <div class="section-num">01 — The Question Underneath Everything Here</div>
+  <h2>Why Does exec() Want An <span class="accent">Array</span>, Not One String?</h2>
+
+  <p class="reveal">It would seem simpler for <code>execve()</code> to just accept the whole command line as one string — <code>"ls -l /home"</code> — and let the new program figure out the splitting itself. That's not the design UNIX chose, and the reason is architectural, not accidental: <strong>splitting the command line into separate words is exactly the part of the job that varies per-shell and per-user, so it has to happen before the kernel is ever involved, not after.</strong></p>
+
+  <div class="formula gold reveal">
+    <span class="label">The signature you're building toward</span>
+    int execve(const char *path, char *const argv[], char *const envp[]);
+    <span class="sub">argv is an array of pointers to C strings, terminated by a NULL pointer — never one big string the program has to re-split itself.</span>
+  </div>
+
+  <p class="reveal">Think about what the new program (say, <code>ls</code>) actually receives when its own <code>main(int argc, char *argv[])</code> starts running. It gets <code>argc</code> — how many arguments — and <code>argv</code> — an array of pointers, one per argument, already separated, already individual C strings. <code>ls</code> never has to know or care whether you typed one space or five between <code>ls</code> and <code>-l</code>, whether you quoted anything, or what shell you were even using. All of that ambiguity was resolved <em>before</em> <code>ls</code> ever got control, by the shell, during the parse step.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    Passing a pre-split array instead of a raw string is a deliberate separation of concerns, same spirit as fork() and exec() being two syscalls instead of one. Word-splitting rules, quoting rules, and escaping rules are all <em>shell</em> policy — different shells even disagree slightly on the details. The kernel and the target program shouldn't have to know or care about any of that. By the time <code>argv</code> crosses the exec() boundary, all the ambiguity has already been resolved into a flat, unambiguous list of strings. The program on the receiving end just walks the array.
+  </div>
+
+  <div class="argv-array reveal">
+    <div class="argv-cell"><div class="idx">argv[0]</div><div class="val">"ls"</div></div>
+    <div class="argv-cell"><div class="idx">argv[1]</div><div class="val">"-l"</div></div>
+    <div class="argv-cell"><div class="idx">argv[2]</div><div class="val">"/home"</div></div>
+    <div class="argv-cell null"><div class="idx">argv[3]</div><div class="val">NULL</div></div>
+  </div>
+
+  <p class="reveal">Notice <code>argv[0]</code> holds the program's own name — that's a UNIX convention, not a technical requirement of exec() itself, but nearly every program relies on it (it's how commands like <code>busybox</code> or symlinked binaries decide which behavior to run). And notice the array's real length is never passed as a separate count to <code>execve()</code> — the array is <strong>self-terminating</strong>, ending in a NULL pointer, exactly the way a C string ends in a <code>'\0'</code> byte. The kernel just walks pointers until it hits NULL.</p>
+</div>
+</section>
+
+<!-- TOKENIZING -->
+<section id="tokenizing">
+<div class="container">
+  <div class="section-num">02 — Step One: Splitting On Whitespace</div>
+  <h2>The Simple Case: <span class="accent">Tokenizing</span></h2>
+
+  <p class="reveal">At its simplest, tokenizing a command line is just "walk the string, and every time you hit a run of spaces, that's a boundary between arguments." Here's a small, real tokenizer loop — the same shape bob_os's own shell uses, and the same shape any from-scratch shell ends up writing, because there's no C standard library to lean on inside a freestanding kernel:</p>
+
+  <pre class="reveal"><span class="tag">C — a minimal whitespace tokenizer</span><code><span class="cm">/* Split line in place into argv[]. Returns argc.
+   line is modified: spaces between tokens become '\0'. */</span>
+<span class="kw">int</span> <span class="fn">tokenize</span>(<span class="kw">char</span> *line, <span class="kw">char</span> **argv, <span class="kw">int</span> max) {
+    <span class="kw">int</span> argc = <span class="numc">0</span>;
+    <span class="kw">char</span> *p = line;
+
+    <span class="kw">while</span> (*p &amp;&amp; argc &lt; max - <span class="numc">1</span>) {
+        <span class="kw">while</span> (*p == <span class="str">' '</span>) p++;      <span class="cm">// skip leading spaces</span>
+        <span class="kw">if</span> (!*p) <span class="kw">break</span>;               <span class="cm">// end of line — done</span>
+
+        argv[argc++] = p;              <span class="cm">// this token starts here</span>
+
+        <span class="kw">while</span> (*p &amp;&amp; *p != <span class="str">' '</span>) p++;  <span class="cm">// find end of token</span>
+        <span class="kw">if</span> (*p) *p++ = <span class="str">'\0'</span>;         <span class="cm">// cut the string here, step past it</span>
+    }
+
+    argv[argc] = <span class="kw">NULL</span>;                 <span class="cm">// the array must end in NULL</span>
+    <span class="kw">return</span> argc;
+}</code></pre>
+
+  <p class="reveal">The trick worth noticing: this tokenizer doesn't allocate any new memory for the individual words. It <em>reuses</em> the original line buffer, overwriting each separating space with a <code>'\0'</code> and pointing <code>argv[i]</code> directly into the middle of that same buffer. One buffer, sliced into pieces in place — cheap, and exactly how bob_os's own <code>dispatch()</code> function does it for its single command/argument split.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="tokLabel">▶ Watch a raw line get tokenized into argv, byte by byte</div>
+    <canvas id="tokCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runTokenize()">▶ Tokenize: ls  -l   /home</button>
+    <button class="ctrl-btn red" onclick="resetTokenize()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice the animation treats runs of multiple spaces as a single boundary — <code>"ls  -l   /home"</code> (extra spaces included) still produces exactly three tokens. That's the <code>while (*p == ' ') p++</code> line doing its job: it doesn't stop at the first space, it consumes <em>all</em> consecutive spaces before deciding a new token has started.</p>
+</div>
+</section>
+
+<!-- QUOTING -->
+<section id="quoting">
+<div class="container">
+  <div class="section-num">03 — Where Plain Tokenizing Breaks</div>
+  <h2>Quoted Strings &amp; <span class="accent">Escape Characters</span></h2>
+
+  <p class="reveal">The tokenizer above has an obvious hole: what happens with <code>echo "hello world"</code>? A naive whitespace-splitter sees the space inside the quotes and produces <em>three</em> tokens — <code>echo</code>, <code>"hello</code>, and <code>world"</code> — when the user clearly intended <em>two</em>: <code>echo</code> and <code>hello world</code>. Quoting exists specifically to let a user say "treat this whole span, spaces included, as a single argument."</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>❌ Naive Whitespace Split</h4>
+      <code>echo "hello world"</code> → <code>argv = ["echo", "\"hello", "world\""]</code><br><br>
+      Three arguments. The quote characters are left sitting in the strings, and the phrase is split apart — exactly backwards from what the user meant.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ Quote-Aware Tokenizer</h4>
+      <code>echo "hello world"</code> → <code>argv = ["echo", "hello world"]</code><br><br>
+      Two arguments. The quote characters are consumed as delimiters (never copied into the token), and the space inside them is preserved as ordinary content.
+    </div>
+  </div>
+
+  <p class="reveal">Making a tokenizer quote-aware means it needs a tiny bit of state it didn't need before: <strong>"am I currently inside a quoted span?"</strong> While that flag is true, spaces stop being token boundaries — they're just characters. The quote character that opened the span is the only thing that closes it (a real shell tracks single vs. double quotes separately, since they have slightly different rules about what's still special inside them).</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Input</th><th>Naive split (wrong)</th><th>Quote-aware split (correct)</th></tr></thead>
+      <tbody>
+        <tr><td><code>echo "hello world"</code></td><td class="neg">["echo", "\"hello", "world\""] — 3 tokens</td><td class="pos">["echo", "hello world"] — 2 tokens</td></tr>
+        <tr><td><code>cat 'my file.txt'</code></td><td class="neg">["cat", "'my", "file.txt'"] — 3 tokens</td><td class="pos">["cat", "my file.txt"] — 2 tokens</td></tr>
+        <tr><td><code>echo a"b c"d</code></td><td class="neg">["echo", "a\"b", "c\"d"] — 3 tokens</td><td class="pos">["echo", "ab cd"] — 2 tokens<span style="color:var(--muted)"> (quoting can start mid-word)</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal"><strong>Escape characters</strong> solve a related but distinct problem: what if you want a literal space, or a literal quote character, inside an argument <em>without</em> wrapping the whole thing in quotes? A backslash (<code>\</code>) conventionally means "treat the very next character as ordinary text, even if it would normally be special" — so <code>hello\ world</code> is one token containing a space, and <code>say\"hi\"</code> is one token containing literal quote characters, with the backslashes themselves consumed and never appearing in the final string.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📖 The Mental Model: A Tiny State Machine</div>
+    A real tokenizer isn't really "split on spaces" plus some patches bolted on — it's better understood as a small state machine walking the line one character at a time, tracking: <em>am I inside a token right now?</em> and <em>am I inside a quote right now, and if so which kind?</em> and <em>was the previous character a backslash that escapes this one?</em> Every character either extends the current token, closes it, opens/closes a quoted span, or gets consumed as an escape marker. That's genuinely most of what a shell's lexer does — the rest is bookkeeping around it.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Single quotes vs. double quotes, briefly.</b> In bash-like shells, single quotes ('...') suppress <em>everything</em> special inside them, including <code>$variable</code> expansion and backslash escapes — what you type is exactly what you get. Double quotes ("...") suppress word-splitting and most metacharacters, but still allow variable expansion and a few backslash escapes through. That distinction is a shell-specific policy choice layered on top of the same core "track whether I'm inside a quoted span" mechanism described above — worth knowing exists, not essential to a first working tokenizer.
+  </div>
+</div>
+</section>
+
+<!-- BUILDING ARGV -->
+<section id="building">
+<div class="container">
+  <div class="section-num">04 — Step Two: Assembling The Array</div>
+  <h2>From Tokens To A <span class="accent">NULL-Terminated</span> Array</h2>
+
+  <p class="reveal">Tokenizing produces a sequence of strings. Building <code>argv</code> is the (smaller) remaining step: allocate — or, as in the earlier snippet, reuse — a fixed-size array of <code>char *</code>, write a pointer to each token into successive slots, and terminate the array with a <code>NULL</code> pointer in the slot right after the last real token. That NULL is not optional decoration; it is the <em>only</em> way <code>execve()</code> — or your own code walking the array — knows where it ends, since C doesn't attach a length to raw pointers or arrays.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Allocate storage for the pointers</strong>A fixed-size <code>char *argv[MAX_ARGS]</code> is enough for a shell with a reasonable argument limit — bob_os's kernel code favors exactly this static-array style, since there's no heap-happy standard library to lean on.</div></li>
+    <li><div class="step-body"><strong>Walk the tokenized line, filling slots in order</strong><code>argv[0]</code> gets the command name itself, <code>argv[1]</code> the first argument, and so on — the same order the user typed them in.</div></li>
+    <li><div class="step-body"><strong>Write the NULL terminator</strong>The slot immediately after the last token is set to <code>NULL</code>. Forget this step and <code>execve()</code> (or anything else walking the array) reads past the end into garbage memory — a classic, nasty bug.</div></li>
+    <li><div class="step-body"><strong>Hand it to execve() — unchanged</strong>This exact array — pointers into the original line buffer, NULL-terminated — is what gets passed as the second argument to <code>execve()</code>. No further copying or reformatting needed; this <em>is</em> the shape the syscall wants.</div></li>
+  </ol>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Tie It Back To fork()/exec()</div>
+    Recall from the deep-dive: the shell forks, the child calls <code>execve(path, argv, environ)</code>, and if that succeeds the child's memory is wiped and replaced by the new program — which starts at <code>main(argc, argv)</code> with exactly the array you just built waiting for it. Everything in this lesson happens <em>before</em> the fork even occurs, in the parent shell process, while it still holds the raw line you typed. By the time the child execs, parsing is long finished — the array is just cargo being carried through.
+  </div>
+
+  <div class="argv-array reveal">
+    <div class="argv-cell"><div class="idx">argv[0]</div><div class="val">"echo"</div></div>
+    <div class="argv-cell"><div class="idx">argv[1]</div><div class="val">"hello world"</div></div>
+    <div class="argv-cell null"><div class="idx">argv[2]</div><div class="val">NULL</div></div>
+  </div>
+</div>
+</section>
+
+<!-- METACHARACTERS -->
+<section id="metachars">
+<div class="container">
+  <div class="section-num">05 — The Next Layer Of Complexity</div>
+  <h2>Shell <span class="accent">Metacharacters</span>: Not Ordinary Arguments</h2>
+
+  <p class="reveal">Everything above assumes the line you typed is destined to become exactly one program's <code>argv</code>. Real shells support a lot more than that: <code>ls | grep txt</code> runs two programs and connects them; <code>cat &gt; out.txt</code> redirects output to a file instead of the screen; <code>sleep 5 &amp;</code> runs a command in the background; <code>cmd1 ; cmd2</code> runs two commands in sequence. The characters that trigger this behavior — <strong><code>|</code>, <code>&gt;</code>, <code>&lt;</code>, <code>&amp;</code>, <code>;</code></strong> — are called <strong>metacharacters</strong>, and they are conceptually a different animal from everything discussed so far.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">| — Pipe</span><span class="fam-count">connects</span></div>
+      <div class="fam-desc">Wires one program's stdout to the next program's stdin. Turns one command line into a small pipeline of processes.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">&gt; / &lt; — Redirection</span><span class="fam-count">rewires I/O</span></div>
+      <div class="fam-desc">Points a program's stdout/stdin at a file instead of the terminal — set up by the shell before the program even starts.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">&amp; — Background</span><span class="fam-count">job control</span></div>
+      <div class="fam-desc">Tells the shell not to wait for this command before printing the next prompt. The subject of Lesson 3's job-control section.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">; — Sequencer</span><span class="fam-count">chains</span></div>
+      <div class="fam-desc">Separates two independent commands on one line, run one after the other regardless of whether the first succeeded.</div>
+    </div>
+  </div>
+
+  <p class="reveal">Here's the key distinction to hold onto: <strong>a quoted space stays data; a bare metacharacter changes behavior.</strong> Tokenizing and quoting (everything covered above) determine <em>what the words are</em>. Metacharacters determine <em>what the shell does</em> with those words once they're known — do they all become one program's argv, or do they get split across a pipeline, or does one become a filename for redirected output instead of an argument at all? That's a strictly higher layer of parsing, usually handled as a second pass (or a smarter single-pass parser) after — or interleaved with — the tokenizing this lesson covered.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ Why This Matters For Quoting, Specifically</div>
+    This is exactly why quoting exists in the first place: if you actually want a literal pipe character or semicolon inside an argument — say, a filename genuinely called <code>report;final.txt</code> — you have to quote or escape it, precisely to tell the shell "no, don't treat this as a metacharacter, this is just data." Quoting isn't only about preserving spaces; it's the general mechanism for telling the parser "everything in here is literal text, not shell syntax," metacharacters included.
+  </div>
+
+  <p class="reveal">This lesson deliberately stops at "metacharacters exist and change what the shell does" rather than implementing pipes or redirection — that's genuinely a separate, larger mechanism (spawning multiple processes, wiring file descriptors between them) worth its own treatment. What matters here is the boundary: plain tokenizing plus quoting gets you a correct <code>argv</code> for <em>one</em> command. Recognizing metacharacters is the first step toward a shell that can run more than one command per line.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Tokenizing</div><div class="glossary-def">Splitting a raw line of text into individual words (tokens), typically on whitespace, as the first stage of parsing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Token</div><div class="glossary-def">One unit of parsed input — a single word, quoted phrase, or metacharacter — that the parser has identified as meaningful on its own.</div></div>
+    <div class="glossary-card"><div class="glossary-term">argv</div><div class="glossary-def">The array of C strings (char *argv[]) passed to a program's main() and to execve() — arguments already split, quote characters already stripped.</div></div>
+    <div class="glossary-card"><div class="glossary-term">NULL Terminator (argv)</div><div class="glossary-def">A NULL pointer placed in the slot after the last real argument, marking the end of the argv array — the array's only length indicator.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Quoting</div><div class="glossary-def">Wrapping text in ' or " to suppress word-splitting (and, depending on the quote type, other special meaning) within that span.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Escape Character</div><div class="glossary-def">A backslash (\) that strips special meaning from the single character immediately following it, without needing a full quoted span.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Metacharacter</div><div class="glossary-def">A character with shell-level meaning beyond being ordinary text — |, >, <, &, ; — that changes what the shell does rather than what argument it produces.</div></div>
+    <div class="glossary-card"><div class="glossary-term">execve()</div><div class="glossary-def">The exec-family syscall that loads a new program into the calling process, taking a path, a NULL-terminated argv array, and a NULL-terminated environment array.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Lexer / Parser</div><div class="glossary-def">The general terms for code that recognizes structure (tokens, quotes, metacharacters) in raw text — a shell's line-reading logic is a small, purpose-built lexer.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Turning a Line of Text Into an argv Array</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion lesson for bob_os module 13_shell.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── TOKENIZER CANVAS ──────────────────────────────────────────────────────
+const rawLine = "ls  -l   /home";
+let tokAnimId=null;
+
+function drawTokScene(cursorIdx,tokens,note,argvBuilt){
+  const canvas=document.getElementById('tokCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // raw line, char by char
+  const charW=Math.min(26,(W-40)/rawLine.length);
+  const startX=20, lineY=44;
+  ctx.font='13px Source Code Pro,monospace';ctx.textAlign='center';
+  for(let i=0;i<rawLine.length;i++){
+    const ch=rawLine[i];
+    const x=startX+i*charW+charW/2;
+    let col=C.text, bg=null;
+    if(i<cursorIdx){
+      // already consumed - color depends on whether it was a space (boundary) or token char
+      bg = ch===' ' ? 'rgba(122,155,191,.15)' : 'rgba(56,189,248,.12)';
+      col = ch===' ' ? C.muted : C.cyan;
+    }
+    if(i===cursorIdx){
+      bg='rgba(245,200,66,.28)';
+      col=C.gold;
+    }
+    if(bg){
+      ctx.fillStyle=bg;
+      ctx.fillRect(x-charW/2+1,lineY-16,charW-2,22);
+    }
+    ctx.fillStyle=col;
+    ctx.fillText(ch===' '?'·':ch,x,lineY);
+  }
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('raw line_buf[] — cursor scans left to right',startX,lineY-26);
+
+  // pointer / cursor marker
+  if(cursorIdx>=0 && cursorIdx<rawLine.length){
+    const x=startX+cursorIdx*charW+charW/2;
+    ctx.fillStyle=C.gold;ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('▲',x,lineY+22);
+    ctx.font='8px Source Code Pro,monospace';
+    ctx.fillText('*p',x,lineY+33);
+  }
+
+  // argv array being built below
+  const argY=H*0.42;
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('argv[] — filled as each token completes',startX,argY-8);
+
+  const slotW=Math.min(150,(W-40-10*3)/4);
+  const slotH=48;
+  for(let i=0;i<4;i++){
+    const x=startX+i*(slotW+10);
+    const filled = i<tokens.length;
+    const isNull = i===tokens.length && argvBuilt;
+    ctx.strokeStyle = filled?C.cyan:(isNull?C.red:C.border);
+    ctx.lineWidth=filled||isNull?1.6:1;
+    ctx.fillStyle = filled?'rgba(56,189,248,.08)':(isNull?'rgba(248,113,113,.08)':'rgba(255,255,255,.02)');
+    ctx.fillRect(x,argY,slotW,slotH);
+    ctx.strokeRect(x,argY,slotW,slotH);
+    ctx.textAlign='center';
+    ctx.fillStyle=C.muted;ctx.font='8px Source Code Pro,monospace';
+    ctx.fillText('argv['+i+']',x+slotW/2,argY+14);
+    ctx.font='11px Source Code Pro,monospace';
+    if(filled){
+      ctx.fillStyle=C.cyan;
+      ctx.fillText('"'+tokens[i]+'"',x+slotW/2,argY+33);
+    } else if(isNull){
+      ctx.fillStyle=C.red;
+      ctx.fillText('NULL',x+slotW/2,argY+33);
+    }
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(note||'',W/2,H-14);
+}
+
+function buildTokSteps(line){
+  // Precompute one frame-state per character index, plus a final "done" frame.
+  const steps=[];
+  let tokens=[], tokenStart=-1;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    let note;
+    if(ch===' '){
+      if(tokenStart>=0){
+        tokens=tokens.concat([line.slice(tokenStart,i)]);
+        note='Hit a space — token "'+tokens[tokens.length-1]+'" complete, written to argv['+(tokens.length-1)+'].';
+        tokenStart=-1;
+      } else note='Skipping whitespace (could be more than one space in a row)...';
+    } else {
+      if(tokenStart<0){ tokenStart=i; note='Non-space found — new token starts at position '+i+'.'; }
+      else note='Scanning character '+i+' of '+line.length+'...';
+    }
+    steps.push({idx:i,tokens:tokens.slice(),note,done:false});
+  }
+  steps.push({idx:line.length,tokens:tokens.slice(),note:'Done — argv has '+tokens.length+' tokens, plus a NULL terminator.',done:true});
+  return steps;
+}
+
+function runTokenize(){
+  if(tokAnimId) cancelAnimationFrame(tokAnimId);
+  document.getElementById('tokLabel').textContent='▶ Tokenizing: "'+rawLine+'"';
+  const steps=buildTokSteps(rawLine);
+  const durations=steps.map(s=>s.done?450:190);
+  let idx=0,start=performance.now();
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    const s=steps[idx];
+    drawTokScene(s.idx,s.tokens,s.note,s.done);
+    if(t>=1){
+      idx++;
+      if(idx>=steps.length){
+        document.getElementById('tokLabel').textContent='▶ Done — try again, or Reset';
+        return;
+      }
+      start=now;
+    }
+    tokAnimId=requestAnimationFrame(step);
+  }
+  tokAnimId=requestAnimationFrame(step);
+}
+function resetTokenize(){
+  if(tokAnimId) cancelAnimationFrame(tokAnimId);
+  document.getElementById('tokLabel').textContent='▶ Watch a raw line get tokenized into argv, byte by byte';
+  drawTokScene(-1,[],'Click Tokenize to step through the loop.',false);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetTokenize(); });
+window.addEventListener('resize',()=>{ resetTokenize(); });
+</script>
+</body>
+</html>

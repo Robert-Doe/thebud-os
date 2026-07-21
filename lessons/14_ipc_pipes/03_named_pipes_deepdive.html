@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Named Pipes (FIFOs): Pipes Two Unrelated Processes Can Find</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--purple);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--purple);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--purple);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#limitation" title="The Real Limitation"></a>
+  <a class="toc-dot" href="#mkfifo" title="mkfifo()"></a>
+  <a class="toc-dot" href="#rendezvous" title="open() Rendezvous"></a>
+  <a class="toc-dot" href="#canvas" title="Watch It Rendezvous"></a>
+  <a class="toc-dot" href="#example" title="Two Shell Scripts"></a>
+  <a class="toc-dot" href="#cleanup" title="Cleanup & Persistence"></a>
+  <a class="toc-dot" href="#compare" title="Pipe vs FIFO vs Shared Mem"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · mkfifo() · Named Pipes · Rendezvous</div>
+    <h1>A Pipe With<br><span>A Name</span></h1>
+    <p class="hero-sub">Everything in the first two lessons of this module assumed one thing quietly in the background: that the two processes sharing a pipe were relatives — one forked from the other, inheriting the fds. What if they aren't? What if two totally unrelated programs, started independently, minutes apart, need to talk? An anonymous pipe genuinely cannot help them. A <strong>named pipe</strong> — a FIFO — can, by doing something an anonymous pipe never does: getting a real name in the filesystem.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Bytes of Pipe Data Ever Stored on Disk</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Filesystem Path Any Process Can open()</div></div>
+      <div class="hero-stat"><div class="num">mkfifo()</div><div class="lbl">The Syscall That Gives a Pipe a Name</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Opens Required Before Either Side Proceeds</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Two Lessons In, <span class="accent">One Assumption Unexamined</span></h2>
+  <p class="reveal">Lesson 1 built <code>ls | grep foo</code> from first principles: the shell calls <code>pipe()</code> <em>once</em>, then <code>fork()</code>s twice, so both children inherit copies of the same two file descriptors. Lesson 2 opened up what those fds actually point at — a fixed-size kernel ring buffer, with blocking on full/empty and SIGPIPE when the reader's gone for good. Both lessons quietly depended on one fact: the pipe was created by a <strong>common ancestor</strong>, before anyone forked. That's not a minor detail — it's the entire reason an anonymous pipe works at all, and it's exactly the assumption this lesson breaks.</p>
+  <p class="reveal">Good news up front: nothing from Lesson 2 gets thrown away. The ring buffer, the blocking semantics, SIGPIPE — all of it carries over here completely unchanged. What changes is only <em>how the two ends find each other in the first place.</em></p>
+</div>
+</section>
+
+<!-- THE LIMITATION -->
+<section id="limitation">
+<div class="container">
+  <div class="section-num">01 — The Problem an Anonymous Pipe Can't Solve</div>
+  <h2>Where Do <span class="accent">File Descriptors</span> Actually Come From?</h2>
+
+  <p class="reveal">Ask yourself a plain question: how does a process ever get a pipe file descriptor in the first place? There are exactly two ways. Either it calls <code>pipe()</code> itself, or it inherits a copy from its parent via <code>fork()</code>. That's the complete list. There is no third mechanism — no syscall exists that says "give me a handle to the pipe some other, unrelated process happens to have open."</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The Hard Limit of an Anonymous Pipe</span>
+    Its file descriptors only exist because a common ancestor process created them before forking.
+    <span class="sub">Two already-running, otherwise-unrelated processes — say, a cron job and a long-lived daemon started at boot — have absolutely no way to end up holding fds that point at the same kernel pipe. There's no shared ancestor moment where fork() could have handed both of them a copy.</span>
+  </div>
+
+  <p class="reveal">This isn't a bug or an oversight — it's a direct consequence of how anonymous pipes are identified. They have no name, no path, nothing you could type or pass as a string to a stranger process. The only "identity" a pipe has is a small integer (a file descriptor number) that's meaningful only inside the fd table of a process that already has it. Two unrelated processes each have their own private fd table, numbered independently — fd 5 in one process has nothing to do with fd 5 in another.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ A Concrete Case Where This Bites You</div>
+    Imagine a logging daemon that starts at boot, and a separate command-line tool a user runs later, by hand, that wants to feed it log lines. Neither process is an ancestor of the other — the daemon was started by the init system; the tool was started later by a shell, itself a totally different process tree. An anonymous pipe cannot connect them, full stop, no matter how you juggle <code>fork()</code> — there is no point in either program's history where a common parent could have created and shared one.
+  </div>
+</div>
+</section>
+
+<!-- MKFIFO -->
+<section id="mkfifo">
+<div class="container">
+  <div class="section-num">02 — Giving a Pipe an Address</div>
+  <h2><span class="accent">mkfifo()</span>: A Pipe You Can Open() By Path</h2>
+
+  <p class="reveal">The fix is almost embarrassingly direct: give the pipe a name in a place both processes can already reach — the filesystem. That's <code>mkfifo()</code>:</p>
+
+  <pre><code>#include &lt;sys/stat.h&gt;
+int rc = mkfifo("/tmp/mypipe", 0666);
+/* creates a special filesystem entry at /tmp/mypipe
+ * rc == 0 on success, -1 on failure (e.g. already exists)   */</code></pre>
+
+  <p class="reveal">After this call, <code>ls -l /tmp/mypipe</code> shows a real directory entry — with its own permissions, owner, and a file type marker (<code>p</code> in <code>ls -l</code>'s leftmost column, corresponding to the <code>S_IFIFO</code> file type bit) that says "this is a FIFO, not a regular file." Any process on the system that can see that path — with no relation to whoever ran <code>mkfifo()</code> whatsoever — can now call <code>open("/tmp/mypipe", ...)</code> and get a file descriptor connected to it. That's the entire trick: <strong>discoverability by name, instead of inheritance by fork().</strong></p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment — Nothing Is Actually Stored There</div>
+    Despite living in the filesystem and showing up in <code>ls</code>, a FIFO's directory entry holds zero bytes of pipe data. It's a <strong>rendezvous point</strong>, not a file — a name the kernel uses to find (or create) the underlying kernel pipe object, the exact same ring-buffer structure from Lesson 2, at <code>open()</code> time. Write 4GB through a FIFO and check the disk afterward: nothing changed, because nothing was ever written to disk. The filesystem's only job here is being a shared namespace two strangers can both look up by the same string.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Regular File</th><th>Named Pipe (FIFO)</th></tr></thead>
+      <tbody>
+        <tr><td>Has a directory entry / path</td><td class="pos">Yes</td><td class="pos">Yes</td></tr>
+        <tr><td>Data lives on disk</td><td class="pos">Yes</td><td class="neg">No — ever</td></tr>
+        <tr><td>Content persists after all processes close it</td><td class="pos">Yes — until you delete it</td><td class="neg">No — the data is gone the instant it's consumed or the last fd closes</td></tr>
+        <tr><td>Multiple readers can each read everything independently</td><td class="pos">Yes — reads don't consume the file</td><td class="neg">No — bytes are consumed once, exactly like any pipe</td></tr>
+        <tr><td>open() can block waiting for "the other side"</td><td class="neg">No</td><td class="pos">Yes — see next section</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- RENDEZVOUS -->
+<section id="rendezvous">
+<div class="container">
+  <div class="section-num">03 — The Handshake Nobody Mentions</div>
+  <h2><span class="accent">open()</span> Itself Can Block</h2>
+
+  <p class="reveal">Here's a genuinely surprising property, and it's unique to FIFOs among all the file types you'll normally open: calling <code>open()</code> on a named pipe can <strong>block before you've even gotten a file descriptor back</strong> — not on <code>read()</code> or <code>write()</code>, but on <code>open()</code> itself.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The Default Rendezvous Rule</span>
+    Opening a FIFO for reading (O_RDONLY) blocks until some process opens it for writing. Opening it for writing (O_WRONLY) blocks until some process opens it for reading.
+    <span class="sub">Neither side's open() call returns until BOTH sides are present. This is the kernel enforcing a two-party handshake before any data can possibly flow — pass O_NONBLOCK to opt out and get an immediate error/success instead of blocking.</span>
+  </div>
+
+  <p class="reveal">Think about why this makes sense. With an anonymous pipe, both ends are guaranteed to exist simultaneously — they were created together, by the same <code>pipe()</code> call, before anyone even forked. A FIFO has no such guarantee: process A might <code>mkfifo()</code> and try to open it minutes before process B ever starts. Without a blocking handshake, A's <code>write()</code> calls would have nowhere defined to go yet — is there a reader coming, or not? The rendezvous rule turns "wait until someone shows up" into an explicit, well-defined step, rather than leaving it ambiguous.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Process A: mkfifo("/tmp/mypipe", 0666)</strong>The rendezvous point now exists in the filesystem. Nobody has opened it yet.</div></li>
+    <li><div class="step-body"><strong>Process A: open("/tmp/mypipe", O_WRONLY)</strong>This call does not return yet. Process A's PCB state flips to BLOCKED — the exact same three-state vocabulary from Module 3, just triggered by open() instead of read()/write() this time.</div></li>
+    <li><div class="step-body"><strong>Process B starts, independently, and calls open("/tmp/mypipe", O_RDONLY)</strong>The instant this call happens, the kernel sees both a waiting writer and a waiting reader for the same FIFO. Both open() calls unblock and return successfully, at essentially the same moment.</div></li>
+    <li><div class="step-body"><strong>From here, it's an ordinary pipe</strong>Both processes now hold ordinary file descriptors connected to the same kernel ring buffer. read(), write(), blocking on full/empty, SIGPIPE if the other side vanishes — every rule from Lesson 2 applies, unmodified.</div></li>
+  </ol>
+
+  <p class="reveal">In C, rather than shell redirection, the same handshake looks like this — note that neither side needs to know anything about the other beyond the agreed-upon path:</p>
+
+  <pre><code>/* writer.c — run whenever you like, by anyone */
+#include &lt;fcntl.h&gt;
+mkfifo("/tmp/mypipe", 0666);        /* harmless if it already exists (EEXIST) */
+int fd = open("/tmp/mypipe", O_WRONLY);  /* BLOCKS until a reader opens it */
+write(fd, "hello from an unrelated process\n", 33);
+close(fd);</code></pre>
+
+  <pre><code>/* reader.c — started independently, possibly first */
+#include &lt;fcntl.h&gt;
+mkfifo("/tmp/mypipe", 0666);        /* also harmless — same path, same object */
+int fd = open("/tmp/mypipe", O_RDONLY);  /* BLOCKS until a writer opens it */
+char buf[128];
+int n = read(fd, buf, sizeof(buf));      /* ordinary blocking read, exactly like Lesson 2 */
+close(fd);</code></pre>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 Either Side Can Call mkfifo() — It's Idempotent In Practice</div>
+    Both snippets above call <code>mkfifo()</code> on the same path, and that's a deliberately common pattern: whichever process happens to run first creates the rendezvous point, and the second call simply fails with <code>EEXIST</code> (harmless — just check for and ignore that specific error). Neither process needs to know or care which one actually "wins" the race to create the name.
+  </div>
+</div>
+</section>
+
+<!-- CANVAS -->
+<section id="canvas">
+<div class="container">
+  <div class="section-num">04 — Watch Two Strangers Rendezvous</div>
+  <h2>Two Unrelated Processes, <span class="accent">One Shared Name</span></h2>
+
+  <p class="reveal">Neither process below was forked from the other, and neither existed when the other started. The only thing they share is a string: <code>/tmp/mypipe</code>.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="fifoLabel">▶ Run the rendezvous: two independent processes meet through a filesystem name</div>
+    <canvas id="fifoCanvas" height="380"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runFifoScenario()">▶ Run Scenario</button>
+    <button class="ctrl-btn red" onclick="resetFifo()">Reset</button>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 What Makes This Different From Lesson 1's Canvas</div>
+    In Lesson 1's shell-pipeline animation, both children existed because one parent forked them, in sequence, one after another, all within milliseconds. Here, watch how Process A and Process B never share a parent frame at all — they're connected only by both independently looking up the same path, at whatever moment each happens to call open(). That's the entire qualitative difference a name in the filesystem buys you.
+  </div>
+</div>
+</section>
+
+<!-- EXAMPLE -->
+<section id="example">
+<div class="container">
+  <div class="section-num">05 — A Concrete, Runnable Example</div>
+  <h2>Two Shell Scripts, <span class="accent">One FIFO</span></h2>
+
+  <p class="reveal">You don't need to write any C to see this work — the shell exposes <code>mkfifo</code> as a command, and every shell's redirection operators (<code>&gt;</code>, <code>&lt;</code>) happily target a FIFO path exactly like a regular file. Open two separate terminals — genuinely separate processes, with no relationship to each other beyond both being your shell.</p>
+
+  <pre><code># Terminal 1 — create the rendezvous point, then read from it
+mkfifo /tmp/mypipe
+echo "waiting for a message..."
+cat &lt; /tmp/mypipe          # blocks here — this IS the open() rendezvous
+echo "got it, script continuing"</code></pre>
+
+  <pre><code># Terminal 2 — a completely separate shell process, run whenever you like
+echo "hello from an unrelated process" &gt; /tmp/mypipe
+# the moment this runs, BOTH terminals' shell commands unblock at once</code></pre>
+
+  <p class="reveal">Run Terminal 1's block first — you'll see it hang at <code>cat &lt; /tmp/mypipe</code>, doing nothing, because it's blocked inside <code>open()</code> waiting for a writer. Only once you run Terminal 2, potentially minutes later, does Terminal 1 unblock, print the message, and continue. That pause is the rendezvous, visible with your own eyes, between two shells that have never heard of each other.</p>
+
+  <div class="sidenote reveal">
+    <b>Sidenote:</b> This exact pattern — a long-running FIFO reader loop plus scripts that write to it whenever something happens — is a genuinely common lightweight IPC technique for shell tooling: a "control pipe" that a daemon script reads commands from, fed by unrelated one-off scripts elsewhere in a cron job or CI pipeline, with none of them needing to know each other's PID or relationship.
+  </div>
+</div>
+</section>
+
+<!-- CLEANUP -->
+<section id="cleanup">
+<div class="container">
+  <div class="section-num">06 — Names Aren't Forever</div>
+  <h2>unlink() and the <span class="accent">Persistence</span> Quirk</h2>
+
+  <p class="reveal">A FIFO's directory entry behaves like any other filesystem name when it comes to cleanup: <code>unlink("/tmp/mypipe")</code> (or <code>rm /tmp/mypipe</code> from a shell) removes it. But — same as unlinking a regular file that some process still has open — removing the <em>name</em> doesn't destroy the underlying kernel object out from under processes that already have it open.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🗂️ What unlink() Removes</h4>
+      Just the directory entry — the name-to-object mapping. After this, no <em>new</em> process can find the pipe by calling open() on that path; it simply won't exist anymore as far as the filesystem namespace is concerned.
+    </div>
+    <div class="compare-card good">
+      <h4>♻️ What Survives</h4>
+      Any file descriptors already open, on either end, keep working exactly as before — the kernel ring buffer they point at doesn't care that its name was removed. It's only fully torn down once every fd referencing it, everywhere, is closed — the same reference-counting rule an anonymous pipe already follows.
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ The Practical Upshot</div>
+    A stale <code>/tmp/mypipe</code> left over from a crashed script is completely harmless to <code>rm</code> — you're never at risk of "deleting in-flight data," because, as established back in Lesson 02, no data was ever stored at that path in the first place. The name is just a rendezvous point; deleting it only closes the door for future strangers to find each other there, it doesn't touch any conversation already underway.
+  </div>
+</div>
+</section>
+
+<!-- COMPARE TABLE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">07 — Where This Fits Among IPC Options</div>
+  <h2>Anonymous Pipe vs <span class="accent">Named Pipe</span> vs Shared Memory</h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Anonymous Pipe</th><th>Named Pipe (FIFO)</th><th>Shared Memory</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Who can use it</td><td>Only descendants of a common ancestor</td><td class="gold">Any process that can reach the path — the whole point of this lesson</td><td>Any process granted the mapping</td></tr>
+        <tr><td class="hl">How processes find it</td><td>Inherited file descriptor via fork()</td><td class="gold">open() on a well-known filesystem path</td><td>A key/handle passed out-of-band</td></tr>
+        <tr><td class="hl">Underlying data mechanism</td><td>Kernel ring buffer</td><td class="pos">Identical kernel ring buffer</td><td>Raw shared physical pages</td></tr>
+        <tr><td class="hl">open() can block on its own</td><td>N/A — no open(), fds are inherited</td><td class="gold">Yes — the read/write rendezvous handshake</td><td>N/A</td></tr>
+        <tr><td class="hl">Data ever touches disk</td><td class="pos">Never</td><td class="pos">Never — only the name is on disk</td><td class="pos">Never</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The One-Sentence Takeaway For This Whole Module</div>
+    An anonymous pipe and a named pipe are the same mechanism wearing two different hats — the only thing that changes between them is how two file descriptors end up pointing at one kernel ring buffer: inherited silently through fork(), or discovered deliberately through a filesystem path. Reach for shared memory only once you've outgrown either — when the volume or frequency of data makes paying the kernel-copy cost, on every single byte, the actual bottleneck.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Named Pipe / FIFO</div><div class="glossary-def">A pipe with a real filesystem path, creatable and openable by any process — as opposed to an anonymous pipe, reachable only via inherited file descriptors.</div></div>
+    <div class="glossary-card"><div class="glossary-term">mkfifo()</div><div class="glossary-def">The syscall (and shell command) that creates a FIFO's directory entry at a given path, without opening it or transferring any data.</div></div>
+    <div class="glossary-card"><div class="glossary-term">S_IFIFO</div><div class="glossary-def">The file-type bit marking a directory entry as a FIFO rather than a regular file, directory, or other special file type — shown as "p" in `ls -l`.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Rendezvous</div><div class="glossary-def">The blocking handshake a FIFO's open() performs: a reader's open() waits for a writer's open() (and vice versa) before either call returns.</div></div>
+    <div class="glossary-card"><div class="glossary-term">O_NONBLOCK</div><div class="glossary-def">A flag passed to open() that opts out of the rendezvous block, returning immediately with success or an error instead of waiting for the other side.</div></div>
+    <div class="glossary-card"><div class="glossary-term">unlink()</div><div class="glossary-def">Removes a FIFO's name from the filesystem without affecting any file descriptors already open on it — the underlying pipe survives until every fd referencing it closes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Well-Known Path</div><div class="glossary-def">A filesystem location agreed upon in advance (e.g. by convention or configuration) that lets unrelated processes rendezvous without any prior direct relationship.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Kernel Ring Buffer</div><div class="glossary-def">The same fixed-size, wrap-around byte buffer from Lesson 2 — identical underneath a FIFO as underneath an anonymous pipe.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Named Pipes (FIFOs): Pipes Two Unrelated Processes Can Find · bob_os Lessons, Module 14 · Part 3 of 3</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Companion lesson for bob_os modules 20_pipes and 23_shared_memory.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+function wrapText(ctx,text,cx,y,maxWidth,lineHeight){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxWidth && line){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY = y - (lines.length-1)*lineHeight/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lineHeight));
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+  else {ctx.beginPath();ctx.rect(x,y,w,h);}
+}
+
+// ── FIFO RENDEZVOUS CANVAS ───────────────────────────────────────────────
+function drawFsPanel(ctx,x,y,w,h,entries){
+  ctx.fillStyle='rgba(255,255,255,.03)';ctx.strokeStyle=C.border;ctx.lineWidth=1;
+  roundRectPath(ctx,x,y,w,h,8);ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('/tmp',x+10,y+16);
+  entries.forEach((e,i)=>{
+    ctx.fillStyle= e.new? C.purple : C.text;
+    ctx.font=(e.new?'bold ':'')+'11px Source Code Pro,monospace';
+    ctx.fillText((e.removed? '(removed) ' : '')+e.name+'   '+e.type, x+18, y+36+i*18);
+  });
+  if(entries.length===0){
+    ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('(empty)',x+18,y+36);
+  }
+}
+
+function drawProc(ctx,x,y,w,h,label,state,color){
+  ctx.fillStyle='rgba(167,139,250,.05)';ctx.strokeStyle=color;ctx.lineWidth=1.3;
+  roundRectPath(ctx,x,y,w,h,8);ctx.fill();ctx.stroke();
+  ctx.fillStyle=color;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2-8);
+  if(state){
+    const stCol={RUNNING:C.green,READY:C.gold,BLOCKED:C.red}[state]||C.muted;
+    ctx.fillStyle=stCol;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText(state,x+w/2,y+h/2+10);
+  }
+}
+
+const FIFO_SCRIPT=[
+  {key:'idle',       fs:[], a:{label:'Process A (unrelated)',state:null}, b:{label:'Process B (unrelated)',state:null}, connected:false,
+   cap:'Two independent processes. Neither exists in the other’s ancestry. No shared name yet.'},
+  {key:'mkfifo',      fs:[{name:'mypipe',type:'FIFO (0 bytes)',new:true}], a:{label:'Process A',state:'RUNNING'}, b:{label:'Process B (not started yet)',state:null}, connected:false,
+   cap:'Process A calls mkfifo("/tmp/mypipe") — a rendezvous point appears in the filesystem. No data. No connection yet.'},
+  {key:'openA',       fs:[{name:'mypipe',type:'FIFO (0 bytes)'}], a:{label:'Process A',state:'BLOCKED'}, b:{label:'Process B (not started yet)',state:null}, connected:false,
+   cap:'Process A calls open("/tmp/mypipe", O_WRONLY) — blocks. No reader has opened it yet.'},
+  {key:'openB',       fs:[{name:'mypipe',type:'FIFO (0 bytes)'}], a:{label:'Process A',state:'BLOCKED'}, b:{label:'Process B',state:'RUNNING'}, connected:false,
+   cap:'Process B starts — independently, possibly minutes later — and calls open("/tmp/mypipe", O_RDONLY).'},
+  {key:'rendezvous',  fs:[{name:'mypipe',type:'FIFO (0 bytes)'}], a:{label:'Process A',state:'RUNNING'}, b:{label:'Process B',state:'RUNNING'}, connected:true,
+   cap:'Rendezvous! Both open() calls unblock at once — same kernel ring buffer as any pipe, just found by name.'},
+  {key:'flow',        fs:[{name:'mypipe',type:'FIFO (0 bytes)'}], a:{label:'Process A',state:'RUNNING'}, b:{label:'Process B',state:'RUNNING'}, connected:true, flow:true,
+   cap:'Bytes flow A → kernel ring buffer → B, exactly like Lesson 2 — blocking, ordering, SIGPIPE, all unchanged.'},
+  {key:'unlink',      fs:[{name:'mypipe',type:'FIFO (0 bytes)',removed:true}], a:{label:'Process A',state:'RUNNING'}, b:{label:'Process B',state:'RUNNING'}, connected:true,
+   cap:'unlink("/tmp/mypipe") removes the NAME only — both processes’ already-open fds keep working fine.'}
+];
+
+function drawFifoScene(s){
+  const canvas=document.getElementById('fifoCanvas');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  drawFsPanel(ctx, W/2-110, 20, 220, 24+s.fs.length*18+14, s.fs);
+
+  const boxW=220, boxH=90, y=200;
+  drawProc(ctx, 40, y, boxW, boxH, s.a.label, s.a.state, s.connected?C.green:C.cyan);
+  drawProc(ctx, W-40-boxW, y, boxW, boxH, s.b.label, s.b.state, s.connected?C.green:C.orange);
+
+  if(s.connected){
+    const px=40+boxW+20, pw=(W-40-boxW)-px-20, py=y+boxH/2-16, ph=32;
+    ctx.fillStyle='rgba(245,200,66,.06)';ctx.strokeStyle=C.gold;ctx.lineWidth=1;
+    ctx.strokeRect(px,py,pw,ph);
+    ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('kernel ring buffer',px+pw/2,py+ph/2+3);
+    ctx.strokeStyle=C.purple;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(40+boxW,y+boxH/2);ctx.lineTo(px,y+boxH/2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px+pw,y+boxH/2);ctx.lineTo(W-40-boxW,y+boxH/2);ctx.stroke();
+    if(s.flow){
+      ctx.fillStyle=C.green;ctx.font='14px sans-serif';
+      ctx.fillText('bytes →',px+pw/2,py-8);
+    }
+  } else if(s.key==='openA'){
+    ctx.strokeStyle=C.red;ctx.setLineDash([3,3]);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(40+boxW,y+boxH/2);ctx.lineTo(W/2-30,y+boxH/2);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.red;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('open() blocked, waiting…',W/2,y+boxH/2-10);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,s.cap,W/2,H-24,W-60,18);
+}
+
+function runFifoScenario(){
+  let idx=0,start=performance.now();
+  const dur=900;
+  document.getElementById('fifoLabel').textContent='▶ Running the rendezvous …';
+  function step(now){
+    const t=(now-start)/dur;
+    drawFifoScene(FIFO_SCRIPT[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=FIFO_SCRIPT.length){
+        document.getElementById('fifoLabel').textContent='▶ Done — same pipe mechanism, found a different way';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetFifo(){
+  document.getElementById('fifoLabel').textContent='▶ Run the rendezvous: two independent processes meet through a filesystem name';
+  drawFifoScene(FIFO_SCRIPT[0]);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetFifo(); });
+window.addEventListener('resize',()=>{ resetFifo(); });
+</script>
+</body>
+</html>

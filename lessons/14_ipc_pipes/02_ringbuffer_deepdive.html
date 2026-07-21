@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inside the Pipe: A Ring Buffer, Blocking, and SIGPIPE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--orange);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--orange);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--orange);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(251,146,60,.1);border:1.5px solid var(--orange);color:var(--orange);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(251,146,60,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--orange);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier.dead{border-color:var(--red);}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;}
+.dossier.dead .dossier-head{background:rgba(248,113,113,.08);border-bottom-color:var(--red);}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier.dead .dossier-head span{color:var(--red);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--orange);}
+.dossier.dead .dossier-field .f-val{color:var(--red);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#ringbuffer" title="The Ring Buffer"></a>
+  <a class="toc-dot" href="#fullpipe" title="Full Pipe: Writer Blocks"></a>
+  <a class="toc-dot" href="#emptypipe" title="Empty Pipe: Reader Blocks"></a>
+  <a class="toc-dot" href="#blocksim" title="Blocking, Simulated"></a>
+  <a class="toc-dot" href="#sigpipe" title="SIGPIPE"></a>
+  <a class="toc-dot" href="#practical" title="Living With SIGPIPE"></a>
+  <a class="toc-dot" href="#compare" title="Pipe vs FIFO vs Shared Mem"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Ring Buffers · Blocking I/O · Signals</div>
+    <h1>What Happens<br><span>Inside the Buffer</span></h1>
+    <p class="hero-sub">Lesson 1 told you a pipe guarantees ordered bytes in, ordered bytes out, with the kernel doing "all the actual buffering." This lesson opens that buffer up. It's a fixed-size ring, and fixed size means it can run out of room — or run out of data. Both situations put a process to sleep. And there's a third failure mode entirely: writing into a pipe nobody will ever read from again, which the kernel handles by killing you, on purpose.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">64KB</div><div class="lbl">Typical Linux Pipe Capacity (Kernel-Tunable)</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Cursors Doing All the Work — Head &amp; Tail</div></div>
+      <div class="hero-stat"><div class="num">BLOCKED</div><div class="lbl">Process State When the Pipe Is Full or Empty</div></div>
+      <div class="hero-stat"><div class="num">SIGPIPE</div><div class="lbl">Signal Sent When You Write Into a Void</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>"The Kernel Does All the Buffering" Was <span class="accent">Doing a Lot of Work</span></h2>
+  <p class="reveal">Lesson 1 kept the buffer itself as a black box on purpose — a pipe's whole selling point is that you never have to think about it. But a black box that never runs out of room doesn't exist, and neither does a real one here: bob_os's <code>pipe_buf</code> struct fixes <code>data[PIPE_BUF]</code> at a flat 4096 bytes, and real Linux pipes, though usually larger, are just as finite. Today we open the box: how the buffer actually wraps bytes around in fixed memory, what "full" and "empty" really mean to the two processes on either end, and the specific signal the kernel fires when a writer is shouting into a pipe that has, quite literally, no one left to hear it.</p>
+  <p class="reveal">This also finally cashes in a promise from Module 3's PCB explainer. That dossier listed <strong>Process State</strong> as <code>RUNNING / READY / BLOCKED</code> and moved on. A pipe is one of the most common, concrete reasons a process ever actually lands in <code>BLOCKED</code> — and by the end of this lesson you'll be able to point at the exact line of kernel logic that puts it there.</p>
+</div>
+</section>
+
+<!-- RING BUFFER -->
+<section id="ringbuffer">
+<div class="container">
+  <div class="section-num">01 — The Actual Data Structure</div>
+  <h2>A Pipe Is a <span class="accent">Ring Buffer</span></h2>
+
+  <p class="reveal">"Fixed-size buffer with a read end and a write end" could, in principle, be implemented a dozen ways. In practice, every mainstream kernel implements it the same way: a flat array of bytes, plus two cursors — <strong>head</strong> (next byte to read) and <strong>tail</strong> (next slot to write) — both of which wrap back to zero once they walk off the end of the array. That's a <strong>ring buffer</strong> (also called a circular buffer), and it's a good structure for exactly this job: fixed memory, no reallocation ever, and O(1) push/pop from either end.</p>
+
+  <pre><code>#define PIPE_BUF  4096          /* bob_os: fixed, small, easy to reason about   */
+                                  /* Linux default capacity: 65536 (tunable via
+                                     fcntl(fd, F_SETPIPE_SZ, n), historically 4096 */
+struct pipe_buf {
+    char     data[PIPE_BUF];
+    uint32_t head;    /* next byte the reader will consume */
+    uint32_t tail;    /* next slot the writer will fill     */
+    uint32_t count;    /* bytes currently buffered — the ONLY way to tell
+                          full (count==PIPE_BUF) apart from empty (count==0),
+                          since head==tail happens in both cases          */
+};
+
+/* wrap-around indexing — this is the entire "ring" in ring buffer */
+data[tail % PIPE_BUF] = byte;   tail++;   count++;   /* on write */
+byte = data[head % PIPE_BUF];   head++;   count--;   /* on read  */</code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why count Exists At All</div>
+    Look closely at the comment in that struct: if you only tracked <code>head</code> and <code>tail</code>, an empty buffer (<code>head == tail</code>, nothing written since last fully drained) would be indistinguishable from a completely full one (<code>head == tail</code> again, because <code>tail</code> wrapped all the way around and caught up to <code>head</code>). That's a classic ring-buffer trap. The fix is exactly what bob_os's <code>pipe.c</code> does: keep an explicit <code>count</code> field as the single source of truth for "how full is this thing," and let <code>head</code>/<code>tail</code> just be positions.
+  </div>
+
+  <p class="reveal">The size is genuinely fixed at pipe-creation time (or resized in one shot via <code>fcntl(F_SETPIPE_SZ)</code> on Linux) — it never grows dynamically the way, say, a <code>Vec</code> or <code>std::vector</code> would as you push more data in. That fixed ceiling is the entire reason the rest of this lesson exists: a writer can eventually catch up to a reader that isn't draining fast enough, and there is nowhere left to put the next byte.</p>
+</div>
+</section>
+
+<!-- FULL PIPE -->
+<section id="fullpipe">
+<div class="container">
+  <div class="section-num">02 — When There's Nowhere Left to Write</div>
+  <h2>Full Pipe: The Writer <span class="accent">Blocks</span></h2>
+
+  <p class="reveal">Picture a writer producing data faster than a reader consumes it — a video encoder streaming frames to a slower network client, for instance. Eventually <code>count</code> reaches <code>PIPE_BUF</code>. The writer calls <code>write()</code> again. What happens is <em>not</em> an error, and it is <em>not</em> a partial write that silently drops bytes. By default, the call simply does not return.</p>
+
+  <div class="formula orange reveal">
+    <span class="label">Default (Blocking) write() On a Full Pipe</span>
+    The calling process is put to sleep — its PCB's Process State field flips to BLOCKED — until at least one byte of free space opens up.
+    <span class="sub">The kernel doesn't busy-loop checking "is there room yet?" a thousand times a second. It removes the writer from the scheduler's run queue entirely and parks it on a wait queue attached to this specific pipe, exactly the same mechanism as any other blocking I/O.</span>
+  </div>
+
+  <p class="reveal">This ties directly back to the three-state PCB model from Module 3. A blocked writer isn't spinning, isn't consuming CPU, and isn't even being considered by the scheduler — it's parked. The instant a reader drains enough bytes to free space, the kernel's <code>write()</code> path (or, symmetrically, the reader's <code>read()</code> path) calls a wake-up routine that moves the writer back to READY, and the scheduler picks it up again on its own schedule, same as any other previously-blocked process.</p>
+
+  <div class="sidenote reveal">
+    <b>Sidenote:</b> POSIX actually carves out a special case here worth knowing: writes of up to <code>PIPE_BUF</code> bytes (a implementation-defined constant, historically 4096 on Linux) are guaranteed <strong>atomic</strong> — if two processes write to the same pipe at once, one write's bytes will never interleave with the other's, mid-write. Writes larger than <code>PIPE_BUF</code> carry no such guarantee and may be split into multiple chunks by the kernel, potentially interleaved with another writer's data. bob_os sidesteps this entirely by making its whole buffer exactly <code>PIPE_BUF</code> bytes and blocking until the full request fits — simple, but see the callout below for the tradeoff.
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ All-Or-Nothing vs Partial Writes</div>
+    bob_os's <code>pipe_write_fn</code> writes as many bytes as currently fit and returns that count immediately — it does not block waiting for the rest, and it does not guarantee your whole buffer gets written in one call. Real POSIX <code>write()</code> behaves similarly for large writes: a caller is expected to check the return value and loop, re-calling <code>write()</code> with whatever didn't fit, until everything is sent. Assuming a single <code>write()</code> call always writes everything you asked for is a real, common bug — always check the return value.
+  </div>
+</div>
+</section>
+
+<!-- EMPTY PIPE -->
+<section id="emptypipe">
+<div class="container">
+  <div class="section-num">03 — When There's Nothing Left to Read</div>
+  <h2>Empty Pipe: The Reader <span class="accent">Blocks</span> (Usually)</h2>
+
+  <p class="reveal">The mirror image: a reader calls <code>read()</code> and <code>count == 0</code> — no bytes are waiting. Exactly like the full-writer case, the default behavior is to block: the reader's PCB state flips to BLOCKED, it's parked on the same pipe's wait queue, and it wakes back up to READY the instant a writer adds even one byte.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Pipe State When read() Is Called</th><th>Write End Status</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Has bytes (count &gt; 0)</td><td>—</td><td class="pos">Returns immediately with up to the requested number of bytes</td></tr>
+        <tr><td>Empty (count == 0)</td><td class="hl">Still open somewhere</td><td class="neg">Blocks — someone might still write more</td></tr>
+        <tr><td>Empty (count == 0)</td><td class="hl">Closed everywhere (0 writers left)</td><td class="gold">Returns 0 immediately — this is end-of-file, not an error</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">That third row is the exit condition for the entire mechanism, and it's the reason Lesson 1's "close the end you don't use" rule matters so much. A blocked reader isn't waiting for "more bytes forever" — it's specifically waiting for one of two things to become true: either new data arrives, or the last write end anywhere closes. The kernel can only ever notice the second condition if every single copy of that write-end fd — including any accidental extras left lying around after a careless <code>fork()</code> — actually gets closed.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Blocking Is Symmetric, On Purpose</div>
+    Full buffer blocks the writer; empty buffer blocks the reader. Neither side ever has to poll the other, spin-wait, or implement its own signaling — the pipe's blocking semantics on <code>read()</code>/<code>write()</code> already are the synchronization primitive. This is a large part of why Lesson 1 called a pipe "the simplest possible IPC mechanism": correct producer/consumer coordination falls out of ordinary blocking syscalls, for free.
+  </div>
+</div>
+</section>
+
+<!-- BLOCKING CANVAS -->
+<section id="blocksim">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>Fill, <span class="accent">Block</span>, Drain, <span class="accent g">Wake</span></h2>
+
+  <p class="reveal">Below is a small ring buffer (drawn abstractly as 12 slots instead of 4096 bytes, so you can actually watch it fill) with a writer producing faster than a reader consumes. Watch the two PCB-style state tags on either side — they're the same RUNNING / READY / BLOCKED vocabulary from the Module 3 dossier.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="ringLabel">▶ Run the scenario: writer outruns reader, fills the buffer, blocks, then wakes</div>
+    <canvas id="ringCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runRingScenario()">▶ Run Scenario</button>
+    <button class="ctrl-btn red" onclick="resetRing()">Reset</button>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 What To Notice</div>
+    The writer doesn't get an error when the buffer fills — it simply stops making progress, silently, until the reader creates room. From the writer's own code's point of view, <code>write()</code> is just a function call that sometimes returns quickly and sometimes takes a while; the "took a while" case is a full pipe, resolved entirely by the kernel without either process writing a single line of synchronization code.
+  </div>
+</div>
+</section>
+
+<!-- SIGPIPE -->
+<section id="sigpipe">
+<div class="container">
+  <div class="section-num">05 — Writing Into a Void</div>
+  <h2>What If <span class="accent">Nobody's</span> Listening Anymore?</h2>
+
+  <p class="reveal">There's a third scenario, distinct from full-and-blocked: what happens if a writer calls <code>write()</code> on a pipe whose read end has been closed <strong>everywhere</strong> — not just temporarily slow, but permanently gone; no process anywhere holds that read fd open, and none ever will again. Blocking would be senseless here: there is no reader left to eventually drain the buffer and unblock anyone.</p>
+
+  <div class="formula orange reveal">
+    <span class="label">What The Kernel Does Instead</span>
+    It sends the writer process the SIGPIPE signal. By default, SIGPIPE terminates the receiving process immediately.
+    <span class="sub">The write() call doesn't even get a chance to return an error code in the normal case — the process is killed out from under it, at the point of the write.</span>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="sigLabel">▶ Reader disappears, writer keeps writing</div>
+    <canvas id="sigCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runSigpipe()">▶ Run: Reader Closes, Writer Writes Anyway</button>
+    <button class="ctrl-btn red" onclick="resetSigpipe()">Reset</button>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Exists — It's a Deliberate Design Choice</div>
+    Without SIGPIPE, a writer with no reader left would face two equally bad options: block forever waiting for a reader that will never come back (the kernel can't distinguish "no reader" from "slow reader" using blocking alone, since new readers could theoretically still open a named pipe later), or keep accepting writes into an ever-growing buffer with genuinely nowhere for the bytes to ever go, accumulating unboundedly. SIGPIPE sidesteps both: it stops the writer immediately, loudly, the moment writing into the void becomes provably pointless — rather than than let it spin or leak memory silently.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Sidenote:</b> You've almost certainly triggered SIGPIPE without realizing it. Run <code>yes | head -n 1</code> at a shell: <code>yes</code> writes the string "y" forever, as fast as it can, but <code>head</code> reads exactly one line and exits immediately, closing its stdin (the pipe's read end) on the way out. The very next time <code>yes</code> tries to write, it receives SIGPIPE and dies silently — which is exactly why the pipeline terminates cleanly instead of <code>yes</code> spinning forever in the background.
+  </div>
+</div>
+</section>
+
+<!-- PRACTICAL -->
+<section id="practical">
+<div class="container">
+  <div class="section-num">06 — Living With SIGPIPE</div>
+  <h2>When Default Termination Is <span class="accent">The Wrong Answer</span></h2>
+
+  <p class="reveal">A one-off shell command dying silently on SIGPIPE is usually fine — even desirable, as the <code>yes | head</code> example shows. But a long-running server process (a web server writing a response body to a client socket that just disconnected, for instance — sockets use this exact same signal) almost never wants to be killed outright by one broken connection among thousands.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>💀 Default: SIG_DFL</h4>
+      SIGPIPE's default disposition terminates the process the instant any write hits a reader-less pipe or socket. Fine for small scripts and command-line tools; catastrophic for a server that would otherwise stay up serving thousands of other, healthy connections.
+    </div>
+    <div class="compare-card good">
+      <h4>🛡️ Common Fix: Ignore It, Check errno Instead</h4>
+      A process can call <code>signal(SIGPIPE, SIG_IGN)</code> once at startup. With SIGPIPE ignored, a write to a reader-less pipe no longer kills anything — instead, <code>write()</code> simply returns <code>-1</code> with <code>errno</code> set to <strong>EPIPE</strong> ("broken pipe"), which is ordinary, recoverable error-handling code can check for and react to, like any other failed syscall.
+    </div>
+  </div>
+
+  <p class="reveal">This is precisely why "Broken pipe" is such a familiar phrase to anyone who's used a Unix shell for long enough — it's the human-readable rendering of <code>EPIPE</code>, surfacing whenever a program's error-handling path (having ignored SIGPIPE) reports the write failure back to you in words instead of dying silently.</p>
+</div>
+</section>
+
+<!-- COMPARE TABLE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">07 — Where This Fits Among IPC Options</div>
+  <h2>Pipe Internals vs Named Pipe vs <span class="accent p">Shared Memory</span></h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Anonymous Pipe</th><th>Named Pipe (FIFO)</th><th>Shared Memory</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Underlying buffer</td><td>Kernel ring buffer, fixed capacity</td><td class="pos">Identical kernel ring buffer</td><td>None — raw pages, no buffer structure</td></tr>
+        <tr><td class="hl">Full-buffer behavior</td><td>Writer blocks (BLOCKED state)</td><td class="pos">Writer blocks — same mechanism</td><td class="neg">N/A — writes never block, you can overwrite live data if unsynchronized</td></tr>
+        <tr><td class="hl">Empty-buffer behavior</td><td>Reader blocks (BLOCKED state)</td><td class="pos">Reader blocks — same mechanism</td><td class="neg">N/A — reads never block, may read stale or torn data</td></tr>
+        <tr><td class="hl">"No reader left" signal</td><td class="gold">SIGPIPE / EPIPE</td><td class="gold">SIGPIPE / EPIPE — same mechanism</td><td class="neg">No such concept — no "reader" role exists to disappear</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Takeaway For This Lesson</div>
+    Everything covered here — the ring buffer, the blocking on full/empty, SIGPIPE — is identical between anonymous pipes and named pipes (FIFOs). They are, quite literally, the same kernel mechanism underneath. The only thing Lesson 3 changes is <em>how the two ends find each other in the first place</em>. Shared memory opts out of all of this entirely — no buffer, no blocking, no SIGPIPE — which is exactly why it's fast and exactly why it demands you build your own synchronization from scratch.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Ring Buffer</div><div class="glossary-def">A fixed-size array with wrap-around head/tail cursors — the data structure a pipe's kernel buffer is built from.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Head / Tail Cursor</div><div class="glossary-def">Head marks the next byte a reader will consume; tail marks the next slot a writer will fill. Both wrap modulo the buffer's fixed size.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PIPE_BUF</div><div class="glossary-def">An implementation-defined constant (4096 on Linux) — the maximum write size POSIX guarantees will be written atomically, without interleaving from another writer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">BLOCKED (Process State)</div><div class="glossary-def">The PCB state a process enters when it can't make progress — e.g. writing to a full pipe or reading from an empty one — and is removed from the scheduler's run queue until woken.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Wait Queue</div><div class="glossary-def">A kernel-side list of processes blocked on a specific resource (like one pipe); a wake-up event moves a process off this queue and back to READY.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIGPIPE</div><div class="glossary-def">The signal sent to a process that writes to a pipe (or socket) whose read end has no readers left anywhere. Default action: terminate the process.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EPIPE</div><div class="glossary-def">The errno value ("broken pipe") a write() reports instead of triggering termination, if the process has set SIGPIPE's disposition to be ignored.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Signal Disposition</div><div class="glossary-def">What a process has configured to happen when it receives a given signal — default action, ignore it, or run a custom handler.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Atomic Write</div><div class="glossary-def">A write guaranteed not to be interleaved, byte-for-byte, with another process's concurrent write to the same pipe — only guaranteed for writes up to PIPE_BUF bytes.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Inside the Pipe: A Ring Buffer, Blocking, and SIGPIPE · bob_os Lessons, Module 14 · Part 2 of 3</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Companion lesson for bob_os modules 20_pipes and 23_shared_memory.</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: Named Pipes (FIFOs) — Pipes Two Unrelated Processes Can Find →</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+function wrapText(ctx,text,cx,y,maxWidth,lineHeight){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxWidth && line){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY = y - (lines.length-1)*lineHeight/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lineHeight));
+}
+
+// ── RING BUFFER FILL/BLOCK/DRAIN CANVAS ─────────────────────────────────
+const SLOTS=12;
+function drawStateTag(ctx,x,y,label,state){
+  const colors={RUNNING:C.green,READY:C.gold,BLOCKED:C.red};
+  const col=colors[state]||C.muted;
+  ctx.fillStyle=col;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(label+': '+state,x,y);
+}
+
+function drawRingScene(filled,writerState,readerState,caption,pulse){
+  const canvas=document.getElementById('ringCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // Writer / reader labels + state tags
+  drawStateTag(ctx,20,30,'Writer PCB',writerState);
+  drawStateTag(ctx,W-190,30,'Reader PCB',readerState);
+
+  // Ring drawn as an arc of slots
+  const cx=W/2, cy=180, radius=110;
+  for(let i=0;i<SLOTS;i++){
+    const ang = (i/SLOTS)*Math.PI*2 - Math.PI/2;
+    const x = cx + radius*Math.cos(ang);
+    const y = cy + radius*Math.sin(ang);
+    const isFull = i < filled;
+    ctx.beginPath();
+    ctx.arc(x,y,14,0,Math.PI*2);
+    ctx.fillStyle = isFull ? (pulse&&i===filled-1 ? C.gold : C.orange) : 'rgba(255,255,255,.05)';
+    ctx.fill();
+    ctx.strokeStyle=C.border;ctx.lineWidth=1;ctx.stroke();
+  }
+  // center label
+  ctx.fillStyle=C.text;ctx.font='12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(filled+' / '+SLOTS+' slots used',cx,cy-4);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('kernel ring buffer',cx,cy+14);
+
+  // head/tail markers
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  const tailAng=(filled/SLOTS)*Math.PI*2 - Math.PI/2;
+  const tx=cx+ (radius+26)*Math.cos(tailAng), ty=cy+(radius+26)*Math.sin(tailAng);
+  ctx.fillText('tail →',tx,ty);
+  ctx.fillStyle=C.purple;
+  const headAng = -Math.PI/2;
+  const hx=cx+(radius+26)*Math.cos(headAng), hy=cy+(radius+26)*Math.sin(headAng)-6;
+  ctx.fillText('← head',hx,hy);
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,caption,W/2,H-24,W-60,18);
+}
+
+const RING_SCRIPT=[
+  {filled:0, w:'RUNNING', r:'BLOCKED', cap:'Reader already blocked on empty buffer — nothing to read yet.'},
+  {filled:4, w:'RUNNING', r:'READY',   cap:'Writer writes a chunk — 4 slots fill. Reader wakes to READY, waiting for the scheduler.'},
+  {filled:8, w:'RUNNING', r:'RUNNING', cap:'Writer keeps producing faster than the reader drains — buffer climbs to 8/12.'},
+  {filled:12,w:'BLOCKED', r:'RUNNING', cap:'Buffer hits FULL. Writer’s next write() call parks it — Process State flips to BLOCKED.', pulse:true},
+  {filled:6, w:'BLOCKED', r:'RUNNING', cap:'Reader drains 6 slots worth of bytes. Free space now exists — but the writer is still asleep, for now.'},
+  {filled:7, w:'READY',   r:'RUNNING', cap:'The kernel notices free space and wakes the writer: BLOCKED → READY. It’s not running yet — just eligible again.'},
+  {filled:11,w:'RUNNING', r:'RUNNING', cap:'Scheduler picks the writer back up: READY → RUNNING. It fills the freed space right back up.'},
+  {filled:3, w:'RUNNING', r:'RUNNING', cap:'Reader keeps consuming in the background — this dance repeats for as long as both processes are alive.'}
+];
+function runRingScenario(){
+  let idx=0,start=performance.now();
+  const dur=900;
+  document.getElementById('ringLabel').textContent='▶ Running: writer outruns reader …';
+  function step(now){
+    const t=Math.min(1,(now-start)/dur);
+    const s=RING_SCRIPT[idx];
+    drawRingScene(s.filled,s.w,s.r,s.cap,s.pulse&&t<0.6);
+    if(t>=1){
+      idx++;
+      if(idx>=RING_SCRIPT.length){
+        document.getElementById('ringLabel').textContent='▶ Done — this cycle repeats for the life of the pipe';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetRing(){
+  document.getElementById('ringLabel').textContent='▶ Run the scenario: writer outruns reader, fills the buffer, blocks, then wakes';
+  drawRingScene(0,'READY','BLOCKED','Click Run to watch the writer fill the buffer and block.',false);
+}
+
+// ── SIGPIPE CANVAS ───────────────────────────────────────────────────────
+function drawSigScene(phase,t){
+  const canvas=document.getElementById('sigCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const wx=60, wy=110, ww=160, wh=80;
+  const rx=W-220, ry=110, rw=160, rh=80;
+
+  const captions={
+    idle:'Both ends open — writer writing, reader reading normally',
+    close:'Reader process exits — its copy of the read end closes. No other reader exists anywhere.',
+    write_attempt:'Writer, unaware, calls write() again — bytes have nowhere left to ever go',
+    signal:'Kernel detects zero readers remain — sends SIGPIPE to the writer process',
+    dead:'Default disposition: SIGPIPE terminates the writer immediately, mid-write()'
+  };
+
+  // writer box
+  ctx.fillStyle='rgba(56,189,248,.05)';ctx.strokeStyle= phase==='dead'? C.red : C.cyan; ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.roundRect?ctx.roundRect(wx,wy,ww,wh,8):ctx.rect(wx,wy,ww,wh);ctx.fill();ctx.stroke();
+  ctx.fillStyle= phase==='dead'? C.red : C.cyan; ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(phase==='dead' ? 'Writer — TERMINATED' : 'Writer process', wx+ww/2, wy+wh/2);
+
+  // reader box
+  const readerGone = (phase!=='idle');
+  ctx.fillStyle='rgba(74,222,128,.05)';
+  ctx.strokeStyle= readerGone? C.border : C.green; ctx.setLineDash(readerGone?[4,4]:[]); ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.roundRect?ctx.roundRect(rx,ry,rw,rh,8):ctx.rect(rx,ry,rw,rh);ctx.fill();ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle= readerGone? C.muted : C.green; ctx.font='bold 12px Source Code Pro,monospace';
+  ctx.fillText(readerGone ? 'Reader — exited' : 'Reader process', rx+rw/2, ry+rh/2);
+
+  // pipe in the middle
+  const px=wx+ww+20, pw=rx-px-20, py=wy+wh/2-16, ph=32;
+  ctx.fillStyle='rgba(245,200,66,.05)';ctx.strokeStyle=C.gold;ctx.lineWidth=1;
+  ctx.strokeRect(px,py,pw,ph);
+  ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('pipe',px+pw/2,py+ph/2+3);
+
+  if(phase==='write_attempt' || phase==='signal'){
+    ctx.strokeStyle=C.red;ctx.setLineDash([3,3]);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(wx+ww,wy+wh/2);ctx.lineTo(px,wy+wh/2);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.red;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('write() …',wx+ww+ (px-wx-ww)/2, wy+wh/2-8);
+  }
+  if(phase==='signal'||phase==='dead'){
+    ctx.fillStyle=C.red;ctx.font='bold 22px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡ SIGPIPE',wx+ww/2,wy-14);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,captions[phase]||'',W/2,H-30,W-60,18);
+}
+const SIG_ORDER=['close','write_attempt','signal','dead'];
+function runSigpipe(){
+  let idx=0,start=performance.now();
+  const dur=750;
+  document.getElementById('sigLabel').textContent='▶ Running …';
+  function step(now){
+    const t=Math.min(1,(now-start)/dur);
+    drawSigScene(SIG_ORDER[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=SIG_ORDER.length){
+        document.getElementById('sigLabel').textContent='▶ Done — the writer never got to check a return value; it was simply gone';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetSigpipe(){
+  document.getElementById('sigLabel').textContent='▶ Reader disappears, writer keeps writing';
+  drawSigScene('idle',1);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRing(); resetSigpipe(); });
+window.addEventListener('resize',()=>{ resetRing(); resetSigpipe(); });
+</script>
+</body>
+</html>

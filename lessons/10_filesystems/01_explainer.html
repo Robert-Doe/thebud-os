@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why Every OS Needs a VFS: One API, Many Filesystems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.35);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.cy{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--gold);}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--orange)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* dossier component, reused from the PCB lesson's design system */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#problem" title="The Problem"></a>
+  <a class="toc-dot" href="#menu" title="One Menu Analogy"></a>
+  <a class="toc-dot" href="#vtable" title="VFS as Vtable"></a>
+  <a class="toc-dot" href="#dispatch" title="Watching Dispatch"></a>
+  <a class="toc-dot" href="#varies" title="What Varies"></a>
+  <a class="toc-dot" href="#bobos" title="bob_os Tie-In"></a>
+  <a class="toc-dot" href="#mounts" title="Nested Mounts"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Filesystems · Virtual File System</div>
+    <h1>One Menu.<br><span>Every Kitchen.</span></h1>
+    <p class="hero-sub">Your laptop's disk might be ext4. The USB stick you just plugged in is FAT32. The folder you mounted over the network is NFS. And <code style="color:var(--cyan)">/proc</code> isn't backed by a disk at all — it's fiction the kernel generates on demand. Yet <code style="color:var(--cyan)">cat</code>, your text editor, and every other program on the machine call the exact same four functions to touch every one of them. This is the story of how.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">Functions Every Backend Must Implement — open/read/write/close</div></div>
+      <div class="hero-stat"><div class="num">5+</div><div class="lbl">Wildly Different Filesystem Formats, One Machine</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">API Every Program Actually Calls</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Filesystem-Specific Code Needed In Your Program</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section id="problem">
+<div class="container">
+  <div class="section-num">00 — The Problem</div>
+  <h2>Your Disk Is Not <span class="accent">One Thing</span></h2>
+
+  <p class="reveal">Sit down at almost any real computer and ask "what filesystem is on this machine," and the honest answer is: several, at once. The root partition might be ext4 (Linux) or NTFS (Windows) or APFS (macOS). The EFI system partition that boots the machine is almost always FAT32, by spec. Plug in a USB stick and it's probably exFAT or FAT32 too, for compatibility. Mount a shared drive over the network and now you're talking NFS or SMB — a filesystem that isn't even stored on a local disk. And under Linux, <code>/proc</code> and <code>/sys</code> present thousands of "files" that don't correspond to any bytes on any disk at all — they're generated fresh, on the spot, every time you read them.</p>
+
+  <p class="reveal">These are not small variations on a theme. FAT32 is a flat array of cluster links with fixed-size 32-byte directory entries. ext4 uses inodes, extents, and B-trees for large directories. NTFS stores almost everything — including tiny files — as records in a master database called the Master File Table. NFS isn't a disk format at all; it's a network protocol wrapping remote procedure calls. procfs has no on-disk format whatsoever, because there's no disk involved. Four of these five don't agree on <em>anything</em> about how bytes are actually laid out.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Filesystem</th><th>Backing Store</th><th>Core On-Disk Structure</th><th>Where You'd See It</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">FAT32</td><td>Real disk/partition</td><td>Flat cluster-chain array + fixed-size dir entries</td><td>USB sticks, EFI system partition</td></tr>
+        <tr><td class="hl">ext4</td><td>Real disk/partition</td><td>Inodes + extents + B-tree directories</td><td>Most Linux root partitions</td></tr>
+        <tr><td class="hl">NTFS</td><td>Real disk/partition</td><td>Master File Table (everything is a record)</td><td>Windows system drives</td></tr>
+        <tr><td class="hl">NFS</td><td class="gold">Another computer, over the network</td><td>None locally — RPC calls to a remote server</td><td>Shared network drives</td></tr>
+        <tr><td class="hl">procfs</td><td class="gold">Nothing — generated live</td><td>None — kernel fabricates content per read</td><td><code>/proc/1/status</code>, <code>/proc/cpuinfo</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">And yet — this is the part that should feel almost suspicious — none of that mess ever shows up in the program you write. You open a file with <code>open()</code>, you get bytes back with <code>read()</code>, you push bytes out with <code>write()</code>, you're done with <code>close()</code>. Same four calls, whether the bytes are coming from a spinning disk, a USB stick, a server on the other side of campus, or a struct the kernel just built in memory thirty milliseconds ago. Something in the middle is absorbing all of that difference. That something is today's subject.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Aha Moment</div>
+    Imagine the alternative: every program that touches a file has to contain a giant <code>if (fs == FAT32) ... else if (fs == EXT4) ... else if (fs == NFS) ...</code> chain, and every time someone invents a new filesystem, every program on Earth needs to be patched to understand it. That's obviously unworkable — which means the "which filesystem is this, really" question has to be answered in exactly <strong>one place</strong>, once, and hidden from everyone above it. That one place is the kernel, and the layer that does the hiding is the <strong>Virtual File System</strong>, or VFS.
+  </div>
+</div>
+</section>
+
+<!-- MENU ANALOGY -->
+<section id="menu">
+<div class="container">
+  <div class="section-num">01 — The Head First Moment</div>
+  <h2>The Restaurant With <span class="accent">One Menu</span></h2>
+
+  <p class="reveal">Picture a food court with five different restaurants behind it: a diner grilling burgers over an open flame, a sushi counter running knives and rice cookers, a noodle stall boiling water in giant pots, a bakery running ovens, and a smoothie bar blending fruit. Every kitchen works completely differently — different equipment, different techniques, different staff training.</p>
+
+  <p class="reveal">But you, the customer, never see any of that. You walk up to <strong>one counter</strong> and read <strong>one menu</strong>: appetizer, main, dessert, drink. You point at "main course," and whichever kitchen is behind that particular counter does whatever it needs to do — grill, steam, boil, bake — and a plate comes back. You never learn to operate a wok. You never need to. The menu is the interface; the kitchen is the implementation; and critically, <em>the menu items are the same words no matter which kitchen is behind the counter</em>.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">FAT32 Kitchen</span><span class="fam-count">clusters</span></div>
+      <div class="fam-desc">Serves your "read a file" order by walking a flat linked list of clusters until it hits an end-of-chain marker. Simple, ancient, works everywhere.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">ext4 Kitchen</span><span class="fam-count">inodes</span></div>
+      <div class="fam-desc">Serves the same order by looking up an inode, following extent pointers to data blocks. Different equipment, same plate comes out.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">procfs Kitchen</span><span class="fam-count">no pantry</span></div>
+      <div class="fam-desc">Has no ingredients in storage at all — it cooks the "file" from scratch, live, the instant you order it, from whatever the kernel currently knows.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">NFS Kitchen</span><span class="fam-count">phone order</span></div>
+      <div class="fam-desc">Doesn't have its own pantry either — it phones a completely different building (a remote server) and relays the order over the network, then plates whatever comes back.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">NTFS Kitchen</span><span class="fam-count">master ledger</span></div>
+      <div class="fam-desc">Runs everything through one big database-like ledger (the Master File Table) instead of a pantry-and-shelves layout — a completely different kitchen floor plan, same menu items served.</div>
+    </div>
+  </div>
+
+  <p class="reveal">The <strong>menu</strong> in an operating system is a tiny, fixed set of operations: open, read, write, close (plus a handful of extras like seek and stat). The <strong>kitchens</strong> are the individual filesystem drivers — FAT, ext4, NTFS, NFS, procfs — each one free to do absolutely anything it wants internally, as long as it can answer those same four orders. The layer standing at the counter, taking your order and routing it to the right kitchen, is the VFS.</p>
+</div>
+</section>
+
+<!-- VTABLE -->
+<section id="vtable">
+<div class="container">
+  <div class="section-num">02 — The Mechanism</div>
+  <h2>A Struct Full of <span class="accent">Function Pointers</span></h2>
+
+  <p class="reveal">Here's where "the menu" stops being a metaphor and becomes actual C code. The VFS defines one struct — call it <code>vfs_ops</code> — that's just a bundle of function pointers, one slot per menu item. Every filesystem driver that wants to plug into the VFS has to fill in that exact same struct with its own functions.</p>
+
+  <pre class="reveal"><code><span class="cm">/* The "menu" — every backend must fill in a struct shaped exactly like this */</span>
+<span class="kw">struct</span> vfs_ops {
+    <span class="kw">int</span>  (*open) (<span class="kw">const</span> <span class="kw">char</span> *path, <span class="kw">int</span> flags);
+    <span class="kw">int</span>  (*read) (<span class="kw">int</span> inode, <span class="kw">char</span> *buf, <span class="kw">int</span> n, <span class="kw">int</span> offset);
+    <span class="kw">int</span>  (*write)(<span class="kw">int</span> inode, <span class="kw">const</span> <span class="kw">char</span> *buf, <span class="kw">int</span> n, <span class="kw">int</span> offset);
+    <span class="kw">void</span> (*close)(<span class="kw">int</span> inode);
+};
+
+<span class="cm">/* Three completely different kitchens, same menu shape */</span>
+<span class="kw">struct</span> vfs_ops fat32_ops   = { fat32_open,   fat32_read,   fat32_write,   fat32_close   };
+<span class="kw">struct</span> vfs_ops ext4_ops    = { ext4_open,    ext4_read,    ext4_write,    ext4_close    };
+<span class="kw">struct</span> vfs_ops procfs_ops  = { procfs_open,  procfs_read,  procfs_write,  procfs_close  };</code></pre>
+
+  <p class="reveal">Notice what's <em>not</em> in that struct: any mention of clusters, inodes, extents, B-trees, or network sockets. The struct only knows about "a function that opens," "a function that reads." What happens inside <code>fat32_read</code> versus <code>ext4_read</code> is each driver's private business — one of them might be walking a cluster chain, the other might be dereferencing extent pointers, and the VFS genuinely does not care, because it never looks inside those functions. It only ever calls through the pointer.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">This Is Just Polymorphism, Written By Hand</div>
+    If you've used an object-oriented language, this should feel familiar: <code>vfs_ops</code> is exactly what a base class's virtual method table (vtable) is in C++ or Java, except C has no built-in notion of classes or virtual functions, so the kernel builds the same mechanism manually out of a struct of function pointers. "Call <code>ops->read(...)</code> and let whichever concrete implementation is plugged in there handle it" <em>is</em> dynamic dispatch — the OS-level ancestor of every <code>interface</code> keyword you've ever typed.
+  </div>
+
+  <p class="reveal">The other half of the trick is: how does the VFS know <em>which</em> <code>vfs_ops</code> struct to use for a given file? Every open file gets a small record — commonly called a file descriptor — that, alongside "where am I reading from right now" (an offset), also carries a pointer to the correct <code>vfs_ops</code> struct for whatever backend that file actually lives on. Once that pointer is set at <code>open()</code> time, every subsequent <code>read()</code> or <code>write()</code> on that file descriptor just follows the pointer — no re-deciding required.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">There Are No Dumb Questions</div>
+    <strong>Q: Doesn't bouncing every read() through a function pointer make file I/O slower?</strong> In practice, no — not in any way that matters. A function-pointer call costs a handful of extra CPU cycles at most; an actual disk read costs on the order of milliseconds, and even a fast SSD read costs microseconds. The dispatch overhead is many orders of magnitude smaller than the I/O it's dispatching to. This is exactly why the VFS pattern is used pervasively throughout real operating systems rather than being reserved for rare cases — the abstraction is essentially free relative to the work it's abstracting over.
+  </div>
+</div>
+</section>
+
+<!-- DISPATCH CANVAS -->
+<section id="dispatch">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>Watching <span class="accent">open()</span> Find Its Kitchen</h2>
+
+  <p class="reveal">Let's make the dispatch mechanism concrete. A single process calls <code>open()</code> on three different paths in a row. Each path lives on a different backend. Pick one below and watch the same syscall get routed to three completely different kitchens.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="dispLabel">▶ Pick a path to open()</div>
+    <canvas id="dispCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn cyan" onclick="runDispatch('fat')">▶ open("/mnt/usb/photo.jpg")</button>
+    <button class="ctrl-btn green" onclick="runDispatch('ext4')">▶ open("/home/bob/notes.txt")</button>
+    <button class="ctrl-btn purple" onclick="runDispatch('proc')">▶ open("/proc/1/status")</button>
+    <button class="ctrl-btn red" onclick="resetDispatch()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The program calls open(path, flags)</strong>It has no idea, and doesn't ask, what kind of filesystem the path resolves to. It just wants a file descriptor back.</div></li>
+    <li><div class="step-body"><strong>The VFS resolves the mount table</strong>Every mounted filesystem is recorded against the path prefix it owns — <code>/mnt/usb</code> → FAT32 driver, <code>/home</code> → ext4 driver, <code>/proc</code> → procfs driver. The VFS walks this table to find the matching entry.</div></li>
+    <li><div class="step-body"><strong>The VFS calls ops->open() through the matched vtable</strong>Whichever <code>vfs_ops</code> struct is registered for that mount point gets its <code>open</code> function pointer called. This is the one and only moment where the "which filesystem" question gets answered.</div></li>
+    <li><div class="step-body"><strong>The backend does whatever it needs to do</strong>FAT32 walks a directory's fixed-size entries; ext4 looks up an inode; procfs just checks whether "1" is a live PID and prepares to fabricate text. Each is invisible to the other.</div></li>
+    <li><div class="step-body"><strong>A file descriptor comes back, tagged with that backend's vtable</strong>Every future <code>read()</code>/<code>write()</code>/<code>close()</code> on this fd will follow the pointer stored right here — no re-resolving the path required.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- WHAT VARIES -->
+<section id="varies">
+<div class="container">
+  <div class="section-num">04 — The Fine Print</div>
+  <h2>What's <span class="accent">Guaranteed</span>, What <span class="accent cy">Varies</span></h2>
+
+  <p class="reveal">The VFS doesn't make every filesystem identical — it can't, and it shouldn't try. It normalizes the <em>interface</em>, not the <em>capabilities</em> behind it. Some things are guaranteed no matter which backend you're touching; other things quietly depend on which kitchen you landed in.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Guaranteed The Same Everywhere</h4>
+      The function signatures (<code>open/read/write/close</code>), the meaning of a file descriptor as a small integer, the fact that <code>read()</code> returns bytes and advances an offset, and the fact that errors come back through the same return-value/errno convention regardless of backend.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Varies By Backend, Silently</h4>
+      Maximum filename length, whether filenames are case-sensitive, whether permissions/ownership exist at all (FAT32 has none; ext4 has full Unix permissions), whether a file can be sparse, and whether writes are even meaningful — you cannot <code>write()</code> to most of <code>/proc</code>.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Watch out:</b> the "inode number" the VFS hands back to your program doesn't mean the same thing on every backend. On ext4 it really is a disk inode index. On FAT32 — which has no concept of inodes at all — the driver has to invent a stand-in number, often derived from the directory entry's location, purely so it has <em>something</em> to plug into that slot of the interface. The VFS's uniformity is a promise about the <em>shape</em> of the API, not a promise that every number flowing through it means the same thing underneath.
+  </div>
+
+  <p class="reveal">This is precisely why a program that only uses the VFS-level API can genuinely be filesystem-agnostic, while a program that pokes at backend-specific quirks (checking a FAT "archive bit," say) instantly stops being portable. The abstraction is honest about where it ends.</p>
+</div>
+</section>
+
+<!-- BOBOS TIE IN -->
+<section id="bobos">
+<div class="container">
+  <div class="section-num">05 — Tying It Back</div>
+  <h2>This Is Exactly What <span class="accent">Module 19</span> Builds</h2>
+
+  <p class="reveal">bob_os builds this same architecture from scratch, deliberately in the same shape as the real thing. Module 12 gives you BobFS: a flat, hand-rolled filesystem talking to a disk over ATA PIO. On its own, BobFS's three functions — <code>fs_read</code>, <code>fs_create</code>, <code>fs_delete</code> — are exactly the kind of backend-specific API that would poison every caller with disk-format knowledge if nothing sat above it.</p>
+
+  <p class="reveal">Module 19 is that "something above it." It introduces the exact same <code>vfs_ops</code> vtable shown earlier in this lesson, plus a per-process <code>fd_table</code> mapping small integers to <code>{inode, offset, ops}</code> records. When a bob_os user process calls <code>SYS_OPEN</code>, the kernel's <code>vfs_resolve()</code> picks the right backend's vtable — BobFS for a real file, the VGA driver's <code>vga_ops</code> for stdout — and every subsequent <code>SYS_READ</code>/<code>SYS_WRITE</code> just follows the pointer stored in that process's fd_table entry. Same dispatch, same reason: so that <code>SYS_READ</code>'s implementation never needs an <code>if</code>-chain for every backend that might ever exist.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>bob_os Module 19 — vfs_ops in practice</span><span style="color:var(--muted);font-size:.7rem">see 19_vfs/tutorial.html</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">bobfs_ops</div><div class="f-val">→ disk.c + fs.c</div><div class="f-desc">Backs real files; open/read/write/close walk BobFS's superblock and raw disk sectors.</div></div>
+      <div class="dossier-field"><div class="f-label">vga_ops</div><div class="f-val">→ terminal driver</div><div class="f-desc">Backs stdout/stderr (fd 1, 2); write() calls the kernel's text-mode printer.</div></div>
+      <div class="dossier-field"><div class="f-label">pipe_read/write_ops</div><div class="f-val">→ Module 20</div><div class="f-desc">Backs anonymous pipes; read/write shuffle bytes through a kernel ring buffer, no disk at all.</div></div>
+      <div class="dossier-field"><div class="f-label">fd_table[MAX_FDS]</div><div class="f-val">per-process array</div><div class="f-desc">Each slot remembers which ops struct and which offset — the "which kitchen" decision, cached.</div></div>
+    </div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">Why bob_os Only Ships One Real Filesystem Backend</div>
+    bob_os's own tutorial is candid about this trade: implementing FAT or ext4 correctly means handling clusters, chains, journaling, and permissions — thousands of lines that teach disk-format trivia, not OS architecture. BobFS is deliberately the simplest thing that still deserves the name "filesystem," so that Module 19's real lesson — the VFS dispatch layer itself — isn't buried under FAT parsing code. The next lessons in this cluster go where bob_os's own modules don't: a concrete look at FAT's internals, at how Linux represents files with inodes and dentries, and at how device files fit under this same interface.
+  </div>
+</div>
+</section>
+
+<!-- NESTED MOUNTS -->
+<section id="mounts">
+<div class="container">
+  <div class="section-num">06 — One More Wrinkle</div>
+  <h2>What Happens When One Path Crosses <span class="accent">Two Filesystems</span>?</h2>
+
+  <p class="reveal">There's a detail the dispatch walkthrough glossed over: mount points can nest, and a single absolute path can legitimately cross a filesystem boundary partway through. <code>/mnt/usb/photo.jpg</code> isn't one lookup against one backend — <code>/mnt</code> might live on your root ext4 filesystem, while <code>/mnt/usb</code> is where an entirely different FAT32 volume has been grafted on. The VFS has to figure out exactly where that handoff happens, using nothing but the path string.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Every mounted filesystem registers its mount point</strong>When FAT32 gets mounted at <code>/mnt/usb</code>, the VFS records that exact path prefix against the FAT32 driver's vtable, alongside whatever else is already mounted (root at <code>/</code>, maybe <code>/proc</code>, maybe others).</div></li>
+    <li><div class="step-body"><strong>Path resolution finds the longest matching prefix</strong>For <code>/mnt/usb/photo.jpg</code>, both <code>/</code> and <code>/mnt/usb</code> are valid prefixes — but <code>/mnt/usb</code> is longer and more specific, so it wins. The VFS always dispatches to the <em>most specific</em> mount that matches.</div></li>
+    <li><div class="step-body"><strong>Only the remaining suffix gets handed to that backend</strong>The FAT32 driver never sees <code>/mnt/usb</code> at all — from its point of view, the file is simply at <code>/photo.jpg</code> within its own volume. The prefix that got it selected is stripped off before the backend ever sees the path.</div></li>
+  </ol>
+
+  <p class="reveal">This is also exactly the mechanism behind Linux's <code>/proc</code>, <code>/sys</code>, and <code>/dev</code>: each is its own filesystem, mounted at a specific point in an otherwise ordinary directory tree, dispatched to by the same longest-prefix-match logic as a physically distinct disk would be. There's no special-case code path for "this one happens to be fake" — procfs is just another entry in the same mount table, competing for the same longest-prefix match as everyone else.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">Why This Matters for Permissions and Behavior, Not Just Routing</div>
+    Crossing a mount boundary can silently change what's even possible with a file. Copy a file from your ext4 home directory onto a FAT32 USB stick, and its Unix permission bits, its symbolic links, and any extended attributes it had are simply gone — not because anything went wrong, but because FAT32 has no on-disk field to store them in. The VFS routes the request correctly every time; it never promised the destination could represent everything the source could.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Virtual File System (VFS)</div><div class="glossary-def">The kernel layer that presents one uniform open/read/write/close interface over any number of differently-implemented filesystem backends.</div></div>
+    <div class="glossary-card"><div class="glossary-term">vfs_ops / vtable</div><div class="glossary-def">A struct of function pointers — one slot per operation — that every backend fills in with its own implementations. The mechanism behind the uniform interface.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Filesystem Driver</div><div class="glossary-def">The code behind one specific vtable — FAT32, ext4, NTFS, NFS, or procfs — that knows how to translate the four VFS calls into real work on its own storage format.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mount Point</div><div class="glossary-def">The path prefix (e.g. <code>/mnt/usb</code>) that a particular filesystem instance is attached to; the VFS uses this to decide which driver's vtable to dispatch a path to.</div></div>
+    <div class="glossary-card"><div class="glossary-term">File Descriptor</div><div class="glossary-def">A small per-process integer that stands in for an open file; internally it carries an offset and a pointer to the correct backend's vtable.</div></div>
+    <div class="glossary-card"><div class="glossary-term">procfs</div><div class="glossary-def">A filesystem backend with no disk storage at all — every "file" under <code>/proc</code> is generated live from live kernel state the instant it's read.</div></div>
+    <div class="glossary-card"><div class="glossary-term">NFS (Network File System)</div><div class="glossary-def">A filesystem backend whose "disk" is actually a remote server, reached over the network via remote procedure calls instead of local block I/O.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dynamic Dispatch</div><div class="glossary-def">Calling a function through a pointer determined at runtime rather than at compile time — the general mechanism a vtable provides, in any language.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Longest-Prefix Match</div><div class="glossary-def">The rule the VFS uses to pick which mounted filesystem owns a path when more than one mount point is a valid prefix — the most specific match always wins.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Bind / Nested Mount</div><div class="glossary-def">A filesystem mounted at a path that sits inside another already-mounted filesystem, requiring the VFS to route by path prefix rather than by whole-path lookup.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Why Every OS Needs a VFS · Companion lesson for bob_os modules <code>12_filesystem</code> and <code>19_vfs</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">One menu. Every kitchen.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── DISPATCH CANVAS ──────────────────────────────────────────────
+const backends={
+  fat:{name:'FAT32 driver',path:'/mnt/usb/photo.jpg',mount:'/mnt/usb',color:C.cyan,detail:'fat32_open() walks the root directory\'s 32-byte entries looking for "photo.jpg"'},
+  ext4:{name:'ext4 driver',path:'/home/bob/notes.txt',mount:'/home',color:C.green,detail:'ext4_open() resolves an inode number, then reads its extent tree'},
+  proc:{name:'procfs driver',path:'/proc/1/status',mount:'/proc',color:C.purple,detail:'procfs_open() checks PID 1 is alive, prepares to fabricate text on read()'}
+};
+
+function drawDispatch(t,phase,kind){
+  const canvas=document.getElementById('dispCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const b=backends[kind]||{name:'',path:'',mount:'',color:C.muted,detail:''};
+
+  // lanes
+  const rowY=[40,120,200,280];
+  const labels=['Program','VFS mount table','Backend vtable ops->open()','Result: file descriptor'];
+  ctx.textAlign='left';
+  for(let i=0;i<4;i++){
+    ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText(labels[i],10,rowY[i]-14);
+    ctx.strokeStyle=C.border;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,rowY[i]+18);ctx.lineTo(W,rowY[i]+18);ctx.stroke();
+  }
+
+  ctx.textAlign='center';ctx.font='12px Source Code Pro,monospace';
+
+  if(phase==='idle'){
+    ctx.fillStyle=C.muted;ctx.font='13px Lato,sans-serif';
+    ctx.fillText('Pick a path above to trace its trip through the VFS',W/2,H/2);
+    return;
+  }
+
+  // stage 1: program calls open
+  const opacity1 = phase==='call'? t : 1;
+  ctx.globalAlpha=Math.min(1,opacity1);
+  ctx.fillStyle=C.card||'#141c2e';ctx.fillStyle='#141c2e';
+  ctx.fillRect(W*0.3,rowY[0]-6,W*0.4,32);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(W*0.3,rowY[0]-6,W*0.4,32);
+  ctx.fillStyle=C.cyan;ctx.fillText('open("'+b.path+'")',W/2,rowY[0]+15);
+  ctx.globalAlpha=1;
+
+  if(phase==='call')return;
+
+  // stage 2: mount table lookup
+  const opacity2 = phase==='lookup'? t : 1;
+  ctx.globalAlpha=Math.min(1,opacity2);
+  ctx.fillRect(W*0.15,rowY[1]-6,W*0.7,32);
+  ctx.strokeStyle=C.gold;ctx.strokeRect(W*0.15,rowY[1]-6,W*0.7,32);
+  ctx.fillStyle=C.gold;
+  ctx.fillText('matched mount "'+b.mount+'" → '+b.name,W/2,rowY[1]+15);
+  ctx.globalAlpha=1;
+  if(phase==='lookup')return;
+
+  // stage 3: backend vtable call
+  const opacity3 = (phase==='dispatch')? t : 1;
+  ctx.globalAlpha=Math.min(1,opacity3);
+  ctx.fillRect(W*0.1,rowY[2]-6,W*0.8,40);
+  ctx.strokeStyle=b.color;ctx.lineWidth=1.5;ctx.strokeRect(W*0.1,rowY[2]-6,W*0.8,40);
+  ctx.fillStyle=b.color;ctx.font='11px Source Code Pro,monospace';
+  ctx.fillText(b.detail,W/2,rowY[2]+18);
+  ctx.globalAlpha=1;
+  if(phase==='dispatch')return;
+
+  // stage 4: fd returned
+  const opacity4 = (phase==='result')? t : 1;
+  ctx.globalAlpha=Math.min(1,opacity4);
+  ctx.fillRect(W*0.3,rowY[3]-6,W*0.4,32);
+  ctx.strokeStyle=C.green;ctx.strokeRect(W*0.3,rowY[3]-6,W*0.4,32);
+  ctx.fillStyle=C.green;ctx.font='12px Source Code Pro,monospace';
+  ctx.fillText('fd=3, ops → '+b.name,W/2,rowY[3]+15);
+  ctx.globalAlpha=1;
+
+  // connecting arrows once settled
+  if(phase==='result'){
+    ctx.strokeStyle=C.muted;ctx.setLineDash([2,3]);
+    for(let i=0;i<3;i++){
+      ctx.beginPath();ctx.moveTo(W/2,rowY[i]+26);ctx.lineTo(W/2,rowY[i+1]-6);ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+function runDispatch(kind){
+  const phases=['call','lookup','dispatch','result'];
+  const durations=[450,450,550,450];
+  let idx=0,start=performance.now();
+  const b=backends[kind];
+  document.getElementById('dispLabel').textContent='▶ Tracing open("'+b.path+'")';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDispatch(t,phases[idx],kind);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('dispLabel').textContent='▶ Done — landed in '+b.name+'. Try another path.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDispatch(){
+  document.getElementById('dispLabel').textContent='▶ Pick a path to open()';
+  drawDispatch(0,'idle','');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDispatch(); });
+window.addEventListener('resize',()=>{ resetDispatch(); });
+</script>
+</body>
+</html>

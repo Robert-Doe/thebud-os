@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why WebSockets Exist — Long-Polling's Hidden Cost</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:170px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--purple);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.05rem;color:var(--gold);letter-spacing:.03em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--purple)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--purple);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--purple);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* frame-overhead bar component */
+.overhead-bars{margin:1.8rem 0;display:flex;flex-direction:column;gap:1rem;}
+.oh-row{display:flex;align-items:center;gap:1rem;}
+.oh-label{width:190px;flex-shrink:0;font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--muted);text-align:right;}
+.oh-track{flex:1;background:var(--card);border:1px solid var(--border);border-radius:6px;height:34px;position:relative;overflow:hidden;}
+.oh-fill{height:100%;display:flex;align-items:center;padding-left:.7rem;font-family:'Source Code Pro',monospace;font-size:.78rem;color:#0b0f1a;font-weight:700;border-radius:6px 0 0 6px;white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#problem" title="The Problem"></a>
+  <a class="toc-dot" href="#longpolling" title="Long Polling"></a>
+  <a class="toc-dot" href="#cost" title="The Hidden Cost"></a>
+  <a class="toc-dot" href="#c10k" title="The C10K Problem"></a>
+  <a class="toc-dot" href="#live" title="Watch Them Race"></a>
+  <a class="toc-dot" href="#frames" title="Minimal Framing"></a>
+  <a class="toc-dot" href="#duplex" title="True Full Duplex"></a>
+  <a class="toc-dot" href="#comparison" title="Head-to-Head"></a>
+  <a class="toc-dot" href="#reason" title="The Real Reason"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Networking · Server Push · Architectural Motivation</div>
+    <h1>Why Bother With <span>WebSockets</span> At All?</h1>
+    <p class="hero-sub">Long before WebSockets existed, developers already had a way to fake server-initiated updates over plain HTTP: hold the connection open and answer late. It worked — chat apps shipped, stock tickers updated, notifications arrived. So why did the web bother standardizing an entirely new protocol? The honest answer isn't "long polling was broken." It's "long polling was <em>disguising</em> a fundamentally different communication pattern as request/response, and the disguise had a real, measurable cost."</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">~700B</div><div class="lbl">Typical HTTP header overhead, per message</div></div>
+      <div class="hero-stat"><div class="num">2B</div><div class="lbl">Minimum WebSocket frame header</div></div>
+      <div class="hero-stat"><div class="num">2×</div><div class="lbl">Round trips per long-poll message cycle</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Standing connection a WebSocket ever needs</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- 00 PROBLEM -->
+<section id="problem">
+<div class="container">
+  <div class="section-num">00 — The Constraint Everyone Was Working Around</div>
+  <h2>HTTP Was Built for <span class="accent c">One-Way Requests</span></h2>
+
+  <p class="reveal">Recall from the companion lesson on the WebSocket upgrade — and from <code>23_http_tls</code> before it — that plain HTTP has one unbreakable rule baked into its very shape: the client speaks first, always, and the server can only ever reply to something it was just asked. There is no HTTP verb for "here's a message I'd like to send you whenever I feel like it." The server cannot open its mouth until the client has already opened the conversation.</p>
+
+  <p class="reveal">That's a fine model for fetching a document. It's a terrible model for a chat app, a live sports score, a collaborative cursor in a shared document, or a stock ticker — all cases where the <em>server</em> is the one that knows first that something changed, and the client just wants to be told. For years before WebSockets existed, this mismatch between "what HTTP allows" and "what real applications needed" was solved with a workaround, not a new protocol. That workaround is where this lesson starts.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Keep This Question in Mind</div>
+    Every workaround in this lesson is really answering the same question, in a slightly more elaborate way each time: <strong>"How do I let the server tell the client something, when HTTP only lets the client ask the server something?"</strong> WebSockets don't answer that question more cleverly — they change the rules so the question stops needing to be asked at all.
+  </div>
+
+  <p class="reveal">It's worth being precise about the family of workarounds this lesson is really contrasting with WebSockets, because "polling" gets used loosely to mean several different things:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Short Polling</span><span class="fam-count">naive</span></div>
+      <div class="fam-desc">Ask on a fixed timer no matter what. Simple to build, but forces a hard trade-off between wasted "nothing changed" requests (short interval) and stale data (long interval).</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--orange)">Long Polling</span><span class="fam-count">this lesson's focus</span></div>
+      <div class="fam-desc">Server deliberately delays its response until it has data. Feels real-time, but every message still costs a full HTTP round trip — the subject of the rest of this lesson.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">WebSockets</span><span class="fam-count">where this lesson lands</span></div>
+      <div class="fam-desc">One HTTP request opens a standing connection; every message after that is a minimal frame, in either direction, with no request/response pairing at all.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 01 LONG POLLING -->
+<section id="longpolling">
+<div class="container">
+  <div class="section-num">01 — The Pre-WebSocket Workaround</div>
+  <h2>How <span class="accent">Long Polling</span> Actually Works</h2>
+
+  <p class="reveal">Ordinary polling is the naive approach: the client asks "anything new?" every few seconds, on a timer, whether or not anything actually happened. It's simple, but it means either a lot of wasted "no, nothing" responses (if the interval is short) or noticeably stale data (if the interval is long). <strong>Long polling</strong> is the clever refinement that pre-WebSocket applications converged on instead.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Client sends a normal HTTP request</strong>Same as any GET — full headers, full URL, waiting for a response like usual.</div></li>
+    <li><div class="step-body"><strong>Server deliberately does not respond yet</strong>If it has nothing new to report, it holds the request open — no response, no close, just... waiting — instead of immediately answering with "nothing new."</div></li>
+    <li><div class="step-body"><strong>Something happens</strong>A new chat message arrives, a score changes, a document is edited — whatever the client was actually waiting to hear about.</div></li>
+    <li><div class="step-body"><strong>Server finally responds</strong>Now, and only now, it sends the HTTP response — carrying the new data, ending that particular request.</div></li>
+    <li><div class="step-body"><strong>Client immediately re-requests</strong>The instant it receives that response, it fires off a brand new HTTP request and the whole cycle repeats, waiting for the <em>next</em> thing to happen.</div></li>
+  </ol>
+
+  <p class="reveal">From the outside, this looks like real-time server push — updates seem to arrive the moment they happen, with no visible polling delay. But look closely at step 5: it's still, unmistakably, request/response. The client is still the one opening every single exchange. The server never truly "speaks first" — it just gets very good at stalling its reply until it has something worth saying, then the client asks again a fraction of a second later.</p>
+
+  <div class="sidenote reveal">
+    <b>Isn't this the same as a server just... waiting to answer?</b> Essentially yes, and that's exactly the point being made here — long polling is a behavioral trick layered entirely on top of unmodified HTTP semantics. No new headers, no new status codes, no protocol change of any kind. It's the client and server agreeing, purely by convention, to use "a slow response" as a stand-in for "a push notification."
+  </div>
+</div>
+</section>
+
+<!-- 02 THE HIDDEN COST -->
+<section id="cost">
+<div class="container">
+  <div class="section-num">02 — Why "It Worked" Isn't the Same as "It Was Free"</div>
+  <h2>The <span class="accent">Hidden Cost</span> of Faking Push</h2>
+
+  <p class="reveal">Long polling isn't wasteful because it's clever — it's wasteful because of what it's built out of. Every single "message" delivered this way requires paying for <em>an entire new HTTP request/response cycle</em>, even though conceptually only a tiny payload actually needed to move.</p>
+
+  <pre class="reveal"><span class="tag">One long-poll cycle, in full</span><code><span class="cm">// Every single message, this entire block gets sent and re-sent:</span>
+<span class="kw">GET</span> <span class="str">/updates?since=482913</span> HTTP/1.1
+<span class="cls">Host</span>: chat.example.com
+<span class="cls">Cookie</span>: <span class="str">session=8f3e9c2a1b7d4e...; theme=dark; locale=en-US</span>
+<span class="cls">User-Agent</span>: <span class="str">Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...</span>
+<span class="cls">Accept</span>: <span class="str">application/json</span>
+<span class="cls">Accept-Encoding</span>: <span class="str">gzip, deflate, br</span>
+<span class="cls">Referer</span>: <span class="str">https://chat.example.com/room/42</span>
+<span class="cm">// ...often 500-1000+ bytes of headers, for a payload that might be 20 bytes.</span></code></pre>
+
+  <p class="reveal">Now multiply that by every message, all day, for every connected user. Two very different kinds of waste stack up here, and it's worth naming them separately because they hurt in different places:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>📦 Per-Message Overhead</h4>
+      Cookies, user-agent strings, accept headers, and a full request/status line get re-transmitted for <em>every single update</em> — even a one-character change pays the same few hundred bytes of header tax as a huge payload would. That cost scales with <strong>message volume</strong>: a chatty application pays it constantly.
+    </div>
+    <div class="compare-card bad">
+      <h4>🖥️ Held-Open Connection Cost</h4>
+      While a long-poll request is deliberately being held open waiting for something to say, the server still has to keep real resources allocated for it — a thread, a socket, buffers — for however long nothing happens. That cost scales with <strong>concurrent idle clients</strong>: a popular app with thousands of quiet tabs pays it constantly too.
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Both Costs Hit at Once, and They Compound</div>
+    A busy chat server doesn't get to pick one problem to have — it gets both simultaneously. Thousands of held-open connections tie up server resources even when nothing is happening, and every message that <em>does</em> arrive re-pays a full HTTP round trip's worth of header overhead to deliver it. Long polling doesn't remove the cost of "server wants to push data" — it just relocates that cost into two different kinds of waste, and hides it well enough that the app still <em>feels</em> real-time.
+  </div>
+</div>
+</section>
+
+<!-- 02b C10K -->
+<section id="c10k">
+<div class="container">
+  <div class="section-num">02b — Where This Bites Hardest: The Server</div>
+  <h2>The <span class="accent">C10K Problem</span>, Revisited</h2>
+
+  <p class="reveal">If you've been through this series' OS track, "holding a connection open costs resources" should sound familiar — it's the same story as processes and threads from <code>03_pcb_threads_scheduling</code>, just showing up at the networking layer instead. Every held-open long-poll request needs, at minimum, an open file descriptor, and in many traditional server architectures, a dedicated thread with its own stack sitting mostly idle, just waiting for data to become available.</p>
+
+  <p class="reveal">This is a well-known enough pain point in server design that it has a name: the <strong>C10K problem</strong> — the challenge of handling ten thousand concurrent connections on one machine. A thread-per-connection server that's fine with a few hundred simultaneous long-polling clients can fall over entirely at ten thousand, not because the network can't handle it, but because the OS runs out of comfortable room for that many thread stacks and scheduling overhead. Modern servers dodge this with event-driven, non-blocking I/O models (the same <code>epoll</code>/<code>kqueue</code>-style mechanisms you'd meet in <code>16_drivers</code>) — but the underlying truth doesn't change: <em>an open connection with nothing to say is still not a free connection to hold.</em></p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🖥️ WebSockets Don't Eliminate This Cost — They Isolate It</div>
+    A WebSocket connection is also a held-open connection, and it also costs a file descriptor and some server-side bookkeeping for its entire lifetime. WebSockets don't make "many concurrent connections" free — nothing does. What they remove is the <em>second</em> cost long polling stacks on top: the repeated full-HTTP-cycle tax paid per message. You still pay for having the door open; you just stop re-paying the doorman every time someone walks through it.
+  </div>
+</div>
+</section>
+
+<!-- 03 LIVE CANVAS -->
+<section id="live">
+<div class="container">
+  <div class="section-num">03 — See the Difference</div>
+  <h2>Watch Them <span class="accent">Race</span></h2>
+
+  <p class="reveal">Run the animation below to compare five messages arriving over long polling versus over an already-open WebSocket connection. Watch how many separate round trips each approach needs — and how much of that traffic is headers versus actual payload.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="raceLabel">▶ Click a button below to run a scenario</div>
+    <canvas id="raceCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runRace('poll')">▶ Run Long Polling (5 messages)</button>
+    <button class="ctrl-btn cyan" onclick="runRace('ws')">▶ Run WebSocket (5 messages)</button>
+    <button class="ctrl-btn red" onclick="resetRace()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice the long-polling side has to fully close and reopen a connection-shaped exchange five separate times — full request out, full response back, immediately again — while the WebSocket side just sends five small frames down a connection that was already sitting there, open, the entire time.</p>
+</div>
+</section>
+
+<!-- 04 MINIMAL FRAMING -->
+<section id="frames">
+<div class="container">
+  <div class="section-num">04 — Built Deliberately Lean</div>
+  <h2>WebSocket Framing Is <span class="accent">Minimal by Design</span></h2>
+
+  <p class="reveal">Once a WebSocket connection is open (see the companion lesson for exactly how it gets there), sending a message never touches HTTP again — no headers, no cookies, no status line. Instead, every message is wrapped in a small binary <strong>frame</strong>, and the frame header can be as small as <strong>2 bytes</strong> for a short text message.</p>
+
+  <pre class="reveal"><span class="tag">Minimal WebSocket frame header</span><code><span class="cm">/* byte 0: FIN bit + reserved bits + 4-bit opcode        */</span>
+<span class="cm">/* byte 1: MASK bit + 7-bit payload length (if &lt; 126)     */</span>
+<span class="kw">uint8_t</span> header[<span class="num">2</span>] = {
+    <span class="num">0x81</span>,  <span class="cm">// FIN=1, opcode=0x1 (text frame)</span>
+    <span class="num">0x05</span>   <span class="cm">// MASK=0 (server→client), payload length = 5</span>
+};
+<span class="cm">// followed immediately by the 5-byte payload: "hello"</span>
+<span class="cm">// total wire cost for this message: 2 header bytes + 5 payload bytes = 7 bytes</span></code></pre>
+
+  <p class="reveal">Compare that 2-byte header to the several hundred bytes of headers a long-poll cycle re-sends for every single message. This isn't a minor optimization — it's roughly two <em>orders of magnitude</em> less overhead per message, and the gap only gets more dramatic the higher your message rate climbs.</p>
+
+  <div class="overhead-bars reveal">
+    <div class="oh-row"><div class="oh-label">Long-poll request headers</div><div class="oh-track"><div class="oh-fill" style="width:100%;background:var(--red)">~700 bytes</div></div></div>
+    <div class="oh-row"><div class="oh-label">Long-poll response headers</div><div class="oh-track"><div class="oh-fill" style="width:34%;background:var(--orange)">~240 bytes</div></div></div>
+    <div class="oh-row"><div class="oh-label">WebSocket frame (small msg)</div><div class="oh-track"><div class="oh-fill" style="width:1%;min-width:34px;background:var(--green)">2-4 bytes</div></div></div>
+  </div>
+  <p class="reveal" style="font-size:.85rem;color:var(--muted);margin-top:-1rem">Illustrative, not exact — real header sizes vary with cookies, user-agent length, and which headers a given app sends. The proportions are the point.</p>
+
+  <p class="reveal">The frame header does grow slightly for larger payloads — up to 8 extra bytes for very large messages, plus 4 bytes for the masking key on every client-to-server frame (client frames must always be masked; server frames never are, a rule that exists to prevent cache-poisoning attacks against misbehaving intermediaries). Even at its largest, though, a WebSocket frame header tops out far below what a single set of HTTP request headers costs.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Payload size</th><th>Length field</th><th>Header bytes (server→client)</th><th>Header bytes (client→server, +mask)</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">≤ 125 bytes</td><td>7 bits, inline</td><td class="pos">2 bytes</td><td class="hl">6 bytes</td></tr>
+        <tr><td class="gold">126 – 65,535 bytes</td><td>16-bit extended</td><td class="pos">4 bytes</td><td class="hl">8 bytes</td></tr>
+        <tr><td class="gold">&gt; 65,535 bytes</td><td>64-bit extended</td><td class="pos">10 bytes</td><td class="hl">14 bytes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice the design intent in that escalation: the common case — a short chat message, a small game-state delta, a single JSON event — gets the cheapest encoding, while only genuinely large payloads pay for a bigger length field. HTTP headers, by contrast, don't scale down at all: a 5-byte payload and a 5-kilobyte payload both drag along the same few hundred bytes of cookies and user-agent string.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why So Minimal, On Purpose?</div>
+    WebSocket framing was designed from scratch specifically for a world where a connection might carry <em>thousands</em> of small messages over its lifetime — a chat app, a multiplayer game's position updates, a live collaborative cursor. HTTP's header model was designed for a world where each connection carries relatively few, relatively large exchanges. Neither format is "wrong" — they were optimized for opposite traffic shapes, and long polling was always going to lose by forcing WebSocket-shaped traffic through an HTTP-shaped pipe.
+  </div>
+</div>
+</section>
+
+<!-- 05 FULL DUPLEX -->
+<section id="duplex">
+<div class="container">
+  <div class="section-num">05 — Not Just Cheaper, Structurally Different</div>
+  <h2>Genuinely <span class="accent">Bidirectional</span>, No Pairing Required</h2>
+
+  <p class="reveal">Cheaper framing is only half the story, and arguably the less important half. The deeper architectural change is this: on a WebSocket connection, <strong>either side can send a frame at any moment</strong>, completely independent of whether the other side just sent something. There is no concept of "this frame is the response to that frame." Frames aren't paired — they're just a stream of independent messages flowing in both directions over one shared pipe.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🔁 Long Polling (still request/response)</h4>
+      The server can only ever send data as the <em>answer</em> to a request the client already made. It cannot get ahead — if the client is momentarily slow to re-request, the server has no channel to use until a new request arrives. Two logically-independent messages (say, a chat message and a "user is typing" notice) still have to take turns riding the same request/response ping-pong.
+    </div>
+    <div class="compare-card good">
+      <h4>↔️ WebSocket (true full duplex)</h4>
+      Client and server can each send frames whenever they have something to say, overlapping freely — the server can push three updates in a row while the client is mid-way through sending a large upload frame, with no coordination required. Nothing is ever "waiting its turn" to be allowed to speak.
+    </div>
+  </div>
+
+  <p class="reveal">This is the part that long polling could never actually replicate, no matter how cleverly it stalled responses. Long polling can only ever <em>simulate</em> server push by exploiting the timing of request/response — it cannot escape the fact that, underneath, the server is still just answering a question the client asked. A WebSocket connection has no such question being asked at all. It's not request/response running very fast; it's a different communication pattern entirely.</p>
+
+  <pre class="reveal"><span class="tag">Neither side waits for the other</span><code><span class="cm">// Client: sends whenever the user acts — never waits for a server "turn"</span>
+socket.<span class="fn">send</span>(<span class="str">'{"type":"cursor_move","x":482,"y":117}'</span>);
+
+<span class="cm">// Server: pushes whenever it has something — never waits to be asked</span>
+<span class="kw">for</span> (<span class="kw">const</span> peer <span class="kw">of</span> room.peers) {
+    peer.socket.<span class="fn">send</span>(<span class="str">'{"type":"chat","user":"alice","text":"hey!"}'</span>);
+}
+
+<span class="cm">// Both of these can happen in the same millisecond, on the same connection,</span>
+<span class="cm">// in either order, with zero coordination between them.</span></code></pre>
+
+  <p class="reveal">Compare that to a long-polling client, which structurally <em>cannot</em> write code shaped like the server-side loop above without opening a brand-new outbound request to do it — there is no "just send it" primitive available, only "make a request and eventually get a response."</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔑 The Structural Difference, Named Precisely</div>
+    Long polling optimizes the <em>timing</em> of request/response until server push becomes possible to fake convincingly. WebSockets remove the request/response pairing requirement altogether. One is a workaround inside an unchanged model; the other is a different model. That's not a matter of degree — it's the actual reason a new protocol was worth standardizing instead of just writing faster long-polling libraries.
+  </div>
+</div>
+</section>
+
+<!-- 06 COMPARISON TABLE -->
+<section id="comparison">
+<div class="container">
+  <div class="section-num">06 — Head to Head</div>
+  <h2>Long Polling vs. <span class="accent">WebSockets</span>, Directly</h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Dimension</th><th>Long Polling</th><th>WebSockets</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Overhead per message</td><td class="neg">Full HTTP headers, every time (~hundreds of bytes)</td><td class="pos">As little as 2-byte frame header</td></tr>
+        <tr><td class="gold">Connections needed for N messages</td><td class="neg">N request/response cycles</td><td class="pos">1 standing connection, reused</td></tr>
+        <tr><td class="gold">Can server send unprompted?</td><td class="neg">No — only as a delayed answer to a request</td><td class="pos">Yes — either side, anytime</td></tr>
+        <tr><td class="gold">Idle-connection resource cost</td><td class="neg">Held-open request still consumes a server slot</td><td class="hl">Also holds a connection — but pays no per-message tax</td></tr>
+        <tr><td class="gold">Underlying transport change?</td><td class="pos">None — plain HTTP throughout</td><td class="hl">One HTTP handshake, then a new framing protocol</td></tr>
+        <tr><td class="gold">Works through unmodified HTTP infra?</td><td class="pos">Always — it never stops looking like HTTP</td><td class="hl">Usually — starts as HTTP, some proxies mishandle the switch</td></tr>
+        <tr><td class="gold">Best fit</td><td>Low message rate, maximum infra compatibility</td><td class="pos">Frequent, bidirectional, latency-sensitive messaging</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Long Polling Isn't "Wrong" — It's a Trade-off</div>
+    For an app that pushes an update once every few minutes, long polling's overhead barely registers, and its total reliance on ordinary HTTP means it survives even hostile network conditions and ancient proxies that a WebSocket upgrade might trip over. The trade-off flips hard, though, the moment message frequency climbs — a live multiplayer game sending 30 position updates a second over long polling would be sending more header bytes than actual game data, many times over.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What about Server-Sent Events (SSE)?</b> SSE sits in an interesting middle spot: like WebSockets, it's one standing connection instead of repeated request/response cycles, so it avoids long polling's per-message header tax. But it's still fundamentally an HTTP response that never finishes — one-directional, server-to-client only, and it plays nicely with CORS since it never leaves the normal fetch model. If your app only needs push, not client-to-server streaming, SSE gets most of WebSockets' efficiency win with noticeably less protocol complexity.
+  </div>
+</div>
+</section>
+
+<!-- 07 THE REAL REASON -->
+<section id="reason">
+<div class="container">
+  <div class="section-num">07 — Tying It Together</div>
+  <h2>The Real Reason <span class="accent">WebSockets Exist</span></h2>
+
+  <p class="reveal">It's tempting to summarize this whole lesson as "WebSockets are faster than long polling," but that undersells what actually happened here. Speed is a symptom. The real story is that the web needed a <strong>standing, low-overhead, full-duplex channel</strong> for a growing category of applications, and every workaround built on top of unmodified HTTP — plain polling, long polling, and their various cousins — was fundamentally disguising that need as request/response, because request/response was the only tool HTTP gave application developers.</p>
+
+  <p class="reveal">WebSockets exist because eventually it became clear that disguising push-style communication as request/response wasn't just inelegant — it was expensive in ways that scaled badly with exactly the applications that wanted it most: chat, gaming, collaborative editing, live dashboards, all of which want <em>frequent, bidirectional, low-latency</em> messages. Rather than inventing an even cleverer disguise, RFC 6455 asked a more direct question: what if, after one ordinary HTTP request to get past the web's existing infrastructure, the connection just stopped pretending to be request/response at all?</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🎭</div><div class="lbl">Long polling disguises push as delayed replies</div></div>
+    <div class="stat-card"><div class="val">💸</div><div class="lbl">Every disguised message re-pays full HTTP overhead</div></div>
+    <div class="stat-card"><div class="val">🧵</div><div class="lbl">Idle held-open requests still cost server resources</div></div>
+    <div class="stat-card"><div class="val">🔓</div><div class="lbl">WebSockets remove the need to disguise anything</div></div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>WebSockets don't exist because long polling was incapable of faking real-time updates — they exist because faking it meant paying full HTTP overhead on every message and tying up server resources on every idle connection, and a standing, minimally-framed, genuinely bidirectional channel does the same job for a fraction of the cost.</strong>
+  </div>
+</div>
+</section>
+
+<!-- 08 GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Polling</div><div class="glossary-def">Repeatedly asking "anything new?" on a fixed timer, regardless of whether anything actually changed — simple, but wastes requests and adds latency.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Long Polling</div><div class="glossary-def">A refinement where the server holds a request open until it has real data, then the client immediately re-requests — simulates push using pure request/response timing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Per-Message Overhead</div><div class="glossary-def">The fixed cost (headers, cookies, request/status lines) paid on every single message — dominates when message frequency is high and payloads are small.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Held-Open Connection Cost</div><div class="glossary-def">Server resources (threads, sockets, buffers) consumed by requests deliberately kept waiting for data — scales with concurrent idle clients, not message volume.</div></div>
+    <div class="glossary-card"><div class="glossary-term">WebSocket Frame</div><div class="glossary-def">The minimal binary unit of WebSocket communication — as small as 2 bytes of header for a short message, replacing HTTP headers entirely after the handshake.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Full Duplex</div><div class="glossary-def">Both sides of a connection can send independently and simultaneously, with no requirement that one side's message be a "reply" to the other's.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Request/Response Pairing</div><div class="glossary-def">HTTP's core rule: every message from the server must be an answer to a message the client sent first. WebSockets remove this requirement entirely.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Masking Key</div><div class="glossary-def">A 4-byte value client-to-server WebSocket frames must XOR their payload with — required by spec to prevent cache-poisoning attacks via crafted frame content, not for confidentiality.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Server-Sent Events (SSE)</div><div class="glossary-def">A related but simpler alternative: unidirectional server-to-client push over plain HTTP, respecting CORS — useful when the client never needs to push data back.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Standing Connection</div><div class="glossary-def">A single long-lived connection reused for many messages over time, as opposed to opening a fresh connection-shaped exchange for each one.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Why WebSockets Exist · A companion lesson for bob_os/browser module <strong>B18_websockets</strong></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Not faster request/response — a different pattern entirely. See <em>01_explainer.html</em> for exactly how the handshake gets you there.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── RACE CANVAS: long polling vs websocket ──────────────────────────────────
+let raceMsgCount=0, raceMode='poll';
+
+function drawRaceScene(t,phase,mode,msgIndex){
+  const canvas=document.getElementById('raceCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=0, leftW=W*0.30, wallX=leftW, wallW=W*0.10, rightX=leftW+wallW, rightW=W-rightX;
+
+  ctx.fillStyle='rgba(167,139,250,.06)';ctx.fillRect(leftX,20,leftW,H-70);
+  ctx.strokeStyle=C.purple;ctx.lineWidth=1.5;ctx.strokeRect(leftX+2,20,leftW-4,H-70);
+  ctx.fillStyle=C.purple;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('CLIENT',leftX+leftW/2,40);
+
+  ctx.fillStyle='rgba(122,155,191,.06)';ctx.fillRect(wallX,20,wallW,H-70);
+
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(rightX,20,rightW,H-70);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(rightX+2,20,rightW-4,H-70);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SERVER',rightX+rightW/2,40);
+
+  // mode label + message counter
+  ctx.fillStyle=C.text;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText((mode==='poll'?'LONG POLLING':'WEBSOCKET (already open)') + '  —  message ' + Math.min(msgIndex+1,5) + ' / 5', W/2, 62);
+
+  const captions = mode==='poll' ? {
+    req_out:'Full GET request sent — headers, cookies, everything, again',
+    held:'Server holds the request open… waiting for something to say',
+    resp_back:'Full HTTP response sent back — with the small payload',
+    reopen:'Client immediately opens a brand-new request — cycle repeats'
+  } : {
+    frame_out:'Small frame sent on the already-open connection — no headers',
+    frame_back:'Server can send a frame back anytime — no request required first'
+  };
+  ctx.fillStyle=C.muted;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  if(mode==='poll'){
+    if(phase==='req_out'){
+      const x=leftX+leftW*0.8+(wallW+rightW*0.15)*t;
+      drawPacket(ctx,x,H*0.48,C.red,'~700B headers',26);
+    } else if(phase==='held'){
+      const pulse=5+2*Math.sin(t*Math.PI*6);
+      drawPacket(ctx,rightX+rightW*0.35,H*0.48,C.orange,'waiting…',18+pulse*0.4);
+    } else if(phase==='resp_back'){
+      const x=rightX+rightW*0.3-(wallW+rightW*0.05+leftW*0.2)*t;
+      drawPacket(ctx,x,H*0.48,C.orange,'~240B + data',22);
+    } else if(phase==='reopen'){
+      const x=leftX+leftW*0.6+(leftW*0.2)*Math.sin(t*Math.PI);
+      drawPacket(ctx,x,H*0.48,C.purple,'new request…',16);
+    }
+  } else {
+    // always show the standing connection as a solid glowing line
+    ctx.strokeStyle=C.green;ctx.lineWidth=2;ctx.shadowColor=C.green;ctx.shadowBlur=8;
+    ctx.beginPath();ctx.moveTo(leftX+leftW,H*0.48);ctx.lineTo(rightX,H*0.48);ctx.stroke();
+    ctx.shadowBlur=0;
+    if(phase==='frame_out'){
+      const x=leftX+leftW*0.85+(wallW+rightW*0.1)*t;
+      drawPacket(ctx,x,H*0.48,C.green,'2-4B frame',10);
+    } else if(phase==='frame_back'){
+      const x=rightX+rightW*0.2-(wallW+leftW*0.15)*t;
+      drawPacket(ctx,x,H*0.48,C.green,'2-4B frame',10);
+    }
+  }
+}
+
+function drawPacket(ctx,x,y,col,label,size){
+  ctx.beginPath();ctx.arc(x,y,size,0,Math.PI*2);ctx.fillStyle=col+'33';ctx.fill();
+  ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle=col;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x,y-size-6);
+}
+
+function runRace(mode){
+  raceMode=mode;
+  const pollPhases=['req_out','held','resp_back','reopen'];
+  const pollDur=[400,550,400,300];
+  const wsPhases=['frame_out','frame_back'];
+  const wsDur=[220,220];
+  const phases = mode==='poll'?pollPhases:wsPhases;
+  const durations = mode==='poll'?pollDur:wsDur;
+
+  let msgIndex=0, idx=0, start=performance.now();
+  document.getElementById('raceLabel').textContent='▶ Running: '+(mode==='poll'?'Long Polling':'WebSocket')+'…';
+
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawRaceScene(t,phases[idx],mode,msgIndex);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        msgIndex++;
+        if(msgIndex>=5){
+          document.getElementById('raceLabel').textContent='▶ Done — '+(mode==='poll'?'5 full request/response cycles used':'5 tiny frames on one open connection')+'. Click Reset to try the other.';
+          return;
+        }
+        idx=0;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetRace(){
+  document.getElementById('raceLabel').textContent='▶ Click a button below to run a scenario';
+  drawRaceScene(0,'idle','poll',0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRace(); });
+window.addEventListener('resize',()=>{ resetRace(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B07 — JS Interpreter | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(248,113,113,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--red);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--red);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--red);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--red);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(248,113,113,0.08),rgba(251,146,60,0.08));border:1px solid rgba(248,113,113,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--red);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B07 — JS INTERPRETER</div>
+  <h1>Tagged Values &amp; <span>Type Confusion</span></h1>
+  <p class="tagline">JavaScript has no static types — every value can be a number, string, object, or function at runtime. The engine uses a tagged union to track types. Confuse the tag and you have arbitrary read/write. This is how most browser exploits start.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">tagged union</div><div class="label">type tag + value in one word</div></div>
+    <div class="hero-stat"><div class="num">NaN-boxing</div><div class="label">V8/JSC pack type into NaN bits</div></div>
+    <div class="hero-stat"><div class="num">type confusion</div><div class="label">treat object A as type B</div></div>
+    <div class="hero-stat"><div class="num">addrof/fakeobj</div><div class="label">primitives built from type confusion</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-numbers">Number Systems</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine a warehouse with unlabelled boxes. Each box has a sticky note saying what's inside: "NUMBER", "STRING", "OBJECT". The forklift driver (JS engine) reads the sticky note to know how to handle the box. A type confusion bug is like switching sticky notes: the driver picks up a box labelled "NUMBER" but it's actually filled with pointers to other boxes. Instead of doing math, it starts following those pointers — now it can read or write anywhere in the warehouse.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Tagged Value</h2>
+    <pre><code>/* js_value.h — simplified NaN-boxing */
+typedef enum {
+    JS_NUMBER = 0,
+    JS_STRING = 1,
+    JS_OBJECT = 2,
+    JS_BOOL   = 3,
+    JS_NULL   = 4,
+    JS_UNDEF  = 5,
+} js_type_t;
+
+typedef struct {
+    js_type_t type;
+    union {
+        double   number;
+        char    *string;
+        void    *object;  /* heap pointer */
+        int      boolean;
+    } u;
+} js_value_t;
+
+/* Helpers */
+static inline js_value_t js_number(double n) {
+    return (js_value_t){ .type=JS_NUMBER, .u.number=n };
+}
+static inline js_value_t js_object(void *ptr) {
+    return (js_value_t){ .type=JS_OBJECT, .u.object=ptr };
+}
+static inline int js_is_number(js_value_t v) {
+    return v.type == JS_NUMBER;
+}
+
+/* Addition: must check types! */
+js_value_t js_add(js_value_t a, js_value_t b) {
+    if (js_is_number(a) && js_is_number(b))
+        return js_number(a.u.number + b.u.number);
+    /* string coercion, etc. */
+    return js_string(js_to_string(a), js_to_string(b));
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — A Type Confusion Bug</h2>
+    <pre><code>/* Suppose the engine has an ARRAY type and an OBJECT type.
+   Arrays have a length field; objects have a property map pointer.
+   If the engine reads an object as an array:
+   - obj->length field is actually obj->prop_map pointer (a heap addr)
+   - Reading "array[0]" computes: base + 0*8 — reads object fields
+   - Writing "array[i]" writes to computed address: arbitrary write!
+*/
+
+typedef struct { uint32_t length; js_value_t *data; } js_array_t;
+typedef struct { uint64_t prop_map; /* pointer */ } js_object_t;
+
+/* BUG: wrong cast — treats js_object_t* as js_array_t* */
+void type_confusion_demo(js_value_t val) {
+    if (val.type == JS_OBJECT) {
+        /* attacker tricks the engine into taking this path
+           with a value whose type field says OBJECT
+           but whose object pointer points to an array layout */
+        js_array_t *arr = (js_array_t*)val.u.object;
+        /* arr->length is actually the prop_map pointer value */
+        printf("length = %u\n", arr->length);  /* leaks a heap addr! */
+        /* arr->data[0] reads at prop_map+0 — arbitrary read */
+    }
+}</code></pre>
+
+    <div class="callout red">
+      <div class="label">addrof and fakeobj Primitives</div>
+      <p><strong>addrof(obj)</strong>: confuse the engine into returning an object's heap address as a JS number. <strong>fakeobj(addr)</strong>: confuse the engine into treating a JS number (an address) as an object pointer. Together: read any object's address, forge a fake object at any address, read/write anywhere in the heap. These two primitives are the building blocks of every modern browser exploit (B10 goes deep on this).</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The Eval Loop</h2>
+    <pre><code>/* A minimal tree-walking interpreter */
+js_value_t eval(ast_node_t *node, env_t *env) {
+    switch (node->type) {
+    case AST_NUMBER:
+        return js_number(node->num);
+    case AST_BINOP:
+        js_value_t left  = eval(node->left,  env);
+        js_value_t right = eval(node->right, env);
+        switch (node->op) {
+        case OP_ADD: return js_add(left, right);
+        case OP_MUL:
+            /* type check: must be numbers */
+            if (!js_is_number(left) || !js_is_number(right))
+                return js_throw("TypeError: not a number");
+            return js_number(left.u.number * right.u.number);
+        }
+    case AST_CALL:
+        js_value_t fn = eval(node->callee, env);
+        if (fn.type != JS_FUNCTION)
+            return js_throw("TypeError: not a function");
+        return call_function(fn.u.object, node->args, env);
+    /* ... */
+    }
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B07 — JS Interpreter</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B07_js_interpreter && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>eval("1 + 2")       → 3      [NUMBER]
+eval("'a' + 'b'")   → "ab"  [STRING]
+eval("1 + 'x'")     → "1x"  [coercion]
+
+Type confusion demo:
+  Object at 0x55a3b800
+  Confused as array: length = 0x55a3b800  (leaked pointer!)
+  Read at confused[0]: 0xdeadbeef
+JS interpreter: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>Real JS engines use NaN-boxing: a 64-bit IEEE 754 NaN has 51 "quiet NaN payload" bits unused. V8 packs the type tag and object pointer into those bits, so a JS value is always exactly 8 bytes — no separate type field. The number zero is just <code>0.0</code>; a pointer to an object is a NaN with the pointer in the low 48 bits.</p>
+      <p style="margin-top:14px;color:var(--muted);">How would a type confusion bug work in a NaN-boxed engine? If the attacker can flip the NaN bit of a floating-point number, they can make the engine think a double value is a pointer. What would the "pointer" point to, and can the attacker control the value of the double to make it point somewhere useful?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why not just add runtime type checks everywhere?</div>
+      <div class="a">Performance. A modern JS engine executes millions of operations per second. Adding a type check to every arithmetic operation would be catastrophic for speed. The solution is speculative optimization (JIT compilation, B08): assume a variable is always a number, emit fast code, and "deoptimize" back to the slow path if a type check fails at runtime. Bugs arise at the deoptimization boundaries.</div>
+      <div class="q">Q: Is this why JavaScript has typeof, instanceof, etc.?</div>
+      <div class="a">Yes — those are userland ways to ask the engine "what type is this value?" They read the same tag bits the engine uses internally. The difference: userland code uses them for logic; the engine uses them to decide how to interpret raw memory. Getting the engine's internal type decision wrong is the bug class we're discussing.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B08 — JIT Compiler</div>
+      <p>The tree-walking interpreter is too slow. The JIT compiler watches hot code paths and emits native x86 machine code on the fly. New attack surface: the JIT emitter itself must not generate exploitable code, and the JIT compiled code lives in memory that must be executable but not writable (W^X).</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>js_value.h</code> · <code>eval.c</code> · <code>type_confusion.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B07 of 18 &nbsp;|&nbsp; <a href="../B06_css_cascade/tutorial.html">← B06</a> &nbsp;·&nbsp; <a href="../B08_jit_compiler/tutorial.html">B08 →</a></footer>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B08 — JIT Compiler | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(56,189,248,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--cyan);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--cyan);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--cyan);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--cyan);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(56,189,248,0.08),rgba(13,148,136,0.08));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .pipeline{display:flex;align-items:center;gap:0;margin:24px 0;flex-wrap:wrap;}
+  .pipe-step{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;text-align:center;font-family:'Source Code Pro',monospace;font-size:12px;min-width:100px;}
+  .pipe-step .step-label{color:var(--muted);font-size:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;}
+  .pipe-step .step-name{color:var(--cyan);}
+  .pipe-arrow{padding:0 8px;color:var(--muted);font-size:18px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B08 — JIT COMPILER</div>
+  <h1>x86 Emitter &amp; <span>W^X</span></h1>
+  <p class="tagline">The interpreter is too slow for tight loops. The JIT watches hot code and emits native x86 instructions directly into memory — then jumps to them. The constraint: memory must be either writable or executable, never both. That's W^X.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">mmap</div><div class="label">allocate executable memory pages</div></div>
+    <div class="hero-stat"><div class="num">x86 bytes</div><div class="label">emit machine code at runtime</div></div>
+    <div class="hero-stat"><div class="num">W^X</div><div class="label">write XOR execute — never both</div></div>
+    <div class="hero-stat"><div class="num">deopt</div><div class="label">bail back to interpreter on type change</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>The interpreter reads your JS source and executes it line by line — like a human translator reading French aloud to an English audience, word by word. The JIT compiler is like hiring a translator who watches your most-used phrases, writes them out in English once, then hands the audience a card to read directly — no translator needed. First time is slow (compilation); every subsequent use is fast (native execution).</p>
+      <p style="margin-top:10px;">W^X is the security rule: the translator can only write on the card OR let people read it — not both simultaneously. This stops an attacker from modifying compiled code that's already being executed.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The JIT Pipeline</h2>
+    <div class="pipeline">
+      <div class="pipe-step"><div class="step-label">source</div><div class="step-name">JS text</div></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><div class="step-label">parse</div><div class="step-name">AST</div></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><div class="step-label">bytecode</div><div class="step-name">IR opcodes</div></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><div class="step-label">profile</div><div class="step-name">type feedback</div></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><div class="step-label">JIT</div><div class="step-name">x86 emit</div></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><div class="step-label">execute</div><div class="step-name">native speed</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — Allocating Executable Memory</h2>
+    <pre><code>/* jit.c — allocate a code buffer with W^X enforcement */
+#include &lt;sys/mman.h&gt;
+
+typedef struct {
+    uint8_t *buf;
+    size_t   size;
+    size_t   pos;
+} jit_buf_t;
+
+jit_buf_t jit_alloc(size_t size) {
+    /* Step 1: allocate WRITABLE, not executable */
+    void *mem = mmap(NULL, size,
+                     PROT_READ | PROT_WRITE,   /* W, not X */
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return (jit_buf_t){ .buf=mem, .size=size, .pos=0 };
+}
+
+void jit_finalize(jit_buf_t *j) {
+    /* Step 2: flip to EXECUTABLE, remove write permission */
+    mprotect(j->buf, j->size, PROT_READ | PROT_EXEC);  /* X, not W */
+    /* now W^X: was writable, now executable — never both */
+}
+
+/* Emit raw x86 bytes */
+void emit_byte(jit_buf_t *j, uint8_t b)  { j->buf[j->pos++] = b; }
+void emit_u32 (jit_buf_t *j, uint32_t v) {
+    memcpy(j->buf + j->pos, &v, 4); j->pos += 4;
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>04 — Emitting x86: A Simple Add Function</h2>
+    <pre><code>/* JIT compile: function(a, b) { return a + b; }
+   x86-64 System V ABI: args in RDI, RSI; return in RAX */
+
+void *jit_compile_add(jit_buf_t *j) {
+    void *entry = j->buf + j->pos;
+
+    /* mov rax, rdi   — load first arg into rax */
+    emit_byte(j, 0x48); emit_byte(j, 0x89); emit_byte(j, 0xF8);
+    /* add rax, rsi   — add second arg */
+    emit_byte(j, 0x48); emit_byte(j, 0x01); emit_byte(j, 0xF0);
+    /* ret            — return */
+    emit_byte(j, 0xC3);
+
+    jit_finalize(j);   /* make executable */
+
+    return entry;
+}
+
+/* Call the JIT-compiled function */
+typedef long (*jit_fn_t)(long, long);
+jit_buf_t buf = jit_alloc(4096);
+jit_fn_t add = jit_compile_add(&buf);
+printf("JIT add(3, 4) = %ld\n", add(3, 4));  /* 7 */</code></pre>
+
+    <div class="callout orange">
+      <div class="label">JIT Spraying</div>
+      <p>An attacker who can control the values the JIT compiles into immediate constants can "spray" shellcode bytes across executable JIT pages. By carefully crafting JavaScript constants like <code>0x90909090</code> (NOP sled) or jump instructions as immediates, the attacker fills JIT pages with exploitable patterns. If they can redirect execution into the middle of a JIT page, they land on their shellcode. W^X alone doesn't stop this — it stops external writes, not the JIT's own code generation.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B08 — JIT Compiler</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B08_jit_compiler && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[jit] allocating code buffer (PROT_WRITE, not exec)
+[jit] emitting x86: mov rax,rdi / add rax,rsi / ret
+[jit] finalizing: mprotect → PROT_READ|PROT_EXEC
+[jit] calling compiled function...
+  add(3, 4)   = 7  ✓
+  add(10, 20) = 30 ✓
+[jit] W^X check: write after finalize → SIGSEGV (enforced) ✓
+JIT compiler: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>Our JIT assumes <code>add(a,b)</code> always gets integer arguments. But JavaScript is dynamic — someone might call <code>add("hello", 3)</code>. The JIT needs a "guard": before the fast path, check that both arguments are actually numbers. If not, jump to the interpreter (deoptimize).</p>
+      <p style="margin-top:14px;color:var(--muted);">Add a type guard to the emitted code: check that RDI and RSI both have the integer tag (in NaN-boxing: check the top bits are not NaN). Emit a conditional jump to a <code>deopt_handler</code> label if the check fails. How does this guard get removed if the JIT observes that the function is always called with numbers?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Can the JIT be disabled for security?</div>
+      <div class="a">Yes — many sandboxed environments (iOS WKWebView without the JIT entitlement, some CSP configurations) run JS without a JIT. Performance drops 5–10x but the attack surface is dramatically reduced: no executable pages generated at runtime, no JIT spraying, no deopt boundary bugs. It's a legitimate security tradeoff.</div>
+      <div class="q">Q: What's the "JIT process" Chrome uses?</div>
+      <div class="a">Chrome's V8 JIT compiles code in the renderer process — the same process running untrusted JS. A proposal called "V8 Sandbox" moves JIT compilation into a separate privileged process; the renderer sends IR to the JIT process over IPC and gets back read-only compiled code. This means a type confusion in the renderer can't directly corrupt JIT compilation. It's analogous to the GPU process architecture in B04.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B09 — Garbage Collector</div>
+      <p>The JIT allocates objects freely; the GC reclaims them when no longer reachable. The mark-and-sweep algorithm must find all live objects before freeing dead ones. A use-after-free bug occurs when the GC frees an object that the JIT still has a cached pointer to — another exploit primitive.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>jit.c</code> · <code>x86_emit.h</code> · <code>deopt.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B08 of 18 &nbsp;|&nbsp; <a href="../B07_js_interpreter/tutorial.html">← B07</a> &nbsp;·&nbsp; <a href="../B09_garbage_collector/tutorial.html">B09 →</a></footer>
+</body>
+</html>

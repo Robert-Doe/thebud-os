@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The APIC: Why the PIC Had to Retire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.16) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:170px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)} h2 .accent.c{color:var(--cyan)} h2 .accent.g{color:var(--green)} h2 .accent.gold{color:var(--gold)} h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;background:rgba(167,139,250,.1);padding:.1rem .4rem;border-radius:4px;color:var(--purple);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout code{background:rgba(0,0,0,.25)}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.6rem 1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre code{background:none;padding:0;color:#c4deff;font-size:.85rem;line-height:1.85;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.86rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.pur{color:var(--purple);font-weight:600} td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.68rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.family-card.hot{border-color:var(--gold2)}
+.family-card.hot .fam-count{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#limit" title="The PIC's Ceiling"></a>
+  <a class="toc-dot" href="#apic" title="Local + I/O APIC"></a>
+  <a class="toc-dot" href="#route" title="Watch Routing Happen"></a>
+  <a class="toc-dot" href="#ipi" title="IPIs"></a>
+  <a class="toc-dot" href="#msi" title="MSI / MSI-X"></a>
+  <a class="toc-dot" href="#compare" title="PIC vs APIC"></a>
+  <a class="toc-dot" href="#practical" title="What Hobby OSes Actually Do"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Beyond the 8259 · Companion to PIC Remapping</div>
+    <h1>Why the PIC<br>Had to <span>Retire</span></h1>
+    <p class="hero-sub">You just spent a whole page fixing a numbering collision baked into the 8259 PIC. That fix works, and it's still exactly what bob_os uses today. But it papers over a much bigger limitation, one no amount of remapping can solve: the 8259 was designed for a machine with exactly one CPU. Once "one CPU" stopped being true of every computer on Earth, the PIC's days as the primary interrupt controller were numbered.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">CPU a Bare PIC Can Ever Target</div></div>
+      <div class="hero-stat"><div class="num">24</div><div class="lbl">Typical I/O APIC Redirection Entries</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">APIC Pieces — Local + I/O</div></div>
+      <div class="hero-stat"><div class="num">MSI-X</div><div class="lbl">The Even Newer Wire-Free Approach</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Remapping Fixed the Vectors. <span class="accent">Not the Architecture.</span></h2>
+  <p class="reveal">The previous lesson fixed a real, hardware-level bug: the 8259 PIC's factory-default IRQ mapping collided head-on with Intel's reserved exception vectors. Reprogramming it via ICW1-4 to land IRQs at 32-47 made that collision go away, permanently, for exactly the kind of single-CPU machine the PIC was designed for in 1976.</p>
+  <p class="reveal">"Single-CPU machine" is the phrase to sit with. Every wire, every register, every design decision baked into the 8259 assumes there is exactly one CPU listening on the other end of its single INTR output line. That assumption was completely reasonable for decades. It stopped being reasonable the moment multi-core and multi-socket systems became the default rather than the exception — which, for consumer hardware, was a while ago now. This page is about the interrupt controller architecture that replaced the PIC specifically to solve that problem: the <strong>APIC</strong>.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📎 One Fact to Keep Handy</div>
+    Everything the IDT lesson taught you about vectors, gate descriptors, and dispatch still applies without modification here. The APIC doesn't change how the CPU looks up a handler once a vector arrives — it changes <em>which CPU core</em> gets to see that vector in the first place, and how much say the OS has in that decision.
+  </div>
+</div>
+</section>
+
+<!-- LIMIT -->
+<section id="limit">
+<div class="container">
+  <div class="section-num">01 — The Wall the PIC Can't Get Past</div>
+  <h2>One Wire, <span class="accent">One CPU</span>, Full Stop</h2>
+  <p class="reveal">Look again at how the 8259 physically works: every IRQ line it manages ultimately funnels down to a <em>single output line</em>, wired directly into one CPU's interrupt pin. There is no field in any ICW, no register, no configuration option anywhere in the 8259's design that lets it say "send this particular interrupt to CPU 2 instead of CPU 0." The concept doesn't exist in the chip at all, because when the 8259 was designed, "which CPU" was never a question that needed asking — there was only ever one.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🔌 The 8259's Reality</h4>
+      One master PIC, cascaded with one slave, wired to one CPU's interrupt pin. Every single hardware interrupt on the whole machine — timer, keyboard, disk, network — funnels through that one wire, to that one core. On a multi-core system, every other core simply never sees a hardware interrupt directly, ever, no matter how the OS is configured.
+    </div>
+    <div class="compare-card good">
+      <h4>🧩 What Multi-Core Actually Needs</h4>
+      A mechanism where <em>any</em> interrupt can be steered to <em>any</em> core, chosen dynamically — so a busy core isn't drowning in every device interrupt on the system while three idle cores sit untouched. That's not a feature the PIC can be configured into. It's a different chip, doing a different job.
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Isn't Just an Inconvenience</div>
+    Picture an 8-core server where every network packet, every disk completion, every timer tick funnels through core 0 alone, purely because that's the one core physically wired to the PIC's output. Core 0 becomes a permanent bottleneck for <em>all</em> interrupt-driven work on the machine, no matter how idle the other seven cores are — and there is no PIC configuration, no clever remapping, that changes this. The limitation is wired into the silicon, not the software sitting on top of it.
+  </div>
+
+  <p class="reveal">This is the real reason the PIC had to retire, not the vector collision from the previous lesson (that part was always fixable with four bytes). Multi-core hardware needed an interrupt controller architecture built, from the ground up, around the question the 8259 was never asked to answer: <em>which of several CPUs should handle this?</em></p>
+</div>
+</section>
+
+<!-- APIC -->
+<section id="apic">
+<div class="container">
+  <div class="section-num">02 — The Replacement</div>
+  <h2>Local + I/O: <span class="accent">Two Chips, One Answer</span></h2>
+  <p class="reveal">The <strong>Advanced Programmable Interrupt Controller (APIC)</strong> solves the single-CPU wall by splitting the job into two cooperating pieces instead of one monolithic chip wired to one core.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">Local APIC (LAPIC)</span><span class="fam-count">one per core</span></div>
+      <div class="fam-desc">Every single CPU core gets its own Local APIC, built directly into the core on modern silicon. It's the component that actually delivers an interrupt vector into <em>that specific core's</em> IDT dispatch — the final step, unique to each core, that the old single-wire PIC design has no equivalent of at all.</div>
+    </div>
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">I/O APIC</span><span class="fam-count">shared, system-wide</span></div>
+      <div class="fam-desc">A separate chip (or chipset block) that plays the PIC's old role of watching external device interrupt lines — but instead of one fixed output wire, it holds a <strong>redirection table</strong>: one entry per interrupt input, each entry independently programmable with a target vector <em>and</em> a target Local APIC (i.e. a target core). The OS fills this table in, and can change it at runtime.</div>
+    </div>
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">The one-sentence difference from the PIC</span>
+    The 8259 hard-wires "which CPU" into the silicon. The I/O APIC's redirection table makes "which CPU" a software-writable field, per interrupt, changeable at runtime.
+  </div>
+
+  <p class="reveal">A typical I/O APIC redirection table entry (64 bits) holds, among other fields, the vector number to raise, the delivery mode, and a destination field naming which Local APIC (or set of them) should receive it. This is the exact mechanism that makes <strong>interrupt load-balancing</strong> possible: an OS can watch which cores are busy and reprogram a device's redirection entry to point at whichever core currently has capacity — something that is not merely awkward but literally impossible to express in the 8259's design.</p>
+
+  <div class="sidenote reveal">
+    <b>Backward compatibility, briefly.</b> Real APIC-era x86 hardware still ships a legacy PIC (or a PIC-compatible emulation) alongside the APIC, specifically so old operating systems — and early boot code, before the APIC is even initialized — keep working. Most modern OSes, including full-scale Linux and Windows, explicitly disable the legacy PIC once the APIC is brought up, precisely to avoid both controllers trying to manage the same interrupt lines at once.
+  </div>
+</div>
+</section>
+
+<!-- ROUTING CANVAS -->
+<section id="route">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>The Same Device Interrupt, <span class="accent">Three Different Cores</span></h2>
+  <p class="reveal">Same physical device, same redirection-table entry being reprogrammed — watch where the interrupt actually lands change each time, something a bare 8259 could never do.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="apicLabel">▶ Choose a routing target</div>
+    <canvas id="apicCanvas" height="380"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runAPIC('pic')">▶ Legacy PIC — always Core 0</button>
+    <button class="ctrl-btn" onclick="runAPIC('core1')">▶ I/O APIC → route to Core 1</button>
+    <button class="ctrl-btn cyan" onclick="runAPIC('core2')">▶ I/O APIC → route to Core 2</button>
+    <button class="ctrl-btn gold" onclick="resetAPIC()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- IPI -->
+<section id="ipi">
+<div class="container">
+  <div class="section-num">04 — A Capability the PIC Never Had At All</div>
+  <h2>Cores Talking to <span class="accent">Each Other</span></h2>
+  <p class="reveal">Because every core has its own Local APIC, and every Local APIC can both send and receive, the APIC architecture picks up an ability the PIC has no analog for whatsoever: one core can directly interrupt <em>another</em> core on purpose. This is an <strong>Inter-Processor Interrupt (IPI)</strong> — a message one core's Local APIC sends straight to another's, dispatched through the target core's IDT exactly like a device interrupt would be.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why This Actually Matters for a Scheduler</div>
+    Picture a thread on core 0 becoming runnable with a higher priority than whatever core 3 is currently executing. Without IPIs, core 3 would only notice and reschedule the next time its own local timer tick happened to fire — a delay of up to a full timer period. With an IPI, core 0's kernel code can send a "reschedule now" interrupt directly to core 3's Local APIC, forcing it to reschedule immediately. This exact mechanism is how real multi-core schedulers keep cross-core scheduling decisions responsive, and it is entirely dependent on APIC-class hardware existing in the first place.
+  </div>
+
+  <p class="reveal">TLB shootdowns (telling every other core to invalidate a stale page-table entry after one core changes a shared mapping) and cross-core work-stealing signals both lean on the same IPI mechanism. None of it is expressible on a bare 8259 system, because the PIC has no concept of "core" to begin with — it only ever knew about the one CPU it was wired to.</p>
+</div>
+</section>
+
+<!-- MSI -->
+<section id="msi">
+<div class="container">
+  <div class="section-num">05 — One Step Further</div>
+  <h2>MSI / MSI-X: <span class="accent">No Wire at All</span></h2>
+  <p class="reveal">The I/O APIC is a huge improvement over the PIC, but it still ultimately depends on physical interrupt lines running from devices to the I/O APIC chip — a finite, board-wired resource. <strong>Message Signaled Interrupts (MSI)</strong>, and its expanded successor <strong>MSI-X</strong>, remove the wire entirely.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🔌 Line-Based (PIC / I/O APIC)</h4>
+      A device asserts a dedicated physical interrupt pin. The controller watching that pin — PIC or I/O APIC — is responsible for translating "this pin went high" into a vector and, for the I/O APIC, a target core. The number of interrupts a device can raise is bounded by how many physical lines it has.
+    </div>
+    <div class="compare-card good">
+      <h4>✉️ Message-Based (MSI / MSI-X)</h4>
+      A device simply performs an ordinary memory write — to a special address in the range starting around <code>0xFEE00000</code> on x86, which the chipset treats specially — with a data value encoding the vector and target core directly. No dedicated wire, no shared line, no I/O APIC redirection-table entry required at all. The "interrupt" is, mechanically, just a write transaction on the same bus the device already uses to move data.
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why This Scales Further Than the I/O APIC</div>
+    A typical I/O APIC has on the order of two dozen redirection-table entries — a real, physical ceiling. A single modern PCIe device using MSI-X can request <em>hundreds</em> of independent interrupt vectors, each one able to target a different core directly, because each is just a differently-addressed memory write rather than a scarce physical pin. This is exactly why high-throughput hardware — multi-queue network cards and NVMe SSDs being the canonical examples — leans on MSI-X: a network card can give each CPU core its own dedicated interrupt vector for its own receive queue, with zero contention between cores for a shared line.
+  </div>
+
+  <p class="reveal">Conceptually, MSI/MSI-X is still landing on a Local APIC at the end — the message's data payload still ultimately names a vector and a destination core, the same two ingredients the I/O APIC's redirection table uses. What's changed is <em>how the device expresses that intent</em>: not by asserting a scarce physical wire, but by writing a value to a special memory address, exactly like writing any other piece of data.</p>
+</div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">06 — Side by Side</div>
+  <h2><span class="accent r">PIC</span> vs <span class="accent">APIC</span></h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Question</th><th>8259 PIC</th><th>APIC (Local + I/O)</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Can target more than one CPU?</td><td class="neg">No — one wire, one CPU, always</td><td class="pos">Yes — any core, chosen per interrupt</td></tr>
+        <tr><td class="hl">Routing changeable at runtime?</td><td class="neg">No — fixed by wiring</td><td class="pos">Yes — I/O APIC redirection table entries are writable</td></tr>
+        <tr><td class="hl">Core-to-core signaling?</td><td class="neg">Not possible — no concept of "core"</td><td class="pos">Yes — Inter-Processor Interrupts (IPIs)</td></tr>
+        <tr><td class="hl">Usable interrupt lines</td><td>15 (two cascaded 8-line chips)</td><td class="pur">~24 typical I/O APIC entries, plus MSI/MSI-X beyond that</td></tr>
+        <tr><td class="hl">Vector assignment</td><td>Fixed offset per chip (ICW2), same for every line on that chip</td><td class="pur">Per-entry, independently programmable vector and destination</td></tr>
+        <tr><td class="hl">Configuration interface</td><td>I/O ports 0x20/0x21, 0xA0/0xA1</td><td class="pur">Memory-mapped registers (Local APIC), MMIO redirection table (I/O APIC)</td></tr>
+        <tr><td class="hl">Era designed for</td><td>Single-CPU 8085/8086 systems, 1976</td><td class="pur">Multi-core, multi-socket SMP systems</td></tr>
+        <tr><td class="hl">Still present on modern hardware?</td><td>Yes, for legacy/boot compatibility, usually disabled once APIC is up</td><td class="pos">Yes — the primary interrupt path on every modern x86 machine</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- PRACTICAL -->
+<section id="practical">
+<div class="container">
+  <div class="section-num">07 — Then Why Does bob_os Use the PIC At All?</div>
+  <h2>Start Simple, <span class="accent">Graduate Later</span></h2>
+  <p class="reveal">If the APIC is strictly more capable, why does this whole module — and nearly every other hobby OS tutorial on the internet — start with the 8259 PIC instead of jumping straight to the APIC? The answer is the same reason you learn arithmetic before calculus: the PIC is a genuinely simpler machine to understand and to program correctly.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>I/O ports vs. memory-mapped registers</strong>The PIC is programmed with plain <code>outb</code>/<code>inb</code> to fixed port numbers — 0x20, 0x21, 0xA0, 0xA1 — no paging required, no MMIO setup needed. The Local APIC, by contrast, is configured through memory-mapped registers, which means you need working paging and a correctly mapped physical address <em>before</em> you can even begin touching it.</div></li>
+    <li><div class="step-body"><strong>One core to reason about, not several</strong>A hobby kernel's earliest milestones — boot, print to the screen, handle a keypress, survive a divide-by-zero — don't need multiple cores running at all. Bringing up APIC, let alone true SMP with several cores executing kernel code simultaneously, is an entirely separate and substantially harder project layered on top of everything this module already covers.</div></li>
+    <li><div class="step-body"><strong>Discovery requires ACPI</strong>Finding out how many I/O APICs exist, where their MMIO registers live, and how interrupt lines are wired on a given motherboard requires parsing ACPI tables (the MADT, specifically) — a real, separate subsystem you'd need to build first. The PIC needs none of that: its ports are fixed, standardized, and identical on every PC-compatible machine.</div></li>
+    <li><div class="step-body"><strong>The PIC forces you to actually learn the concepts</strong>Vectors, gate descriptors, EOI, IRQ vs exception — every concept this whole module series covers is fully exercised by the PIC path, without also demanding you simultaneously learn paging internals, ACPI parsing, and SMP bring-up. Once those concepts are solid, moving to APIC is a matter of a new driver, not new fundamentals.</div></li>
+  </ol>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Honest Migration Path</div>
+    Nearly every serious hobby OS project follows the same arc this module is setting you up for: bring up the PIC first, because it's simple and gets interrupts working end-to-end quickly — then, once paging and ACPI parsing exist, detect and switch to the Local APIC and I/O APIC, disable the legacy PIC, and only then attempt real multi-core bring-up. Treat the PIC not as a mistake to avoid, but as the correct first rung on a ladder that ends at full SMP.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">APIC</div><div class="glossary-def">Advanced Programmable Interrupt Controller — the multi-core-capable successor to the 8259 PIC, split into per-core Local APICs and a shared I/O APIC.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Local APIC (LAPIC)</div><div class="glossary-def">A per-core component that delivers interrupt vectors into that specific core's IDT dispatch, and both sends and receives Inter-Processor Interrupts.</div></div>
+    <div class="glossary-card"><div class="glossary-term">I/O APIC</div><div class="glossary-def">A shared chip holding a redirection table that maps external device interrupt lines to a chosen vector and a chosen target Local APIC (core).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Redirection Table Entry</div><div class="glossary-def">A programmable I/O APIC record (one per interrupt input) naming the vector and destination core for that line — the field the 8259 has no equivalent of.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IPI (Inter-Processor Interrupt)</div><div class="glossary-def">An interrupt one core's Local APIC sends directly to another's, used for forced rescheduling, TLB shootdowns, and other cross-core coordination.</div></div>
+    <div class="glossary-card"><div class="glossary-term">MSI / MSI-X</div><div class="glossary-def">Message Signaled Interrupts — a device raises an interrupt by writing a vector-and-destination-encoding value to a special memory address instead of asserting a physical line.</div></div>
+    <div class="glossary-card"><div class="glossary-term">MADT</div><div class="glossary-def">Multiple APIC Description Table — the ACPI table an OS parses to discover how many APICs exist and where their registers live.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt Load-Balancing</div><div class="glossary-def">Dynamically reprogramming which core an interrupt targets to spread hardware-interrupt work evenly — only possible with APIC-class hardware.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SMP (Symmetric Multiprocessing)</div><div class="glossary-def">A system design where multiple identical cores can all run kernel code and receive interrupts — the scenario that made the PIC's one-core limitation untenable.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The APIC · Companion lesson for bob_os module 05_idt_interrupts</p>
+  <p style="margin-top:.5rem;font-size:.78rem">One wire retired. Every core gets a phone now.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0',teal:'#0d9488'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── APIC ROUTING CANVAS ──────────────────────────────────────────────────
+function coreBox(ctx,i,n,W,y,h,active,col,label){
+  const gap=16, w=(W-40-gap*(n-1))/n, x=20+i*(w+gap);
+  ctx.fillStyle= active ? col+'22' : 'rgba(255,255,255,.03)';
+  ctx.strokeStyle= active ? col : C.border;
+  ctx.lineWidth=1.4;
+  ctx.beginPath(); if(ctx.roundRect){ctx.roundRect(x,y,w,h,6);}else{ctx.rect(x,y,w,h);}
+  ctx.fill();ctx.stroke();
+  ctx.fillStyle= active ? col : C.muted;
+  ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2+4);
+  return {x,y,w,h,cx:x+w/2,cy:y+h/2};
+}
+
+function drawAPICScene(t,phase,mode){
+  const canvas=document.getElementById('apicCanvas');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // device box top
+  const devY=30, devH=44;
+  const dev=coreBox(ctx,0,1,W,devY,devH,phase!=='idle',C.gold,'NETWORK CARD — asserts an interrupt');
+
+  // controller box (PIC or I/O APIC)
+  const ctrlY=devY+devH+40, ctrlH=48;
+  const ctrlActive = phase==='ctrl'||phase==='route'||phase==='land';
+  const ctrlLabel = mode==='pic' ? 'LEGACY PIC (fixed wiring)' : 'I/O APIC — redirection table';
+  const ctrl=coreBox(ctx,0,1,W,ctrlY,ctrlH,ctrlActive,mode==='pic'?C.red:C.purple,ctrlLabel);
+
+  // three core boxes
+  const coreY=ctrlY+ctrlH+60, coreH=64;
+  const coreLabels=['CORE 0','CORE 1','CORE 2'];
+  const cores=[];
+  for(let i=0;i<3;i++){
+    let active=false, col=C.muted;
+    if(phase==='route'||phase==='land'){
+      const targetIdx = mode==='pic'?0 : mode==='core1'?1:2;
+      if(i===targetIdx){ active=true; col = mode==='pic'?C.red:(mode==='core1'?C.cyan:C.green); }
+    }
+    cores.push(coreBox(ctx,i,3,W,coreY,coreH,active,col,coreLabels[i]+'\n'));
+    ctx.fillStyle= active? col : C.muted;
+    ctx.font='9px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText(mode==='pic'&&i>0?'unreachable':'', cores[i].cx, cores[i].cy+16);
+  }
+
+  // moving dot
+  let dotX=dev.cx, dotY=dev.cy, dotCol=C.gold;
+  if(phase==='fire'){ dotY = dev.cy + (ctrl.cy-dev.cy)*t; dotX=dev.cx; dotCol=C.gold; }
+  else if(phase==='ctrl'){ dotX=ctrl.cx; dotY=ctrl.cy; dotCol=mode==='pic'?C.red:C.purple; }
+  else if(phase==='route'){
+    const targetIdx = mode==='pic'?0 : mode==='core1'?1:2;
+    const target=cores[targetIdx];
+    dotX = ctrl.cx + (target.cx-ctrl.cx)*t;
+    dotY = ctrl.cy + (target.cy-ctrl.cy)*t;
+    dotCol = mode==='pic'?C.red:(mode==='core1'?C.cyan:C.green);
+  } else if(phase==='land'){
+    const targetIdx = mode==='pic'?0 : mode==='core1'?1:2;
+    const target=cores[targetIdx];
+    dotX=target.cx; dotY=target.cy; dotCol=mode==='pic'?C.red:(mode==='core1'?C.cyan:C.green);
+  }
+
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  const captions={
+    idle:'Choose a routing target above',
+    fire:'⚡ Device asserts its interrupt line',
+    ctrl: mode==='pic' ? 'PIC receives it — its output wire only ever goes to Core 0' : 'I/O APIC looks up this line’s redirection table entry',
+    route: mode==='pic' ? 'No choice possible — routing to Core 0, the only wire that exists' : 'Redirection entry names a target Local APIC — routing there now',
+    land: mode==='pic' ? 'Delivered to Core 0. Cores 1 and 2 never see this interrupt, ever.' : `Delivered to ${mode==='core1'?'Core 1':'Core 2'} via its Local APIC — same device, chosen destination`
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function runAPIC(mode){
+  const phases=['fire','ctrl','route','land'];
+  const durations=[380,420,520,600];
+  let idx=0,start=performance.now();
+  const labels={pic:'▶ Legacy PIC — this device can only ever interrupt Core 0',core1:'▶ I/O APIC routes this device to Core 1',core2:'▶ I/O APIC routes the SAME device to Core 2 instead'};
+  document.getElementById('apicLabel').textContent = labels[mode];
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawAPICScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('apicLabel').textContent='▶ Done — try another routing target';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetAPIC(){
+  document.getElementById('apicLabel').textContent='▶ Choose a routing target';
+  drawAPICScene(0,'idle','');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetAPIC(); });
+window.addEventListener('resize',()=>{ resetAPIC(); });
+</script>
+</body>
+</html>

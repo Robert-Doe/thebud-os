@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Static vs Dynamic Linking — Deciding When Code Gets Glued Together</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.6rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#d8c8ff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--purple);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.cy{color:var(--cyan)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--purple);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Why Linking Exists"></a>
+  <a class="toc-dot" href="#static" title="Static Linking"></a>
+  <a class="toc-dot" href="#dynamic" title="Dynamic Linking"></a>
+  <a class="toc-dot" href="#compare" title="Compare"></a>
+  <a class="toc-dot" href="#relocations" title="Relocations"></a>
+  <a class="toc-dot" href="#ldso" title="The Dynamic Linker"></a>
+  <a class="toc-dot" href="#bobos" title="bob_os Today"></a>
+  <a class="toc-dot" href="#lazy" title="Lazy Binding"></a>
+  <a class="toc-dot" href="#canvas" title="Watch Memory Fill"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Linking · Static vs Dynamic</div>
+    <h1>Deciding When Code<br><span>Gets Glued Together</span></h1>
+    <p class="hero-sub">Every program calls functions it didn't write — <code>printf</code>, <code>malloc</code>, string routines, math. Somewhere between "source code with a call to a function that doesn't exist yet in this file" and "a running process," that call has to be connected to real, addressable code. <strong>Linking</strong> is that connection. The only real question is <em>when</em> it happens — at build time, permanently, or at load time, every single run.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1×</div><div class="lbl">Copies of libc, Statically Linked ×50 Programs</div></div>
+      <div class="hero-stat"><div class="num">1×</div><div class="lbl">Physical Copy, Dynamically Linked, Shared by All</div></div>
+      <div class="hero-stat"><div class="num">PT_INTERP</div><div class="lbl">Phdr Type Requesting a Dynamic Linker</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">PT_INTERP Segments bob_os's Loader Handles Today</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP / WHY LINKING EXISTS -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — The Problem Before the Choice</div>
+  <h2>Why <span class="accent">Linking</span> Has to Happen at All</h2>
+  <p class="reveal">A compiler works one source file at a time. When it hits <code>printf("hi")</code>, it has no idea where <code>printf</code>'s actual machine code lives — maybe it's in another file in this same project, maybe it's in a library installed system-wide. So the compiler does the only honest thing it can: it emits a call instruction to a placeholder, and leaves a note in the object file's symbol table saying, in effect, "there's an unresolved reference to a symbol named <code>printf</code> right here — someone else needs to fill in the real address."</p>
+  <p class="reveal">That "someone else" is the <strong>linker</strong>. Its entire job is finding every unresolved symbol reference across every object file being combined, locating where each one is actually defined, and patching the real address into place. The previous two lessons assumed this had already happened — a bob_os ELF executable arrives at the loader fully linked, every internal call already pointing somewhere real. This lesson is about the one decision that changes everything about <em>how</em> that patching happens: static or dynamic.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    Static and dynamic linking aren't two different <em>technologies</em> — they're the same problem (connect a call site to real code) solved at two different <em>times</em>. Static linking finishes the job once, at build time, and never revisits it. Dynamic linking deliberately leaves part of the job unfinished until the moment the program actually runs.
+  </div>
+</div>
+</section>
+
+<!-- STATIC LINKING -->
+<section id="static">
+<div class="container">
+  <div class="section-num">01 — Finish the Job at Build Time</div>
+  <h2><span class="accent">Static Linking</span>: Copy-Paste, Permanently</h2>
+
+  <p class="reveal">With static linking, the linker doesn't just patch an address — it <strong>copies the actual machine code</strong> of every function your program uses (and, transitively, everything <em>those</em> functions call) directly into your final executable. If your program calls three functions out of libc, the linker pulls the compiled object code for exactly those three functions — and whatever they depend on — out of the static library archive (a <code>.a</code> file, itself just a bundle of <code>.o</code> object files) and welds it into your binary.</p>
+
+  <p class="reveal">The result is a single, self-contained file. Copy it to another machine with the exact same architecture and it runs — no other files required, no version of libc that needs to already be installed, nothing to go looking for at runtime. This is precisely bob_os's current model: <code>elf_type == ET_EXEC</code>, fully resolved, every address already final by the time the file lands on BobFS.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">Static linking's promise</span>
+    Whatever this file needs, this file already contains.
+    <span class="sub">No lookup, no missing dependency, no runtime surprise — at the cost of every program carrying its own private copy of everything.</span>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Cost: Duplication, Everywhere</div>
+    Picture 50 different programs on one system, each statically linked against libc. Every single one of those 50 executables now contains its own private copy of <code>printf</code>, <code>malloc</code>, <code>strcpy</code>, and everything else it pulled in. That's the same machine code, byte-for-byte identical, sitting in 50 separate places on disk — and, worse, loaded into 50 separate sets of physical memory pages when all 50 happen to run at once, even though every one of those pages holds exactly the same bytes.
+  </div>
+
+  <p class="reveal">Static linking isn't a mistake — it's a deliberate trade. It buys predictability (the exact code you tested is the exact code that ships) and independence (no risk of a system library update silently changing your program's behavior). The bill for that comes due in disk space and, more importantly, redundant physical memory once many such programs run side by side.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">OS Kernels</span><span class="fam-count">almost always static</span></div>
+      <div class="fam-desc">A kernel can't dynamically link against its own not-yet-running userland — it has to be one self-contained image, exactly like bob_os's own flat kernel binary.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Embedded / Containers</span><span class="fam-count">often static</span></div>
+      <div class="fam-desc">A minimal container image or firmware blob frequently statically links on purpose — no guarantee the target environment has any particular library installed at all.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Desktop / Server Apps</span><span class="fam-count">almost always dynamic</span></div>
+      <div class="fam-desc">Hundreds of installed programs sharing libc, a GUI toolkit, and OpenSSL — exactly the scenario where dynamic linking's memory savings compound across an entire running system.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- DYNAMIC LINKING -->
+<section id="dynamic">
+<div class="container">
+  <div class="section-num">02 — Leave the Job for Load Time</div>
+  <h2><span class="accent">Dynamic Linking</span>: Borrow, Every Time You Run</h2>
+
+  <p class="reveal">Dynamic linking takes the opposite bet. Instead of copying libc's code into your executable, the linker just records, inside your ELF file, a note that says: "I need a library named <code>libc.so.6</code>, and specifically the symbols <code>printf</code>, <code>malloc</code>, and so on, out of it." Your executable ships without that code at all — it's smaller, and it stays smaller no matter how much of libc it ends up calling.</p>
+
+  <p class="reveal">The missing piece gets filled in at <strong>load time</strong>, by a separate program called the <strong>dynamic linker</strong> (on Linux, this is <code>ld.so</code> / <code>ld-linux.so</code>). It reads your executable's list of needed libraries, locates each <code>.so</code> file on disk, <strong>maps it into your process's address space</strong>, and patches your program's unresolved call sites to point at the real, now-mapped addresses — every time the program starts.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Payoff: One Physical Copy, Many Processes</div>
+    Here's the part that actually saves memory, not just disk space: when the dynamic linker maps <code>libc.so</code> into a process, it isn't decompressing or copying that library's code — it's mapping the <em>same physical page frames</em> that every other process using libc on the system is already mapping. Fifty running programs, all dynamically linked against libc, share <strong>one</strong> physical copy of libc's code pages in RAM. This is the exact same shared-memory trick you've already seen the kernel offer deliberately to cooperating processes — except here, the kernel and the dynamic linker set it up on your behalf, automatically, for every dynamically-linked program.
+  </div>
+
+  <p class="reveal">The trade is symmetric to static linking's: you give up self-containment (the library has to actually exist on the target machine, at a compatible version) in exchange for smaller files on disk and, at scale, dramatically less redundant physical memory across a whole system's worth of running programs.</p>
+</div>
+</section>
+
+<!-- COMPARE GRID -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">03 — Side by Side</div>
+  <h2>Static vs. Dynamic, <span class="accent">Head to Head</span></h2>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📦 Static Linking</h4>
+      Library code copied in at build time. Self-contained — no runtime dependency lookups, nothing else has to be installed. Larger files, duplicated code across every program that links the same library, duplicated physical memory when several run at once. What bob_os's <code>ET_EXEC</code>-only loader does today.
+    </div>
+    <div class="compare-card bad">
+      <h4>🔗 Dynamic Linking</h4>
+      Library code mapped in at load time by a separate dynamic linker program. Smaller files, one shared physical copy across every process using the library, and a library update can fix every program at once — but the library must exist, at a compatible version, on whatever machine actually runs the program.
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Static</th><th>Dynamic</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">When symbols resolve</td><td class="pos">Build time, once</td><td class="cy">Load time, every run</td></tr>
+        <tr><td class="hl">Executable file size</td><td class="neg">Larger — carries dependencies</td><td class="pos">Smaller — dependencies stay external</td></tr>
+        <tr><td class="hl">Disk footprint, N programs</td><td class="neg">N copies of shared library code</td><td class="pos">1 copy on disk, referenced by all</td></tr>
+        <tr><td class="hl">Physical RAM, N processes running</td><td class="neg">N copies loaded</td><td class="pos">1 copy, shared page frames</td></tr>
+        <tr><td class="hl">Runtime dependency risk</td><td class="pos">None — fully self-contained</td><td class="neg">Missing/incompatible library breaks launch</td></tr>
+        <tr><td class="hl">Library security patch</td><td class="neg">Every program must be rebuilt</td><td class="pos">Replace one .so, every program benefits</td></tr>
+        <tr><td class="hl">ELF e_type</td><td class="gold">ET_EXEC</td><td class="gold">ET_DYN (+ a PT_INTERP entry)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- RELOCATIONS -->
+<section id="relocations">
+<div class="container">
+  <div class="section-num">04 — The Mechanism Underneath Both</div>
+  <h2>Relocations: Why <span class="accent">Addresses Need Patching</span> at All</h2>
+
+  <p class="reveal">Step back to when a function is compiled, long before any linking happens. The compiler has no idea what the final memory address of <code>printf</code> will be — it doesn't even know for certain what address its <em>own</em> function will end up at, especially for code destined for a shared library that might get mapped at a different address in every process that loads it. So when it generates a call or a reference to some other symbol, it can't bake in a real address. It leaves a placeholder, plus an entry in a <strong>relocation table</strong> that says, precisely: "at this byte offset, once you know the real address of symbol X, write it in, using this patching formula."</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Relocation Table Entry</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">r_offset</td><td>Where in the final image the patch needs to be written — a byte offset.</td></tr>
+        <tr><td class="hl">r_symbol</td><td>Which symbol's final address this patch depends on, e.g. <code>printf</code>.</td></tr>
+        <tr><td class="hl">r_type</td><td>How to combine the symbol's address into the placeholder — write it whole, add an offset, compute a relative jump distance, and so on.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal"><strong>Static linking</strong> processes every relocation once, at build time — by the time the executable is written to disk, every placeholder has already been replaced with a real, final address, because the linker knows exactly where every piece of code will live (bob_os's linker script fixes user code at <code>0x400000</code>, permanently). <strong>Dynamic linking</strong> can't do that for the parts that live in a shared library, because the same <code>libc.so</code> might be mapped at a different address in every process that uses it (especially under ASLR — address space layout randomization). So those relocations stay unresolved <em>in the file</em>, and get processed instead by the dynamic linker, once per process, at load time.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The One-Sentence Version</div>
+    A relocation is a receipt the compiler leaves behind, saying "I couldn't finish this address — here's exactly how and where to finish it once you know the real number." Static linking cashes every receipt at build time. Dynamic linking cashes the ones pointing at shared libraries at load time instead, trading a small amount of startup work for the ability to share physical code pages across every process using that library.
+  </div>
+
+  <p class="reveal">On bob_os's own i686 target, two relocation types cover the overwhelming majority of real cases, and seeing them named makes the abstract "patching formula" concrete:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>r_type (x86, ELF32)</th><th>Patching Formula</th><th>Used For</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">R_386_32</td><td><code>write32(target) = S + A</code></td><td>An absolute address reference — "put the real address of symbol S right here," e.g. a pointer stored in a data segment.</td></tr>
+        <tr><td class="hl">R_386_PC32</td><td><code>write32(target) = S + A - P</code></td><td>A PC-relative reference — "compute the distance from here to symbol S," the form most <code>call</code>/jump instructions actually use.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">(<code>S</code> = the symbol's final resolved address, <code>A</code> = an addend baked into the placeholder, <code>P</code> = the address of the placeholder itself.) A statically-linked bob_os user program has already had every one of these formulas evaluated once, by the linker, before the file ever reaches BobFS — which is exactly why <code>elf_load()</code> never needs to open a relocation table at all.</p>
+</div>
+</section>
+
+<!-- DYNAMIC LINKER IS JUST A PROGRAM -->
+<section id="ldso">
+<div class="container">
+  <div class="section-num">05 — The Twist</div>
+  <h2>The Dynamic Linker Is Just <span class="accent">Another Program the Kernel Loads</span></h2>
+
+  <p class="reveal">Here's the detail that ties this whole lesson back to the previous one. When the kernel loads a dynamically-linked ELF executable, it doesn't hand control straight to that program's <code>e_entry</code>. It first checks the Program Header table for a special entry type: <strong><code>PT_INTERP</code></strong>. If present, that segment doesn't describe a loadable chunk of the program at all — it contains a plain string, the path to the program's requested <strong>interpreter</strong>: on Linux, almost always something like <code>/lib64/ld-linux-x86-64.so.2</code>.</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>1. The kernel spots PT_INTERP</strong>It reads the interpreter path straight out of that segment — no parsing beyond "here's a null-terminated string."</div></li>
+    <li><div class="step-body"><strong>2. The kernel loads the dynamic linker itself, as an ELF file</strong><code>ld.so</code> is, structurally, just another ELF executable — same magic bytes, same Program Header table, same <code>PT_LOAD</code> segments, loaded through the exact same mechanism covered in the previous lesson. The kernel treats it no differently than any other program.</div></li>
+    <li><div class="step-body"><strong>3. The kernel jumps to ld.so's entry point — not the real program's</strong>The very first user-mode code that runs isn't your program at all. It's the dynamic linker, now running at ring 3, with your actual program's ELF information handed to it on the stack.</div></li>
+    <li><div class="step-body"><strong>4. ld.so does the rest of the work</strong>It reads your program's list of needed shared libraries, maps each one in, processes every outstanding relocation against their real, now-known addresses — and only then jumps to <em>your</em> program's real <code>e_entry</code>, having finished the job the static linker would have finished at build time.</div></li>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 So "Loading a Program" Can Mean Loading Two Programs</div>
+    For a dynamically-linked executable, the kernel's ELF loader runs <em>twice</em> before your code ever executes a single instruction: once to load <code>ld.so</code>, and once — performed by <code>ld.so</code> itself, in user mode, using its own internal loading logic rather than a syscall — to map in every shared library your program actually needs. The kernel only ever directly launches one thing: either your program (no <code>PT_INTERP</code>), or the dynamic linker (with one).
+  </div>
+</div>
+</section>
+
+<!-- BOB_OS TIE-IN -->
+<section id="bobos">
+<div class="container">
+  <div class="section-num">06 — Where bob_os Stands Today</div>
+  <h2>bob_os's Loader Is <span class="accent">Deliberately Static-Only</span></h2>
+
+  <p class="reveal">Go back and look at the validation in <code>16_elf_loader/elf_loader.c</code>: <code>elf_load()</code> rejects anything where <code>e_type != ET_EXEC</code>. There's no branch that looks for <code>PT_INTERP</code>, no code that maps a second ELF file, no relocation-processing step at all. Every user program bob_os runs today has to be a fully statically-linked, fixed-address executable — precisely the simplest point on the spectrum this lesson describes.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>What Dynamic Linking Would Add to elf_load()</span><span style="color:var(--muted);font-size:.7rem">not present in bob_os today — a real extension point</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Accept e_type</div><div class="f-val">ET_DYN, not just ET_EXEC</div><div class="f-desc">Shared objects and position-independent executables use this type instead.</div></div>
+      <div class="dossier-field"><div class="f-label">Scan for PT_INTERP</div><div class="f-val">new p_type check</div><div class="f-desc">Currently the loop only checks p_type == PT_LOAD; everything else is skipped, PT_INTERP included.</div></div>
+      <div class="dossier-field"><div class="f-label">Load ld.so first</div><div class="f-val">recursive elf_load() call</div><div class="f-desc">The kernel would need to load a second ELF file before jumping anywhere.</div></div>
+      <div class="dossier-field"><div class="f-label">Process relocations</div><div class="f-val">new relocation-table walk</div><div class="f-desc">bob_os's loader currently never reads a relocation table — every address in its supported binaries is already final.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">This isn't a shortcoming so much as a scoping decision that matches the rest of the project's philosophy: get one thing working correctly and completely — a static ELF executable, mapped and launched at ring 3 — before adding the considerable extra machinery dynamic linking requires. Everything in this lesson describes the road bob_os would travel to get there, not a road it's on yet.</p>
+</div>
+</section>
+
+<!-- LAZY BINDING -->
+<section id="lazy">
+<div class="container">
+  <div class="section-num">07 — One More Trick, Since You Asked</div>
+  <h2>Lazy Binding: <span class="accent">Deferring Even the Load-Time Work</span></h2>
+
+  <p class="reveal">There's a refinement production dynamic linkers add on top of everything above, because resolving <em>every</em> symbol a program might ever call, at startup, is wasteful — a large program might link against a library with hundreds of functions and only actually call a dozen of them in any given run. Real dynamic linkers exploit this with <strong>lazy binding</strong>: instead of resolving a symbol's address at load time, defer it until the very first time that specific function is actually called.</p>
+
+  <p class="reveal">The mechanism is a small indirection layer: the <strong>Procedure Linkage Table (PLT)</strong> and <strong>Global Offset Table (GOT)</strong>. Every call to an external function doesn't jump directly to that function — it jumps to a tiny stub in the PLT, which reads a pointer out of the GOT and jumps through <em>that</em>. The first time through, the GOT entry doesn't point at the real function yet — it points back into the dynamic linker itself, which resolves the symbol right then, patches the real address into the GOT, and only <em>then</em> jumps to the real function. Every subsequent call reads the now-correct GOT entry and jumps straight there, at full speed, with no linker involvement at all.</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>First call to printf()</strong>Jumps to the PLT stub for <code>printf</code>, which loads the GOT entry — still pointing at the resolver.</div></li>
+    <li><div class="step-body"><strong>Resolver runs, once</strong>The dynamic linker looks up <code>printf</code>'s real address in libc's mapped pages, and overwrites the GOT entry with it.</div></li>
+    <li><div class="step-body"><strong>Every later call to printf()</strong>Jumps to the same PLT stub, which now loads a GOT entry pointing directly at real code — no resolver involvement, just one extra indirect jump versus a fully static call.</div></li>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why This Matters Beyond Startup Speed</div>
+    Lazy binding is also why <code>LD_BIND_NOW</code> (or a binary marked with the <code>-z now</code> linker flag, common under modern hardening) is a meaningful security-vs-performance knob on real systems: forcing every relocation to resolve immediately at load time closes a small window of mutable, resolver-writable GOT state that certain exploit techniques (GOT overwrite attacks) rely on, at the cost of slower startup for programs that call into large libraries. Nothing to implement in bob_os today — but exactly the kind of trade-off this lesson's static/dynamic split scales up into.
+  </div>
+</div>
+</section>
+
+<!-- CANVAS -->
+<section id="canvas">
+<div class="container">
+  <div class="section-num">08 — See It Happen</div>
+  <h2>Watch Memory Fill: <span class="accent">Duplicated vs. Shared</span></h2>
+
+  <p class="reveal">Below, five processes each need the same library. Toggle between static and dynamic linking and watch what happens to physical memory as each process launches.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="linkLabel">▶ Choose static or dynamic, then launch processes</div>
+    <canvas id="linkCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runLink('static')">▶ Launch 5 Processes — Static</button>
+    <button class="ctrl-btn cyan" onclick="runLink('dynamic')">▶ Launch 5 Processes — Dynamic</button>
+    <button class="ctrl-btn red" onclick="resetLink()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal"><b>What to watch.</b> In the static run, each process arrives with its own private purple block of library code — five separate physical allocations. In the dynamic run, all five processes' arrows point at the exact same single cyan block — one physical allocation, five mappings into it.</div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Linker</div><div class="glossary-def">The tool that resolves references between object files and libraries into real addresses, producing a final executable or shared object.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Static Linking</div><div class="glossary-def">Copying needed library code directly into the executable at build time — self-contained, but duplicated across every program that does it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dynamic Linking</div><div class="glossary-def">Recording a dependency on a shared library instead of copying its code; a dynamic linker resolves and maps it in at load time, shared across processes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Shared Object (.so)</div><div class="glossary-def">A dynamically-linked library file, ELF type ET_DYN, that can be mapped into many processes' address spaces at once, sharing physical pages.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Relocation</div><div class="glossary-def">An instruction left by the compiler/linker describing how to patch a placeholder address once the real, final address of a symbol is known.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PT_INTERP</div><div class="glossary-def">A Program Header entry, present only in dynamically-linked executables, naming the path to the dynamic linker the kernel should load and run first.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dynamic Linker (ld.so)</div><div class="glossary-def">A user-mode program, itself loaded via the ordinary ELF-loading path, responsible for mapping in shared libraries and finishing relocations at launch time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ET_EXEC vs ET_DYN</div><div class="glossary-def">ELF header e_type values distinguishing a fixed-address static executable (ET_EXEC, bob_os's only supported type) from a relocatable shared object or PIE (ET_DYN).</div></div>
+    <div class="glossary-card"><div class="glossary-term">ASLR</div><div class="glossary-def">Address Space Layout Randomization — loading libraries (and often the executable itself) at a randomized address each run, a security measure that only dynamic-style, relocation-tolerant loading can support cleanly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PLT (Procedure Linkage Table)</div><div class="glossary-def">A small per-function stub table that indirects external calls through the GOT, enabling lazy binding — resolving each symbol only on its first call.</div></div>
+    <div class="glossary-card"><div class="glossary-term">GOT (Global Offset Table)</div><div class="glossary-def">A table of patchable pointers, one per external symbol, that PLT stubs jump through — initially pointing at the resolver, later patched to the real address.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Lazy Binding</div><div class="glossary-def">Deferring symbol resolution until a function's first actual call, rather than resolving every dependency eagerly at load time — the PLT/GOT mechanism's purpose.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Static vs Dynamic Linking: Deciding When Code Gets Glued Together · Companion lesson for bob_os module 16_elf_loader</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same question either way: when does an unresolved call finally become a real address?</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+function hexA(hex,a){ const n=parseInt(hex.slice(1),16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return `rgba(${r},${g},${b},${a})`; }
+
+// ── STATIC VS DYNAMIC MEMORY CANVAS ─────────────────────────────────────────
+const PROC_COUNT=5;
+
+function drawLink(mode,launched,t){
+  const canvas=document.getElementById('linkCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';ctx.fillStyle=C.muted;
+  ctx.fillText('PHYSICAL MEMORY',16,20);
+
+  const procW=(W-32)/PROC_COUNT-10;
+  const procTop=44, procH=110;
+  const libTop = mode==='dynamic' ? 220 : 220;
+  const libH=70;
+
+  // draw shared library block for dynamic mode (drawn once, appears as processes launch)
+  if(mode==='dynamic' && launched>0){
+    const a = launched>=PROC_COUNT ? 1 : (0.4+0.6*(launched/PROC_COUNT));
+    const x = W/2 - 90, y=libTop, w=180;
+    ctx.fillStyle=hexA(C.cyan,.28);
+    ctx.fillRect(x,y,w,libH);
+    ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(x,y,w,libH);
+    ctx.fillStyle=C.cyan;ctx.textAlign='center';ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('libc.so — ONE physical copy',x+w/2,y+libH/2-4);
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('shared by every process below',x+w/2,y+libH/2+12);
+  }
+
+  for(let i=0;i<PROC_COUNT;i++){
+    const x=16+i*(procW+10);
+    const show = launched>i || (launched===i+1);
+    const localT = (launched===i+1) ? t : 1;
+    if(launched<=i) continue;
+
+    // process box
+    ctx.fillStyle=hexA(C.green,.18*localT+.1);
+    ctx.fillRect(x,procTop,procW,procH*0.45);
+    ctx.strokeStyle=C.green;ctx.lineWidth=1;ctx.strokeRect(x,procTop,procW,procH*0.45);
+    ctx.fillStyle=C.green;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('proc '+(i+1),x+procW/2,procTop+procH*0.45/2+3);
+
+    if(mode==='static'){
+      const y=procTop+procH*0.45+10;
+      const a=.2+.5*localT;
+      ctx.fillStyle=hexA(C.purple,a);
+      ctx.fillRect(x,y,procW,procH*0.4);
+      ctx.strokeStyle=C.purple;ctx.strokeRect(x,y,procW,procH*0.4);
+      ctx.fillStyle=C.purple;ctx.font='9px Source Code Pro,monospace';
+      ctx.fillText('own libc copy',x+procW/2,y+procH*0.4/2+3);
+    } else {
+      // arrow down to the shared block
+      const y1=procTop+procH*0.45+4;
+      const libX=W/2, libY=libTop;
+      const a = .3+.7*localT;
+      ctx.strokeStyle=hexA(C.cyan,a);ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(x+procW/2,y1);
+      ctx.lineTo(x+procW/2, libTop-14);
+      ctx.lineTo(libX, libTop-14);
+      ctx.lineTo(libX, libTop);
+      ctx.stroke();
+    }
+  }
+
+  ctx.textAlign='center';ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';
+  const caption = mode==='static'
+    ? `Static: launching process ${Math.min(launched,PROC_COUNT)} of ${PROC_COUNT} — each brings its own private library copy`
+    : `Dynamic: launching process ${Math.min(launched,PROC_COUNT)} of ${PROC_COUNT} — each maps into the SAME physical library pages`;
+  ctx.fillText(launched===0? 'Press a launch button above' : caption, W/2, H-16);
+}
+
+let linkTimer=null;
+function runLink(mode){
+  if(linkTimer) cancelAnimationFrame(linkTimer);
+  document.getElementById('linkLabel').textContent = mode==='static'
+    ? '▶ Static linking — watch each process bring its own copy'
+    : '▶ Dynamic linking — watch every process share one copy';
+  let launched=0,start=performance.now();
+  const dur=500;
+  function step(now){
+    const t=Math.min(1,(now-start)/dur);
+    drawLink(mode,launched+1,t);
+    if(t>=1){
+      launched++;
+      if(launched>=PROC_COUNT){
+        drawLink(mode,PROC_COUNT,1);
+        document.getElementById('linkLabel').textContent = mode==='static'
+          ? '▶ Done — 5 separate physical copies of the library now resident'
+          : '▶ Done — 1 physical copy of the library, referenced by all 5';
+        return;
+      }
+      start=now;
+    }
+    linkTimer=requestAnimationFrame(step);
+  }
+  linkTimer=requestAnimationFrame(step);
+}
+function resetLink(){
+  if(linkTimer) cancelAnimationFrame(linkTimer);
+  document.getElementById('linkLabel').textContent='▶ Choose static or dynamic, then launch processes';
+  drawLink('static',0,0);
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetLink(); });
+window.addEventListener('resize',()=>{ resetLink(); });
+</script>
+</body>
+</html>

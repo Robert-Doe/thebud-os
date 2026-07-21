@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POSIX: A Contract, Not an Implementation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--gold);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.timeline{display:flex;flex-direction:column;gap:0;margin:1.8rem 0;border-left:2px solid var(--border);padding-left:1.6rem;}
+.tl-item{position:relative;padding-bottom:1.8rem;}
+.tl-item:last-child{padding-bottom:0}
+.tl-item::before{content:'';position:absolute;left:-1.87rem;top:.25rem;width:12px;height:12px;border-radius:50%;background:var(--gold);border:2px solid var(--code-bg);}
+.tl-year{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--gold);font-weight:700;letter-spacing:.05em;}
+.tl-desc{font-size:.92rem;color:var(--text);margin-top:.2rem;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#fractured" title="The Fractured 1980s"></a>
+  <a class="toc-dot" href="#contract" title="A Contract, Not Code"></a>
+  <a class="toc-dot" href="#seam" title="The Portability Seam"></a>
+  <a class="toc-dot" href="#demo" title="Same Source, Three Kernels"></a>
+  <a class="toc-dot" href="#standardizes" title="What It Standardizes"></a>
+  <a class="toc-dot" href="#family" title="The POSIX Family"></a>
+  <a class="toc-dot" href="#leftopen" title="What's Left Open"></a>
+  <a class="toc-dot" href="#bobos" title="Back to bob_os"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · POSIX · Standards · Portability</div>
+    <h1>A Contract,<br>Not a <span>Kernel</span></h1>
+    <p class="hero-sub">Somewhere between "here's the code" and "here's what the code must do," there's a document that changed Unix forever. POSIX doesn't tell a kernel how to implement <code>fork()</code> — it tells every kernel what <code>fork()</code> must be observed doing from the outside, so that one C program, unmodified, behaves identically no matter which of three completely different kernels underneath it actually runs.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1988</div><div class="lbl">First IEEE Std 1003.1 Published</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Kernel Internals POSIX Mandates</div></div>
+      <div class="hero-stat"><div class="num">3+</div><div class="lbl">Wildly Different Kernels, One API</div></div>
+      <div class="hero-stat"><div class="num">150+</div><div class="lbl">Standardized Functions &amp; Utilities</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- FRACTURED UNIX -->
+<section id="fractured">
+<div class="container">
+  <div class="section-num">00 — Why Anyone Needed This</div>
+  <h2>The <span class="accent">Fractured</span> 1980s</h2>
+
+  <p class="reveal">Unix started as one thing at Bell Labs in the early 1970s. By the mid-1980s it was a dozen things. AT&amp;T sold System V. Berkeley shipped BSD. Sun had SunOS. IBM had AIX. HP had HP-UX. SGI had IRIX. Every vendor had taken the original Unix source, forked it, and then spent a decade "improving" it in its own incompatible direction — a new flag here, a slightly different signal semantic there, a file-locking call that only existed on one platform.</p>
+
+  <p class="reveal">For a programmer, this was a nightmare with a very specific shape: you could write portable C, use the standard library, avoid anything obviously vendor-specific — and your program would <em>still</em> fail to compile, or worse, compile fine and behave subtly differently, the moment you moved it to a different vendor's Unix. Not because the languages differed. Because the <strong>operating system interface</strong> itself — the exact set of functions available and what they promised to do — was never pinned down anywhere. Everyone had converged on "something Unix-like," and "Unix-like" wasn't a specification, it was a vibe.</p>
+
+  <div class="timeline reveal">
+    <div class="tl-item"><div class="tl-year">1969–1971</div><div class="tl-desc">Unix is born at Bell Labs — one lineage, one set of behaviors, no competing implementations yet.</div></div>
+    <div class="tl-item"><div class="tl-year">Late 1970s – early 1980s</div><div class="tl-desc">AT&amp;T licenses Unix source widely. Berkeley's BSD branch and AT&amp;T's own System V branch drift apart. Commercial vendors fork both.</div></div>
+    <div class="tl-item"><div class="tl-year">Mid 1980s</div><div class="tl-desc">A dozen mutually-incompatible "Unix-like" systems exist. The US government — a huge Unix buyer — starts demanding portability guarantees in procurement contracts, since it can't afford to be locked to one vendor.</div></div>
+    <div class="tl-item"><div class="tl-year">1985–1988</div><div class="tl-desc">The IEEE convenes a working group to write down, formally, exactly what a "Unix-like" system's programming interface must guarantee. Richard Stallman suggests the pronounceable name: <strong>POSIX</strong> — <em>Portable Operating System Interface</em> (the trailing X nodding to Unix's naming tradition).</div></div>
+    <div class="tl-item"><div class="tl-year">1988</div><div class="tl-desc">IEEE Std 1003.1-1988 is published — the first formal POSIX standard for the core system interface. Later folded together with the Single UNIX Specification maintained by The Open Group.</div></div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Real Problem Being Solved</div>
+    It was never really "these operating systems are different" — different is fine, even good. The problem was that <strong>nobody had written down which differences were allowed to exist</strong> without breaking a program that was supposed to be portable. POSIX is that missing document: a line drawn between "core behavior every conforming system must reproduce identically" and "everything else, left to each vendor."
+  </div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">12+</div><div class="lbl">Incompatible commercial Unix variants by the mid-1980s</div></div>
+    <div class="stat-card"><div class="val">2</div><div class="lbl">Root lineages (System V and BSD) most vendors forked from</div></div>
+    <div class="stat-card"><div class="val">3+ yrs</div><div class="lbl">IEEE working-group effort behind the first published standard</div></div>
+    <div class="stat-card"><div class="val">1</div><div class="lbl">Pronounceable name, suggested by Richard Stallman</div></div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Vendor Unix</th><th>Company</th><th>Root Lineage</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">SunOS / Solaris</td><td>Sun Microsystems</td><td>BSD-derived, later rebased on System V</td></tr>
+        <tr><td class="hl">AIX</td><td>IBM</td><td>System V-derived</td></tr>
+        <tr><td class="hl">HP-UX</td><td>Hewlett-Packard</td><td>System V-derived</td></tr>
+        <tr><td class="hl">IRIX</td><td>Silicon Graphics</td><td>System V-derived</td></tr>
+        <tr><td class="hl">Ultrix</td><td>Digital Equipment Corp.</td><td>BSD-derived</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">It's worth being honest that this wasn't purely altruistic standards work. Vendors selling "Unix" had a real commercial incentive to differentiate their product with proprietary extras — that's exactly what produced the fragmentation in the first place. What forced the truce was buyer power: the US federal government, by far the largest institutional buyer of Unix systems at the time, began writing portability requirements directly into procurement contracts. A standard that let the government credibly threaten to switch vendors without rewriting all its software was worth far more to buyers than it initially was to sellers — which is a big part of why POSIX succeeded where purely voluntary cooperation between competing vendors likely would not have.</p>
+</div>
+</section>
+
+<!-- CONTRACT NOT CODE -->
+<section id="contract">
+<div class="container">
+  <div class="section-num">01 — The Core Aha</div>
+  <h2>POSIX Is a <span class="accent">Contract</span>, Not an Implementation</h2>
+
+  <p class="reveal">Here's the sentence to actually sit with: <strong>POSIX is a specification document.</strong> Not a codebase. Not a library. Not a kernel. It is, quite literally, thousands of pages of prose and formal definitions describing what a function named <code>open()</code> must do — what arguments it accepts, what it returns on success, what it must set on failure, which error conditions it must be able to report and under what circumstances — without specifying a single line of the C code, or a single kernel data structure, that makes any of that happen.</p>
+
+  <p class="reveal">Think of it like a restaurant menu that specifies "scrambled eggs" down to texture, temperature, and doneness — but says absolutely nothing about which stove, which pan, or which chef's technique produces them. Order scrambled eggs at any restaurant that has agreed to follow that menu spec, and you get the same eggs. What happens in the kitchen — gas range or induction, nonstick pan or cast iron, whisked in the pan or in a bowl first — is completely up to the kitchen. That's the separation POSIX enforces: <em>behavior</em> is standardized, <em>mechanism</em> is not.</p>
+
+  <div class="formula reveal">
+    <span class="label">The line POSIX draws</span>
+    POSIX says WHAT a function must do. The kernel decides HOW.
+    <span class="sub">Same observable behavior, any internal implementation — that's the entire trick.</span>
+  </div>
+
+  <p class="reveal">Concretely: POSIX says <code>fork()</code> must create a new process that is a near-exact duplicate of the calling process, sharing nothing but file descriptors and a few other explicitly-listed things, returning 0 in the child and the child's PID in the parent. It says absolutely nothing about whether the kernel achieves that by copying every page of memory (the naive way) or by mapping both processes' page tables to the same physical pages and marking them copy-on-write (the way every real kernel actually does it — the exact mechanism you built in <a href="../03_pcb_threads_scheduling/02_fork_exec_deepdive.html" style="color:var(--cyan)">the fork/exec deep dive</a>). Both implementations are 100% POSIX-conformant, because POSIX only ever grades the outside.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Why "Contract" Is the Right Word</div>
+    A legal contract between two parties doesn't dictate how either party privately gets its obligations done — it specifies the observable terms both sides must uphold. POSIX plays exactly that role between <strong>program authors</strong> and <strong>operating system authors</strong>: programs promise to only rely on documented behavior, kernels promise to reproduce that behavior exactly, and what happens on either side of that boundary, in private, is nobody else's business.
+  </div>
+</div>
+</section>
+
+<!-- PORTABILITY SEAM -->
+<section id="seam">
+<div class="container">
+  <div class="section-num">02 — Why This Actually Matters</div>
+  <h2>POSIX Is the <span class="accent">Portability Seam</span></h2>
+
+  <p class="reveal">This is the payoff, stated as concretely as possible: the exact same C source file, calling <code>fork()</code>, <code>open()</code>, <code>read()</code>, <code>write()</code>, and checking <code>errno</code> the standard way, can be handed to a compiler on Linux, a compiler on FreeBSD, and a compiler on macOS — and on all three, it compiles and runs <strong>correctly</strong>. Not "similarly." Correctly, per the same specified semantics, despite the fact that the three kernels underneath share almost no implementation in common.</p>
+
+  <p class="reveal">Linux is a monolithic kernel with its own scheduler, its own virtual memory subsystem, its own VFS layer, written by thousands of independent contributors over three decades. FreeBSD (and the other BSDs) descend from the original Berkeley code, with a different process model heritage and a different filesystem lineage entirely. macOS's kernel, XNU, is a hybrid — a Mach microkernel core with a BSD-derived layer bolted on top for the POSIX-facing parts, plus IOKit for drivers. These are not "basically the same kernel with different branding." They are separately engineered systems that happen to agree, deliberately, to look identical from outside — because all three chose to implement the POSIX contract.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🧱 Without a Shared Contract</h4>
+      Every kernel exposes whatever functions it wants, named however it wants, behaving however its authors happened to implement them. Portable code doesn't exist — you write once, and rewrite for every target, forever, exactly like the fractured 1980s.
+    </div>
+    <div class="compare-card good">
+      <h4>🔌 With POSIX as the Seam</h4>
+      Three unrelated kernels agree to expose the same 150+ function names with the same argument shapes and the same guaranteed behavior. Source code written against that contract stops caring which kernel is underneath — it only has to care that the kernel is <em>POSIX-conformant</em>.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>One precision worth having:</b> "runs correctly on all three" is a claim about <em>source-level</em> portability — you still recompile per target, because the compiled binary format and calling convention differ per OS (that's a separate, ABI-level concern, covered in depth in this module's next lesson). POSIX guarantees your <em>source code</em> doesn't need to change, not that one compiled binary runs everywhere unmodified.
+  </div>
+
+  <p class="reveal">It's worth noticing how much software infrastructure quietly depends on this seam holding. Every cross-platform build system, every "write once, `#ifdef` rarely" C or C++ codebase, every scripting language runtime (Python's, Ruby's, Node's own C implementations) that ships on Linux, BSD, and macOS alike — all of them lean on the assumption that calling <code>open()</code>, forking a child process, or installing a signal handler means the same thing everywhere they target. Pull that assumption away and every one of those projects would need a separate, hand-maintained implementation per operating system for even its most basic plumbing, long before it got to do anything interesting.</p>
+</div>
+</section>
+
+<!-- INTERACTIVE DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">03 — See It Happen</div>
+  <h2>One Source File, <span class="accent">Three Kernels</span></h2>
+
+  <p class="reveal">Below is the same eight-line POSIX C snippet, compiled and run against three different kernel backends. Watch what stays identical (the source, and the observed behavior) versus what's completely different and invisible from outside (what each kernel actually does internally to make it happen).</p>
+
+  <pre class="reveal"><span class="tag">portable_fork_open.c</span><code><span class="kw">#include</span> <span class="str">&lt;unistd.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;fcntl.h&gt;</span>
+
+<span class="kw">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {
+    <span class="kw">int</span> fd = <span class="fn">open</span>(<span class="str">"/tmp/note.txt"</span>, O_CREAT | O_WRONLY, <span class="numc">0644</span>);
+    <span class="kw">pid_t</span> pid = <span class="fn">fork</span>();
+    <span class="cm">/* pid == 0 in the child, child's real PID in the parent — guaranteed */</span>
+    <span class="kw">return</span> <span class="numc">0</span>;
+}</code></pre>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="demoLabel">▶ Choose a kernel to compile and run against</div>
+    <canvas id="demoCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runDemo('linux')">▶ Run on Linux</button>
+    <button class="ctrl-btn cyan" onclick="runDemo('bsd')">▶ Run on FreeBSD</button>
+    <button class="ctrl-btn purple" onclick="runDemo('macos')">▶ Run on macOS (XNU)</button>
+    <button class="ctrl-btn red" onclick="resetDemo()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What You Just Watched</div>
+    Three completely different internal paths — a monolithic scheduler and VFS on Linux, a differently-structured process table and filesystem stack on FreeBSD, a Mach-based task/thread model wrapped in a BSD compatibility layer on XNU — and all three land on the exact same externally observable result: a file gets created, <code>fork()</code> returns 0 in the child and a real PID in the parent. That convergence isn't an accident of similar engineering. It's what happens when three separate teams all promise to satisfy the same written contract.
+  </div>
+</div>
+</section>
+
+<!-- WHAT IT STANDARDIZES -->
+<section id="standardizes">
+<div class="container">
+  <div class="section-num">04 — Getting Concrete</div>
+  <h2>What POSIX Actually <span class="accent">Standardizes</span></h2>
+
+  <p class="reveal">"A big pile of function behavior" is true but not useful. Here's the shape of what's actually inside the standard — the categories of guarantee that make portable Unix programming possible at all.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Category</th><th>Representative Calls</th><th>What's Guaranteed</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Process control</td><td><code>fork()</code>, <code>execve()</code>, <code>wait()</code>, <code>exit()</code></td><td>Exact semantics of process creation, replacement, and reaping — parent/child relationships, exit status propagation.</td></tr>
+        <tr><td class="hl">File I/O</td><td><code>open()</code>, <code>read()</code>, <code>write()</code>, <code>close()</code>, <code>lseek()</code></td><td>File descriptor behavior, byte-offset semantics, flag meanings (<code>O_CREAT</code>, <code>O_APPEND</code>…), atomicity guarantees.</td></tr>
+        <tr><td class="hl">Signals</td><td><code>signal()</code>, <code>sigaction()</code>, <code>kill()</code></td><td>Which signal numbers mean what, default dispositions, what "delivered" means, safe operations inside a handler.</td></tr>
+        <tr><td class="hl">Error reporting</td><td><code>errno</code> and its standard values</td><td>A shared vocabulary of error codes (<code>ENOENT</code>, <code>EAGAIN</code>, <code>EINVAL</code>…) every conforming call must use consistently.</td></tr>
+        <tr><td class="hl">Threads</td><td><code>pthread_create()</code>, mutexes, condition variables</td><td>Thread lifecycle and synchronization primitive semantics — not the scheduler that runs them.</td></tr>
+        <tr><td class="hl">Filesystem model</td><td><code>stat()</code>, permission bits, directory operations</td><td>The hierarchical namespace model, owner/group/mode permission semantics.</td></tr>
+        <tr><td class="hl">Shell &amp; utilities</td><td><code>sh</code>, <code>grep</code>, <code>awk</code>, <code>ls</code> (POSIX subset)</td><td>A required baseline set of command-line behavior every conforming system's utilities must support.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 It's a Family of Standards, Not One Document</div>
+    "POSIX" is shorthand for a whole family — IEEE Std 1003.1 covers the core system interface, separate parts historically covered real-time extensions, threads, and shell utilities. These were eventually merged and are now co-maintained with The Open Group's <strong>Single UNIX Specification</strong>. When a vendor says a system is "POSIX certified," they usually mean it passed The Open Group's conformance test suite against this merged specification.
+  </div>
+
+  <p class="reveal">Notice the shape of every row in that table: a small, precisely-worded English description of required behavior, paired with a handful of function names. That's the entire standard, scaled up — hundreds of these rows, covering every corner of the traditional Unix programming surface, each one enforceable independently of how any particular kernel happens to be built.</p>
+
+  <h3>How a conformance claim actually gets checked</h3>
+  <p class="reveal">"POSIX-conformant" isn't a marketing adjective a vendor can just assert — for the strongest form of the claim (the one that lets you legally call your product "UNIX"), The Open Group runs an actual test suite against the running system, exercising the standardized behavior mechanically rather than taking anyone's word for it.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Pick the target specification version</strong>The vendor declares which version of the merged POSIX / Single UNIX Specification they're claiming conformance to — the standard itself has evolved across multiple revisions since 1988.</div></li>
+    <li><div class="step-body"><strong>Run the automated conformance test suite</strong>Thousands of small test programs exercise every mandated function — checking not just "does it return success" but "does it return the exact documented value, set the exact documented errno, in the exact documented edge cases."</div></li>
+    <li><div class="step-body"><strong>Triage every failure</strong>A failing test means either a genuine non-conformance to fix, or (rarely) a case where the test itself needs updating for a newer spec revision — vendors work directly with The Open Group to resolve disputes.</div></li>
+    <li><div class="step-body"><strong>Certification, not self-declaration</strong>Only after passing does a vendor get to use the "UNIX" trademark and claim formal conformance — which is exactly why so many Unix-like systems (Linux distributions among them) are informally "POSIX-compliant in practice" without ever pursuing or paying for the formal certification.</div></li>
+  </ol>
+
+  <div class="sidenote reveal">
+    <b>Worth knowing:</b> most Linux distributions have never sought formal Single UNIX Specification certification (macOS has). That doesn't mean Linux is less conformant in practice — glibc and the kernel together track the standard extremely closely — it means nobody paid for the official paperwork. Conformance and certification are related but not identical concepts.
+  </div>
+</div>
+</section>
+
+<!-- POSIX FAMILY -->
+<section id="family">
+<div class="container">
+  <div class="section-num">05 — One More Layer of Precision</div>
+  <h2>The <span class="accent">POSIX Family</span>, Named</h2>
+
+  <p class="reveal">"POSIX" gets used as a catch-all, but the standard is actually a set of separately-numbered parts, developed over different years by different working groups, later consolidated. Knowing the major pieces makes it much easier to understand why, say, "POSIX threads" and "POSIX the file I/O standard" can feel like they arrived from completely different eras of Unix history — because they did.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">POSIX.1</span><span class="fam-count">1988</span></div>
+      <div class="fam-desc">The original core: process control, file I/O, signals, the basic system-call surface. Everything else builds on this.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">POSIX.1b</span><span class="fam-count">1993</span></div>
+      <div class="fam-desc">Real-time extensions — message queues, semaphores, shared memory, real-time scheduling classes, for latency-sensitive systems.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">POSIX.1c</span><span class="fam-count">1995</span></div>
+      <div class="fam-desc">Threads — the Pthreads API (<code>pthread_create()</code>, mutexes, condition variables) that standardized what had been a mess of vendor-specific threading libraries.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">XSI</span><span class="fam-count">extension</span></div>
+      <div class="fam-desc">The X/Open System Interfaces extension — additional, optional functionality (like System V IPC) required for the strongest "UNIX" trademark tier.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">POSIX.2</span><span class="fam-count">1992</span></div>
+      <div class="fam-desc">Shell &amp; utilities — the required baseline behavior for <code>sh</code>, <code>grep</code>, <code>awk</code>, <code>ls</code>, and dozens of other command-line tools.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">SUSv4</span><span class="fam-count">merged</span></div>
+      <div class="fam-desc">The current, actively-maintained consolidation — POSIX and the Single UNIX Specification developed jointly as one document set by The Open Group and IEEE.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- WHAT'S LEFT OPEN -->
+<section id="leftopen">
+<div class="container">
+  <div class="section-num">06 — The Other Half of the Deal</div>
+  <h2>What POSIX Deliberately Leaves <span class="accent">Open</span></h2>
+
+  <p class="reveal">A contract that specified everything wouldn't be a portability standard — it would be a single mandated implementation, and every OS would have to be a clone. POSIX is useful precisely because it leaves enormous room underneath: the exact scheduling algorithm, the exact filesystem's on-disk layout and performance characteristics, and a long list of genuinely useful non-standard extensions each vendor is free to add on top.</p>
+
+  <ul class="reveal">
+    <li><strong>Scheduling policy</strong> — POSIX defines a couple of standard scheduling <em>classes</em> you can request, but not the algorithm a kernel uses by default; Linux's Completely Fair Scheduler and a BSD's scheduler are free to disagree completely.</li>
+    <li><strong>Filesystem performance</strong> — POSIX says what <code>read()</code> and <code>write()</code> must return; it says nothing about how fast, what the on-disk format looks like, or whether the filesystem is case-sensitive by default.</li>
+    <li><strong>Non-standard extensions</strong> — a kernel is free to ship extra functions beyond POSIX, as long as the POSIX-mandated ones still behave correctly. This is exactly how Linux's <code>epoll()</code> and BSD/macOS's <code>kqueue()</code> coexist with POSIX's own <code>poll()</code>/<code>select()</code>.</li>
+    <li><strong>Binary compatibility</strong> — as the next lesson covers in depth, POSIX never promised a compiled binary runs unmodified across systems, only that recompiled source behaves the same. That's a separate, harder promise each kernel makes to itself.</li>
+  </ul>
+
+  <div class="sidenote reveal">
+    <b>Worth flagging now, explored properly later:</b> this module's third lesson digs into exactly these gaps — real, <code>strace</code>-visible divergence between Linux, BSD, and macOS that exists <em>despite</em> all three being fully POSIX-conformant, because POSIX simply never promised those particular behaviors would match.
+  </div>
+</div>
+</section>
+
+<!-- TIE TO BOB_OS -->
+<section id="bobos">
+<div class="container">
+  <div class="section-num">07 — Tying It Back</div>
+  <h2>This Is Exactly What <span class="accent">bob_os</span> Module 28 Does</h2>
+
+  <p class="reveal">Every syscall you've written across this project so far — <code>sys_open()</code>, <code>sys_write()</code>, <code>sys_fork()</code> — is a bob_os-specific function with a bob_os-specific calling convention and bob_os-specific return codes. That's a perfectly fine internal API, but it's not POSIX, and no unmodified real-world C program written against standard headers would compile against it as-is.</p>
+
+  <p class="reveal">Module 28's <code>posix.c</code> is a thin translation layer sitting on top of those internal syscalls — precisely the same trick every real kernel plays. It doesn't reimplement <code>open()</code> from scratch; it wraps <code>sys_open()</code>, translates bob_os's internal error codes into the standard POSIX vocabulary, sets the global <code>errno</code> variable, and returns <code>-1</code> on failure the way POSIX mandates <em>every</em> conforming implementation must. The internal mechanism (bob_os's own VFS, its own process table) stays completely bob_os-specific. Only the outward-facing shape has to match the contract.</p>
+
+  <pre class="reveal"><span class="tag">posix.c — bob_os's contract-enforcement layer</span><code><span class="kw">int</span> <span class="fn">open</span>(<span class="kw">const</span> <span class="kw">char</span> *path, <span class="kw">int</span> flags) {
+    <span class="kw">return</span> ret_or_errno(sys_open(path, flags));
+    <span class="cm">/* sys_open() is 100% bob_os-specific internally —      */</span>
+    <span class="cm">/* open() is 100% POSIX-shaped externally. Same pattern */</span>
+    <span class="cm">/* Linux, BSD, and XNU all use at their own syscall layer. */</span>
+}</code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Same Pattern, One More Time</div>
+    bob_os's <code>ret_or_errno()</code> helper — check the internal return code, translate it, set <code>errno</code>, return <code>-1</code> or the real value — is bob_os's own tiny POSIX contract-enforcement layer. It's the same idea as Linux's syscall table, FreeBSD's syscall table, and XNU's syscall table: three (now four, counting bob_os) unrelated internal implementations, one promised outward behavior.
+  </div>
+
+  <p class="reveal">This is also why module 28 was positioned as the series finale rather than an early module: writing a POSIX-shaped adapter layer only makes sense once there's a real kernel underneath with its own processes, its own filesystem, its own signal delivery, and its own error model already built — everything the earlier 27 modules spent their time constructing. POSIX compliance isn't a subsystem you bolt on early; it's the very last coat of paint that makes everything underneath speak a language the rest of the software world already knows.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">POSIX</div><div class="glossary-def">Portable Operating System Interface — a family of IEEE/Open Group standards specifying required behavior for Unix-like operating system interfaces, without mandating any implementation.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IEEE Std 1003.1</div><div class="glossary-def">The formal designation of the core POSIX system-interface standard, first published in 1988, still the backbone of POSIX today.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Single UNIX Specification</div><div class="glossary-def">The Open Group's merged specification (now co-developed with POSIX) that vendors certify against to legally use the "UNIX" trademark.</div></div>
+    <div class="glossary-card"><div class="glossary-term">API</div><div class="glossary-def">Application Programming Interface — the source-level contract (function names, arguments, behavior) a program is written against. POSIX standardizes at this level.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Conformance</div><div class="glossary-def">The property of an OS implementing every POSIX-mandated behavior correctly, typically verified by an official test suite.</div></div>
+    <div class="glossary-card"><div class="glossary-term">errno</div><div class="glossary-def">The standardized per-thread error-code variable every failing POSIX call must set, drawn from a shared vocabulary (ENOENT, EINVAL, EAGAIN…).</div></div>
+    <div class="glossary-card"><div class="glossary-term">libc</div><div class="glossary-def">The C standard library — in practice, the layer that usually implements the POSIX function names and forwards them down to whatever raw syscalls the underlying kernel actually exposes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">System V / BSD</div><div class="glossary-def">The two major Unix lineages that diverged in the late 1970s–80s, whose incompatibilities were the direct motivation for standardizing POSIX in the first place.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Implementation-defined</div><div class="glossary-def">POSIX terminology for behavior each conforming system may choose freely, as long as it's documented — one of the standard's deliberate escape hatches.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Pthreads (POSIX.1c)</div><div class="glossary-def">The standardized threading API — <code>pthread_create()</code>, mutexes, condition variables — that replaced a decade of incompatible vendor-specific threading libraries.</div></div>
+    <div class="glossary-card"><div class="glossary-term">XSI</div><div class="glossary-def">X/Open System Interfaces — an optional extension layer beyond the POSIX baseline, required for the strongest tier of official "UNIX" trademark certification.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>POSIX: A Contract, Not an Implementation · Companion lesson for bob_os module 28_posix</p>
+  <p style="margin-top:.5rem;font-size:.78rem">The paperwork every kernel signed.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── SAME SOURCE, THREE KERNELS CANVAS ──────────────────────────────────────
+const kernelInfo={
+  linux:{name:'Linux',color:C.gold,detail:'Monolithic kernel · CFS scheduler · VFS + ext4/btrfs/xfs'},
+  bsd:{name:'FreeBSD',color:C.cyan,detail:'Monolithic kernel · BSD process model · UFS/ZFS'},
+  macos:{name:'macOS (XNU)',color:C.purple,detail:'Hybrid: Mach microkernel core + BSD compat layer · APFS'}
+};
+
+function drawDemoScene(t,phase,target){
+  const canvas=document.getElementById('demoCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // source box top
+  const srcY=20, srcH=50;
+  ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(W*0.32,srcY,W*0.36,srcH);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(W*0.32,srcY,W*0.36,srcH);
+  ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('portable_fork_open.c',W*0.5,srcY+22);
+  ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+  ctx.fillText('unchanged, unmodified',W*0.5,srcY+38);
+
+  const info=kernelInfo[target]||kernelInfo.linux;
+  const boxY=H*0.42, boxH=110;
+  ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(W*0.1,boxY,W*0.8,boxH);
+  ctx.strokeStyle=info.color;ctx.lineWidth=1.5;ctx.strokeRect(W*0.1,boxY,W*0.8,boxH);
+  ctx.fillStyle=info.color;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(info.name+' kernel — internal implementation',W*0.5,boxY+22);
+  ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(info.detail,W*0.5,boxY+42);
+
+  // internal churn boxes (representing different internals)
+  const parts=['scheduler','VFS layer','process table','page tables'];
+  parts.forEach((p,i)=>{
+    const px=W*0.16+i*(W*0.68/parts.length), pw=W*0.68/parts.length-8;
+    ctx.fillStyle='rgba(255,255,255,.04)';ctx.fillRect(px,boxY+56,pw,36);
+    ctx.strokeStyle='rgba(255,255,255,.15)';ctx.strokeRect(px,boxY+56,pw,36);
+    ctx.fillStyle=C.muted;ctx.font='8px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(p,px+pw/2,boxY+77);
+  });
+
+  const captions={
+    idle:'Choose a kernel above',
+    compile:'Compiling identical source against the '+info.name+' toolchain…',
+    arrive:'Binary executes — calls open(), then fork()',
+    internal:info.name+' internals do the work, entirely its own way',
+    result:'✅ Result: file created, fork() returns 0 in child, PID in parent — exactly as POSIX requires'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  // moving dot: source -> kernel box -> result
+  let dotX=W*0.5,dotY=srcY+srcH,dotCol=C.gold;
+  if(phase==='compile'){dotX=W*0.5;dotY=srcY+srcH+(boxY-srcY-srcH)*t;dotCol=C.gold;}
+  else if(phase==='arrive'){dotX=W*0.5;dotY=boxY+10;dotCol=info.color;}
+  else if(phase==='internal'){
+    const idx=Math.min(parts.length-1,Math.floor(t*parts.length));
+    const px=W*0.16+idx*(W*0.68/parts.length)+(W*0.68/parts.length-8)/2;
+    dotX=px;dotY=boxY+74;dotCol=info.color;
+  }
+  else if(phase==='result'){dotX=W*0.5;dotY=boxY+boxH+18+((H-30)-(boxY+boxH+18))*t;dotCol=C.green;}
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  if(phase==='result'){
+    ctx.fillStyle=C.green;ctx.font='bold 20px sans-serif';ctx.textAlign='center';
+    ctx.fillText('✓',W*0.5,boxY+boxH+16);
+  }
+}
+
+function runDemo(target){
+  const phases=['compile','arrive','internal','result'];
+  const durations=[500,400,700,500];
+  let idx=0,start=performance.now();
+  const info=kernelInfo[target]||kernelInfo.linux;
+  document.getElementById('demoLabel').textContent='▶ Compiling & running against '+info.name;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDemoScene(t,phases[idx],target);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('demoLabel').textContent='▶ Done on '+info.name+' — try another kernel, same source file';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDemo(){
+  document.getElementById('demoLabel').textContent='▶ Choose a kernel to compile and run against';
+  drawDemoScene(0,'idle','linux');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDemo(); });
+window.addEventListener('resize',()=>{ resetDemo(); });
+</script>
+</body>
+</html>

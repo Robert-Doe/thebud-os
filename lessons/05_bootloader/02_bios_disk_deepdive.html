@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIOS Disk Services — INT 13h and the CHS-to-LBA Story</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid #2a6f96;border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.05rem;color:var(--cyan);letter-spacing:.02em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.gold{border-color:var(--gold2);color:var(--gold)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--cyan);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--cyan);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--cyan)}
+
+/* register table card, bespoke component for this lesson */
+.regcard{background:var(--code-bg);border:1.5px solid #2a6f96;border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.regcard-head{background:rgba(56,189,248,.08);padding:.8rem 1.3rem;border-bottom:1px solid #2a6f96;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.regcard-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--cyan);}
+.regcard-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.regcard-body{grid-template-columns:1fr}}
+.regcard-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.regcard-field:nth-child(2n){border-right:none;}
+.regcard-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.regcard-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--gold);}
+.regcard-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#int13" title="INT 13h"></a>
+  <a class="toc-dot" href="#chsorigin" title="CHS Origin"></a>
+  <a class="toc-dot" href="#chsfiction" title="CHS Fiction"></a>
+  <a class="toc-dot" href="#lba" title="LBA"></a>
+  <a class="toc-dot" href="#worked" title="Worked Example"></a>
+  <a class="toc-dot" href="#ext" title="Extended Reads"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Bootloader · Module 01 Companion · Disk I/O · Real Mode</div>
+    <h1>INT 13h and the<br><span>CHS-to-LBA Story</span></h1>
+    <p class="hero-sub">Your bootloader's <code>mov ah, 0x02</code> / <code>int 0x13</code> looks like five lines of boilerplate. It's actually a phone call to firmware, made in a language — Cylinder/Head/Sector — that describes a physical disk geometry almost no disk sold in the last twenty years actually has. This is the story of why that lie still works, and the modern alternative that stopped needing it.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">AH=02h</div><div class="lbl">Read Sectors (CHS)</div></div>
+      <div class="hero-stat"><div class="num">AH=42h</div><div class="lbl">Extended Read (LBA)</div></div>
+      <div class="hero-stat"><div class="num">504MB</div><div class="lbl">The Infamous CHS Barrier</div></div>
+      <div class="hero-stat"><div class="num">CF</div><div class="lbl">Carry Flag = Error Signal</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- INT 13H INTRO -->
+<section id="int13">
+<div class="container">
+  <div class="section-num">01 — Calling Firmware From Assembly</div>
+  <h2>What Is <span class="accent">INT 13h</span>, Really?</h2>
+
+  <p class="reveal">You already know from Module 01's memory map that the first 1KB of RAM (addresses <code>0x0000</code>–<code>0x03FF</code>) holds the Interrupt Vector Table: 256 slots, 4 bytes each, every slot a far pointer to a handler routine. <code>INT 0x13</code> is nothing more mysterious than "jump through slot 0x13 of that table." BIOS, during POST, populated slot 0x13 with the address of its own disk-service handler. Your bootloader executing the single instruction <code>int 0x13</code> is a software interrupt — a deliberate, self-inflicted trap that transfers control to that handler, exactly the way a real hardware interrupt would, except you triggered it on purpose.</p>
+
+  <p class="reveal">Think of it as a tiny, ancient API. There's no dynamic linker, no shared library, no function name to call — just a convention: load specific 16-bit registers with specific meanings, execute <code>int 0x13</code>, and BIOS's handler reads those registers, does the disk work, and writes results back into registers (plus one special bit) before returning to the instruction right after your <code>int 0x13</code>.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>AH Value</th><th>Service</th><th>Addressing</th><th>Era</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0x00</td><td>Reset disk system</td><td>—</td><td>Original IBM PC BIOS</td></tr>
+        <tr><td class="hl">0x02</td><td>Read sectors into memory</td><td class="gold">CHS</td><td>Original IBM PC BIOS (1981)</td></tr>
+        <tr><td class="hl">0x03</td><td>Write sectors from memory</td><td class="gold">CHS</td><td>Original IBM PC BIOS (1981)</td></tr>
+        <tr><td class="hl">0x08</td><td>Get current drive parameters</td><td class="gold">CHS</td><td>Query actual geometry BIOS believes the drive has</td></tr>
+        <tr><td class="hl">0x41</td><td>Check extensions present</td><td>—</td><td>EDD / INT 13h Extensions (mid-1990s)</td></tr>
+        <tr><td class="hl">0x42</td><td>Extended read via Disk Address Packet</td><td class="pos">LBA</td><td>EDD / INT 13h Extensions (mid-1990s)</td></tr>
+        <tr><td class="hl">0x43</td><td>Extended write via Disk Address Packet</td><td class="pos">LBA</td><td>EDD / INT 13h Extensions (mid-1990s)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Universal Error Convention</div>
+    Every one of these services reports success or failure the exact same way: the x86 <strong>carry flag (CF)</strong>. Clear (0) means success; set (1) means something went wrong, with a numeric error code left in <code>AH</code>. This is precisely why <code>boot.asm</code>'s disk-read pattern always ends the same way — <code>int 0x13</code> immediately followed by <code>jc disk_error</code> (<em>jump if carry</em>). It's a two-instruction idiom you will type dozens of times across this project: call the BIOS service, then check the one bit that tells you whether to trust what just happened.
+  </div>
+
+  <p class="reveal">When <code>AH=0x02</code> does fail, the numeric code BIOS leaves behind in <code>AH</code> tells you specifically what went wrong — useful for a more informative <code>disk_error</code> handler than "something broke":</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>AH Error Code</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0x00</td><td class="pos">No error (shouldn't appear alongside CF=1, but defensively worth checking)</td></tr>
+        <tr><td class="hl">0x01</td><td>Invalid function or invalid parameter — a malformed request</td></tr>
+        <tr><td class="hl">0x02</td><td>Address mark not found — the requested sector's header wasn't located</td></tr>
+        <tr><td class="hl">0x04</td><td>Sector not found — requested CHS coordinates don't exist on this media</td></tr>
+        <tr><td class="hl">0x05</td><td>Reset failed</td></tr>
+        <tr><td class="hl">0x09</td><td>Data boundary error — transfer crossed a 64KB DMA boundary (a classic real-mode gotcha)</td></tr>
+        <tr><td class="hl">0x0C</td><td>Media type not found — often means no disk present at all</td></tr>
+        <tr><td class="hl">0x80</td><td>Drive timed out — no response, often a disconnected or missing drive</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>The 64KB DMA boundary gotcha (error 0x09).</b> Classic INT 13h disk reads use DMA hardware that cannot transfer across a 64KB physical boundary in one operation — your destination buffer given in <code>ES:BX</code> must not straddle a 0x10000-aligned line. This is a real, sharp-edged constraint: request too many sectors into a buffer positioned wrong, and you'll get error 0x09 even though every register value you supplied looks perfectly reasonable. It's one of several reasons production bootloaders are careful about exactly where they place destination buffers, not just how big they are.
+  </div>
+</div>
+</section>
+
+<!-- CHS ORIGIN -->
+<section id="chsorigin">
+<div class="container">
+  <div class="section-num">02 — Where CHS Actually Came From</div>
+  <h2><span class="accent">CHS</span>: A Language Built for Real Hardware</h2>
+
+  <p class="reveal">Cylinder/Head/Sector addressing wasn't an arbitrary numbering scheme someone invented for convenience — it described, literally and physically, how a spinning hard disk works. Picture the inside of an old mechanical drive: several rigid platters stacked on a spindle, a read/write head hovering over each platter surface, and all the heads moving together on one arm.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>CHS Term</th><th>Physical Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Cylinder</td><td>How far the read/write arm has moved inward or outward. All the concentric tracks at that same arm position, across every platter surface, form one cylinder.</td></tr>
+        <tr><td class="hl">Head</td><td>Which physical read/write head (and therefore which platter surface) is active — head 0 is the first surface, head 1 the next, and so on.</td></tr>
+        <tr><td class="hl">Sector</td><td>Which pie-slice segment of that particular track, since each circular track was itself divided into fixed-size arcs — the actual 512-byte chunks.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Reading a specific piece of data genuinely meant: move the arm to the right cylinder (this is the slow part — physically repositioning a mechanical arm), select the right head electronically (instant — no physical movement, just switching which head's signal you're reading), then wait for the disk's rotation to bring the right sector under the head. CHS numbers weren't an abstraction layered on top of the hardware — for early drives, they described exactly where a stepper motor needed to send an arm and exactly which electrical head to enable.</p>
+
+  <div class="sidenote reveal">
+    <b>Original IBM PC BIOS INT 13h field widths.</b> <code>CH</code> holds the low 8 bits of cylinder, with the top 2 bits smuggled into the top 2 bits of <code>CL</code> — giving 10 bits total, cylinders 0–1023. <code>DH</code> holds head, 8 bits, 0–255. The bottom 6 bits of <code>CL</code> hold sector, 1–63 (sector numbering starts at 1, not 0 — a detail that trips up almost everyone the first time). Multiply the ceilings together and you get the entire CHS-addressable universe through this interface: 1024 × 256 × 63 × 512 bytes ≈ 7.9GB. That number mattered enormously in the 1990s — it was a real, load-bearing ceiling, not a theoretical one.
+  </div>
+
+  <h3>Asking the Drive Instead of Hardcoding Numbers</h3>
+  <p class="reveal"><code>boot.asm</code> hardcodes <code>ch=0</code>, <code>cl=2</code>, <code>dh=0</code> because the disk image this project builds is small and its layout is known ahead of time at build time — reasonable for a teaching bootloader with a fixed <code>Makefile</code>-generated <code>disk.img</code>. Production code, aimed at disks whose geometry isn't known in advance, typically calls <code>AH=0x08</code> ("get current drive parameters") first, and lets BIOS report back the maximum cylinder, head, and sector values it believes the drive actually has, rather than assuming any particular shape.</p>
+
+  <pre><code>mov ah, 0x08        ; Get drive parameters
+mov dl, 0x80         ; Drive to query — first hard disk
+int 0x13
+jc disk_error
+; On return:
+;   CH = max cylinder (low 8 bits), CL bits 6-7 = max cylinder (high 2 bits)
+;   DH = max head number
+;   CL bits 0-5 = max sector number per track
+;   DL = number of drives detected</code></pre>
+
+  <p class="reveal">This is the BIOS-level equivalent of asking "what are your limits?" before assuming any — precisely the same defensive posture the extended-read section later in this lesson recommends for checking whether <code>AH=0x42</code> is even supported before relying on it.</p>
+</div>
+</section>
+
+<!-- CHS FICTION -->
+<section id="chsfiction">
+<div class="container">
+  <div class="section-num">03 — When the Geometry Stopped Being Real</div>
+  <h2>CHS Became a <span class="accent">Fiction</span></h2>
+
+  <p class="reveal">CHS worked fine as long as disks physically matched the numbers they reported. That stopped being true fairly quickly, for a very physical reason: outer tracks on a platter have more circumference than inner tracks, so a fixed sector count per track (which CHS assumes) wastes enormous capacity on the outer edge — you could easily pack more 512-byte sectors on an outer track's longer circumference than an inner one, but the traditional CHS interface has no way to express "this track has more sectors than that one."</p>
+
+  <p class="reveal">Drive manufacturers solved this with <strong>zone bit recording</strong>: group tracks into zones, and give outer zones more sectors per track than inner zones, squeezing meaningfully more capacity out of the same platter. This immediately broke the assumption baked into CHS that every track has the same sector count. Manufacturers' fix was pragmatic rather than pure: keep reporting <em>some</em> CHS-shaped numbers to software for compatibility, but have the drive's own controller silently translate that fictional CHS address into whatever the real physical layout actually is.</p>
+
+  <p class="reveal">This wasn't the first time disk encoding quietly changed underneath a stable-looking interface, either. Early drives used FM (frequency modulation) encoding, replaced by the denser MFM (Modified FM) scheme, later replaced again by even denser RLL (Run-Length Limited) encoding — each transition packed more bits into the same physical track without requiring software above the disk controller to know or care. CHS addressing survived every one of these encoding changes untouched, because it always operated one layer above the raw magnetic encoding. Zone bit recording was simply the first change that broke the <em>geometric</em> assumption (fixed sectors per track) rather than just the <em>encoding</em> underneath it.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    By the time you bought a hard drive in the mid-1990s, the "cylinders / heads / sectors" printed on its label were <strong>already a polite lie</strong> — a translated, BIOS-compatible geometry chosen to fit within CHS's addressing limits, not a description of the platters inside. Software calling <code>INT 0x13</code> with CHS coordinates was, and still is on anything old enough to use it, talking to a translation layer, not to physical hardware. The drive firmware receives your fictional C/H/S numbers and maps them internally to wherever the data actually lives.
+  </div>
+
+  <p class="reveal">This translation layer created its own famous headaches, because two different translators — the disk controller (ATA/IDE) and the system BIOS — each had their own, differently-sized CHS fields, and software had to survive whichever one was more restrictive:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Layer</th><th>Cylinder Bits</th><th>Head Bits</th><th>Sector Bits</th><th>Resulting Ceiling</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">BIOS INT 13h (original)</td><td>10 bits (1024)</td><td>8 bits (256)</td><td>6 bits (63)</td><td>≈ 7.9GB</td></tr>
+        <tr><td class="hl">ATA / IDE task file</td><td>16 bits (65536)</td><td>4 bits (16)</td><td>8 bits (255)</td><td>≈ 137GB</td></tr>
+        <tr><td class="hl">Combined worst case</td><td>min(1024,65536)</td><td class="red">min(256,16) = 16</td><td>min(63,255)</td><td class="red">1024×16×63×512 ≈ 504MB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Infamous 504MB Barrier</div>
+    Neither BIOS nor the ATA controller was individually the bottleneck — the disaster came from combining the <em>narrowest</em> field from each layer: BIOS's generous 256 heads met ATA's stingy 16-head hardware limit, and the combination capped every CHS-addressed disk at roughly 504MB (528,482,304 bytes) regardless of how large the physical drive actually was. Drives bigger than that, addressed purely through classic CHS, simply had the excess capacity become invisible to the operating system. This single number is a large part of why the industry was motivated to move away from CHS entirely rather than patch around it again.
+  </div>
+</div>
+</section>
+
+<!-- LBA -->
+<section id="lba">
+<div class="container">
+  <div class="section-num">04 — The Fiction Gets Retired</div>
+  <h2>Enter <span class="accent">LBA</span>: Just Count the Sectors</h2>
+
+  <p class="reveal">Logical Block Addressing throws out cylinder/head/sector entirely and replaces it with the simplest possible scheme: treat the disk as one long, flat array of fixed-size sectors, numbered <code>0, 1, 2, 3, ...</code> up to however many the disk holds. Sector 0 is the boot sector you already know from the previous lesson. There is no arm, no platter, no zone — just an index into an array, exactly like indexing into any other buffer.</p>
+
+  <div class="formula reveal">
+    <span class="label">Logical Block Addressing</span>
+    Byte offset on disk = LBA × 512
+    <span class="sub">No geometry required at all — just multiply the sector number by the sector size.</span>
+  </div>
+
+  <p class="reveal">This isn't just a software convenience — it matches modern hardware much better than CHS ever could. SSDs have no platters, no arms, no rotation at all; "cylinder" and "head" are meaningless concepts for flash memory. LBA never assumed a specific physical mechanism in the first place, so it keeps working correctly regardless of what's actually inside the drive.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🌀 CHS (Legacy)</h4>
+      Requires three coordinates that must be translated through however many layers of firmware disagree about the true geometry; hard limits baked into fixed-width register fields; meaningless for SSDs and modern zone-recorded drives; the field widths alone impose the 504MB barrier.
+    </div>
+    <div class="compare-card good">
+      <h4>📏 LBA (Modern)</h4>
+      One flat number identifies any sector on the disk; field width is the only limit (32-bit LBA in classic <code>INT 13h</code> AH=42h reaches 2TB, 48-bit LBA in modern ATA reaches 128 petabytes); matches SSDs, RAID arrays, and virtual disks with no fictional geometry required at all.
+    </div>
+  </div>
+
+  <p class="reveal">Notice this is precisely the same conceptual shift the upcoming MBR/GPT lesson in this module covers at the partition-table level — GPT also abandons small fixed-width legacy fields in favor of a flat 64-bit LBA addressing scheme, for exactly the same underlying reason: CHS-shaped thinking runs out of room, and a flat linear index doesn't.</p>
+
+  <h3>LBA Didn't Eliminate the Translation — It Moved It</h3>
+  <p class="reveal">It's worth being precise about what actually changed. Even a purely LBA-addressed modern SSD still has to translate that flat sector number into something physical internally — flash memory has its own complex internal mapping (wear leveling, bad block remapping, a flash translation layer) that's arguably far more involved than a spinning disk's old CHS translation ever was. What LBA actually eliminated wasn't translation itself — it was <strong>exposing a fictional physical geometry to software</strong>. The interface got simpler; the hardware behind it, if anything, got more complex. This is a pattern worth recognizing broadly: a clean abstraction doesn't necessarily mean less work happens underneath, only that the software above no longer needs to know about it.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 One More Ceiling Worth Knowing</div>
+    Classic <code>INT 13h AH=0x42</code> extended reads use a 32-bit LBA field inside the Disk Address Packet by convention on many older implementations, capping addressable space at 2TB — the exact same numeric ceiling the MBR partition table's own 32-bit LBA field hits, covered in the next lesson. The DAP format technically reserves a full 64-bit field for the starting LBA (shown in the worked example ahead), but not every BIOS populates or honors the upper 32 bits correctly, which is one more reason modern systems increasingly skip BIOS disk services altogether in favor of UEFI's own, cleaner block I/O protocols.
+  </div>
+</div>
+</section>
+
+<!-- WORKED EXAMPLE -->
+<section id="worked">
+<div class="container">
+  <div class="section-num">05 — A Real Call, Register by Register</div>
+  <h2>Worked Example: <span class="accent">AH=02h</span> in Practice</h2>
+
+  <p class="reveal"><code>boot.asm</code>'s disk read from the tutorial is the canonical AH=02h call. Here it is again, this time with every register explained as a field, not just a comment:</p>
+
+  <pre><code>mov ah, 0x02       ; Function select: 0x02 = "read sectors" (CHS)
+mov al, 16         ; Sector COUNT to read — 16 sectors = 8KB
+mov ch, 0          ; Cylinder, low 8 bits — cylinder 0
+mov cl, 2          ; Bits 0-5: starting sector = 2 (sector 1 is the boot sector itself)
+                   ; Bits 6-7: cylinder's high 2 bits — 0 here since cylinder is 0
+mov dh, 0          ; Head 0
+mov dl, 0x80       ; Drive number — 0x80 = first hard disk, 0x00 = first floppy
+mov bx, 0x1000     ; ES:BX = destination buffer — writes to ES:0x1000
+int 0x13           ; Trap into BIOS's disk service handler
+jc disk_error      ; CF set means the read failed — branch to your error path</code></pre>
+
+  <div class="regcard reveal">
+    <div class="regcard-head"><span>INT 13h AH=02h — Register Contract</span><span style="color:var(--muted);font-size:.7rem">set before int 0x13, read/checked after</span></div>
+    <div class="regcard-body">
+      <div class="regcard-field"><div class="f-label">AH (in)</div><div class="f-val">0x02</div><div class="f-desc">Selects the "read sectors" service among everything INT 13h can do.</div></div>
+      <div class="regcard-field"><div class="f-label">AL (in)</div><div class="f-val">sector count</div><div class="f-desc">How many consecutive sectors to read in this one call — 1 to 128, though many real BIOSes cap this lower.</div></div>
+      <div class="regcard-field"><div class="f-label">CH / CL (in)</div><div class="f-val">cylinder / sector</div><div class="f-desc">CH = cylinder low bits, CL bits 0-5 = sector (1-based!), CL bits 6-7 = cylinder high bits.</div></div>
+      <div class="regcard-field"><div class="f-label">DH / DL (in)</div><div class="f-val">head / drive</div><div class="f-desc">DH = head number, DL = drive number (0x00-0x7F floppies, 0x80+ hard disks).</div></div>
+      <div class="regcard-field"><div class="f-label">ES:BX (in)</div><div class="f-val">destination</div><div class="f-desc">Segment:offset of the buffer to read into — real mode addressing, not a flat pointer.</div></div>
+      <div class="regcard-field"><div class="f-label">CF (out)</div><div class="f-val">0 or 1</div><div class="f-desc">Carry flag — 0 means success, 1 means error; check this before trusting the result.</div></div>
+      <div class="regcard-field"><div class="f-label">AH (out)</div><div class="f-val">status code</div><div class="f-desc">On failure, holds a numeric BIOS error code you can branch on for more specific handling.</div></div>
+      <div class="regcard-field"><div class="f-label">AL (out)</div><div class="f-val">sectors read</div><div class="f-desc">Actual number of sectors successfully transferred — may be less than requested on a partial failure.</div></div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="chsLabel">▶ Translate LBA 33 into CHS coordinates</div>
+    <canvas id="chsCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runCHS()">▶ Compute CHS from LBA (16 heads, 63 sectors/track)</button>
+    <button class="ctrl-btn red" onclick="resetCHS()">Reset</button>
+  </div>
+
+  <div class="formula gold reveal">
+    <span class="label">The CHS ↔ LBA Conversion the Firmware Performs For You</span>
+    C = LBA / (HeadsPerCyl × SectorsPerTrack)&nbsp;&nbsp;&nbsp;H = (LBA / SectorsPerTrack) mod HeadsPerCyl&nbsp;&nbsp;&nbsp;S = (LBA mod SectorsPerTrack) + 1
+    <span class="sub">This is exactly the arithmetic drive firmware runs internally whenever you issue a CHS-style read — you're asking it to translate a lie back into the truth it already knows.</span>
+  </div>
+</div>
+</section>
+
+<!-- EXTENDED READS -->
+<section id="ext">
+<div class="container">
+  <div class="section-num">06 — The Modern Way</div>
+  <h2>AH=42h: <span class="accent">Extended</span> Reads, No Geometry Required</h2>
+
+  <p class="reveal">INT 13h Extensions (often abbreviated EDD, for Enhanced Disk Drive) arrived in the mid-1990s specifically to route around the CHS ceilings above. Instead of packing coordinates into CH/CL/DH, you build a small memory structure called a <strong>Disk Address Packet (DAP)</strong> and pass BIOS a pointer to it.</p>
+
+  <pre><code>; Disk Address Packet, 16 bytes, built in memory before the call
+dap:
+    db 0x10        ; Packet size = 16 bytes
+    db 0            ; Reserved, must be 0
+    dw 16           ; Number of sectors to read
+    dw 0x1000       ; Destination offset
+    dw 0x0000       ; Destination segment
+    dq 2            ; Starting LBA — a full 64-bit value, sector 2
+
+; ...
+mov ah, 0x42       ; Extended read
+mov dl, 0x80        ; Drive number, same convention as AH=02h
+mov si, dap         ; DS:SI points at the Disk Address Packet
+int 0x13
+jc disk_error       ; Same carry-flag convention as always</code></pre>
+
+  <p class="reveal">Two things stand out here. First, there's no cylinder, head, or sector field anywhere — just a single starting LBA, so the barriers from the previous section simply don't apply. Second, notice the last line of the DAP is a full quadword (<code>dq</code>, 8 bytes) — that's 64 bits of address space for the starting sector, which is why extended reads can address drives far larger than CHS ever could, all the way past the 2TB mark where even 32-bit LBA runs out.</p>
+
+  <div class="regcard reveal">
+    <div class="regcard-head"><span>Disk Address Packet — 16 Bytes</span><span style="color:var(--muted);font-size:.7rem">built in memory, pointed to by DS:SI before int 0x13</span></div>
+    <div class="regcard-body">
+      <div class="regcard-field"><div class="f-label">Packet Size (1 byte)</div><div class="f-val">0x10</div><div class="f-desc">Always 16 — lets BIOS validate it's reading a packet of the expected shape.</div></div>
+      <div class="regcard-field"><div class="f-label">Reserved (1 byte)</div><div class="f-val">0x00</div><div class="f-desc">Must be zero — reserved for future extension, ignored by current BIOSes.</div></div>
+      <div class="regcard-field"><div class="f-label">Sector Count (2 bytes)</div><div class="f-val">up to 0xFFFF</div><div class="f-desc">How many sectors to transfer — 16 bits wide, unlike AH=02h's 8-bit AL.</div></div>
+      <div class="regcard-field"><div class="f-label">Buffer Offset:Segment (4 bytes)</div><div class="f-val">segment:offset pair</div><div class="f-desc">Destination in RAM — still real-mode addressing, even though the source address is now flat LBA.</div></div>
+      <div class="regcard-field"><div class="f-label">Starting LBA (8 bytes)</div><div class="f-val">64-bit sector number</div><div class="f-desc">The entire point of this structure — one flat number instead of three fictional coordinates.</div></div>
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧭 Always Check Support First — AH=41h</div>
+    Not every BIOS implements the extensions, particularly on genuinely old hardware, so well-behaved code checks before relying on AH=42h: set <code>AH=0x41</code>, <code>BX=0x55AA</code>, <code>DL</code>=drive number, then <code>int 0x13</code>. If the carry flag comes back clear <em>and</em> <code>BX</code> now holds <code>0xAA55</code> (the bytes swapped back), extensions are present and it's safe to use AH=42h/43h. This is the same kind of "ask before you assume" pattern you'll meet constantly in low-level programming — never assume a capability exists just because it's common; a bootloader that only ever needs to run under QEMU or a reasonably modern BIOS can often skip this check, but production bootloaders never do.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Aspect</th><th>AH=02h (CHS)</th><th>AH=42h (Extended/LBA)</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Address form</td><td>Cylinder / Head / Sector, packed into registers</td><td>Single 64-bit LBA, packed into a DAP structure in memory</td></tr>
+        <tr><td class="hl">Max addressable</td><td>~504MB–~7.9GB, depending on which layer's limits bind</td><td>Effectively unbounded (2TB at 32-bit LBA, far more at 64-bit)</td></tr>
+        <tr><td class="hl">Universally supported</td><td class="pos">Yes — every BIOS since 1981</td><td class="neg">Only if EDD extensions present — check with AH=41h first</td></tr>
+        <tr><td class="hl">Used by this project's</td><td class="gold">boot.asm today</td><td>A reasonable upgrade path once disks/images exceed CHS limits</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Sharpen your pencil.</b> The DAP's sector-count field (<code>dw 16</code> in the example above) is a 16-bit word, not the 8-bit <code>AL</code> that AH=02h uses. What does that difference in field width actually buy you in practice, beyond the LBA addressing change itself? (Answer: AH=02h's sector count tops out at 255 per call — AL is only 8 bits — while AH=42h's 16-bit count field can request up to 65,535 sectors, over 32MB, in a single BIOS call. Fewer calls means less per-call overhead when loading something as large as a full kernel image.)
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">INT 13h</div><div class="glossary-def">The BIOS software interrupt exposing low-level disk services (read, write, reset, get parameters) to real-mode code via registers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CHS</div><div class="glossary-def">Cylinder/Head/Sector — the original disk addressing scheme, describing an arm position, a platter surface, and a track segment.</div></div>
+    <div class="glossary-card"><div class="glossary-term">LBA</div><div class="glossary-def">Logical Block Addressing — treats a disk as one flat array of numbered sectors, with no geometry assumptions at all.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Zone Bit Recording</div><div class="glossary-def">Storing more sectors per track on a platter's longer outer tracks than its shorter inner ones — the physical change that made fixed-geometry CHS obsolete.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Disk Address Packet (DAP)</div><div class="glossary-def">The 16-byte memory structure passed to INT 13h AH=42h/43h, holding sector count, destination pointer, and a 64-bit starting LBA.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EDD / INT 13h Extensions</div><div class="glossary-def">The mid-1990s BIOS extension adding LBA-based disk services (AH=41h/42h/43h) to route around CHS's addressing ceilings.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Carry Flag (CF)</div><div class="glossary-def">The x86 status flag INT 13h (and most BIOS services) use as a universal success/failure signal after returning from a call.</div></div>
+    <div class="glossary-card"><div class="glossary-term">504MB Barrier</div><div class="glossary-def">The historical CHS capacity ceiling created by combining BIOS's 256-head field with ATA's 16-head hardware limit.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sector Translation</div><div class="glossary-def">The drive firmware's internal remapping of externally-reported (often fictional) CHS coordinates onto real physical storage locations.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>BIOS Disk Services — INT 13h and the CHS-to-LBA Story · A companion lesson for bob_os module 01_bootloader</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: MBR, GPT, and why bootloaders chain-load.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CHS COMPUTATION CANVAS ──────────────────────────────────────────────
+const LBA_DEMO = 33, HEADS = 16, SPT = 63;
+function computeCHS(lba){
+  const c = Math.floor(lba / (HEADS*SPT));
+  const h = Math.floor(lba / SPT) % HEADS;
+  const s = (lba % SPT) + 1;
+  return {c,h,s};
+}
+
+function drawCHSScene(t,phase){
+  const canvas=document.getElementById('chsCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.muted;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(`LBA = ${LBA_DEMO}   HeadsPerCyl = ${HEADS}   SectorsPerTrack = ${SPT}`,14,26);
+
+  const rows=[
+    {key:'c',label:'Cylinder = LBA / (Heads × SPT)',expr:`${LBA_DEMO} / (${HEADS}×${SPT}) = ${LBA_DEMO} / ${HEADS*SPT}`,val:computeCHS(LBA_DEMO).c,y:80},
+    {key:'h',label:'Head = (LBA / SPT) mod Heads',expr:`(${LBA_DEMO} / ${SPT}) mod ${HEADS} = ${Math.floor(LBA_DEMO/SPT)} mod ${HEADS}`,val:computeCHS(LBA_DEMO).h,y:150},
+    {key:'s',label:'Sector = (LBA mod SPT) + 1',expr:`(${LBA_DEMO} mod ${SPT}) + 1 = ${LBA_DEMO%SPT} + 1`,val:computeCHS(LBA_DEMO).s,y:220}
+  ];
+
+  const order=['c','h','s'];
+  const activeIdx = order.indexOf(phase);
+
+  rows.forEach((r,i)=>{
+    const isActive = r.key===phase;
+    const isDone = activeIdx>=0 && order.indexOf(r.key) < activeIdx;
+    const isResult = phase==='result';
+    ctx.fillStyle = (isActive||isDone||isResult) ? C.text : C.muted;
+    ctx.font='13px Lato,sans-serif';ctx.textAlign='left';
+    ctx.fillText(r.label, 14, r.y);
+    ctx.font='12px Source Code Pro,monospace';
+    ctx.fillStyle = (isActive) ? C.cyan : C.muted;
+    ctx.fillText(r.expr, 14, r.y+20);
+
+    if(isActive || isDone || isResult){
+      const alpha = isActive ? t : 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle=C.gold;
+      ctx.font='bold 20px Source Code Pro,monospace';ctx.textAlign='right';
+      ctx.fillText(String(r.val), W-30, r.y+10);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  if(phase==='result'){
+    ctx.fillStyle=C.green;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+    const res=computeCHS(LBA_DEMO);
+    ctx.fillText(`→ CH=${res.c}  DH=${res.h}  CL=${res.s}  (matches boot.asm's own field layout)`,W/2,H-16);
+  } else if(phase==='idle'){
+    ctx.fillStyle=C.muted;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText('Click the button to walk through the conversion',W/2,H-16);
+  }
+}
+
+function runCHS(){
+  const phases=['c','h','s','result'];
+  const durations=[700,700,700,900];
+  let idx=0,start=performance.now();
+  document.getElementById('chsLabel').textContent='▶ Computing CHS coordinates for LBA '+LBA_DEMO+'...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawCHSScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('chsLabel').textContent='▶ Done — this is exactly what drive firmware computes internally';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetCHS(){
+  document.getElementById('chsLabel').textContent='▶ Translate LBA 33 into CHS coordinates';
+  drawCHSScene(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetCHS(); });
+window.addEventListener('resize',()=>{ resetCHS(); });
+</script>
+</body>
+</html>

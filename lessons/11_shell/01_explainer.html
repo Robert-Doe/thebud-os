@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Shell's Loop — Read, Parse, Execute, Repeat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.bug{color:var(--red);font-weight:700}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* Wall diagram */
+.wall-diagram{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;gap:0;margin:1.8rem 0;border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+.wall-side{padding:1.6rem 1.4rem;background:var(--card);}
+.wall-side.kernel{background:rgba(248,113,113,.05);}
+.wall-side.user{background:rgba(56,189,248,.05);}
+.wall-side h4{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:.8rem;}
+.wall-side.kernel h4{color:var(--red)} .wall-side.user h4{color:var(--cyan)}
+.wall-side ul{padding-left:1.2rem;margin-bottom:0;}
+.wall-side li{font-size:.86rem;color:var(--muted);margin-bottom:.5rem;}
+.wall-divider{width:6px;background:repeating-linear-gradient(0deg,var(--gold),var(--gold) 6px,transparent 6px,transparent 12px);}
+@media(max-width:700px){.wall-diagram{grid-template-columns:1fr}.wall-divider{width:100%;height:6px;background:repeating-linear-gradient(90deg,var(--gold),var(--gold) 6px,transparent 6px,transparent 12px);}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#loop" title="The Loop"></a>
+  <a class="toc-dot" href="#ordinary" title="Just A Program"></a>
+  <a class="toc-dot" href="#wall" title="The Wall, Reprised"></a>
+  <a class="toc-dot" href="#bobos" title="bob_os's Shell"></a>
+  <a class="toc-dot" href="#power" title="Where The Power Comes From"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Shells · Userspace · The Read-Parse-Execute Loop</div>
+    <h1>Read. Parse.<br><span>Execute. Repeat.</span></h1>
+    <p class="hero-sub">Every terminal session you've ever had — bash, zsh, PowerShell, BobSH — boils down to the same four-step loop running forever. That's the entire trick. What makes it interesting isn't the loop itself; it's <em>where the shell sits</em> in the architecture you already know. It has zero special privileges. It's a completely ordinary user-space program — and it's also the main way most humans ever talk to an operating system at all.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">Steps in the loop, forever: prompt, read, dispatch, repeat</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Kernel privileges a shell has beyond any other program</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Process — the shell is just one, like any other</div></div>
+      <div class="hero-stat"><div class="num">∞</div><div class="lbl">Times the loop repeats, until you type exit</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>You Already Know The <span class="accent">Wall</span>. This Is What Lives On One Side Of It.</h2>
+  <p class="reveal">Two things you're already carrying from earlier in this series: the user space / kernel space wall (Ring 3 code cannot touch Ring 0 memory, cannot execute privileged instructions, and can only cross into the kernel through the guarded door of a system call), and — from the PCB and fork()/exec() material — exactly how a process gets born and how it turns into a running program. This lesson doesn't add a new mechanism on top of those. It picks one extremely familiar program — the shell — and asks you to actually look at it through the lens you already have.</p>
+  <p class="reveal">The punchline, stated up front: a shell is not a special, elevated part of the operating system. It's an ordinary user-space process, sandboxed exactly like every other program on the wrong side of the wall. Everything that makes it feel powerful is stuff it's <em>asking</em> the kernel to do on your behalf, one syscall at a time — the same door every other program has to use.</p>
+</div>
+</section>
+
+<!-- THE LOOP -->
+<section id="loop">
+<div class="container">
+  <div class="section-num">01 — The Whole Program, Structurally</div>
+  <h2>A Shell Is A <span class="accent">while(1)</span> Loop</h2>
+
+  <p class="reveal">Strip away every convenience feature — tab completion, command history, colored prompts, aliases — and every shell that has ever existed, from the original Bourne shell to bash to zsh to bob_os's own <code>shell_main()</code>, reduces to the same four-step cycle, repeated forever:</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">💬</div><div class="pipe-name">Prompt</div><div class="pipe-desc">Print something like $ or bob@BobOS&gt; so you know it's listening</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">⌨️</div><div class="pipe-name">Read</div><div class="pipe-desc">Collect characters from input until you press Enter</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🧩</div><div class="pipe-name">Parse</div><div class="pipe-desc">Figure out what the line of text actually means</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">⚙️</div><div class="pipe-name">Execute</div><div class="pipe-desc">Do the thing — run a builtin, or launch a program</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🔁</div><div class="pipe-name">Repeat</div><div class="pipe-desc">Back to the top. Forever, until you type exit.</div></div>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">The entire architecture of a shell, in one line</span>
+    for (;;) { prompt(); read_line(buf); dispatch(buf); }
+    <span class="sub">Everything else — pipes, quoting, job control, tab completion — is detail bolted onto one of these four steps. None of it changes the shape of the loop.</span>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="loopLabel">▶ Watch one trip around the loop</div>
+    <canvas id="loopCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runLoop()">▶ Run one iteration: prompt → read → parse → execute → repeat</button>
+    <button class="ctrl-btn red" onclick="resetLoop()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice what's conspicuously <em>not</em> in that loop: nothing about memory protection, nothing about privilege levels, nothing that requires the CPU to be in any particular ring. It's a loop that reads text and reacts to it — the same shape as a chatbot's input loop, or a video game's main loop, or a REPL. There is nothing inherently "kernel-flavored" about any of these four steps.</p>
+</div>
+</section>
+
+<!-- ORDINARY PROGRAM -->
+<section id="ordinary">
+<div class="container">
+  <div class="section-num">02 — The Claim That Surprises People</div>
+  <h2>The Shell Has <span class="accent">Zero</span> Special Privileges</h2>
+
+  <p class="reveal">Here's the part that catches people off guard the first time it's said plainly: <strong>a shell cannot do a single thing that an ordinary user-space program couldn't already do.</strong> Not one. It runs at the exact same Ring 3 privilege level as a text editor, a web browser, or a game. It has no elevated syscall access. It has no bypass around the memory-protection wall. When you type <code>ls</code> and files appear on screen, the shell didn't reach into the kernel and grab the directory listing through some back channel reserved for shells — it made the exact same <code>read()</code>/<code>getdents()</code>-style syscalls that any C program calling the same library functions would make.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A shell isn't powerful because of what it's <em>allowed</em> to do that other programs aren't. It's powerful because it's <em>convenient</em> — it packages up "make this specific syscall, or fork and run that specific program" behind a two-word command you can type without writing and compiling C. The privilege boundary doesn't move for it. The shell just makes the already-available door easier to find and easier to use, over and over, quickly.
+  </div>
+
+  <p class="reveal">This is worth sitting with, because it cuts against the mental model a lot of people carry in from movies and pop culture, where "the terminal" feels like a magic backstage pass into the machine's inner workings. It isn't. It's the front-of-house lobby. Everything you do in a shell is still filtered through exactly the same syscall interface, exactly the same privilege checks, exactly the same wall that any other program has to respect.</p>
+
+  <div class="sidenote reveal">
+    <b>Then why does <code>sudo</code> feel different?</b> Running a command as root through <code>sudo</code> doesn't give the <em>shell</em> new powers — it launches a <em>new process</em> (via fork()+exec(), same as always) whose credentials are set to a more privileged user before that process's code ever runs. The shell that typed <code>sudo</code> stays exactly as unprivileged as it always was; it just asked the kernel to start a different, more-privileged process on your behalf. Same door, different ID card presented at it.
+  </div>
+</div>
+</section>
+
+<!-- THE WALL, REPRISED -->
+<section id="wall">
+<div class="container">
+  <div class="section-num">03 — Same Wall, Familiar Shape</div>
+  <h2>The Shell Lives Entirely On <span class="accent">One Side</span></h2>
+
+  <p class="reveal">Put the shell directly onto the diagram you already know from the kernel/userspace lessons, and there's nothing new to draw — it just occupies a labeled box on the side you'd expect:</p>
+
+  <div class="wall-diagram reveal">
+    <div class="wall-side kernel">
+      <h4>Ring 0 — Kernel Space</h4>
+      <ul>
+        <li>Scheduler, memory manager, filesystem driver, keyboard driver</li>
+        <li>Owns the PCB / process table</li>
+        <li>The only code allowed to execute privileged instructions</li>
+        <li>Reached only through the syscall door, a fault, or an interrupt</li>
+      </ul>
+    </div>
+    <div class="wall-divider"></div>
+    <div class="wall-side user">
+      <h4>Ring 3 — User Space</h4>
+      <ul>
+        <li><strong>The shell</strong> — an ordinary process, PID and all</li>
+        <li>Text editors, browsers, games — same privilege level</li>
+        <li>Every program the shell launches for you</li>
+        <li>Can only ask the kernel for things, via syscalls — never take them directly</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="reveal">When the shell's read-step wants a keystroke, it doesn't reach out and grab it from the keyboard controller — it calls something like <code>read()</code> on standard input and waits, exactly as any other program would. When its execute-step wants to run <code>ls</code>, it doesn't inject the listing logic into itself — it forks a new process and lets that new process <code>exec()</code> into the real <code>ls</code> binary, which then makes its own ordinary syscalls to read the directory. The shell is a relay, not a backstage pass.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Restated As Sharply As Possible</div>
+    A shell can't do anything a user-space program couldn't already do. It just does it <em>on your behalf</em>, conveniently, from one place, without you having to write a new program every time you want the kernel to do something for you.
+  </div>
+</div>
+</section>
+
+<!-- BOB_OS SHELL -->
+<section id="bobos">
+<div class="container">
+  <div class="section-num">04 — Grounded In This Project</div>
+  <h2><span class="accent">bob_os</span>'s Own Shell, Read Through This Lens</h2>
+
+  <p class="reveal">bob_os's shell (module <code>13_shell</code>, <code>shell_main()</code>) is worth looking at directly, because it's small enough to read in one sitting and it makes the loop completely literal. At this stage of the project it's actually a <em>kernel</em> process — bob_os hasn't built Ring-3 user mode yet (that's the very next module) — but structurally it is still exactly the read-parse-execute loop, characters and all:</p>
+
+  <pre class="reveal"><span class="tag">C — bob_os shell.c, condensed</span><code><span class="kw">void</span> <span class="fn">shell_main</span>(<span class="kw">void</span>) {
+    <span class="kw">char</span> c;
+    line_len = <span class="numc">0</span>;
+
+    <span class="fn">kprintf</span>(<span class="str">"[shell] BobOS shell started.\n"</span>);
+    <span class="fn">print_prompt</span>();               <span class="cm">// "bob@BobOS> "</span>
+
+    <span class="kw">for</span> (;;) {                       <span class="cm">// the loop — forever</span>
+        <span class="fn">sys_yield</span>();                <span class="cm">// let other processes run while we wait</span>
+
+        c = <span class="fn">keyboard_getchar</span>();     <span class="cm">// READ, one character at a time</span>
+        <span class="kw">if</span> (!c) <span class="kw">continue</span>;
+
+        <span class="kw">if</span> (c == <span class="str">'\n'</span>) {
+            line_buf[line_len] = <span class="str">'\0'</span>;
+            <span class="kw">if</span> (line_len &gt; <span class="numc">0</span>) <span class="fn">dispatch</span>(line_buf); <span class="cm">// PARSE + EXECUTE</span>
+            line_len = <span class="numc">0</span>;
+            <span class="fn">print_prompt</span>();           <span class="cm">// REPEAT</span>
+        } <span class="kw">else</span> {
+            line_buf[line_len++] = c;   <span class="cm">// still collecting the line</span>
+            <span class="fn">vga_putchar</span>(c);
+        }
+    }
+}</code></pre>
+
+  <p class="reveal">Every one of the four steps is right there, just spelled out in freestanding C with no standard library: <code>print_prompt()</code> is the prompt step, the character-by-character loop around <code>keyboard_getchar()</code> is the read step, <code>dispatch()</code> is parse-and-execute combined (you'll see it split apart properly in the next lesson), and the outer <code>for (;;)</code> is the repeat. There's no magic hiding anywhere in it — which is rather the point of building an OS from scratch.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 One Honest Difference, Worth Naming</div>
+    Because bob_os doesn't have user-mode processes or a program loader yet, every one of its shell's commands (<code>help</code>, <code>ls</code>, <code>cat</code>, <code>echo</code>...) is a <strong>built-in</strong> — a function called directly inside <code>dispatch()</code>. A shell like bash, by contrast, treats most commands as <em>external programs</em> it forks and execs (you already met that mechanism in the fork/exec deep-dive). bob_os will grow that capability once its ELF loader and user mode land in later modules — at which point <code>dispatch()</code> stops being a chain of function calls and starts being a chain of "is this built into me, or do I need to go find a program on disk?" decisions. Lesson 3 of this shell series covers exactly that fork.
+  </div>
+</div>
+</section>
+
+<!-- WHERE THE POWER COMES FROM -->
+<section id="power">
+<div class="container">
+  <div class="section-num">05 — Why It's Still The Most Important Program On The Machine</div>
+  <h2>Ordinary Privileges, <span class="accent">Extraordinary</span> Position</h2>
+
+  <p class="reveal">If the shell has no special powers, why does this lesson series — and every OS course ever taught — treat it as such a big deal? Because privilege isn't the only axis that matters. <strong>Position</strong> matters too, and the shell occupies an unusually central one: for decades, it has been the primary interface most humans (and most scripts, and most automation) use to actually operate a machine.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>What people assume</th><th>What's actually true</th></tr></thead>
+      <tbody>
+        <tr><td>"The shell has root-level access to the system."</td><td class="pos">The shell runs as whatever user launched it — same as any program. It has <em>no</em> inherent elevated access.</td></tr>
+        <tr><td>"Typing commands is a lower-level, more powerful way to control the OS."</td><td class="pos">It's the same syscall interface every GUI application also goes through — just exposed as text instead of buttons.</td></tr>
+        <tr><td>"A shell script can do things a compiled program can't."</td><td class="pos">A shell script's power is entirely borrowed from the programs it forks and execs — it's a convenient composition layer, not a new capability.</td></tr>
+        <tr><td>"The shell is basically part of the kernel."</td><td class="pos">It is ordinary Ring 3 user code — as sandboxed as anything else on that side of the wall.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">What the shell <em>does</em> have is leverage: one loop, one place to type, and immediate access — through fork()/exec() — to every other program installed on the system, plus a set of built-ins for the handful of operations (like changing directory) that genuinely can't be delegated to a child process at all. That combination — cheap composition of arbitrary programs, plus a small set of process-local built-ins — is what makes a text prompt feel disproportionately powerful compared to its actual privilege level. The next two lessons dig into exactly how the parse step turns your typed line into something dispatchable, and exactly why a few commands have to live inside the shell itself rather than as separate programs.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Carry This Forward</div>
+    Every time this series shows you a shell doing something that looks impressive — piping commands together, backgrounding a job, changing your working directory — go back to this lesson's claim and check it: is the shell doing something no ordinary program could do? It never is. It's composing ordinary, already-available operations conveniently, from one privileged-feeling but actually unprivileged seat at the table.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Shell</div><div class="glossary-def">An ordinary user-space program that runs a read-parse-execute loop, translating typed commands into syscalls and program launches on your behalf.</div></div>
+    <div class="glossary-card"><div class="glossary-term">REPL</div><div class="glossary-def">Read-Eval-Print Loop — the general pattern a shell is one instance of; also describes Python's interactive prompt, a database console, and similar tools.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Prompt</div><div class="glossary-def">The text printed to signal the shell is ready for input, like <code>$</code>, <code>%</code>, or bob_os's <code>bob@BobOS&gt;</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dispatch</div><div class="glossary-def">The step where a parsed command line is matched against known commands and routed to the right handler — a builtin function or a forked/exec'd external program.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Ring 3 / User Space</div><div class="glossary-def">The unprivileged CPU execution level where the shell, and every ordinary application, runs — no direct hardware access, no privileged instructions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Ring 0 / Kernel Space</div><div class="glossary-def">The privileged level where the OS itself runs, reachable from user space only through syscalls, faults, or interrupts — never directly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">System Call (Syscall)</div><div class="glossary-def">The guarded, deliberate door through which a user-space program (including a shell) asks the kernel to do something on its behalf.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Built-in Command</div><div class="glossary-def">A command implemented as a function inside the shell's own process, rather than as a separate program launched via fork()/exec(). Covered in depth in Lesson 3.</div></div>
+    <div class="glossary-card"><div class="glossary-term">shell_main() (bob_os)</div><div class="glossary-def">bob_os's own shell entry point — currently a kernel process (no user mode yet), but structurally the same prompt/read/dispatch/repeat loop as bash.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The Shell's Loop — Read, Parse, Execute, Repeat</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion lesson for bob_os module 13_shell.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── THE LOOP CANVAS ──────────────────────────────────────────────────────
+const loopStages=[
+  {name:'prompt()',icon:'💬',desc:'Print "bob@BobOS> " — signal readiness'},
+  {name:'read',icon:'⌨️',desc:'Collect characters until Enter'},
+  {name:'parse',icon:'🧩',desc:'Split the line, figure out the command'},
+  {name:'execute',icon:'⚙️',desc:'Run a builtin, or fork+exec a program'},
+  {name:'repeat',icon:'🔁',desc:'Back to the top — forever'}
+];
+let loopAnimId=null;
+
+function drawLoopScene(activeIdx,typedText,note){
+  const canvas=document.getElementById('loopCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const n=loopStages.length;
+  const margin=20, gap=14;
+  const boxW=(W-margin*2-gap*(n-1))/n;
+  const boxY=H*0.16, boxH=88;
+
+  for(let i=0;i<n;i++){
+    const x=margin+i*(boxW+gap);
+    const isActive=i===activeIdx;
+    const col=C.cyan;
+    ctx.fillStyle = isActive? col+'33' : 'rgba(255,255,255,.03)';
+    ctx.strokeStyle = isActive? col : C.border;
+    ctx.lineWidth = isActive? 2 : 1;
+    ctx.fillRect(x,boxY,boxW,boxH);
+    ctx.strokeRect(x,boxY,boxW,boxH);
+    ctx.font='20px sans-serif';ctx.textAlign='center';
+    ctx.fillText(loopStages[i].icon,x+boxW/2,boxY+30);
+    ctx.font='10px Source Code Pro,monospace';
+    ctx.fillStyle = isActive? col : C.muted;
+    ctx.fillText(loopStages[i].name,x+boxW/2,boxY+52);
+    ctx.font='8px Lato,sans-serif';
+    ctx.fillStyle=C.muted;
+    wrapText(ctx,loopStages[i].desc,x+boxW/2,boxY+68,boxW-10,10);
+    if(i<n-1){
+      ctx.fillStyle=C.muted;ctx.font='16px sans-serif';
+      ctx.fillText('→',x+boxW+gap/2,boxY+boxH/2+5);
+    }
+  }
+  // loop-back arrow from last box back to first
+  const lastX=margin+(n-1)*(boxW+gap)+boxW/2;
+  const firstX=margin+boxW/2;
+  const loopY=boxY+boxH+34;
+  ctx.strokeStyle=activeIdx===4?C.gold:C.border;
+  ctx.lineWidth=activeIdx===4?2:1;
+  ctx.beginPath();
+  ctx.moveTo(lastX,boxY+boxH);
+  ctx.lineTo(lastX,loopY);
+  ctx.lineTo(firstX,loopY);
+  ctx.lineTo(firstX,boxY+boxH);
+  ctx.stroke();
+  ctx.fillStyle=activeIdx===4?C.gold:C.muted;
+  ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('for (;;) — loop forever',W/2,loopY+14);
+
+  // typed-text simulation box
+  const termY=H*0.62, termH=90;
+  ctx.fillStyle=C.code_bg||'#000';
+  ctx.fillStyle='#000814';
+  ctx.fillRect(margin,termY,W-margin*2,termH);
+  ctx.strokeStyle=C.border;ctx.strokeRect(margin,termY,W-margin*2,termH);
+  ctx.font='13px Source Code Pro,monospace';ctx.textAlign='left';ctx.fillStyle=C.green;
+  ctx.fillText('bob@BobOS> ' + typedText + (activeIdx===1?'▌':''),margin+16,termY+30);
+  if(activeIdx>=2){
+    ctx.fillStyle=C.muted;ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('argv[0] = "'+typedText.split(' ')[0]+'"'+(typedText.includes(' ')?'   argv[1] = "'+typedText.split(' ').slice(1).join(' ')+'"':''),margin+16,termY+52);
+  }
+  if(activeIdx>=3){
+    ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('→ dispatch(): running handler for "'+typedText.split(' ')[0]+'"',margin+16,termY+72);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(note||'',W/2,H-10);
+}
+
+function wrapText(ctx,text,x,y,maxWidth,lineHeight){
+  const words=text.split(' ');
+  let line='',ly=y;
+  for(let i=0;i<words.length;i++){
+    const test=line+words[i]+' ';
+    if(ctx.measureText(test).width>maxWidth && line!==''){
+      ctx.fillText(line,x,ly);
+      line=words[i]+' ';
+      ly+=lineHeight;
+    } else line=test;
+  }
+  ctx.fillText(line,x,ly);
+}
+
+const LOOP_CMD='ls -l';
+const loopNotes=[
+  'Step 1 — prompt(): the shell prints its prompt and waits.',
+  'Step 2 — read: characters accumulate in a buffer as you type, one at a time.',
+  'Step 3 — parse: the line is split into a command and its arguments (argv).',
+  'Step 4 — execute: dispatch() runs the matching builtin, or forks+execs a program.',
+  'Step 5 — repeat: back to the top of the for(;;) loop. Nothing about the shell changed.'
+];
+
+function runLoop(){
+  if(loopAnimId) cancelAnimationFrame(loopAnimId);
+  document.getElementById('loopLabel').textContent='▶ Simulating: you type "'+LOOP_CMD+'" and press Enter';
+  const phases=[0,1,2,3,4];
+  const durations=[450,1500,800,800,800];
+  let idx=0,start=performance.now();
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    let typedText = idx>=2 ? LOOP_CMD : (idx===1 ? LOOP_CMD.slice(0,Math.ceil(t*LOOP_CMD.length)) : '');
+    drawLoopScene(idx,typedText,loopNotes[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=loopStages.length){
+        document.getElementById('loopLabel').textContent='▶ Done — the loop just goes back to Step 1, forever';
+        return;
+      }
+      start=now;
+    }
+    loopAnimId=requestAnimationFrame(step);
+  }
+  loopAnimId=requestAnimationFrame(step);
+}
+function resetLoop(){
+  if(loopAnimId) cancelAnimationFrame(loopAnimId);
+  document.getElementById('loopLabel').textContent='▶ Watch one trip around the loop';
+  drawLoopScene(-1,'','Click Run to simulate typing a command.');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetLoop(); });
+window.addEventListener('resize',()=>{ resetLoop(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polling vs Interrupt-Driven I/O — Asking vs Being Told</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.o{color:var(--orange)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.cyan li::before{background:rgba(56,189,248,.15);border-color:var(--cyan);color:var(--cyan)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(248,113,113,.1);border:1.5px solid var(--red);color:var(--red);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(248,113,113,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--red);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#polling" title="Polling"></a>
+  <a class="toc-dot" href="#interrupts" title="Interrupt-Driven"></a>
+  <a class="toc-dot" href="#sidebyside" title="Side by Side"></a>
+  <a class="toc-dot" href="#costs" title="The Real Costs"></a>
+  <a class="toc-dot" href="#pollingwins" title="When Polling Wins"></a>
+  <a class="toc-dot" href="#hybrid" title="Hybrid Approaches"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">I/O Models · Polling · Interrupts · bob_os Module 16</div>
+    <h1>Asking vs<br><span>Being Told</span></h1>
+    <p class="hero-sub">Every driver eventually has to answer the same question: how do I know when the hardware has something for me? There are exactly two honest answers. Keep asking, over and over, until the answer is yes — that's <strong>polling</strong>. Or set up a doorbell and go do something else until it rings — that's <strong>interrupt-driven I/O</strong>. bob_os's own disk driver and keyboard driver each picked a different one, and neither choice was an accident.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Useful Work Done in a Polling Spin Loop</div></div>
+      <div class="hero-stat"><div class="num">33</div><div class="lbl">IRQ1's CPU Interrupt Vector After PIC Remap</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Register Checked per Poll — ATA STATUS, 0x1F7</div></div>
+      <div class="hero-stat"><div class="num">&#8734;</div><div class="lbl">Times ata_wait_bsy() Loops With No Timeout</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Not Re-Deriving <span class="accent">Interrupts</span> — Using Them</h2>
+  <p class="reveal">The IDT/interrupts lesson already covered the mechanics in depth: the IDT, the 8259A PIC, ISR stubs, <code>pic_send_eoi()</code>, vector remapping to 32+ so IRQs don't collide with CPU exceptions. If any of those terms are unfamiliar, that's the lesson to go back to — this page assumes you already know <em>how</em> an interrupt reaches a handler function.</p>
+  <p class="reveal">What that lesson didn't cover is the <em>design decision</em> sitting one level up: given that interrupts exist and work, why would a driver ever choose <strong>not</strong> to use them? bob_os's own source answers this by example — <code>keyboard.c</code> registers an IRQ1 handler and does nothing else; <code>disk.c</code> never touches the IDT at all and instead spins in a <code>while</code> loop reading a status register. Same kernel, two completely different answers to "how do I know when data is ready?" This lesson is about why.</p>
+</div>
+</section>
+
+<!-- POLLING -->
+<section id="polling">
+<div class="container">
+  <div class="section-num">01 — Asking, Repeatedly</div>
+  <h2>Polling: <span class="accent">"Are You Ready Yet?"</span> On Loop</h2>
+
+  <p class="reveal">Polling means the driver reads a hardware status register in a tight loop, checking one bit, over and over, until the hardware flips it. No setup beyond the loop itself, no interrupt handler to register, no vector to worry about. It's the most direct code you can possibly write, and bob_os's ATA disk driver uses exactly this pattern for every single sector it reads or writes.</p>
+
+  <pre><code>/* disk.c — real code from bob_os's ATA PIO driver */
+
+/* Spin until BSY clears.  No timeout — in a real driver you'd add one. */
+static void ata_wait_bsy(void) {
+    while (ata_inb(ATA_STATUS) & ATA_BSY) {}
+}
+
+/* Spin until DRQ sets (data ready) or ERR sets.
+ * Returns 0 if DRQ set, -1 if ERR set. */
+static int ata_wait_drq(void) {
+    uint8_t s;
+    for (;;) {
+        s = ata_inb(ATA_STATUS);
+        if (s &amp; ATA_ERR) return -1;
+        if (s &amp; ATA_DRQ) return 0;
+    }
+}</code></pre>
+
+  <p class="reveal">Every single call to <code>disk_read_sector()</code> runs <code>ata_wait_bsy()</code>, then programs the LBA registers, issues the read command, and calls <code>ata_wait_drq()</code> — burning CPU cycles in a bare loop the entire time the drive is busy internally. On real spinning rust that could be milliseconds; on an emulated QEMU disk it's usually fast, but the CPU has no way to know that in advance, so it spins regardless.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Honest Cost of That Loop</div>
+    While <code>ata_wait_bsy()</code> spins, the CPU is 100% occupied doing <em>nothing useful</em> — not running another process, not servicing a timer tick promptly, not doing anything except re-reading the same port over and over. On a single-core, non-preemptible kernel like early bob_os, that loop <em>is</em> the entire machine for however long it runs. There's also no timeout here, which the comment itself admits — a truly wedged drive would hang the kernel forever.
+  </div>
+
+  <p class="reveal">The latency story is just as blunt: how quickly you notice the drive became ready is entirely a function of how often you check. Check constantly and you notice almost instantly, at the cost of burning every spare cycle checking. Check occasionally and you save cycles, at the cost of noticing late. Polling doesn't let you have both — the loop's check frequency <em>is</em> the latency bound.</p>
+</div>
+</section>
+
+<!-- INTERRUPTS -->
+<section id="interrupts">
+<div class="container">
+  <div class="section-num">02 — Being Told</div>
+  <h2>Interrupt-Driven I/O: The Hardware <span class="accent">Speaks First</span></h2>
+
+  <p class="reveal">Interrupt-driven I/O flips the arrangement completely. Instead of the CPU asking, the CPU registers a handler once and then does something else entirely — runs other processes, even halts — until the device itself asserts an IRQ line, forcing the CPU into that handler the instant there's something to report.</p>
+
+  <pre><code>/* keyboard.c — real code from bob_os's PS/2 keyboard driver */
+
+void keyboard_init(void) {
+    irq_register(1, keyboard_irq_handler);   /* registered ONCE, at boot */
+}
+
+/* IRQ1 handler -- called from the generic interrupt dispatcher,
+ * only when hardware actually has a scancode waiting. */
+static void keyboard_irq_handler(struct interrupt_frame *frame) {
+    (void)frame;
+    uint8_t sc = inb(KB_DATA_PORT);      /* read the ONE byte that's ready */
+    /* ... decode + buf_push(c) ... */
+}</code></pre>
+
+  <p class="reveal">Between keypresses, bob_os does zero work related to the keyboard — no loop, no register reads, nothing. The CPU could be running the shell, another process, or idling at a <code>HLT</code> instruction. The instant a key goes down, the PS/2 controller asserts IRQ1, the 8259A PIC delivers CPU vector 33, the ISR stub saves registers, and <code>keyboard_irq_handler()</code> runs — all without any code anywhere having asked "is a key ready?" first.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What This Buys You</div>
+    Two things simultaneously: the CPU is free to do genuinely useful work between events (no wasted spinning), and reaction time is essentially the hardware's own signaling latency, not "however often you happened to check." For an event like a keypress — rare, unpredictable, latency-sensitive — that's a clear win on both axes at once.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Side note —</b> "interrupt-driven" doesn't mean interrupts are free. Taking one still costs real cycles: the CPU must finish or abort its current instruction, push a trap frame, jump through the IDT, run the ISR stub, execute the handler, send an EOI back to the PIC, and return. For something as rare as a keypress that overhead is trivial next to the alternative (constant polling). As you'll see in section 05, that overhead stops being trivial once events start arriving by the million per second.
+  </div>
+</div>
+</section>
+
+<!-- SIDE BY SIDE CANVAS -->
+<section id="sidebyside">
+<div class="container">
+  <div class="section-num">03 — Watch Them Both Run</div>
+  <h2>The Same Ten Seconds, <span class="accent">Two Ways</span></h2>
+
+  <p class="reveal">Below is one simulated stretch of CPU time in which a device becomes ready exactly once, partway through. Run each scenario and watch what the CPU is doing right up until that moment — and how differently each one notices.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="ioLabel">▶ Choose a scenario</div>
+    <canvas id="ioCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runIO('poll')">▶ Polling loop</button>
+    <button class="ctrl-btn cyan" onclick="runIO('irq')">▶ Interrupt-driven</button>
+    <button class="ctrl-btn gold" onclick="resetIO()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice the polling run never stops moving — it's <em>always</em> spending CPU, whether or not there's anything to report. The interrupt-driven run sits idle (or, in a real kernel, runs something else) right up until the single moment it's needed, then reacts immediately. Same event, same eventual outcome, wildly different use of everything in between.</p>
+</div>
+</section>
+
+<!-- COSTS TABLE -->
+<section id="costs">
+<div class="container">
+  <div class="section-num">04 — Putting Numbers to the Feeling</div>
+  <h2>The <span class="accent">Real</span> Cost Comparison</h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Dimension</th><th class="hl">Polling</th><th class="hl">Interrupt-Driven</th></tr></thead>
+      <tbody>
+        <tr><td>CPU spent while waiting</td><td class="neg">100% of the wait, spinning</td><td class="pos">~0% — free for other work or HLT</td></tr>
+        <tr><td>Reaction latency</td><td class="neg">Bounded by how often you check</td><td class="pos">Bounded by hardware signaling delay only</td></tr>
+        <tr><td>Code complexity</td><td class="pos">Trivial — one while loop</td><td class="neg">IDT entry, ISR stub, EOI, ring buffer for handoff</td></tr>
+        <tr><td>Per-event fixed overhead</td><td class="pos">None beyond the register read itself</td><td class="neg">Trap frame push, IDT dispatch, EOI, return-from-interrupt</td></tr>
+        <tr><td>Behaviour under very high event rates</td><td class="pos">Scales — one loop handles any rate</td><td class="neg">Can be swamped — one full trap per event, every event</td></tr>
+        <tr><td>Best fit</td><td class="hl">Rare polling windows, or extremely high, bursty rates (see §05)</td><td class="hl">Rare, unpredictable, latency-sensitive events</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Actual Trade, Stated Precisely</div>
+    Polling trades CPU time for simplicity and a hard ceiling on worst-case latency (you're never <em>surprised</em> by an interrupt arriving mid-critical-section). Interrupts trade a small, fixed per-event overhead for near-zero idle cost and near-instant reaction. Neither is strictly better — which one wins depends entirely on how <em>often</em> the event happens and how <em>predictable</em> that timing is, which is exactly what section 05 pulls apart.
+  </div>
+</div>
+</section>
+
+<!-- WHEN POLLING WINS -->
+<section id="pollingwins">
+<div class="container">
+  <div class="section-num">05 — The Twist</div>
+  <h2>Why Polling Still <span class="accent">Wins</span> Sometimes</h2>
+
+  <p class="reveal">Everything above makes interrupts sound strictly better for anything that isn't rare. That's true for a keypress arriving a few times a second. It stops being true once the event rate climbs into the hundreds of thousands or millions per second — which is exactly where modern storage and networking hardware live.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>💥 NVMe SSDs</h4>
+      A single modern NVMe drive can complete well over a million I/O operations per second. Taking one full hardware interrupt — trap frame, IDT dispatch, ISR, EOI, return — for <em>every single completion</em> at that rate means the interrupt-handling machinery itself becomes the bottleneck, not the storage device or the software above it.
+    </div>
+    <div class="compare-card bad">
+      <h4>💥 10Gbps+ Networking</h4>
+      At line rate, small packets can arrive faster than one every microsecond. An interrupt per packet at that pace leaves almost no CPU time for anything except entering and leaving interrupt handlers — a phenomenon with an actual name, <strong>receive livelock</strong>, where a machine can be pegged at 100% CPU and yet forward zero packets, because it never escapes the interrupt storm long enough to do real work.
+    </div>
+  </div>
+
+  <div class="formula red reveal">
+    <span class="label">The crossover, in one line</span>
+    Interrupts win when events are rare relative to their own handling cost.
+    <span class="sub">Once events arrive faster than you can afford to fully context-switch into and out of a handler for each one, the fixed per-interrupt overhead — not the actual work — becomes the bottleneck.</span>
+  </div>
+
+  <p class="reveal">This is exactly bob_os's ATA disk driver's situation in miniature: on a real disk, sector completion is slow enough (milliseconds) that an interrupt-driven design would be the better choice, and full OS-grade ATA/AHCI drivers do use interrupts. bob_os's teaching version polls instead, purely because a synchronous spin loop is far simpler to read and reason about at this stage — a deliberate simplicity trade-off, not evidence that polling is always fine.</p>
+</div>
+</section>
+
+<!-- HYBRID -->
+<section id="hybrid">
+<div class="container">
+  <div class="section-num">06 — Best of Both</div>
+  <h2>Hybrid Approaches: <span class="accent">Poll During Bursts</span>, Interrupt When Idle</h2>
+
+  <p class="reveal">Production kernels don't pick one strategy and stick with it forever — they switch dynamically based on load. The general pattern, used under names like <strong>NAPI</strong> (New API, Linux's networking interrupt-mitigation framework) and <strong>interrupt coalescing</strong> (common in NIC and NVMe hardware), looks like this:</p>
+
+  <ol class="step-list cyan reveal">
+    <li><div class="step-body"><strong>Start interrupt-driven, as usual</strong>While traffic is light, a single interrupt per event is cheap relative to how rarely it fires — exactly the regime where interrupts win outright.</div></li>
+    <li><div class="step-body"><strong>The first interrupt of a burst disables further interrupts for that device</strong>Instead of servicing just that one event and re-arming, the handler masks the device's interrupt line and switches the driver into polling mode.</div></li>
+    <li><div class="step-body"><strong>Drain everything available in a tight poll loop</strong>While the burst lasts, the driver repeatedly checks the device's ready queue directly — no per-packet interrupt overhead, because it isn't taking interrupts at all right now. This is precisely the "asking" model from section 01, deliberately chosen because the event rate has made "being told" per-event too expensive.</div></li>
+    <li><div class="step-body"><strong>Once the queue drains and stays empty, re-arm the interrupt</strong>When there's genuinely nothing left to process, the driver flips back to interrupt-driven mode and the CPU is freed up again — back to section 02's regime, because now events are rare again.</div></li>
+  </ol>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">Low</div><div class="lbl">Event Rate → Pure Interrupts</div></div>
+    <div class="stat-card"><div class="val">High</div><div class="lbl">Event Rate → Pure Polling</div></div>
+    <div class="stat-card"><div class="val">Bursty</div><div class="lbl">Traffic → NAPI-Style Hybrid</div></div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Interrupt Coalescing — A Simpler Cousin</div>
+    NIC and NVMe hardware often expose a related, hardware-level trick: instead of firing an interrupt for every single completed event, the device batches several completions and fires <em>one</em> interrupt covering all of them, either after a timer expires or after N events accumulate — whichever comes first. It's the same underlying insight as NAPI (amortize the fixed per-interrupt cost across many events) implemented in silicon instead of in the driver's control flow.
+  </div>
+
+  <p class="reveal">The lesson underneath both techniques is the same one this whole page has been circling: polling and interrupts aren't rival philosophies to pick once and defend forever — they're two tools with opposite cost curves, and the best drivers switch between them based on what the hardware is actually doing right now.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Polling</div><div class="glossary-def">Repeatedly reading a hardware status register in a loop until it reports readiness — simple, CPU-hungry while waiting, latency bounded by check frequency.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt-Driven I/O</div><div class="glossary-def">Registering a handler once and letting the hardware itself signal the CPU via an IRQ line when it has something to report — near-zero idle cost, near-instant reaction.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Busy-Wait / Spin Loop</div><div class="glossary-def">A loop that does nothing but repeatedly test a condition — bob_os's ata_wait_bsy() and ata_wait_drq() are real examples.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Status Register</div><div class="glossary-def">A hardware register a driver reads to check device state — e.g. ATA's 0x1F7, whose BSY/DRQ/ERR bits report drive readiness.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IRQ (Interrupt Request)</div><div class="glossary-def">A hardware line a device asserts to force the CPU into an interrupt handler, independent of whatever the CPU was doing — see the IDT/interrupts lesson for the full mechanism.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Receive Livelock</div><div class="glossary-def">A pathological state where a system is 100% busy handling interrupts yet accomplishes no forward progress, because event arrival outpaces the CPU's ability to fully service each one.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt Coalescing</div><div class="glossary-def">A hardware-level optimization where a device batches multiple completions into a single interrupt, amortizing the fixed per-interrupt cost across many events.</div></div>
+    <div class="glossary-card"><div class="glossary-term">NAPI</div><div class="glossary-def">Linux's New API networking model: interrupt-driven under light load, switching to a polling drain loop during bursts, then re-arming interrupts once the queue empties.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt Overhead</div><div class="glossary-def">The fixed cost of taking any interrupt — trap frame save, IDT dispatch, ISR execution, EOI, return — regardless of how much real work the event required.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Crossover Point</div><div class="glossary-def">The event rate at which per-interrupt fixed overhead starts to dominate total cost, making a polling or hybrid strategy cheaper than pure interrupts.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Polling vs Interrupt-Driven I/O &middot; Companion lesson for bob_os module 27_drivers</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Ask, or be told — the right answer depends on how often you'd have to ask.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── POLLING VS INTERRUPT TIMELINE CANVAS ────────────────────────────────────
+let ioAnimId=null;
+
+function drawIOScene(progress,mode,readyAt,spinPhase){
+  const canvas=document.getElementById('ioCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const laneY=H*0.18, laneH=90, laneW=W*0.86, laneX=W*0.07;
+  ctx.strokeStyle=C.border;ctx.lineWidth=1;ctx.strokeRect(laneX,laneY,laneW,laneH);
+  ctx.fillStyle=C.muted;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(mode==='poll'?'CPU TIMELINE — polling loop':'CPU TIMELINE — interrupt-driven',laneX,laneY-10);
+
+  // device-ready marker
+  const readyX=laneX+laneW*readyAt;
+  ctx.strokeStyle=C.gold;ctx.setLineDash([4,3]);ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(readyX,laneY-4);ctx.lineTo(readyX,laneY+laneH+4);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('device becomes ready',readyX,laneY+laneH+20);
+
+  // progress cursor
+  const curX=laneX+laneW*progress;
+
+  if(mode==='poll'){
+    // fill the whole lane with tiny check ticks up to progress -- constant activity
+    const tickSpace=10;
+    ctx.strokeStyle=C.red;ctx.lineWidth=1.5;
+    for(let x=laneX+4;x<curX;x+=tickSpace){
+      const h=8+6*Math.abs(Math.sin((x+spinPhase)*0.4));
+      ctx.beginPath();ctx.moveTo(x,laneY+laneH/2+h/2);ctx.lineTo(x,laneY+laneH/2-h/2);ctx.stroke();
+    }
+    ctx.fillStyle=C.red;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('constant register reads — CPU never idle',laneX+laneW/2,laneY+laneH+40);
+    if(progress>=readyAt){
+      ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';
+      ctx.fillText('✓ next poll after this point notices immediately',laneX+laneW/2,laneY+laneH+56>H-4?H-4:laneY+laneH+56);
+    }
+  } else {
+    // flat idle line until readyAt, then a spike
+    ctx.strokeStyle=C.cyan;ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(laneX+4,laneY+laneH/2);
+    const upto=Math.min(curX,readyX);
+    ctx.lineTo(upto,laneY+laneH/2);
+    ctx.stroke();
+    ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText(progress<readyAt?'CPU idle / running other work — zero I/O overhead':'', laneX+laneW/2, laneY+laneH+40);
+    if(progress>=readyAt){
+      // interrupt spike
+      const spikeW=18;
+      ctx.strokeStyle=C.orange;ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(readyX,laneY+laneH/2);
+      ctx.lineTo(readyX+spikeW*0.3,laneY+8);
+      ctx.lineTo(readyX+spikeW*0.6,laneY+laneH-8);
+      ctx.lineTo(readyX+spikeW,laneY+laneH/2);
+      ctx.lineTo(curX,laneY+laneH/2);
+      ctx.stroke();
+      ctx.fillStyle=C.orange;ctx.font='bold 10px Source Code Pro,monospace';
+      ctx.fillText('⚡ IRQ fires — handler runs once',readyX,laneY+laneH+40);
+      if(progress>readyAt+0.02){
+        ctx.fillStyle=C.green;ctx.font='bold 11px Source Code Pro,monospace';
+        ctx.fillText('✓ reacted the instant it happened',laneX+laneW/2,laneY+laneH+56>H-4?H-4:laneY+laneH+56);
+      }
+    }
+  }
+
+  // cursor
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.beginPath();
+  ctx.moveTo(curX,laneY-2);ctx.lineTo(curX,laneY+laneH+2);ctx.stroke();
+}
+
+function runIO(mode){
+  cancelAnimationFrame(ioAnimId);
+  const readyAt=0.55;
+  const duration=2600;
+  let start=performance.now();
+  document.getElementById('ioLabel').textContent = mode==='poll'
+    ? '▶ Polling: the CPU checks the status register nonstop, whether or not there is anything to find'
+    : '▶ Interrupt-driven: the CPU is free until the device itself signals readiness';
+  function step(now){
+    const t=Math.min(1,(now-start)/duration);
+    drawIOScene(t,mode,readyAt,(now-start)*0.05);
+    if(t<1){ ioAnimId=requestAnimationFrame(step); }
+    else {
+      document.getElementById('ioLabel').textContent='▶ Done — try the other scenario, or reset';
+    }
+  }
+  ioAnimId=requestAnimationFrame(step);
+}
+function resetIO(){
+  cancelAnimationFrame(ioAnimId);
+  document.getElementById('ioLabel').textContent='▶ Choose a scenario';
+  drawIOScene(0,'poll',0.55,0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetIO(); });
+window.addEventListener('resize',()=>{ resetIO(); });
+</script>
+</body>
+</html>

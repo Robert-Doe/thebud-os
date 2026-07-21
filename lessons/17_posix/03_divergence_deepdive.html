@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Where Linux, BSD &amp; macOS Diverge Despite All Claiming POSIX Compliance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.gd{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.pur{color:var(--purple);font-weight:600}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+/* three-way divergence grid */
+.tri-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin:1.8rem 0;}
+@media(max-width:760px){.tri-grid{grid-template-columns:1fr}}
+.tri-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;border-top:3px solid var(--border);}
+.tri-card.linux{border-top-color:var(--gold)}
+.tri-card.bsd{border-top-color:var(--cyan)}
+.tri-card.macos{border-top-color:var(--purple)}
+.tri-card h4{font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.6rem;}
+.tri-card.linux h4{color:var(--gold)} .tri-card.bsd h4{color:var(--cyan)} .tri-card.macos h4{color:var(--purple)}
+.tri-card p{font-size:.88rem;color:var(--muted);margin-bottom:0;}
+.tri-card code{color:var(--text)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#gaps" title="Gaps On Purpose"></a>
+  <a class="toc-dot" href="#internals" title="Scheduler & Filesystem Divergence"></a>
+  <a class="toc-dot" href="#iomux" title="epoll vs kqueue vs select"></a>
+  <a class="toc-dot" href="#demo" title="Same Task, Three Kernels"></a>
+  <a class="toc-dot" href="#xnu" title="macOS's Mach Heritage"></a>
+  <a class="toc-dot" href="#userland" title="ps, ls & Userland Drift"></a>
+  <a class="toc-dot" href="#kernelwars" title="Kernel Design Wars"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · POSIX · Kernel Architecture · Divergence</div>
+    <h1>Same Contract,<br><span>Different Kitchens</span></h1>
+    <p class="hero-sub">Linux, the BSDs, and macOS can all legitimately claim POSIX compliance — and <code>strace</code> a real program on each one and you'll see genuinely different things happening. That's not a bug in the standard. POSIX was written to leave enormous, deliberate room underneath it, and each of these kernels filled that room in its own way, with its own architecture, its own history, and its own non-standard extensions.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Kernels, One POSIX Face</div></div>
+      <div class="hero-stat"><div class="num">epoll()</div><div class="lbl">Linux-Only I/O Multiplexing Extension</div></div>
+      <div class="hero-stat"><div class="num">kqueue()</div><div class="lbl">BSD/macOS-Only Event Notification Extension</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Kernel Architectures POSIX Mandates</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- GAPS ON PURPOSE -->
+<section id="gaps">
+<div class="container">
+  <div class="section-num">00 — Setting Up the Puzzle</div>
+  <h2>POSIX Leaves Gaps <span class="accent">On Purpose</span></h2>
+
+  <p class="reveal">The first lesson in this module made the case that POSIX is a contract, not an implementation — it standardizes behavior, not mechanism. This lesson is about the direct consequence of that design choice: POSIX explicitly, deliberately, leaves huge categories of behavior <strong>unspecified</strong> or <strong>implementation-defined</strong>. Not as an oversight — as the entire point. A standard that pinned down everything wouldn't leave room for a monolithic kernel, a hybrid kernel, and radically different filesystem and scheduler designs to all still qualify as conformant.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The pattern this lesson is about</span>
+    Same POSIX call. Same documented return value. Completely different strace output underneath.
+    <span class="sub">Because POSIX only ever graded the outside — see the explainer lesson for why.</span>
+  </div>
+
+  <p class="reveal">Three big categories of legitimate divergence exist between fully POSIX-conformant systems:</p>
+
+  <ul class="reveal">
+    <li><strong>Unspecified internal mechanism</strong> — the exact scheduling algorithm, the exact filesystem's on-disk layout and performance characteristics. POSIX defines the observable contract of <code>read()</code>/<code>write()</code>, never how fast or in what internal order a filesystem actually satisfies it.</li>
+    <li><strong>Non-standard extensions</strong> — a kernel is completely free to expose extra, powerful functions beyond the POSIX baseline, as long as the required POSIX functions keep behaving correctly alongside them. This is where <code>epoll()</code> and <code>kqueue()</code> come from.</li>
+    <li><strong>Userland tooling conventions</strong> — POSIX specifies a required baseline behavior for utilities like <code>ps</code> and <code>ls</code>, but says nothing about the extra flags, output formatting, or convenience options vendors bolt on top.</li>
+  </ul>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">2</div><div class="lbl">POSIX-mandated I/O multiplexing calls (poll, select)</div></div>
+    <div class="stat-card"><div class="val">2+</div><div class="lbl">Non-standard high-performance alternatives (epoll, kqueue)</div></div>
+    <div class="stat-card"><div class="val">3</div><div class="lbl">Distinct scheduler implementations behind identical POSIX scheduling classes</div></div>
+    <div class="stat-card"><div class="val">0</div><div class="lbl">Loss of POSIX conformance from any of the above</div></div>
+  </div>
+
+  <p class="reveal">Keep that last stat in mind through the rest of this lesson — it's the thing every case study below comes back to prove from a different angle.</p>
+</div>
+</section>
+
+<!-- SCHEDULER & FILESYSTEM DIVERGENCE -->
+<section id="internals">
+<div class="container">
+  <div class="section-num">01 — Case Study #0</div>
+  <h2>Same Scheduling Classes, <span class="accent">Different Schedulers</span></h2>
+
+  <p class="reveal">Before getting to the flashier non-standard extensions, it's worth grounding the "unspecified internal mechanism" category in something POSIX <em>does</em> touch, but only loosely: real-time scheduling classes. POSIX.1b defines a small set of scheduling policy names a program can request — <code>SCHED_FIFO</code> (strict priority, run-to-completion), <code>SCHED_RR</code> (priority with round-robin time-slicing), and <code>SCHED_OTHER</code> (whatever the system's normal, non-real-time default is). Every conformant system must recognize these names and honor their broad behavioral contract. None of them specify an actual algorithm for <code>SCHED_OTHER</code> — the default policy nearly every ordinary process actually runs under.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>System</th><th>Default (<code>SCHED_OTHER</code>) Scheduler</th><th>Core Idea</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Linux</td><td class="gold">CFS (Completely Fair Scheduler), replaced by EEVDF in newer kernels</td><td>Models "fair" CPU share using a virtual-runtime clock per task, red-black tree of runnable tasks</td></tr>
+        <tr><td class="hl">FreeBSD</td><td>ULE scheduler</td><td>Per-CPU run queues with interactivity scoring, designed for SMP scalability</td></tr>
+        <tr><td class="hl">macOS (XNU)</td><td>Mach-derived multilevel feedback queue</td><td>Priority bands adjusted dynamically based on recent CPU usage and I/O behavior, plus QoS-class hints from the app layer</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">A program that just calls <code>fork()</code> and lets the default scheduler handle things is fully portable — POSIX guarantees it gets <em>some</em> reasonable, fair-ish share of the CPU on any conformant system. What it can't portably assume is <em>which order</em> two equal-priority processes run in from moment to moment, or exactly how quickly one starved process gets its next turn — that timing behavior is a genuinely different, independently-engineered algorithm on each of the three systems above.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📜 What's Actually Portable</h4>
+      Requesting <code>SCHED_FIFO</code> or <code>SCHED_RR</code> by name, setting a numeric priority within the POSIX-defined range, calling <code>sched_yield()</code> — all guaranteed to exist and behave per spec on any conformant system.
+    </div>
+    <div class="compare-card bad">
+      <h4>🎲 What Was Never Portable</h4>
+      Assuming a specific latency before a starved process runs, assuming two equal-priority processes alternate in strict turns, or tuning behavior around one scheduler's specific internal heuristics — none of that survives a move to a different conformant kernel.
+    </div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Filesystem Version of the Same Story</div>
+    Identical pattern, different subsystem: POSIX guarantees <code>write()</code> followed by <code>read()</code> at the same offset returns what you wrote, and specifies rename's atomicity guarantees — but says nothing about on-disk layout, journaling strategy, or default case sensitivity. Linux's ext4/btrfs, a BSD's UFS/ZFS, and macOS's APFS are three separately engineered filesystems, with APFS notably shipping case-<em>insensitive</em> by default on new Macs — behavior a portable POSIX program should never assume, and a genuinely common source of real bugs when Linux-authored code gets ported carelessly.
+  </div>
+
+  <p class="reveal">This is also why benchmarking "filesystem speed" across operating systems is a notoriously misleading exercise: you're never comparing POSIX against POSIX, you're comparing one specific on-disk data structure and caching strategy against another, underneath an identical, unhelpful-for-this-purpose <code>read()</code>/<code>write()</code> contract. POSIX conformance tells you the two filesystems agree on <em>correctness</em>; it tells you nothing at all about which one is faster for a given workload.</p>
+</div>
+</section>
+
+<!-- EPOLL VS KQUEUE VS SELECT -->
+<section id="iomux">
+<div class="container">
+  <div class="section-num">02 — Case Study #1</div>
+  <h2><code>epoll()</code> vs <code>kqueue()</code> vs <span class="accent">poll()</span>/<span class="accent">select()</span></h2>
+
+  <p class="reveal">POSIX standardizes exactly two ways to wait on multiple file descriptors at once: <code>select()</code> and <code>poll()</code>. Both work by handing the kernel a list (or bitmask, for <code>select()</code>) of file descriptors every single time you call them, and the kernel scans the whole list and tells you which ones are ready. That's fully portable, fully POSIX, and — at high descriptor counts, the kind a busy network server sees — genuinely slow, because the cost of each call grows with the number of descriptors you're watching, even if only one of ten thousand actually became ready.</p>
+
+  <p class="reveal">Real-world high-performance servers don't use plain <code>poll()</code>/<code>select()</code> for exactly that reason — and this is where the divergence becomes concrete and <code>strace</code>-visible. Linux added a completely non-POSIX extension, <code>epoll()</code>, that lets the kernel maintain the watch list internally and hand back <em>only</em> the descriptors that became ready, in roughly constant time regardless of how many you're watching. The BSDs (and macOS, inheriting from BSD) never adopted <code>epoll()</code> — they built their own answer years earlier, <code>kqueue()</code>, which solves the same performance problem with a different API shape and broader scope (it can watch file descriptors, but also processes, signals, and filesystem changes through the same mechanism).</p>
+
+  <div class="tri-grid reveal">
+    <div class="tri-card linux">
+      <h4>🐧 Linux</h4>
+      <p><code>epoll_create()</code>, <code>epoll_ctl()</code>, <code>epoll_wait()</code> — a Linux-only extension, not in POSIX at all. This is what nginx, Node.js's libuv, and Redis actually use on Linux under the hood.</p>
+    </div>
+    <div class="tri-card bsd">
+      <h4>👹 BSD</h4>
+      <p><code>kqueue()</code> + <code>kevent()</code> — originated on FreeBSD, a different non-POSIX extension solving the same class of problem with a single generalized event-queue API.</p>
+    </div>
+    <div class="tri-card macos">
+      <h4>🍎 macOS</h4>
+      <p>Also <code>kqueue()</code> — inherited straight from its BSD ancestry (more on this in the next section), plus Apple's own higher-level wrapper, Grand Central Dispatch, built on top of it.</p>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Is Exactly the Kind of Divergence POSIX Allows</div>
+    All three systems still implement <code>poll()</code> and <code>select()</code> correctly, per the standard — a program using only those calls is fully portable across all three. But the moment you <code>strace</code> or <code>dtrace</code> a real production server on each platform, you'll see it reaching for a completely different, completely non-standard syscall to do the actual heavy lifting, because POSIX never claimed to be the <em>only</em> interface a conformant kernel is allowed to expose — only the <em>minimum</em> one.
+  </div>
+
+  <p class="reveal">Real event-loop libraries handle this divergence exactly the way you'd expect: compile-time platform detection, picking whichever fast, non-portable extension is actually available, with a POSIX-only fallback for anything else.</p>
+
+  <pre class="reveal"><span class="tag">simplified event-loop backend selection</span><code><span class="kw">#if</span> defined(__linux__)
+    <span class="cm">/* Linux: use the non-POSIX, high-performance extension */</span>
+    backend = <span class="str">"epoll"</span>;
+<span class="kw">#elif</span> defined(__FreeBSD__) || defined(__APPLE__)
+    <span class="cm">/* BSD family (including macOS, via its BSD heritage): kqueue */</span>
+    backend = <span class="str">"kqueue"</span>;
+<span class="kw">#else</span>
+    <span class="cm">/* Unknown or minimal POSIX target: fall back to the guaranteed baseline */</span>
+    backend = <span class="str">"poll"</span>;
+<span class="kw">#endif</span></code></pre>
+
+  <p class="reveal">This is precisely the pattern behind libuv (Node.js's event-loop library), and it's the same shape you'd write if you ever added a fast I/O-multiplexing path to bob_os's own syscall layer someday: keep a POSIX-guaranteed fallback that always works, and opportunistically reach for whatever faster, platform-specific mechanism is actually available underneath.</p>
+</div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">03 — See It Happen</div>
+  <h2>Same Task, <span class="accent">Three Strace Logs</span></h2>
+
+  <p class="reveal">Below, a network server needs to know the instant any of thousands of open sockets has data ready to read — the exact same high-level task, on three different, fully POSIX-conformant kernels. Watch which real-world syscall each one actually reaches for.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="divLabel">▶ Pick a kernel to watch handle the same event-wait task</div>
+    <canvas id="divCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runDiv('linux')">▶ Watch it on Linux</button>
+    <button class="ctrl-btn cyan" onclick="runDiv('bsd')">▶ Watch it on FreeBSD</button>
+    <button class="ctrl-btn" onclick="runDiv('macos')">▶ Watch it on macOS</button>
+    <button class="ctrl-btn red" onclick="resetDiv()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What You Just Watched</div>
+    Three different real syscalls chosen for the exact same job — none of them POSIX-mandated, all of them coexisting happily with the POSIX-required <code>poll()</code>/<code>select()</code> that still work identically on all three. This is what "implementation-defined" and "non-standard extension" actually look like in a running system, not just in the standard's fine print.
+  </div>
+</div>
+</section>
+
+<!-- XNU -->
+<section id="xnu">
+<div class="container">
+  <div class="section-num">04 — Case Study #2</div>
+  <h2>macOS's <span class="accent">Mach/XNU</span> Heritage Showing Through</h2>
+
+  <p class="reveal">macOS's kernel, XNU ("X is Not Unix"), is architecturally the odd one out of the three — and it shows in exactly the places POSIX left open. XNU is a <strong>hybrid kernel</strong>: a Mach microkernel core, originally developed at Carnegie Mellon, handling low-level primitives like virtual memory, scheduling, and inter-process communication via <strong>Mach ports</strong> and <strong>Mach messages</strong> — wrapped in a BSD-derived layer that provides the POSIX-facing process model, the standard filesystem namespace, and the traditional Unix syscalls, plus IOKit for device drivers.</p>
+
+  <p class="reveal">From directly inside the POSIX contract, this hybrid heritage is invisible — <code>fork()</code>, <code>open()</code>, and <code>read()</code> behave exactly as specified. But step even slightly outside pure POSIX territory and the Mach layer shows through immediately: macOS's actual native IPC mechanism isn't POSIX pipes or System V message queues, it's raw Mach messages passed between Mach ports, and a huge amount of macOS's own internal plumbing (including parts of launchd, the system's init process, and XPC, Apple's own higher-level IPC framework) is built directly on top of that non-POSIX substrate rather than on top of the BSD-compatibility layer at all.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🔌 What POSIX Sees</h4>
+      A conformant Unix-like process model, standard file I/O, standard signals — XNU's BSD layer faithfully reproduces all of it, which is exactly why so much ordinary Unix software (including huge amounts of Linux server software) compiles and runs on macOS with little or no change.
+    </div>
+    <div class="compare-card bad">
+      <h4>👁️ What's Underneath, Invisible to POSIX</h4>
+      A Mach microkernel doing the actual scheduling and memory management, Mach ports as the real native IPC primitive, and a kernel architecture that shares almost no code lineage with Linux's monolithic design or even with the rest of the BSD family it borrows its userland layer from.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Worth noticing:</b> this is the same lesson as this module's first explainer, just running in reverse. There, the point was that wildly different kernels can present an identical POSIX face. Here, the point is that the parts of the kernel POSIX <em>doesn't</em> cover are exactly where that underlying difference becomes visible again.
+  </div>
+
+  <h3>A short, concrete tour of where XNU's Mach roots surface</h3>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>launchd, macOS's init process</strong>Responsible for starting and supervising system and user services — talks to many of them over Mach IPC and XPC rather than exclusively over POSIX-standard mechanisms like signals and pipes.</div></li>
+    <li><div class="step-body"><strong>XPC (Apple's IPC framework)</strong>The mechanism most modern macOS apps and system daemons actually use to communicate with each other and with system services — built on top of Mach messaging, not POSIX message queues.</div></li>
+    <li><div class="step-body"><strong>Mach exception handling</strong>Crash reporting and debugging tools on macOS (like the built-in crash reporter, or debuggers such as lldb) hook into Mach-level exception ports — a lower-level, non-POSIX mechanism sitting underneath the POSIX signal delivery a program itself sees.</div></li>
+    <li><div class="step-body"><strong>Mach virtual memory calls</strong>Beneath the POSIX-standard <code>mmap()</code> a program calls, XNU's actual memory management is expressed in terms of Mach VM primitives — <code>mmap()</code> is a compatibility-layer translation on top, not the native mechanism itself.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- USERLAND -->
+<section id="userland">
+<div class="container">
+  <div class="section-num">05 — Case Study #3</div>
+  <h2><code>ps</code>, <code>ls</code> &amp; the <span class="accent">Userland Drift</span></h2>
+
+  <p class="reveal">POSIX doesn't just standardize library functions — it also specifies a required baseline behavior for a set of command-line utilities, including <code>ps</code> and <code>ls</code>. And exactly like the syscall layer, the standard specifies required core behavior while leaving flags, output formatting, and convenience extensions to each vendor. Decades of separate evolution on top of that same open door produced genuinely different day-to-day conventions.</p>
+
+  <p class="reveal">The classic, still-relevant example: BSD-style <code>ps</code> historically accepted options without a leading dash (<code>ps aux</code>), while System V/GNU-style <code>ps</code> expected the traditional dashed form (<code>ps -ef</code>). GNU's <code>ps</code> (what ships on virtually every Linux distribution) has since learned to accept both styles for compatibility — but macOS and the BSDs still run their original BSD-derived <code>ps</code>, which does not understand every GNU-only long-option extension, and vice versa. Similarly, GNU <code>ls</code> supports a large set of GNU-specific long options (like <code>--color</code>, or <code>--group-directories-first</code>) that BSD/macOS <code>ls</code> simply doesn't recognize, because they were never part of the POSIX-required baseline either implementation is obligated to share.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Divergence Point</th><th class="pur">Linux (GNU userland)</th><th>BSD</th><th>macOS</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">I/O readiness multiplexing extension</td><td class="gold">epoll()</td><td>kqueue()</td><td>kqueue()</td></tr>
+        <tr><td class="hl">Kernel architecture</td><td class="gold">Monolithic</td><td>Monolithic</td><td>Hybrid (Mach + BSD)</td></tr>
+        <tr><td class="hl">Native low-level IPC primitive</td><td class="gold">Pipes, sockets, signals</td><td>Pipes, sockets, signals</td><td>Mach ports/messages (+ POSIX layer)</td></tr>
+        <tr><td class="hl"><code>ps</code> flag convention</td><td class="gold">GNU-style, accepts both dashed &amp; BSD-style</td><td>BSD-style (no dash) native</td><td>BSD-style (no dash) native</td></tr>
+        <tr><td class="hl"><code>ls</code> long options (<code>--color</code>, etc.)</td><td class="gold">GNU extensions, widely supported</td><td>Not recognized (BSD getopt-style short flags)</td><td>Not recognized (BSD-derived <code>ls</code>)</td></tr>
+        <tr><td class="hl">Default filesystem case sensitivity</td><td class="gold">Case-sensitive (ext4/btrfs default)</td><td>Case-sensitive (UFS/ZFS default)</td><td>Case-insensitive by default (APFS)</td></tr>
+        <tr><td class="hl">Extended attributes / ACL syscalls</td><td class="gold">xattr syscalls, distinct API</td><td>extattr syscalls, distinct API</td><td>xattr-compatible API, distinct semantics</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 The Pattern Across All Three Case Studies</div>
+    Every single row above is a place where POSIX either specified nothing, or specified only a required minimum and explicitly left extension room. None of it makes any of these three systems less POSIX-conformant — a program written strictly to the POSIX baseline runs correctly on all three. The divergence lives entirely in the space POSIX always intended to leave open.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>A practical consequence:</b> shell scripts are the most common place this divergence actually bites people. A script that pipes <code>ps aux</code> into <code>awk</code> assuming GNU-specific column behavior, or calls <code>ls --color</code> for output formatting, will often fail outright or silently misbehave the moment it's run on a BSD or macOS box — not because the script did anything POSIX-illegal, just because it quietly depended on a vendor extension it never checked for. Writing genuinely portable shell scripts means deliberately sticking to the POSIX.2 baseline, the same discipline as writing portable C against the POSIX.1 baseline.
+  </div>
+</div>
+</section>
+
+<!-- KERNEL DESIGN WARS TIE-IN -->
+<section id="kernelwars">
+<div class="container">
+  <div class="section-num">06 — Tying It Back</div>
+  <h2>POSIX Is <span class="accent">Orthogonal</span> to Kernel Architecture</h2>
+
+  <p class="reveal">This closes the loop on the kernel-design-wars territory from earlier in the series: monolithic kernels (Linux, the BSDs), microkernels, and hybrid kernels (XNU) are a completely different axis of variation from POSIX conformance, and the two axes are, genuinely, orthogonal — independent of each other. A kernel's architecture is about <em>how</em> it's built internally: how much code runs in privileged mode, how subsystems communicate, where the fault-isolation boundaries are drawn. POSIX conformance is about <em>what</em> it presents externally, at the syscall/library boundary. You can pick any point on the first axis and, separately, choose to conform to POSIX or not on the second.</p>
+
+  <div class="tri-grid reveal">
+    <div class="tri-card linux">
+      <h4>🐧 Linux — Monolithic</h4>
+      <p>Nearly the entire kernel — scheduler, VFS, network stack, most drivers — runs as one privileged program in Ring 0. Fully POSIX-conformant at the boundary, architecturally about as "everything in one address space" as it gets.</p>
+    </div>
+    <div class="tri-card bsd">
+      <h4>👹 FreeBSD — Monolithic</h4>
+      <p>Also monolithic, with its own independent codebase and design lineage from Linux — yet exposes a nearly identical POSIX face, because monolithic-vs-monolithic doesn't require shared code, only shared observable behavior.</p>
+    </div>
+    <div class="tri-card macos">
+      <h4>🍎 macOS/XNU — Hybrid</h4>
+      <p>A genuinely different architecture — a Mach microkernel core plus a BSD compatibility layer — and still fully POSIX-conformant, proving conformance has nothing to do with how many privilege-boundary crossings happen internally.</p>
+    </div>
+  </div>
+
+  <p class="reveal">Push the point further: a <em>true</em> microkernel — one where the scheduler, filesystem, and drivers all run as separate user-space servers passing messages through a minimal privileged core — could, in principle, be made just as POSIX-conformant as Linux's monolithic design, provided its designers built a translation layer that reproduces the exact same externally observable behavior for every POSIX-mandated call. Nothing about "many small isolated servers talking over message-passing" is incompatible with "looks exactly like a Unix kernel from the outside." The architecture war and the standards-compliance question were never actually the same fight.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Closing Idea</div>
+    POSIX compliance is a promise about a boundary, not a blueprint for what's on either side of it. Wildly different kernels — different privilege models, different IPC mechanisms, different scheduling and filesystem internals, different decades of independent engineering — can all present an identical POSIX face, precisely because that face was designed, from 1988 onward, to be implementable by absolutely anyone willing to reproduce the specified behavior, by whatever internal means they choose.
+  </div>
+
+  <p class="reveal">bob_os sits on this same axis, just at a much smaller scale. Its own scheduler, VFS, and process model — everything you built module by module before ever reaching <code>posix.c</code> — are entirely bob_os's own design, unrelated to Linux's CFS, FreeBSD's ULE, or XNU's Mach-derived queues. That was always a legitimate choice, not a compromise: nothing about presenting a correct <code>fork()</code>, <code>open()</code>, and <code>errno</code> contract at module 28's boundary required copying anyone else's internal scheduling or filesystem design. bob_os is, in miniature, a fourth point on the same chart as Linux, BSD, and XNU — architecturally its own thing, POSIX-shaped at the seam.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Implementation-Defined</div><div class="glossary-def">POSIX terminology for behavior each conforming system may choose freely, as long as the choice is documented by that vendor.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Unspecified Behavior</div><div class="glossary-def">Behavior POSIX places no requirement on at all — not even a documentation obligation — such as exact scheduling order among equal-priority processes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">epoll()</div><div class="glossary-def">A Linux-only, non-POSIX syscall family for scalable readiness notification across large numbers of file descriptors, used internally by most high-performance Linux servers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">kqueue()</div><div class="glossary-def">A BSD-originated, non-POSIX generalized event-notification API (also covering processes, signals, and filesystem events) adopted by all the BSDs and by macOS.</div></div>
+    <div class="glossary-card"><div class="glossary-term">XNU</div><div class="glossary-def">Apple's kernel ("X is Not Unix") — a hybrid combining a Mach microkernel core with a BSD-derived compatibility layer that provides the POSIX-facing surface.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mach Microkernel</div><div class="glossary-def">The Carnegie Mellon-originated microkernel design underlying XNU, using ports and messages as its native low-level IPC primitive instead of Unix pipes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">strace / dtrace</div><div class="glossary-def">Tools that log every syscall a running program makes — the direct, observable evidence of which non-POSIX extension a program actually uses underneath a portable-looking call.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hybrid Kernel</div><div class="glossary-def">An architecture combining a microkernel core with monolithic-style compatibility layers for performance or compatibility — XNU is the canonical mainstream example.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Single UNIX Specification</div><div class="glossary-def">The Open Group's certification standard, co-developed with POSIX, that vendors formally test conformance against to use the "UNIX" trademark.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Orthogonality (architecture vs conformance)</div><div class="glossary-def">The property that a kernel's internal design (monolithic, microkernel, hybrid) and its external POSIX conformance are independent choices — either can vary without affecting the other.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SCHED_OTHER</div><div class="glossary-def">POSIX's name for a system's default, non-real-time scheduling policy — required to exist and behave reasonably, with its actual algorithm left completely unspecified.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mach Port / Mach Message</div><div class="glossary-def">XNU's native low-level IPC primitives — a capability-protected communication endpoint and the messages passed through it, underlying much of macOS's own internal plumbing outside the POSIX-facing layer.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Where Linux, BSD &amp; macOS Diverge Despite All Claiming POSIX Compliance · Companion lesson for bob_os module 28_posix</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same face, different kitchens underneath.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── SAME TASK, THREE STRACE LOGS CANVAS ────────────────────────────────────
+const divInfo={
+  linux:{name:'Linux',color:C.gold,call:'epoll_wait(7, events, 1024, -1)',arch:'Monolithic kernel — epoll instance tracked internally in the VFS'},
+  bsd:{name:'FreeBSD',color:C.cyan,call:'kevent(kq, NULL, 0, events, 1024, NULL)',arch:'Monolithic kernel — kqueue generalized event mechanism'},
+  macos:{name:'macOS',color:C.purple,call:'kevent(kq, NULL, 0, events, 1024, NULL)',arch:'Hybrid XNU kernel — kqueue via BSD compat layer over Mach core'}
+};
+
+function drawDivScene(t,phase,target){
+  const canvas=document.getElementById('divCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const info=divInfo[target]||divInfo.linux;
+
+  // task box
+  const taskY=20, taskH=48;
+  ctx.fillStyle='rgba(255,255,255,.04)';ctx.fillRect(W*0.22,taskY,W*0.56,taskH);
+  ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=1.5;ctx.strokeRect(W*0.22,taskY,W*0.56,taskH);
+  ctx.fillStyle=C.text;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Task: wait for ANY of 1024 sockets to become readable',W*0.5,taskY+22);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('same high-level goal on all three kernels',W*0.5,taskY+38);
+
+  // strace box
+  const strY=H*0.42, strH=54;
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(W*0.1,strY,W*0.8,strH);
+  ctx.strokeStyle=info.color;ctx.lineWidth=2;ctx.strokeRect(W*0.1,strY,W*0.8,strH);
+  ctx.fillStyle=info.color;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('$ strace -e trace=network -f myserver   ['+info.name+']',W*0.13,strY+20);
+  ctx.font='11px Source Code Pro,monospace';ctx.fillStyle=C.text;
+  ctx.fillText(info.call,W*0.13,strY+40);
+
+  // kernel arch box
+  const kY=H*0.7, kH=60;
+  ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(W*0.1,kY,W*0.8,kH);
+  ctx.strokeStyle='rgba(255,255,255,.15)';ctx.strokeRect(W*0.1,kY,W*0.8,kH);
+  ctx.fillStyle=C.muted;ctx.font='10px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(info.arch,W*0.5,kY+kH/2+3);
+
+  const captions={
+    idle:'Pick a kernel above',
+    call:'Server library picks the fastest event-notification path available on '+info.name,
+    trace:'strace shows the real non-POSIX syscall actually used',
+    handled:'Kernel-specific mechanism handles the wait internally',
+    result:'✅ Same result delivered — "socket 442 is readable" — via a completely different real syscall'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+
+  let dotX=W*0.5,dotY=taskY+taskH,dotCol=info.color;
+  if(phase==='call'){dotX=W*0.5;dotY=taskY+taskH+(strY-taskY-taskH)*t;dotCol=info.color;}
+  else if(phase==='trace'){dotX=W*0.16+ (W*0.68)*Math.min(1,t+0.15);dotY=strY+40;dotCol=info.color;}
+  else if(phase==='handled'){dotX=W*0.5;dotY=strY+strH+(kY-strY-strH)*t;dotCol=info.color;}
+  else if(phase==='result'){dotX=W*0.5;dotY=kY+kH+16;dotCol=C.green;}
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+  if(phase==='result'){
+    ctx.fillStyle=C.green;ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+    ctx.fillText('✓',W*0.5,kY+kH+13);
+  }
+}
+
+function runDiv(target){
+  const phases=['call','trace','handled','result'];
+  const durations=[450,600,500,500];
+  let idx=0,start=performance.now();
+  const info=divInfo[target]||divInfo.linux;
+  document.getElementById('divLabel').textContent='▶ Tracing the same task on '+info.name;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDivScene(t,phases[idx],target);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('divLabel').textContent='▶ Done on '+info.name+' — try another kernel, same task';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDiv(){
+  document.getElementById('divLabel').textContent='▶ Pick a kernel to watch handle the same event-wait task';
+  drawDivScene(0,'idle','linux');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDiv(); });
+window.addEventListener('resize',()=>{ resetDiv(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kernel Design Wars — Monolithic vs Microkernel vs Hybrid vs Unikernel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.pur{color:var(--purple);font-weight:600}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* Bespoke component: proof-grid — badges for a formally verified property list */
+.proof-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.9rem;margin:1.8rem 0;}
+.proof-item{background:var(--card);border:1px solid var(--purple);border-radius:8px;padding:.9rem 1rem;display:flex;gap:.7rem;align-items:flex-start;}
+.proof-item .proof-check{color:var(--purple);font-family:'Source Code Pro',monospace;font-weight:700;flex-shrink:0;}
+.proof-item .proof-text{font-size:.85rem;color:var(--muted);line-height:1.5;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#monolithic" title="Monolithic"></a>
+  <a class="toc-dot" href="#microkernel" title="Microkernel"></a>
+  <a class="toc-dot" href="#hybrid" title="Hybrid"></a>
+  <a class="toc-dot" href="#unikernel" title="Unikernel"></a>
+  <a class="toc-dot" href="#tracing" title="One Read, Four Ways"></a>
+  <a class="toc-dot" href="#showdown" title="Showdown"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Kernel Design · Monolithic · Microkernel · Hybrid · Unikernel</div>
+    <h1>Kernel Design<br><span>Wars</span></h1>
+    <p class="hero-sub">You already know the wall exists — Ring 0 versus Ring 3, kernel versus user space, one guarded door called the syscall. What we skipped is that "the kernel" is not one universally agreed-upon shape. Different operating systems draw the line between trusted and untrusted in wildly different places, and that one design decision ripples into everything: how fast the OS is, how safely it survives a bad driver, and even whether it needs a user/kernel wall at all. This is the deep-dive on those decisions — with real numbers, real kernels, and one real, famous, public argument.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">30M+</div><div class="lbl">Lines in the Linux Kernel (Monolithic)</div></div>
+      <div class="hero-stat"><div class="num">~10K</div><div class="lbl">Lines of C in seL4's Verified Core</div></div>
+      <div class="hero-stat"><div class="num">1992</div><div class="lbl">The Year Tanenbaum vs Torvalds Went Public</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Address Space in a Unikernel, By Design</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Wall Was <span class="accent">Never the Whole Story</span></h2>
+  <p class="reveal">In the last module you learned the wall itself: Ring 0 is fully trusted, Ring 3 is not, and the syscall instruction is the one hardware-guarded door between them. You even got a glimpse that "the kernel" comes in different shapes — a quick mention that Linux packs almost everything into Ring 0, while something called a microkernel shrinks that privileged core down to almost nothing. That mention was one paragraph. It deserved a whole page, because the decision of <em>what goes inside the wall</em> is arguably the single most consequential architectural choice in operating system design — consequential enough that two famous computer scientists once argued about it in public, in a debate people still cite thirty years later.</p>
+  <p class="reveal">Here's the plan. We'll look at four real design philosophies — <strong>monolithic</strong>, <strong>microkernel</strong>, <strong>hybrid</strong>, and <strong>unikernel</strong> — each with a flagship real-world example, each with a concrete story about what a bug costs you and what performance you get in exchange. By the end you'll be able to look at any OS and ask, intelligently, "how much did they choose to trust?"</p>
+
+  <p class="reveal">Notice, too, that none of these four are describing <em>whether</em> a user/kernel wall exists — the wall from the last module, Ring 0 versus Ring 3, is still there in three of the four designs, enforced by the same CPU hardware either way. What changes is a much more interesting question: <strong>how much code gets invited to live on the trusted side of that wall</strong>, and — in the unikernel's case — whether the wall gets built at all.</p>
+</div>
+</section>
+
+<!-- MONOLITHIC -->
+<section id="monolithic">
+<div class="container">
+  <div class="section-num">01 — Everything, One Roof, Ring 0</div>
+  <h2>Monolithic Kernels: <span class="accent">The Big Kitchen</span></h2>
+
+  <p class="reveal">A <strong>monolithic kernel</strong> takes the most literal interpretation of "the kernel is the trusted core": it puts nearly the entire operating system — scheduler, memory manager, every filesystem, every device driver, the full network stack — inside Ring 0, compiled and linked together (or dynamically loaded as modules) into one enormous privileged program that all runs at the same trust level, in the same address space.</p>
+
+  <p class="reveal"><strong>Linux</strong> is the flagship example, and it is not a small program. The Linux kernel's source tree has grown past <strong>30 million lines of code</strong>, and — this is the part people find surprising — the overwhelming majority of that isn't the scheduler or the memory manager at all. It's <em>drivers</em>. Kernel maintainers have repeatedly pointed out that roughly two-thirds to three-quarters of the tree is device driver code, because Linux tries to support essentially every piece of hardware anyone has ever plugged into a computer. Every one of those drivers, from your Wi-Fi chip to your GPU to some obscure industrial sensor, runs at full Ring 0 privilege, in the same address space as the process scheduler.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why a Buggy Driver Can Take the Whole Machine Down</div>
+    Here's the mechanism, stated plainly: inside a monolithic kernel, there is <strong>no MMU-enforced wall</strong> between a device driver and the scheduler, the memory manager, or any other driver. They're all just functions and data structures living in one shared privileged address space. If a Wi-Fi driver has a bug — writes through a dangling pointer, corrupts a kernel data structure it was never supposed to touch, walks off the end of a buffer — there is nothing in the hardware stopping that write from landing on memory the scheduler or filesystem was relying on. The CPU's protection hardware, the same hardware that stops your browser from touching your text editor's memory, offers <em>zero</em> protection between kernel-internal components, because as far as Ring 0 is concerned, it's all one trusted thing. The result is a <strong>kernel panic</strong> — the entire OS halts, because the corruption could be anywhere and nothing can be trusted to keep running.
+  </div>
+
+  <p class="reveal">So why does Linux — a design with this exact failure mode baked in — dominate servers, phones (via Android), and most of the cloud? <strong>Performance, and specifically, the total absence of IPC overhead for internal calls.</strong> When the filesystem layer needs the disk driver, it doesn't send a message and wait for a scheduler to deliver it to another process — it just calls a function. A direct function call inside one address space costs roughly a nanosecond: no mode switch, no message copy, no context switch, no scheduler decision about who runs next. Multiply that "free" internal communication across the millions of internal calls a busy server kernel makes per second, and the savings are enormous.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The monolithic trade, in one line</span>
+    Everything is trusted, so everything talks to everything for free — until one of those trusted things is wrong.
+    <span class="sub">Speed comes from zero communication overhead between subsystems. Risk comes from exactly the same fact.</span>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>"Loadable kernel modules" are not an exception to this.</b> Linux lets you insert and remove driver code at runtime (<code>insmod</code>/<code>rmmod</code>) without rebooting or recompiling the kernel — which feels modular. But once loaded, a kernel module runs with exactly the same Ring 0 privilege and shared address space as everything else. It's dynamic loading, not isolation. A crash in a loaded module is exactly as fatal as a crash in code that was compiled in from the start.
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What the monolithic bet buys you</h4>
+      Every internal call — VFS to filesystem, filesystem to block layer, block layer to driver — is an ordinary function call the compiler can even inline. No message serialization, no scheduler round-trip, no extra mode switches beyond the single syscall that got you into the kernel in the first place. On workloads that hammer the filesystem or network stack (exactly what a server does all day), that adds up to real, measurable throughput.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ What it costs you</h4>
+      Every one of those tens of thousands of driver, filesystem, and network-protocol code paths is a candidate to bring the whole machine down. There is no "just that driver crashed" outcome — a bad write anywhere in Ring 0 can corrupt state anywhere else in Ring 0, so the kernel's only safe response to detected corruption is to halt everything (a panic) rather than risk running on data it can no longer trust.
+    </div>
+  </div>
+
+  <p class="reveal">It's worth saying the community hasn't just accepted that risk as permanent. In recent years, the Linux kernel has begun accepting <strong>Rust</strong> code for new drivers specifically because Rust's compiler enforces memory-safety rules (no dangling pointers, no unchecked buffer overruns) at compile time — an attempt to shrink the monolithic kernel's blast-radius problem from the inside, without giving up the zero-IPC performance model that makes Linux fast in the first place.</p>
+
+  <p class="reveal">Linux isn't the only member of this family, either — it's just the one that won the most ground.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Linux</span><span class="fam-count">flagship</span></div>
+      <div class="fam-desc">30M+ line tree, most of it drivers, all of it Ring 0. Powers most of the cloud, Android's core, and the majority of public web servers.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">FreeBSD / classic BSD</span><span class="fam-count">same bet</span></div>
+      <div class="fam-desc">The 4.4BSD lineage made the identical one-privileged-program design choice — and macOS's own BSD layer, fused into XNU, directly descends from it.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Windows 95/98/ME</span><span class="fam-count">cruder version</span></div>
+      <div class="fam-desc">A less rigorously engineered monolithic design where driver, and even application, crashes could take the whole system down far more easily than on NT — a major reason Microsoft retired the line for the NT kernel.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Classic Mac OS (≤9)</span><span class="fam-count">no real wall</span></div>
+      <div class="fam-desc">Pre-OS X Mac OS didn't even fully enforce Ring 0/Ring 3 separation for applications — cooperative multitasking meant one misbehaving app could freeze the whole machine, an even more extreme version of the same underlying risk.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- MICROKERNEL -->
+<section id="microkernel">
+<div class="container">
+  <div class="section-num">02 — Almost Nothing, Ring 0, Everything Else Talks Its Way In</div>
+  <h2>Microkernels: <span class="accent">The Tiny, Paranoid Core</span></h2>
+
+  <p class="reveal">A <strong>microkernel</strong> takes the opposite bet. Shrink Ring 0 down to the absolute minimum needed to make anything else possible at all: basic <strong>inter-process communication (IPC)</strong>, minimal <strong>scheduling</strong>, and minimal <strong>memory management</strong> (usually just enough to hand out and protect address spaces). Everything else you'd normally think of as "the OS" — filesystems, device drivers, and often even large parts of the network stack — moves <em>out</em> of Ring 0 entirely and runs as ordinary, unprivileged, Ring 3 <strong>user-space servers</strong>, each in its own protected address space, each talking to the others (and to applications) exclusively through message passing brokered by that tiny kernel core.</p>
+
+  <p class="reveal">The flagship example here is <strong>seL4</strong>, and its defining claim is not "small" — plenty of things are small — it's <strong>formally verified</strong>. Using the Isabelle/HOL interactive theorem prover, researchers at NICTA (now part of Australia's Data61) produced a mathematically checked proof, published in 2009, that seL4's actual C implementation matches its formal specification, and that certain classes of bugs are <em>provably absent</em> from that verified core — not "tested for and not found," but proven, the same way you'd prove a theorem in geometry.</p>
+
+  <div class="proof-grid reveal">
+    <div class="proof-item"><span class="proof-check">✓</span><span class="proof-text">No buffer overflows in the verified kernel code — proven, not merely fuzz-tested</span></div>
+    <div class="proof-item"><span class="proof-check">✓</span><span class="proof-text">No null-pointer dereferences reachable in the verified core</span></div>
+    <div class="proof-item"><span class="proof-check">✓</span><span class="proof-text">No use-after-free or dangling-pointer bugs in the proven code paths</span></div>
+    <div class="proof-item"><span class="proof-check">✓</span><span class="proof-text">No unintended arithmetic overflow in the verified implementation</span></div>
+    <div class="proof-item"><span class="proof-check">✓</span><span class="proof-text">The C implementation is proven to match the abstract functional specification</span></div>
+    <div class="proof-item"><span class="proof-check">✓</span><span class="proof-text">Enforced isolation properties (integrity/confidentiality) proven for the access-control model</span></div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why This Is a Big Deal for Safety-Critical Systems</div>
+    Ordinary software testing can only show the presence of bugs, never their absence — you can run a million test cases and a bug can still be lurking in test case 1,000,001. A machine-checked proof is a different kind of guarantee entirely: it covers <em>every possible input and every possible execution path</em>, not just the ones someone thought to try. That's exactly the guarantee that matters in avionics, medical devices, and defense systems, where "we tested it a lot" isn't good enough. seL4 was the centerpiece of DARPA's HACMS program, where a red team was given access to an seL4-secured autonomous helicopter's control systems and, notably, could not break out of the isolation the kernel enforced.
+  </div>
+
+  <p class="reveal">Here's the honest trade-off, and it's the same one that fueled a genuinely famous argument. In a microkernel, an operation that would be one function call in Linux — say, reading a file — instead requires the application to send an IPC message to a filesystem server, which might need to send its own IPC message to a disk-driver server, which does the work and sends a message back, which gets routed back to the application. Every one of those message hops is a trip through the kernel's IPC mechanism, and depending on the architecture, each hop can mean a context switch and, historically, real, measurable latency. <strong>More IPC crossings meant more context switches meant, especially on 1990s hardware, a slower system</strong> — full stop.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">📜 The Tanenbaum–Torvalds Debate, Briefly and Accurately</div>
+    In January 1992, Andrew Tanenbaum — a professor who had built the microkernel-based teaching OS Minix — posted to the Usenet group <code>comp.os.minix</code> under the subject line "LINUX is obsolete," arguing that Linus Torvalds's brand-new Linux, a monolithic design, was architecturally a step backward compared to microkernels like Minix, Mach, and Chorus, which Tanenbaum considered the clear future of OS design. Torvalds publicly disagreed, defending the pragmatic, monolithic choice as the right one for getting real performance out of real, contemporary x86 hardware, and pushing back on Tanenbaum's portability arguments as premature for a hobby project trying to actually ship. History's verdict was messier than either side predicted: monolithic Linux went on to dominate servers, cloud, and phones on raw performance and momentum — but microkernels didn't disappear, they found their footing precisely where seL4 and QNX now live: safety-critical embedded systems where provable correctness matters more than shaving nanoseconds off a syscall.
+  </div>
+
+  <p class="reveal">Modern microkernels have narrowed the historical performance gap considerably through careful IPC engineering (seL4's own IPC path is famously fast for a message-passing primitive), but the fundamental shape of the trade-off hasn't changed: every service you move out of Ring 0 for safety is a service that now costs a message crossing instead of a function call.</p>
+
+  <p class="reveal">Microkernels also quietly won a much bigger commercial fight than most people realize. <strong>QNX</strong>, a real-time microkernel with roots going back to 1982 and now owned by BlackBerry, isn't a research curiosity — it's the microkernel running infotainment, instrument clusters, and increasingly safety-critical ADAS functions in a huge share of the world's cars, with BlackBerry itself citing QNX software as embedded in hundreds of millions of vehicles. Nobody buying a car asks "monolithic or microkernel?" — but the automotive industry's own risk calculus, over decades, kept landing on the same answer Tanenbaum was arguing for in 1992: when a crash is unacceptable, contain the blast radius, even if it costs you some raw speed.</p>
+
+  <p class="reveal">seL4 didn't appear from nothing, either — it's part of the <strong>L4 microkernel family</strong>, a lineage started by Jochen Liedtke in the 1990s specifically to answer Tanenbaum-era critics: Liedtke's original L4 was built around the idea that IPC itself could be engineered to be blazingly fast if the kernel designer treated message-passing latency as the single most important number to optimize, rather than an unavoidable tax. seL4 inherited that obsession with fast IPC and then added the formal-verification layer on top — the modern answer to "microkernels are slow" is "not if you design the message-passing primitive like your career depends on it, then mathematically prove the result is correct."</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">seL4</span><span class="fam-count">flagship</span></div>
+      <div class="fam-desc">L4-family microkernel with a machine-checked proof of implementation correctness. Trusted computing base: roughly 10,000 lines of C, not tens of millions.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">QNX</span><span class="fam-count">commercial giant</span></div>
+      <div class="fam-desc">Real-time microkernel dating to 1982, now owned by BlackBerry. Runs infotainment, instrument clusters, and increasingly ADAS functions across a huge share of the world's cars.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">MINIX 3</span><span class="fam-count">Tanenbaum's answer</span></div>
+      <div class="fam-desc">The direct successor to the teaching OS at the center of the 1992 debate, redesigned specifically to demonstrate that drivers and filesystems could run as restartable, isolated user-space servers.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">L4 family (general)</span><span class="fam-count">the lineage</span></div>
+      <div class="fam-desc">Started by Jochen Liedtke to prove microkernel IPC could be engineered fast rather than assumed slow — the intellectual ancestor seL4 and several other modern microkernels build on.</div>
+    </div>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What the microkernel bet buys you</h4>
+      A crashed filesystem server is just a crashed process — the kernel restarts it (or a supervisor does) and the rest of the system keeps running. Combined with formal verification, you get a mathematically bounded trusted computing base instead of tens of millions of lines you simply have to hope are correct.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ What it costs you</h4>
+      Every cross-service operation now has to be designed around message passing instead of shared function calls and shared data structures — a real constraint on how software gets written, and a real, if narrowed, performance tax versus a monolithic design doing the identical work.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- HYBRID -->
+<section id="hybrid">
+<div class="container">
+  <div class="section-num">03 — The Real-World Compromise</div>
+  <h2>Hybrid Kernels: <span class="accent">Windows NT and XNU</span></h2>
+
+  <p class="reveal">Almost no general-purpose consumer OS you actually use is purely monolithic or purely micro. The two dominant non-Linux kernels on the planet — <strong>Windows NT</strong> and Apple's <strong>XNU</strong> (the kernel behind macOS and iOS) — are both honest, real-world compromises, sometimes called <strong>hybrid kernels</strong>: most subsystems run in kernel space for performance, the way a monolithic kernel would do it, but the internals are structured with message-passing-style boundaries borrowed from microkernel thinking, aiming for some of the fault isolation without paying the full IPC tax everywhere.</p>
+
+  <h3>Windows NT: layered by design, then partly re-merged for speed</h3>
+  <p class="reveal">Windows NT was designed from the start by Dave Cutler (previously an architect of DEC's VMS) with real microkernel influence: an <strong>Executive</strong> layer of core kernel services sitting on top of a <strong>Hardware Abstraction Layer (HAL)</strong> that isolates architecture-specific code from the rest of the kernel, plus, in early versions, a user-mode Win32 subsystem process (<code>csrss.exe</code>) that talked to the kernel via a fast local IPC mechanism called <strong>LPC (Local Procedure Call)</strong>. That's the microkernel-flavored part: window management and graphics originally lived outside the most-trusted core, reached via message passing.</p>
+  <p class="reveal">Then, in Windows NT 4.0 (1996), Microsoft moved the window manager and graphics device interface (<code>win32k.sys</code>) directly into kernel mode. Why? Every window-drawing operation was paying the LPC round-trip tax, and graphics-heavy workloads were measurably slower for it. Microsoft traded away some of that fault isolation — a bad graphics driver can now bring down the whole system — for real, user-visible performance. The HAL and the Executive's internal layering remain, giving NT a structured, message-passing-informed internal architecture even though most of it now executes in the same Ring 0 trust level.</p>
+
+  <h3>XNU: a Mach microkernel core, fused with a BSD kernel</h3>
+  <p class="reveal">XNU's lineage is even more literally microkernel-derived: it's built around a <strong>Mach</strong> kernel core (inherited via NeXTSTEP, which Apple acquired along with Steve Jobs's NeXT in 1997), providing Mach's classic primitives — tasks, threads, virtual memory, and IPC via <strong>Mach ports</strong> and Mach messages — fused together with a <strong>BSD</strong> kernel layer that supplies the POSIX process model, the network stack, and the VFS/filesystem layer, plus the C++-based <strong>I/O Kit</strong> driver framework. Despite that Mach heritage, the BSD and Mach layers in modern XNU run together in the <em>same</em> kernel address space rather than as fully separated, individually-crashable servers the way a pure microkernel like seL4 would arrange them — so XNU doesn't get full microkernel-grade fault isolation internally. What it does retain is the Mach IPC architecture as a working internal mechanism, and modern macOS/iOS lean on that heritage at the application layer too: <strong>XPC services</strong>, Apple's user-facing descendant of Mach IPC, deliberately split many system daemons and app extensions into separate, sandboxed, crash-isolated processes that talk over message passing — the same fault-isolation instinct as a microkernel, applied selectively rather than universally.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Hybrid Bet, Stated Plainly</div>
+    Put nearly everything in Ring 0 so the common paths are fast, like a monolithic kernel — but keep enough internal message-passing structure (LPC in NT, Mach ports in XNU, XPC at the app layer in both Apple OSes) that specific subsystems can still be isolated, replaced, or sandboxed without needing to isolate <em>everything</em>. You don't get seL4's mathematical guarantees. You do get more resilience than a pure monolith, at a fraction of the IPC cost a pure microkernel would demand everywhere.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Subsystem</th><th>Windows NT</th><th>XNU (macOS/iOS)</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Core scheduling / memory</td><td>Executive, Ring 0</td><td>Mach core, Ring 0</td></tr>
+        <tr><td class="hl">Filesystem / networking</td><td>Executive, Ring 0</td><td>BSD layer, fused into Ring 0 alongside Mach</td></tr>
+        <tr><td class="hl">Window manager / graphics</td><td>Ring 0 since NT 4.0 (<code>win32k.sys</code>) — moved in for speed</td><td>User space (WindowServer), Ring 3</td></tr>
+        <tr><td class="hl">App-facing services</td><td>User-mode subsystem servers via LPC</td><td>XPC services, Ring 3, sandboxed and crash-isolated</td></tr>
+        <tr><td class="hl">Device drivers</td><td>Mostly Ring 0 (kernel-mode drivers)</td><td>I/O Kit — mix of Ring 0 and user-space drivers via DriverKit</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice the pattern in both columns: the parts that run constantly, on the hottest paths — scheduling, filesystems, core memory management — stay in Ring 0 exactly like a monolithic kernel would put them. The parts that are easiest to sandbox without hurting overall throughput — a single app's background helper, a window server, a user-installable driver — get pushed out to Ring 3, message-passing style. That's the hybrid recipe in one sentence: monolithic where it's expensive not to be, microkernel-flavored everywhere else.</p>
+
+  <div class="sidenote reveal">
+    <b>Wasn't NT originally supposed to be closer to a real microkernel?</b> Early NT design documents leaned more heavily on Mach-style thinking than what shipped ended up reflecting, and Dave Cutler's team was explicitly aware of the microkernel research of the era. The NT 4.0 decision to fold the window manager back into Ring 0 is the clearest evidence of what actually happened in practice: pure microkernel purity kept losing to measured, user-visible latency on real hardware, the same underlying force Torvalds was betting on in 1992.
+  </div>
+</div>
+</section>
+
+<!-- UNIKERNEL -->
+<section id="unikernel">
+<div class="container">
+  <div class="section-num">04 — A Completely Different Axis</div>
+  <h2>Unikernels: <span class="accent">Deleting the Wall by Deleting the Need for It</span></h2>
+
+  <p class="reveal">Monolithic, microkernel, and hybrid are all answers to the same question: <em>how much of the OS should be trusted with Ring 0?</em> A <strong>unikernel</strong> steps sideways and asks a different question entirely: <em>what if there's only one program running here, and it wrote all of it?</em></p>
+
+  <p class="reveal">A unikernel compiles your application code <strong>together with</strong> only the specific OS-level libraries it actually needs — a minimal network stack, a minimal set of drivers appropriate to the virtual hardware it'll run on, a minimal scheduler if it needs one at all — into a single, sealed, single-address-space bootable image. There is no separate "OS" underneath making promises to untrusted applications, because there are no other applications, trusted or not, ever sharing that image. The user/kernel wall isn't weakened or restructured here, the way hybrid kernels do it — it's <strong>eliminated</strong>, because the entire reason the wall exists (protecting the trusted core from code nobody vetted) simply doesn't apply when the only code present is the one purpose-built application, compiled in by its own author.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">MirageOS</span><span class="fam-count">flagship</span></div>
+      <div class="fam-desc">Written in OCaml, compiles applications directly against minimal, purpose-built network/storage libraries into a unikernel image that boots on Xen or via the Solo5 sandbox — boot times measured in milliseconds, not seconds. Used in production for specialized, single-purpose infrastructure components where a tiny, auditable attack surface matters more than general flexibility.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">OSv</span><span class="fam-count">JVM-focused</span></div>
+      <div class="fam-desc">Designed to run a single application (classically a JVM workload) directly on a hypervisor with a POSIX-ish compatibility layer, skipping most of the general-purpose OS machinery that application will never touch.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">IncludeOS</span><span class="fam-count">C++ services</span></div>
+      <div class="fam-desc">Lets a C++ service be linked directly against a minimal runtime and booted as a standalone virtual machine image with no conventional OS layer at all underneath it.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--orange)">Unikraft</span><span class="fam-count">Linux Foundation / Xen Project</span></div>
+      <div class="fam-desc">A modular unikernel build system that lets you compose exactly the libraries an application needs (and no more) across multiple language runtimes and hypervisor targets.</div>
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 What You Give Up — and Why That's Fine, Sometimes</div>
+    A unikernel makes sense only in narrow, specific deployment contexts: <strong>single-purpose cloud VMs</strong> — a function, a proxy, a DNS resolver, a specialized network appliance — where exactly one job runs, deployed as exactly one instance per virtual machine. In exchange you give up things every general-purpose OS takes for granted: <strong>no multi-tenancy</strong> (you cannot run several unrelated applications inside one unikernel image the way a normal OS runs many processes — there's no process model to speak of), <strong>no general-purpose flexibility</strong> (no shell to SSH into, often no ability to install new software after the image is built — you rebuild and redeploy the whole image instead), and isolation between <em>different</em> unikernel instances now has to come entirely from the hypervisor underneath, since there's no OS-level process boundary doing that job anymore. You're not choosing a smaller OS so much as choosing to not need one.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>So is a unikernel "kernel space" or "user space"?</b> Neither, really, in the way you've been thinking about it. There's typically just one privilege level in use once the hypervisor has booted the image — the distinction stops being meaningful because the entire point of Ring 3 was containing code you don't fully trust, and a unikernel, by construction, never runs any such code. The isolation boundary moves up a whole layer, to the hypervisor separating one VM from another, rather than the OS separating one process from another inside a shared machine.
+  </div>
+
+  <p class="reveal">The payoff for accepting those limits is a genuinely different order of magnitude on two numbers that matter a lot in cloud deployments: boot time and attack surface.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Traditional VM (general-purpose OS)</th><th>Unikernel</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">What's inside the image</td><td>Full OS kernel + userland tools + shell + package manager + your app</td><td>Your app + only the library code it calls</td></tr>
+        <tr><td class="hl">Typical boot time</td><td>Seconds to tens of seconds</td><td class="pos">Often milliseconds</td></tr>
+        <tr><td class="hl">Remotely reachable attack surface</td><td>Everything installed, used or not — shells, unrelated daemons, package managers</td><td class="pos">Just the code paths the app actually calls</td></tr>
+        <tr><td class="hl">Post-deploy debugging</td><td>SSH in, inspect processes, patch live</td><td class="neg">Usually none — rebuild the image and redeploy</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">That attack-surface argument isn't hypothetical marketing — it's the whole reason unikernels get chosen for narrowly scoped infrastructure roles at all: components like lightweight networking or proxy layers, where MirageOS-derived code has shipped inside real production tooling, precisely because there's no shell, no unrelated daemon, and no unused package sitting there waiting to be the next CVE.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What the unikernel bet buys you</h4>
+      Millisecond boot times, a minimal remotely reachable attack surface, and no user/kernel wall to build or maintain at all — because there's no untrusted code on the other side of it to defend against in the first place.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ What it costs you</h4>
+      No multi-tenancy, no shell for live debugging, no installing a second unrelated service into the same image — every change means rebuilding and redeploying the whole thing, and isolation between instances is now entirely the hypervisor's job.
+    </div>
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">The unikernel trade, in one line</span>
+    One purpose, one binary, one privilege level — the wall disappears because nothing untrusted was ever invited in to begin with.
+    <span class="sub">This only works because the deployment context guarantees single tenancy. Change that guarantee, and you need the wall back.</span>
+  </div>
+</div>
+</section>
+
+<!-- TRACING -->
+<section id="tracing">
+<div class="container">
+  <div class="section-num">05 — Same Request, Four Different Bills</div>
+  <h2>One File Read, <span class="accent">Four Kernel Designs</span></h2>
+
+  <p class="reveal">Forget the animation for a second — here's the same <code>read()</code> call, narrated end to end, through each of the four architectures you just met. Same request every time: "give me the next 4KB of this file." Notice how the <em>number of trusted parties</em> involved changes the whole shape of the answer.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Keep One Number in Mind as You Read</div>
+    Count the ring crossings in each step below — how many times the CPU has to flip its privilege bit and jump to a fixed, kernel-controlled entry point just to complete this one, ordinary file read. That number is the closest thing to a single scorecard for "how much did this design choose to trust."
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Monolithic (Linux) — one trap, then it's all function calls</strong>Your program's <code>read()</code> traps once into Ring 0. From there, the VFS layer calls the filesystem driver directly, which calls the block layer, which calls the disk (or NVMe) driver — all ordinary function calls inside one trusted program, no further mode switches. One trap in, the real work happens, one trap out.</div></li>
+    <li><div class="step-body"><strong>Microkernel (seL4-style) — a relay race through isolated servers</strong>Your program sends an IPC message to a filesystem server, which is just another Ring 3 process. The tiny Ring 0 core traps in, routes the message, traps back out. The filesystem server realizes it needs the disk driver server, and repeats the exact same dance: trap in, route, trap out. The disk driver server does the actual I/O, then the result retraces the same path in reverse. Four ring crossings (at minimum) for the identical logical operation.</div></li>
+    <li><div class="step-body"><strong>Hybrid (Windows NT / XNU) — usually the monolithic path, sometimes not</strong>For an ordinary file read, NT's I/O manager and XNU's BSD layer behave almost exactly like the monolithic case — direct calls within one trusted Executive or one trusted BSD/Mach core. But if the request touches a subsystem the designers deliberately isolated (a sandboxed XPC service on macOS, a user-mode driver framework component on Windows), it takes on a microkernel-style message-passing detour for just that one piece, while everything else stays on the fast path.</div></li>
+    <li><div class="step-body"><strong>Unikernel (MirageOS-style) — there's no "trap" to speak of</strong>The application code and the minimal storage-driver code it needs were compiled into the <em>same</em> binary, at the <em>same</em> privilege level. "Calling read()" is just calling a library function linked directly into your program — there was never a wall here to cross, because there was only ever one piece of code running in this VM to begin with.</div></li>
+  </ol>
+
+  <p class="reveal">Same English sentence — "read the next 4KB" — and four completely different physical stories underneath it, purely because of a decision made long before your program ever ran: how much of the surrounding system was trusted enough to sit beside the data path.</p>
+</div>
+</section>
+
+<!-- SHOWDOWN -->
+<section id="showdown">
+<div class="container">
+  <div class="section-num">06 — Watch the Cost, Then See It Side by Side</div>
+  <h2>The <span class="accent">Showdown</span></h2>
+
+  <p class="reveal">Let's make the IPC tax from Section 02 concrete. Below is the exact same logical operation — an application asking to read a file — traced through a monolithic kernel and through a microkernel. Watch how many times each one has to cross the Ring 0/Ring 3 wall to get the same job done.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="ipcLabel">▶ Choose a kernel design to trace one file read</div>
+    <canvas id="ipcCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runIPC('mono')">▶ Monolithic — direct function calls</button>
+    <button class="ctrl-btn" onclick="runIPC('micro')">▶ Microkernel — IPC round trips</button>
+    <button class="ctrl-btn red" onclick="resetIPC()">Reset</button>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Same Job, Very Different Bill</div>
+    In the monolithic trace, the whole operation costs <strong>one</strong> ring crossing (the original syscall trap), because the VFS layer, filesystem code, and disk driver are all just functions calling each other inside the same trusted program. In the microkernel trace, that identical file read needs <strong>multiple</strong> ring crossings, because the filesystem and the disk driver are separate, individually-isolated Ring 3 servers that can only reach each other through the kernel's IPC broker. Neither number is "wrong" — they're the direct, physical consequence of where each design chose to draw its wall.
+  </div>
+
+  <p class="reveal">Now the full comparison, across all four designs, on the dimensions that actually matter when you're picking one.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Design</th><th>Address Space Model</th><th>Driver Crash Blast Radius</th><th>IPC Overhead</th><th>Real-World Examples</th><th>Best-Fit Use Case</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Monolithic</td><td>One shared Ring 0 address space for the entire OS</td><td class="neg">Whole system — kernel panic / BSOD</td><td class="pos">None for internal calls — plain function calls</td><td>Linux, classic BSD, Windows 9x</td><td>General-purpose servers &amp; desktops where raw throughput wins</td></tr>
+        <tr><td class="pur">Microkernel</td><td>Tiny Ring 0 core; every service in its own Ring 3 address space</td><td class="pos">Contained to one server process</td><td class="neg">High — every cross-service op is a message + context switch</td><td>seL4, QNX, MINIX 3</td><td>Safety/security-critical embedded systems (avionics, automotive, medical)</td></tr>
+        <tr><td class="gold">Hybrid</td><td>Mostly one Ring 0 space, internally layered with message-style boundaries</td><td>Usually whole system, with select subsystems isolated (XPC, csrss)</td><td>Moderate — used selectively, not on the common path</td><td>Windows NT, macOS/iOS (XNU)</td><td>General-purpose consumer OSes wanting speed plus some isolation</td></tr>
+        <tr><td class="hl" style="color:var(--orange)">Unikernel</td><td>One flat address space; app and OS bits fused into a single image</td><td>The whole (single-purpose) instance — isolation moves to the hypervisor</td><td class="pos">None internally — no processes to message between</td><td>MirageOS, OSv, IncludeOS, Unikraft</td><td>Single-purpose cloud VMs / serverless / specialized appliances</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">If you zoom all the way out, every one of these designs is answering the same underlying question with a different amount of nerve: <em>how much code are you willing to trust completely?</em></p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🏗️</div><div class="lbl">Monolithic trusts almost everything, for speed</div></div>
+    <div class="stat-card"><div class="val">🔬</div><div class="lbl">Microkernel trusts almost nothing, and proves it</div></div>
+    <div class="stat-card"><div class="val">⚖️</div><div class="lbl">Hybrid trusts most things, isolates a few on purpose</div></div>
+    <div class="stat-card"><div class="val">🎯</div><div class="lbl">Unikernel trusts everything, because there's only one thing</div></div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Is one of these four just "correct"?</b> No — and that's the actual lesson, not a hedge. seL4 didn't make Linux's design a mistake; Linux has powered the internet for three decades on the monolithic bet. MirageOS didn't make Windows's hybrid compromise wrong either — Windows runs on a billion general-purpose desktops that need to run arbitrary, mutually distrusting third-party software forever, a job description a unikernel structurally cannot do. Every one of these designs is a locally optimal answer to a differently shaped problem.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Monolithic Kernel</div><div class="glossary-def">A design that runs nearly the entire OS — scheduler, memory manager, filesystems, drivers, network stack — in one shared Ring 0 address space. Flagship: Linux. Fast internal calls, wide crash blast radius.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Microkernel</div><div class="glossary-def">A design that shrinks Ring 0 to IPC, minimal scheduling, and minimal memory management, pushing drivers and filesystems into isolated Ring 3 servers that communicate via message passing. Flagship: seL4.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hybrid Kernel</div><div class="glossary-def">A real-world compromise: most subsystems run in Ring 0 for speed, but the kernel is internally structured with message-passing-style boundaries for select subsystems. Flagships: Windows NT, XNU.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Unikernel</div><div class="glossary-def">An application compiled together with only the OS pieces it needs into one single-address-space, single-privilege-level bootable image, eliminating the user/kernel wall by eliminating untrusted co-resident code. Flagship: MirageOS.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IPC (Inter-Process Communication)</div><div class="glossary-def">Any kernel-mediated mechanism (message passing, pipes, shared memory) that lets isolated processes exchange data or requests. The core primitive a microkernel is built around.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Formal Verification</div><div class="glossary-def">Mathematically proving, via a theorem prover, that a program's implementation matches its specification and is free of specific bug classes — a stronger guarantee than any amount of testing. seL4's defining claim.</div></div>
+    <div class="glossary-card"><div class="glossary-term">HAL (Hardware Abstraction Layer)</div><div class="glossary-def">A layer in Windows NT that isolates architecture-specific hardware details from the rest of the kernel, part of NT's original microkernel-influenced layering.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mach</div><div class="glossary-def">The microkernel lineage (via NeXTSTEP) that XNU's IPC model — tasks, threads, and Mach ports — descends from, still present as XNU's internal messaging architecture today.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Blast Radius</div><div class="glossary-def">How much of the system a single bug can take down. Whole machine in a monolithic kernel; one isolated server process in a microkernel.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Multi-Tenancy</div><div class="glossary-def">The ability to run several unrelated applications safely on one shared OS instance. Present in monolithic/microkernel/hybrid designs; explicitly absent by design in a unikernel.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Tanenbaum–Torvalds Debate</div><div class="glossary-def">The public January 1992 Usenet argument between Andrew Tanenbaum and Linus Torvalds over whether monolithic Linux was an architectural step backward compared to microkernel designs — still cited today as the canonical framing of the trade-off.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trusted Computing Base (TCB)</div><div class="glossary-def">The set of all code a system must trust to be correct for its security guarantees to hold. Tens of millions of lines in a monolithic kernel; roughly ten thousand in seL4's verified core.</div></div>
+    <div class="glossary-card"><div class="glossary-term">L4 Family</div><div class="glossary-def">The microkernel lineage started by Jochen Liedtke, built around making IPC itself fast rather than accepting message-passing overhead as unavoidable. seL4 is its most famous modern member.</div></div>
+    <div class="glossary-card"><div class="glossary-term">XPC</div><div class="glossary-def">Apple's modern, user-facing descendant of Mach IPC — used throughout macOS/iOS to run services and app extensions as separate, sandboxed, crash-isolated processes.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Kernel Design Wars · A companion deep-dive to "Kernel vs User Space" in the OS Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same wall, four very different opinions about where to build it.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── MONOLITHIC vs MICROKERNEL IPC-COST CANVAS ──────────────────────────────────
+function drawIPCScene(t,phase,mode,crossings){
+  const canvas=document.getElementById('ipcCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const top=50, boxH=110;
+
+  if(mode==='mono'){
+    // two zones: App (Ring 3) | Monolithic Kernel (Ring 0) with VFS + Driver sub-boxes
+    const appX=0, appW=W*0.28;
+    const kX=appW, kW=W-appW;
+    ctx.fillStyle='rgba(56,189,248,.07)';ctx.fillRect(appX,top,appW,boxH);
+    ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(appX+2,top,appW-4,boxH);
+    ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('APP (Ring 3)',appX+appW/2,top-10);
+
+    ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(kX,top,kW,boxH);
+    ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(kX+2,top,kW-4,boxH);
+    ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';
+    ctx.fillText('MONOLITHIC KERNEL (Ring 0)',kX+kW/2,top-10);
+
+    // sub-boxes VFS + Driver inside kernel
+    const subY=top+boxH*0.28, subH=boxH*0.44;
+    const vfsX=kX+kW*0.08, vfsW=kW*0.36;
+    const drvX=kX+kW*0.56, drvW=kW*0.36;
+    ctx.fillStyle='rgba(245,200,66,.14)';ctx.fillRect(vfsX,subY,vfsW,subH);
+    ctx.strokeStyle=C.gold;ctx.lineWidth=1;ctx.strokeRect(vfsX,subY,vfsW,subH);
+    ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('VFS layer',vfsX+vfsW/2,subY+subH/2+3);
+    ctx.fillStyle='rgba(245,200,66,.14)';ctx.fillRect(drvX,subY,drvW,subH);
+    ctx.strokeStyle=C.gold;ctx.strokeRect(drvX,subY,drvW,subH);
+    ctx.fillStyle=C.gold;
+    ctx.fillText('Disk driver',drvX+drvW/2,subY+subH/2+3);
+
+    const capt={
+      idle:'Choose a scenario above',
+      enter:'App calls read() — ONE syscall trap into the monolithic kernel (Ring 0)',
+      vfs_call:'Inside the kernel: the VFS layer calls the filesystem driver directly — an ordinary function call, about 1 nanosecond, same address space',
+      driver_call:'The filesystem code calls the disk driver directly — another ordinary function call, still one trusted program',
+      ret:'Single trap back to Ring 3 — total cost: one mode switch, zero IPC messages'
+    };
+    ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText(capt[phase]||'',W/2,H-40);
+    ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('Ring crossings so far: '+crossings,W/2,H-18);
+
+    let dotX=appX+appW/2, dotY=top+boxH/2, col=C.cyan;
+    if(phase==='enter'){dotX=appX+appW*(0.3+0.7*t);dotY=top+boxH/2;col=C.gold;}
+    else if(phase==='vfs_call'){dotX=vfsX+vfsW*t;dotY=subY+subH/2;col=C.gold;}
+    else if(phase==='driver_call'){dotX=vfsX+vfsW+(drvX-(vfsX+vfsW))*t+ (drvW*0.3)*t;dotY=subY+subH/2;col=C.orange;}
+    else if(phase==='ret'){dotX=drvX+drvW*0.6-(drvX+drvW*0.6-(appX+appW*0.5))*t;dotY=top+boxH/2;col=C.green;}
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+
+  } else if(mode==='micro'){
+    // four zones: App | uKernel | FS Server | Driver Server
+    const zw=W/4;
+    const zones=[
+      {x:0,label:'APP',sub:'(Ring 3)',col:C.cyan,fill:'rgba(56,189,248,.07)'},
+      {x:zw,label:'MICROKERNEL',sub:'(Ring 0, tiny)',col:C.red,fill:'rgba(248,113,113,.09)'},
+      {x:zw*2,label:'FS SERVER',sub:'(Ring 3)',col:C.purple,fill:'rgba(167,139,250,.08)'},
+      {x:zw*3,label:'DRIVER SERVER',sub:'(Ring 3)',col:C.green,fill:'rgba(74,222,128,.08)'}
+    ];
+    zones.forEach(z=>{
+      ctx.fillStyle=z.fill;ctx.fillRect(z.x,top,zw-4,boxH);
+      ctx.strokeStyle=z.col;ctx.lineWidth=1.5;ctx.strokeRect(z.x+2,top,zw-6,boxH);
+      ctx.fillStyle=z.col;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText(z.label,z.x+zw/2-2,top-16);
+      ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+      ctx.fillText(z.sub,z.x+zw/2-2,top-4);
+    });
+
+    const capt={
+      idle:'Choose a scenario above',
+      enter:'App sends an IPC message toward the Filesystem Server — trap #1 into the microkernel just to route one message',
+      route1:'The microkernel (tiny, Ring 0) copies and routes the message — trap back out to Ring 3, into the Filesystem Server',
+      fs_work:'The Filesystem Server (an ordinary Ring 3 process) does its logic, then needs the Disk Driver Server — sends ANOTHER IPC message',
+      route2:'The microkernel routes again — trap #2 in, trap #2 out — the Disk Driver Server receives the request',
+      drv_work:'The Disk Driver Server does the real work, then the result travels back through the same chain, in reverse',
+      done:'Total cost for one file read: 4 ring crossings and multiple context switches — the classic microkernel IPC tax'
+    };
+    ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText(capt[phase]||'',W/2,H-40);
+    ctx.fillStyle=C.red;ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('Ring crossings so far: '+crossings,W/2,H-18);
+
+    const midY=top+boxH/2;
+    let dotX=zw/2, dotY=midY, col=C.cyan;
+    if(phase==='enter'){dotX=zw*0.5+(zw*0.55)*t;dotY=midY;col=C.gold;}
+    else if(phase==='route1'){dotX=zw+zw*0.3+(zw*0.9)*t;dotY=midY;col=C.gold;}
+    else if(phase==='fs_work'){dotX=zw*2+zw*0.4;dotY=midY;col=C.purple;}
+    else if(phase==='route2'){dotX=zw*2+zw*0.4+(zw*1.1)*t;dotY=midY;col=C.orange;}
+    else if(phase==='drv_work'){dotX=zw*3+zw*0.4;dotY=midY;col=C.green;}
+    else if(phase==='done'){dotX=zw*3+zw*0.4-(zw*3+zw*0.4-zw*0.5)*t;dotY=midY;col=C.green;}
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  } else {
+    ctx.fillStyle=C.muted;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText('Choose a scenario above',W/2,H/2);
+  }
+}
+
+function runIPC(mode){
+  const label=document.getElementById('ipcLabel');
+  let phases, durations, crossingsAt;
+  if(mode==='mono'){
+    phases=['enter','vfs_call','driver_call','ret'];
+    durations=[450,400,400,450];
+    crossingsAt=[1,1,1,1];
+    label.textContent='▶ Monolithic kernel — tracing one file read';
+  } else {
+    phases=['enter','route1','fs_work','route2','drv_work','done'];
+    durations=[400,400,450,400,450,450];
+    crossingsAt=[1,2,2,3,4,4];
+    label.textContent='▶ Microkernel — tracing one file read';
+  }
+  let idx=0,start=performance.now();
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawIPCScene(t,phases[idx],mode,crossingsAt[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        label.textContent='▶ Done — try the other design, or Reset';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetIPC(){
+  document.getElementById('ipcLabel').textContent='▶ Choose a kernel design to trace one file read';
+  drawIPCScene(0,'idle','',0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetIPC(); });
+window.addEventListener('resize',()=>{ resetIPC(); });
+</script>
+</body>
+</html>

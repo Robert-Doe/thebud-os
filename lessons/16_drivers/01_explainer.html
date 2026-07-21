@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Driver Model — One Contract Over Wildly Different Hardware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--orange);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)} td.orange{color:var(--orange)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(251,146,60,.1);border:1.5px solid var(--orange);color:var(--orange);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(251,146,60,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.25);color:var(--orange);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* Vtable dossier */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--orange);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#why" title="Why Hardware Refuses to Match"></a>
+  <a class="toc-dot" href="#translator" title="The Driver as Translator"></a>
+  <a class="toc-dot" href="#contract" title="The Contract, Precisely"></a>
+  <a class="toc-dot" href="#lifecycle" title="Boot-Time Lifecycle"></a>
+  <a class="toc-dot" href="#families" title="Device Families"></a>
+  <a class="toc-dot" href="#stakes" title="What Goes Wrong Without It"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Device Drivers · Abstraction · bob_os Module 16</div>
+    <h1>One Doorway Into<br><span>Wildly Different Hardware</span></h1>
+    <p class="hero-sub">A keyboard talks in scancodes pulled from a single I/O port. A disk talks in 512-byte sectors negotiated through an eight-register handshake. A network card talks in packets arriving on its own schedule. Electrically and functionally, these three chips have almost nothing in common — yet the kernel wants to <code>read()</code> from all three the exact same way. This page is about the layer that makes that possible: the <strong>driver</strong>.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">Functions in bob_os's driver_ops Vtable</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Device Type Families — CHAR, BLOCK, NET</div></div>
+      <div class="hero-stat"><div class="num">16</div><div class="lbl">MAX_DRIVERS Slots in the Boot-Time Table</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Generic Contract, No Matter What's Plugged In</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>You've Already Written <span class="accent">Three Drivers</span> — You Just Didn't Call Them That</h2>
+  <p class="reveal">Back in the VGA module you wrote code that pokes bytes directly into <code>0xB8000</code> to put characters on screen. In the keyboard module you wrote an IRQ1 handler that reads port <code>0x60</code> and pushes ASCII into a ring buffer. In the filesystem module you built a VFS with a <code>vfs_ops</code> vtable — <code>open/read/write/close</code> — so the shell could treat a real file and a device the same way. Every one of those <em>was already a driver</em>. What was missing was a name for the pattern, and a single registration table so the kernel doesn't have to know about "the VGA thing" and "the keyboard thing" and "the disk thing" as three unrelated bodies of code.</p>
+  <p class="reveal">That's what bob_os's Module 27 (<code>driver.c</code> / <code>driver.h</code>) adds on top of everything you already built: a <strong>driver framework</strong> — a boot-time table that every device driver registers itself into, and a uniform <code>/dev/</code> filesystem (<code>devfs</code>) that the VFS mounts on top of it. This lesson is about the idea underneath that code, before we get into the two big mechanical questions the next two lessons tackle: <em>how</em> should a driver notice a device has data ready (polling vs interrupts), and <em>where</em> does a device's memory actually live in the CPU's address space (MMIO vs port I/O).</p>
+</div>
+</section>
+
+<!-- WHY -->
+<section id="why">
+<div class="container">
+  <div class="section-num">01 — The Problem, Stated Bluntly</div>
+  <h2>Why <span class="accent">Hardware</span> Refuses to Be Uniform</h2>
+
+  <p class="reveal">Picture four chips sitting on the same motherboard. None of them agree on anything.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">⌨ PS/2 Keyboard</span><span class="fam-count">IRQ1</span></div>
+      <div class="fam-desc">Speaks in <strong>single bytes</strong> called scancodes, one per key transition, delivered by asserting an interrupt line. There is no concept of "reading 512 of them at once" — you get exactly one, whenever the hardware feels like sending it.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">💾 ATA Disk</span><span class="fam-count">8 registers</span></div>
+      <div class="fam-desc">Speaks in <strong>512-byte sectors</strong>, negotiated through an eight-register handshake (LBA low/mid/high, drive/head, sector count, command, status) that must be programmed in a strict order before any data moves.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">🌐 NE2000 NIC</span><span class="fam-count">variable-length</span></div>
+      <div class="fam-desc">Speaks in <strong>variable-length packets</strong> that arrive with no fixed schedule at all — could be ten in a millisecond, could be none for an hour — buffered in an onboard ring the driver has to drain before it overflows.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">🖥 VGA Text Buffer</span><span class="fam-count">framebuffer</span></div>
+      <div class="fam-desc">Isn't even "read" in the usual sense — it's a <strong>2,000-cell framebuffer</strong> mapped straight into RAM at <code>0xB8000</code> that the monitor scans continuously. Writing to it is just an ordinary memory store.</div>
+    </div>
+  </div>
+
+  <p class="reveal">Different transfer units. Different timing models. Different physical access mechanisms — some through dedicated I/O ports, some through ordinary memory addresses. If the kernel had to know all of that to talk to every device, every new piece of hardware would mean touching the scheduler, the shell, the filesystem code, and anything else that ever wants to move a byte in or out. That doesn't scale past about three devices.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Trap: Special-Casing Creeps</div>
+    Without a driver layer, "read some data" quietly becomes "read some data, unless it's the keyboard, in which case check the ring buffer, unless it's the disk, in which case poll the status register, unless it's the network card, in which case..." Every caller of I/O has to know the internals of every device. One new peripheral means editing code all over the kernel, not just adding one file.
+  </div>
+</div>
+</section>
+
+<!-- TRANSLATOR -->
+<section id="translator">
+<div class="container">
+  <div class="section-num">02 — The Deliberate Fix</div>
+  <h2>The Driver as <span class="accent">Translator</span></h2>
+
+  <p class="reveal">A driver's entire job is to stand between two worlds and speak both languages fluently, so nobody else has to learn either. On one side: this exact chip's registers, this exact protocol, this exact timing quirk. On the other side: a small, boring, generic contract — <code>probe / read / write / ioctl</code> — that looks identical no matter which chip is actually plugged in.</p>
+
+  <div class="formula orange reveal">
+    <span class="label">The one-line definition</span>
+    A driver is hardware-specific knowledge, wrapped in a generic shape.
+    <span class="sub">Everything above the driver only ever sees the generic shape. Everything below the driver is a mess particular to one chip — and that mess never leaks upward.</span>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="translatorLabel">▶ Watch a keyboard interrupt and a disk poll both cross the same doorway</div>
+    <canvas id="translatorCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runTranslator('kbd')">▶ Keyboard: scancode 0x1E arrives</button>
+    <button class="ctrl-btn cyan" onclick="runTranslator('disk')">▶ Disk: sector 4021 requested</button>
+    <button class="ctrl-btn red" onclick="resetTranslator()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice what the right-hand side of that animation never changes: it's always <code>read(buf, len)</code> returning bytes. The caller — the shell reading a keypress, or a program reading a file — never once has to know whether a scancode table or an ATA status register sat behind that call. That's not an accident; it's the entire point of the abstraction.</p>
+
+  <div class="sidenote reveal">
+    <b>Side note —</b> this is the exact same move you already made once. The VFS's <code>vfs_ops</code> vtable (<code>open/read/write/close</code>) lets the shell treat a real file on BobFS and a device under <code>/dev/</code> identically. The driver's <code>driver_ops</code> vtable is that same move applied one layer further down — <em>this exact chip</em> versus <em>a generic device</em>, instead of <em>this exact filesystem</em> versus <em>a generic file</em>. Once you've drawn one dispatch-through-vtable diagram, you've understood both.
+  </div>
+</div>
+</section>
+
+<!-- CONTRACT -->
+<section id="contract">
+<div class="container">
+  <div class="section-num">03 — The Contract, Precisely</div>
+  <h2>What Exactly Does a Driver <span class="accent">Promise</span>?</h2>
+
+  <p class="reveal">In bob_os the promise is a plain C struct of function pointers — a vtable — that every driver fills in and hands to the kernel exactly once, at registration time.</p>
+
+  <pre><code>/* driver.h — the vtable every driver must implement */
+struct driver_ops {
+    const char *name;            /* "kbd", "disk", "eth0" -&gt; becomes /dev/&lt;name&gt; */
+    dev_type_t  type;             /* DEV_CHAR, DEV_BLOCK, or DEV_NET */
+
+    int  (*probe)(void);                          /* detect + init hardware, 0 = found */
+    int  (*read) (uint8_t *buf, uint32_t len);    /* read len bytes into buf   */
+    int  (*write)(const uint8_t *buf, uint32_t len); /* write len bytes from buf */
+    int  (*ioctl)(uint32_t cmd, void *arg);       /* device-specific control   */
+};</code></pre>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>driver_ops — what each field actually buys the kernel</span><span style="color:var(--muted);font-size:.7rem">filled in once per driver, called forever after</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">name</div><div class="f-val">"kbd" / "disk" / "eth0"</div><div class="f-desc">The string devfs uses to build /dev/&lt;name&gt; — the only thing user space ever sees or types.</div></div>
+      <div class="dossier-field"><div class="f-label">type</div><div class="f-val">DEV_CHAR / DEV_BLOCK / DEV_NET</div><div class="f-desc">Which broad family this device belongs to, so the kernel knows what "a unit of data" even means for it.</div></div>
+      <div class="dossier-field"><div class="f-label">probe()</div><div class="f-val">→ 0 found, -1 absent</div><div class="f-desc">Runs once at boot. Does the actual hardware detection and chip initialisation — the only place device-specific setup is allowed to happen.</div></div>
+      <div class="dossier-field"><div class="f-label">read() / write()</div><div class="f-val">→ bytes moved, or &lt;0</div><div class="f-desc">The generic data-movement contract. Every device answers to the exact same two signatures regardless of what's actually happening behind them.</div></div>
+      <div class="dossier-field"><div class="f-label">ioctl()</div><div class="f-val">cmd, arg → device-specific</div><div class="f-desc">The escape hatch. Not everything fits "read some bytes, write some bytes" — setting a baud rate or a network MAC address needs its own channel, without inventing a new syscall per device.</div></div>
+      <div class="dossier-field"><div class="f-label">(kernel-side) dev_major</div><div class="f-val">assigned by driver_register()</div><div class="f-desc">A unique number stamped on the driver at registration time, used internally to distinguish devices sharing a type.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">Compare that to the VFS vtable from the filesystems lesson — the shape is deliberately identical:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>vfs_ops (filesystems / Module 19)</th><th>driver_ops (devices / Module 27)</th><th>Same idea, different layer</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">open(path, flags)</td><td class="hl">probe(void)</td><td>One-time "does this exist and is it usable" check</td></tr>
+        <tr><td class="hl">read(inode, buf, n, offset)</td><td class="hl">read(buf, len)</td><td>Generic data-in, identical signature to every caller</td></tr>
+        <tr><td class="hl">write(inode, buf, n, offset)</td><td class="hl">write(buf, len)</td><td>Generic data-out, identical signature to every caller</td></tr>
+        <tr><td class="hl">close(inode)</td><td class="hl">(no equivalent — devices probe once at boot)</td><td>Filesystems open/close per-file; most drivers stay live forever</td></tr>
+        <tr><td class="neg">— no equivalent —</td><td class="hl">ioctl(cmd, arg)</td><td>Devices need control commands that don't fit read/write; files rarely do</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Pattern, Named</div>
+    Whenever you see "a struct of function pointers, filled in differently by each implementation, called uniformly by everyone else," you're looking at a <strong>vtable</strong> — the same mechanism that gives you polymorphism in C++ under the hood, and the same mechanism Linux uses for <code>file_operations</code>, <code>block_device_operations</code>, and every driver interface it exposes. bob_os's <code>driver_ops</code> is a small, honest version of the exact same idea.
+  </div>
+</div>
+</section>
+
+<!-- LIFECYCLE -->
+<section id="lifecycle">
+<div class="container">
+  <div class="section-num">04 — From Registration to /dev/</div>
+  <h2>How the Kernel Actually <span class="accent">Uses</span> the Contract</h2>
+
+  <p class="reveal">The vtable alone doesn't do anything — it has to be registered, probed, and exposed. bob_os does this in a fixed, four-step boot sequence.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Each driver calls driver_register(&amp;ops)</strong>Before <code>kernel_main()</code> runs anything else, every driver's <code>.c</code> file hands its filled-in <code>driver_ops</code> struct to the kernel. This just claims a slot in the fixed-size <code>driver_table[MAX_DRIVERS]</code> array and assigns a <code>dev_major</code> number — no hardware has been touched yet.</div></li>
+    <li><div class="step-body"><strong>The kernel calls driver_probe_all()</strong>The kernel walks every registered slot and calls each one's <code>probe()</code>. This is the only moment device-specific initialisation is allowed to happen — programming the PIC-adjacent chip registers, checking for a floating ATA bus, whatever that particular piece of hardware needs. A driver whose <code>probe()</code> returns nonzero is marked inactive and simply never appears again.</div></li>
+    <li><div class="step-body"><strong>devfs exposes every active driver as /dev/&lt;name&gt;</strong>devfs is deliberately the thinnest possible VFS backend — no inodes, no on-disk state. <code>devfs_open("/dev/kbd")</code> is nothing more than a call to <code>driver_find("kbd")</code>, which linear-scans the active drivers for a name match and stores the matching <code>driver_ops*</code> pointer in the file descriptor.</div></li>
+    <li><div class="step-body"><strong>Every later read()/write()/ioctl() is a straight vtable dispatch</strong>Once a process has an fd open on <code>/dev/kbd</code>, calling <code>read()</code> on it is just <code>fd->ops->read(buf,len)</code> — a function-pointer call through the struct, with zero branching on "which device is this." The generic contract from section 03 is what makes that single line correct for every device in the table.</div></li>
+  </ol>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">🔌</div><div class="pipe-name">driver_register()</div><div class="pipe-desc">Claims a slot, no hardware touched</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🔍</div><div class="pipe-name">driver_probe_all()</div><div class="pipe-desc">probe() runs once at boot</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">📁</div><div class="pipe-name">devfs mounts /dev</div><div class="pipe-desc">name → driver_ops lookup</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">↔</div><div class="pipe-name">open("/dev/kbd")</div><div class="pipe-desc">fd->ops now points at kbd's vtable</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">✅</div><div class="pipe-name">read(fd, buf, n)</div><div class="pipe-desc">Generic call, device-specific result</div></div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 Why probe() Instead of Just Assuming the Device Exists</div>
+    QEMU, real hardware, and CI test runners don't all have the same peripherals attached. <code>probe()</code> is the driver's chance to say "actually, I looked, and I'm not here" — a floating ATA bus reads back <code>0xFF</code>, an absent NIC never answers its EEPROM read. Marking that driver inactive means every later lookup, list, and dispatch simply skips it, instead of the kernel crashing the first time something tries to touch hardware that was never plugged in.
+  </div>
+</div>
+</section>
+
+<!-- FAMILIES -->
+<section id="families">
+<div class="container">
+  <div class="section-num">05 — Not All Devices Are Alike, Either</div>
+  <h2>Three <span class="accent">Families</span>, One Vtable</h2>
+
+  <p class="reveal">The generic contract doesn't mean every device behaves the same — <code>dev_type_t</code> exists precisely because "a unit of data" means something different depending on what kind of device you're talking to.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📇 DEV_CHAR — character devices</h4>
+      An unstructured stream, one byte (or a few) at a time, with no seeking. The keyboard is the canonical example: <code>read()</code> returns whatever's next in the ring buffer, in order, and there's no meaningful "byte 47 of the keyboard."
+    </div>
+    <div class="compare-card bad">
+      <h4>💽 DEV_BLOCK — block devices</h4>
+      Fixed-size, addressable chunks — 512-byte sectors for the ATA disk — that support random access by number. <code>read()</code> on a block device is really "read sector N," even though the vtable signature doesn't show the sector number explicitly (that detail is usually folded into how the driver interprets its buffer/length arguments, or handled via <code>ioctl</code>).
+    </div>
+  </div>
+  <div class="family-grid reveal" style="margin-top:0">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">🌐 DEV_NET — network devices</span><span class="fam-count">packet-shaped</span></div>
+      <div class="fam-desc">Neither a byte stream nor a sector-addressed disk — a sequence of discrete, variable-length packets with no inherent ordering guarantee beyond arrival order. NE2000 and loopback both fall here; <code>read()</code> hands back one packet's worth of bytes at a time.</div>
+    </div>
+  </div>
+
+  <p class="reveal">The point isn't that <code>dev_type_t</code> changes the function signatures — it doesn't. It's metadata the rest of the kernel (and eventually user space, through <code>ioctl</code> or a <code>stat</code>-like call) can use to decide <em>how</em> to interpret the bytes a generic <code>read()</code> handed back, without ever needing device-specific code to get those bytes in the first place.</p>
+</div>
+</section>
+
+<!-- STAKES -->
+<section id="stakes">
+<div class="container">
+  <div class="section-num">06 — Why This Discipline Matters</div>
+  <h2>What Happens <span class="accent">Without</span> a Driver Layer</h2>
+
+  <p class="reveal">It's worth being concrete about the alternative, because "abstraction" can sound like busywork until you picture the code it's replacing.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Scenario</th><th>Without a driver layer</th><th>With driver_ops</th></tr></thead>
+      <tbody>
+        <tr><td>Shell wants to read a keypress</td><td class="neg">Shell code directly pokes port 0x60 and knows the scancode table</td><td class="pos">Shell calls read() on an fd — same call it uses for a file</td></tr>
+        <tr><td>New NIC model is added</td><td class="neg">Every place that ever touches "the network" gets edited</td><td class="pos">One new .c file calls driver_register() — nothing else changes</td></tr>
+        <tr><td>Device isn't present in this boot environment</td><td class="neg">Undefined behaviour or a crash the first time it's touched</td><td class="pos">probe() marks it inactive; driver_find() simply returns nothing</td></tr>
+        <tr><td>Testing driver logic</td><td class="neg">Requires the real chip or a full hardware emulator</td><td class="pos">Swap in a fake driver_ops that implements the same four functions</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Real Payoff</div>
+    A driver framework's value isn't visible on the happy path — it's visible the day you add device number four. Every device before that could have been special-cased by hand and nobody would notice the difference. The generic contract is what keeps device number sixteen exactly as cheap to add as device number two.
+  </div>
+
+  <p class="reveal">That's the shape of the problem this whole module solves. The next two lessons dig into the two decisions every <code>read()</code>/<code>write()</code> implementation has to make underneath that clean exterior: <strong>how does the driver even know data is ready</strong> (polling a status register vs. waiting for an interrupt — next lesson), and <strong>where does the device's memory actually live</strong> from the CPU's point of view (a dedicated I/O port space vs. an ordinary memory address — the lesson after that).</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Driver</div><div class="glossary-def">The translation layer between one specific piece of hardware and a generic contract the rest of the kernel relies on, regardless of which device is actually attached.</div></div>
+    <div class="glossary-card"><div class="glossary-term">driver_ops</div><div class="glossary-def">bob_os's vtable of function pointers — name, type, probe, read, write, ioctl — that every driver fills in once and the kernel calls forever after.</div></div>
+    <div class="glossary-card"><div class="glossary-term">probe()</div><div class="glossary-def">The one-time, boot-time function that detects whether a device is actually present and performs its initial hardware setup.</div></div>
+    <div class="glossary-card"><div class="glossary-term">devfs</div><div class="glossary-def">The pseudo-filesystem mounted at /dev that maps device names to driver_ops pointers, with no on-disk state of its own.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Character device</div><div class="glossary-def">A device exposing an unstructured, sequential byte stream with no meaningful random access — e.g. the keyboard.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Block device</div><div class="glossary-def">A device exposing fixed-size, randomly addressable chunks — e.g. 512-byte disk sectors.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Network device</div><div class="glossary-def">A device exposing discrete, variable-length packets with no fixed timing or size, arriving in send order.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ioctl</div><div class="glossary-def">The escape hatch for device-specific control commands that don't fit the shape of read() or write().</div></div>
+    <div class="glossary-card"><div class="glossary-term">vtable</div><div class="glossary-def">A struct of function pointers that lets a single generic call site dispatch to wildly different implementations, chosen at registration time rather than compile time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VFS</div><div class="glossary-def">The Virtual File System layer one level above devfs, giving processes a single open/read/write/close interface over both real files and device nodes.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The Driver Model &middot; Companion lesson for bob_os module 27_drivers</p>
+  <p style="margin-top:.5rem;font-size:.78rem">One contract. Any chip. Next up: polling vs interrupt-driven I/O.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── TRANSLATOR CANVAS ───────────────────────────────────────────────────────
+function drawTranslatorScene(t,phase,device){
+  const canvas=document.getElementById('translatorCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const hwX=W*0.06, hwW=W*0.24;
+  const drvX=W*0.40, drvW=W*0.20;
+  const kX=W*0.72, kW=W*0.24;
+  const laneY=H*0.30, laneH=110;
+
+  // hardware-specific lane
+  ctx.fillStyle='rgba(251,146,60,.07)';ctx.fillRect(hwX,laneY,hwW,laneH);
+  ctx.strokeStyle=C.orange;ctx.lineWidth=1;ctx.strokeRect(hwX,laneY,hwW,laneH);
+  ctx.fillStyle=C.orange;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('HARDWARE-SPECIFIC',hwX+hwW/2,laneY-10);
+
+  // driver box
+  ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(drvX,laneY,drvW,laneH);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(drvX,laneY,drvW,laneH);
+  ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';
+  ctx.fillText('DRIVER',drvX+drvW/2,laneY-10);
+
+  // generic kernel lane
+  ctx.fillStyle='rgba(74,222,128,.07)';ctx.fillRect(kX,laneY,kW,laneH);
+  ctx.strokeStyle=C.green;ctx.lineWidth=1;ctx.strokeRect(kX,laneY,kW,laneH);
+  ctx.fillStyle=C.green;ctx.font='11px Source Code Pro,monospace';
+  ctx.fillText('GENERIC CONTRACT',kX+kW/2,laneY-10);
+
+  ctx.fillStyle=C.text;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText(device==='kbd'?'IRQ1 scancode 0x1E':'ATA status/DRQ poll',hwX+hwW/2,laneY+laneH/2-6);
+  ctx.fillText(device==='kbd'?'(raw byte, no meaning yet)':'(512 raw bytes, no meaning yet)',hwX+hwW/2,laneY+laneH/2+10);
+
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';
+  ctx.fillText(device==='kbd'?'kbd_ops.read()':'disk_ops.read()',drvX+drvW/2,laneY+laneH/2);
+
+  ctx.fillStyle=C.text;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('read(buf, len)',kX+kW/2,laneY+laneH/2-6);
+  ctx.fillText('→ bytes, same shape',kX+kW/2,laneY+laneH/2+10);
+
+  const capt={
+    idle:'Pick a device above',
+    signal:device==='kbd'?'⚡ IRQ1 fires — hardware asserts an interrupt line, unprompted':'⏳ Driver polls ATA status register in a loop, waiting for DRQ',
+    enter:'Data crosses into the driver — this is the ONLY code that knows this chip’s registers',
+    translate:device==='kbd'?'Driver looks up scancode 0x1E in a table → ‘a’':'Driver reads 256 words from the DATA port → 512-byte buffer',
+    emit:'Driver hands back through the generic contract: read(buf,len) → n bytes',
+    done:'Caller receives plain bytes — never knew this was a keyboard or a disk'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(capt[phase]||'',W/2,H-16);
+
+  let dotX=hwX+hwW/2, dotY=laneY+laneH/2, dotCol=C.orange, r=8;
+  if(phase==='signal'){dotX=hwX+hwW*0.3+hwW*0.2*Math.sin(t*Math.PI*4)*0.3+hwW*0.3;dotCol=C.orange;}
+  else if(phase==='enter'){dotX=hwX+hwW+ (drvX-(hwX+hwW))*t; dotCol=C.gold;}
+  else if(phase==='translate'){dotX=drvX+drvW/2; dotCol=C.gold; r=8+2*Math.sin(t*Math.PI*6);}
+  else if(phase==='emit'){dotX=drvX+drvW+(kX-(drvX+drvW))*t; dotCol=C.green;}
+  else if(phase==='done'){dotX=kX+kW/2; dotCol=C.green;}
+  ctx.beginPath();ctx.arc(dotX,dotY,r,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+
+  // arrows
+  ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(hwX+hwW,laneY+laneH/2);ctx.lineTo(drvX,laneY+laneH/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(drvX+drvW,laneY+laneH/2);ctx.lineTo(kX,laneY+laneH/2);ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function runTranslator(device){
+  const phases=['signal','enter','translate','emit','done'];
+  const durations=[500,400,500,400,500];
+  let idx=0,start=performance.now();
+  document.getElementById('translatorLabel').textContent = device==='kbd'
+    ? '▶ Path: keyboard scancode → generic read()'
+    : '▶ Path: disk sector poll → generic read()';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawTranslatorScene(t,phases[idx],device);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('translatorLabel').textContent='▶ Done — try the other device, or reset';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetTranslator(){
+  document.getElementById('translatorLabel').textContent='▶ Watch a keyboard interrupt and a disk poll both cross the same doorway';
+  drawTranslatorScene(0,'idle','kbd');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetTranslator(); });
+window.addEventListener('resize',()=>{ resetTranslator(); });
+</script>
+</body>
+</html>

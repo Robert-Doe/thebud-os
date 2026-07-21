@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The WebSocket Upgrade — One HTTP Request, One Persistent Channel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:170px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.05rem;color:var(--gold);letter-spacing:.03em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#scene" title="Setting the Scene"></a>
+  <a class="toc-dot" href="#getrequest" title="An Ordinary GET"></a>
+  <a class="toc-dot" href="#headers" title="The Three Headers"></a>
+  <a class="toc-dot" href="#keyed" title="Sec-WebSocket-Key"></a>
+  <a class="toc-dot" href="#response" title="101 Switching Protocols"></a>
+  <a class="toc-dot" href="#acceptkey" title="Computing the Accept Key"></a>
+  <a class="toc-dot" href="#negotiation" title="Subprotocols & Extensions"></a>
+  <a class="toc-dot" href="#live" title="Watch the Handshake"></a>
+  <a class="toc-dot" href="#afterward" title="Same Socket, New Rules"></a>
+  <a class="toc-dot" href="#beforeafter" title="Before vs After"></a>
+  <a class="toc-dot" href="#failures" title="What Can Go Wrong"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Networking · HTTP Upgrade Mechanism · RFC 6455</div>
+    <h1>One HTTP Request,<br>One <span>Persistent Channel</span></h1>
+    <p class="hero-sub">Here's the thing almost nobody tells you about WebSockets: there is no separate "WebSocket protocol" negotiation happening on some other port. A WebSocket connection is born as a completely ordinary HTTP <code>GET</code> request — the same kind your browser sends for every image, script, and stylesheet on a page. It just carries three unusual headers asking politely: <em>"Would you mind switching to something else, on this exact same connection?"</em></p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">GET</div><div class="lbl">It starts as an ordinary HTTP request</div></div>
+      <div class="hero-stat"><div class="num">101</div><div class="lbl">Switching Protocols response code</div></div>
+      <div class="hero-stat"><div class="num">SHA-1</div><div class="lbl">Proves the server really understood</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">New TCP connections opened afterward</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- 00 SCENE -->
+<section id="scene">
+<div class="container">
+  <div class="section-num">00 — Setting the Scene</div>
+  <h2>What Plain <span class="accent">HTTP</span> Can't Do</h2>
+
+  <p class="reveal">If you've worked through the sibling lesson on HTTP and TLS (<code>23_http_tls</code> in this series), you already know the shape of a normal HTTP exchange: the client sends one request, the server sends back exactly one response, and then — unless the client asks again — the conversation is over. The server can never speak first. It cannot tap you on the shoulder and say "hey, new chat message arrived" unless you walk over and ask it, over and over, "anything new? anything new? anything new?"</p>
+
+  <p class="reveal">For a stock ticker, a multiplayer game, a chat app, or a live collaborative document, that limitation is a real problem. You want the server to be able to push data <em>the moment it exists</em>, and you want it to flow in both directions without renegotiating a new connection for every single message. That's the gap WebSockets were built to close — and this lesson is about exactly <em>how</em> a browser and server agree to open that channel, using nothing but a single, perfectly ordinary-looking HTTP request as the doorway in.</p>
+
+  <p class="reveal">You might reasonably ask: why not just define WebSockets as their own thing on their own port, the way, say, SSH lives on port 22? The answer is almost entirely about <strong>deployability</strong>. By the time WebSockets were standardized (RFC 6455, 2011), the web already had a decade of firewalls, corporate proxies, and load balancers configured around ports 80 and 443, and around the assumption that traffic on those ports looks like HTTP. A protocol that had to convince every network operator on Earth to open a new port would have taken years longer to become usable in practice. Starting as an HTTP request sidesteps that entire fight.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔗 This Lesson Assumes You Know Plain HTTP</div>
+    We are not going to re-derive request lines, header syntax, or status codes here — that's the job of <strong>23_http_tls</strong>. What follows leans on that foundation directly: a WebSocket handshake <em>is</em> an HTTP/1.1 request and an HTTP/1.1 response, just with headers that mean something special. If header syntax feels shaky, that lesson is the right place to shore it up first.
+  </div>
+</div>
+</section>
+
+<!-- 01 GET REQUEST -->
+<section id="getrequest">
+<div class="container">
+  <div class="section-num">01 — The Doorway In</div>
+  <h2>It Starts as a Completely <span class="accent">Ordinary GET</span></h2>
+
+  <p class="reveal">Open your browser's dev tools, go to the Network tab, and load a page that uses a WebSocket — you'll see it listed right alongside every other request. Same request line format, same headers block, same everything a plain HTML page fetch would use. From the network's point of view, absolutely nothing unusual is happening yet.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📄 A Normal GET (for a stylesheet)</h4>
+      <code style="font-size:.82rem">GET /style.css HTTP/1.1<br>Host: example.com<br>Accept: text/css</code>
+      <p style="margin-top:.8rem;margin-bottom:0;color:var(--muted);font-size:.88rem">A request for a resource, answered with a normal <code>200 OK</code> and a body.</p>
+    </div>
+    <div class="compare-card bad">
+      <h4>🔌 A WebSocket-Upgrade GET</h4>
+      <code style="font-size:.82rem">GET /chat HTTP/1.1<br>Host: example.com<br>Upgrade: websocket<br>Connection: Upgrade</code>
+      <p style="margin-top:.8rem;margin-bottom:0;color:var(--muted);font-size:.88rem">Still <code>GET</code>, still HTTP/1.1 — just carrying extra headers that change what happens next.</p>
+    </div>
+  </div>
+
+  <p class="reveal">This is a deliberate design choice, not an accident. By reusing the exact same request format the entire web already speaks, WebSocket connections get to travel through the same infrastructure everything else does — proxies, load balancers, firewalls, and any middlebox that already knows how to forward an HTTP request. A brand-new, unrelated wire protocol invented from scratch would have hit compatibility walls everywhere. Piggybacking on HTTP's own <strong>Upgrade mechanism</strong> — a feature HTTP/1.1 has always had, for switching protocols mid-connection — sidesteps all of that.</p>
+
+  <p class="reveal">It also means every ordinary rule you already know about HTTP requests still applies at this stage, because it genuinely still <em>is</em> an HTTP request. The handshake runs over the same TCP connection a plain fetch would use. It can (and in production, always should) run inside a TLS tunnel, using <code>wss://</code> the same way <code>https://</code> wraps a normal request. The browser attaches cookies for the target origin automatically. Same-origin rules, redirects, and even HTTP authentication challenges are all still in play for this one request — none of that machinery knows or cares yet that anything unusual is about to happen.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🎯 One Sentence to Keep Coming Back To</div>
+    <strong>A WebSocket connection is 100% ordinary HTTP right up until the exact moment the 101 response finishes — and then, on that same wire, it is 0% HTTP ever again.</strong> Nearly every confusing thing about WebSockets (why they need <code>Origin</code> checks, why proxies sometimes break them, why the handshake looks so plain) falls out of taking that sentence completely literally.
+  </div>
+</div>
+</section>
+
+<!-- 02 THE THREE HEADERS -->
+<section id="headers">
+<div class="container">
+  <div class="section-num">02 — The Request, In Full</div>
+  <h2>The Headers That <span class="accent">Ask For an Upgrade</span></h2>
+
+  <p class="reveal">Here is a real WebSocket handshake request, byte for byte the kind a browser actually sends. Every line matters — nothing here is boilerplate.</p>
+
+  <pre class="reveal"><span class="tag">Client → Server</span><code><span class="kw">GET</span> <span class="str">/chat</span> HTTP/1.1
+<span class="cls">Host</span>: example.com
+<span class="cls">Upgrade</span>: <span class="var">websocket</span>              <span class="cm">// "I want to stop speaking HTTP after this"</span>
+<span class="cls">Connection</span>: <span class="var">Upgrade</span>            <span class="cm">// "...specifically, this is an Upgrade request"</span>
+<span class="cls">Sec-WebSocket-Key</span>: <span class="str">dGhlIHNhbXBsZQ==</span>  <span class="cm">// 16 random bytes, base64-encoded</span>
+<span class="cls">Sec-WebSocket-Version</span>: <span class="num">13</span>       <span class="cm">// the WebSocket protocol version, per RFC 6455</span>
+<span class="cls">Origin</span>: <span class="str">https://example.com</span>     <span class="cm">// which page's script opened this connection</span></code></pre>
+
+  <p class="reveal">Three headers are doing the actual work of requesting the switch, and it takes all three together — a server that only sees one or two of them isn't supposed to treat this as a WebSocket request at all:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Upgrade: websocket</span><span class="fam-count">what</span></div>
+      <div class="fam-desc">States the target protocol by name. This is the generic HTTP/1.1 Upgrade header — it could in principle name other protocols too, but in practice today it almost always means exactly this.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Connection: Upgrade</span><span class="fam-count">how</span></div>
+      <div class="fam-desc">Tells any intermediary reading this request that the <code>Upgrade</code> header should actually be honored for this particular connection — not silently stripped as an unrecognized header.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Sec-WebSocket-Key</span><span class="fam-count">proof</span></div>
+      <div class="fam-desc">A fresh, random, base64-encoded value the client generates for this handshake alone. The server has to do real work with it — you'll see exactly what in a moment.</div>
+    </div>
+  </div>
+
+  <p class="reveal">Two more headers round out a real handshake request, and they're worth naming even though they don't drive the actual switch:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--teal)">Sec-WebSocket-Version</span><span class="fam-count">= 13</span></div>
+      <div class="fam-desc">Pins the client to a specific revision of the WebSocket protocol. If a server only supports a different version, it responds with <code>426 Upgrade Required</code> and lists the versions it does support — a normal HTTP status code doing normal HTTP-style version negotiation.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--teal)">Origin</span><span class="fam-count">sent automatically</span></div>
+      <div class="fam-desc">The browser attaches this on every WebSocket handshake, unprompted, the same way it does for CORS-relevant fetches. Unlike normal cross-origin fetches, though, WebSockets don't enforce same-origin policy for you — reading and acting on this header is entirely the server's responsibility.</div>
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why GET, and never POST?</b> The WebSocket spec (RFC 6455) requires the handshake request to use <code>GET</code> specifically. There's no body to send, and using a method every HTTP server, proxy, and cache already understands as "fetch/negotiate a resource" keeps the handshake maximally boring and compatible — boring is exactly what you want from a step that has to survive being relayed through infrastructure it never asked to support.
+  </div>
+</div>
+</section>
+
+<!-- 03 SEC-WEBSOCKET-KEY -->
+<section id="keyed">
+<div class="container">
+  <div class="section-num">03 — A Nonce, Not a Secret</div>
+  <h2><span class="accent">Sec-WebSocket-Key</span>: What It Actually Proves</h2>
+
+  <p class="reveal">It's tempting to look at <code>Sec-WebSocket-Key</code> and assume it's some kind of authentication or encryption secret. It isn't. It carries no permission, proves no identity, and is sent in the clear right there in the headers for anyone to read. What it <em>does</em> do is give the server something unpredictable to prove it actually processed <em>this specific</em> request, rather than replaying a cached, generic "yes, upgrade" response it had lying around from earlier.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Real Reason: Confused Proxies, Not Attackers</div>
+    RFC 6455's own rationale for this dance is refreshingly unglamorous: it exists mainly to stop <strong>HTTP-naive caching proxies</strong> from getting confused. A proxy that doesn't understand WebSockets at all might otherwise cache a "101 Switching Protocols" response and later replay it for a completely different client's request — corrupting both connections. Forcing the accept value to be freshly, deterministically derived from <em>this</em> request's random key means a cached or blindly-copied response will never match, and a well-behaved client can detect the mismatch and refuse the connection.
+  </div>
+
+  <p class="reveal">So think of <code>Sec-WebSocket-Key</code> less like a password and more like a <strong>nonce</strong> — a number used once, whose only job is to make the server's reply provably tied to this exact exchange. Real security for a WebSocket connection comes from <code>wss://</code> (WebSocket over TLS) and from the server validating the <code>Origin</code> header — not from this key.</p>
+</div>
+</section>
+
+<!-- 04 THE RESPONSE -->
+<section id="response">
+<div class="container">
+  <div class="section-num">04 — The Server Answers</div>
+  <h2><span class="accent">101 Switching Protocols</span></h2>
+
+  <p class="reveal">If — and only if — the server understands WebSockets and is willing to proceed, it answers with an HTTP status line you'll basically never see anywhere else on the web: <strong>101</strong>, not 200, not 204, not 101's much more famous cousin 404. Status code 101 exists in the HTTP spec specifically to mean "I'm honoring your Upgrade request; this connection is about to start speaking something other than HTTP."</p>
+
+  <pre class="reveal"><span class="tag">Server → Client</span><code>HTTP/1.1 <span class="num">101</span> <span class="str">Switching Protocols</span>
+<span class="cls">Upgrade</span>: <span class="var">websocket</span>
+<span class="cls">Connection</span>: <span class="var">Upgrade</span>
+<span class="cls">Sec-WebSocket-Accept</span>: <span class="str">s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</span>  <span class="cm">// computed from the client's key</span></code></pre>
+
+  <p class="reveal">Notice what's <em>missing</em> compared to a normal HTTP response: no <code>Content-Length</code>, no <code>Content-Type</code>, no response body at all. There's nothing to send in a body, because this response isn't delivering a resource — it's delivering permission. The moment this response finishes, the meaning of every subsequent byte on this TCP connection changes completely.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ A Plain HTTP Server Would Just... Ignore This</div>
+    A web server with no WebSocket support isn't broken by an upgrade request — it simply doesn't recognize <code>Upgrade</code> or <code>Sec-WebSocket-Key</code> as meaningful, and answers with a normal HTTP response (maybe a <code>200</code> serving whatever <code>/chat</code> normally returns, or a <code>404</code>). The client-side WebSocket API checks for exactly a <code>101</code> plus a correct <code>Sec-WebSocket-Accept</code> — anything else, and it treats the connection as failed rather than silently trying to speak WebSocket frames at a server that never agreed to listen for them.
+  </div>
+</div>
+</section>
+
+<!-- 05 COMPUTING ACCEPT -->
+<section id="acceptkey">
+<div class="container">
+  <div class="section-num">05 — Proof of Understanding</div>
+  <h2>Computing <span class="accent">Sec-WebSocket-Accept</span></h2>
+
+  <p class="reveal">Here's the part that actually does the proving. The server can't just echo the client's key back, and it can't send a canned constant either — both would be indistinguishable from a dumb HTTP server or proxy blindly copying headers around. Instead, the server must run a specific, deterministic computation that only something which actually implements RFC 6455 would know to do.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Take the client's Sec-WebSocket-Key</strong>Exactly as received: <code>dGhlIHNhbXBsZQ==</code></div></li>
+    <li><div class="step-body"><strong>Append the fixed "magic GUID"</strong>A constant string defined in the spec, the same for every WebSocket implementation on Earth: <code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code></div></li>
+    <li><div class="step-body"><strong>SHA-1 hash the concatenation</strong>Producing a 20-byte binary digest of <code>dGhlIHNhbXBsZQ==258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code></div></li>
+    <li><div class="step-body"><strong>Base64-encode the digest</strong>Turning those 20 raw bytes into the printable string that becomes the header value</div></li>
+    <li><div class="step-body"><strong>Send it back as Sec-WebSocket-Accept</strong>The client independently re-runs steps 1–4 itself and checks the two values match, byte for byte</div></li>
+  </ol>
+
+  <div class="formula cyan reveal">
+    <span class="label">The Accept-Key Formula</span>
+    Sec-WebSocket-Accept = base64( SHA1( Sec-WebSocket-Key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" ) )
+    <span class="sub">For key dGhlIHNhbXBsZQ== the result is always s3pPLMBiTxaQ9kYGzzhZRbK+xOo= — try it yourself, it's deterministic every time.</span>
+  </div>
+
+  <p class="reveal">Why does this prove anything? Because the "magic GUID" string is baked into the WebSocket specification itself — it means nothing, does nothing cryptographically clever, and isn't a secret (anyone can look it up in RFC 6455 in about ten seconds). Its entire job is to be a fixed fingerprint: <em>only</em> code that was deliberately written to implement the WebSocket handshake would know to append that exact string before hashing. A generic HTTP server, or a caching proxy just forwarding bytes around, has no reason to know that string exists — so it structurally cannot produce a correct <code>Sec-WebSocket-Accept</code> by accident.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 This Is Not Encryption or Authentication</div>
+    Don't mistake this SHA-1-and-GUID dance for a security mechanism — it protects against nothing an actual attacker would care about; the GUID is public and the whole computation is public. What it protects against is <em>accidental protocol confusion</em>: a proxy or cache that doesn't understand WebSockets replaying a stale response, or a server that isn't running WebSocket-aware code stumbling into a "success" by coincidence. Real WebSocket security still comes entirely from <code>wss://</code> (TLS) and server-side <code>Origin</code> validation.
+  </div>
+</div>
+</section>
+
+<!-- 05b NEGOTIATION -->
+<section id="negotiation">
+<div class="container">
+  <div class="section-num">05b — Extra Credit in the Same Handshake</div>
+  <h2>Negotiating <span class="accent">Subprotocols &amp; Extensions</span></h2>
+
+  <p class="reveal">The three core headers get the connection open, but the very same handshake can carry two more optional headers that let the client and server agree on <em>how</em> they'll use the connection, before a single WebSocket frame has been sent.</p>
+
+  <pre class="reveal"><span class="tag">Client → Server (extended)</span><code><span class="kw">GET</span> <span class="str">/chat</span> HTTP/1.1
+<span class="cls">Host</span>: example.com
+<span class="cls">Upgrade</span>: <span class="var">websocket</span>
+<span class="cls">Connection</span>: <span class="var">Upgrade</span>
+<span class="cls">Sec-WebSocket-Key</span>: <span class="str">dGhlIHNhbXBsZQ==</span>
+<span class="cls">Sec-WebSocket-Version</span>: <span class="num">13</span>
+<span class="cls">Sec-WebSocket-Protocol</span>: <span class="str">chat, superchat</span>       <span class="cm">// "I can speak either of these app-level dialects"</span>
+<span class="cls">Sec-WebSocket-Extensions</span>: <span class="str">permessage-deflate</span> <span class="cm">// "...and I support compressing frames"</span></code></pre>
+
+  <pre class="reveal"><span class="tag">Server → Client (extended)</span><code>HTTP/1.1 <span class="num">101</span> <span class="str">Switching Protocols</span>
+<span class="cls">Upgrade</span>: <span class="var">websocket</span>
+<span class="cls">Connection</span>: <span class="var">Upgrade</span>
+<span class="cls">Sec-WebSocket-Accept</span>: <span class="str">s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</span>
+<span class="cls">Sec-WebSocket-Protocol</span>: <span class="str">superchat</span>          <span class="cm">// server picks exactly one of the offered choices</span>
+<span class="cls">Sec-WebSocket-Extensions</span>: <span class="str">permessage-deflate</span> <span class="cm">// server agrees to compress</span></code></pre>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Sec-WebSocket-Protocol</span><span class="fam-count">application-level</span></div>
+      <div class="fam-desc">Lets the client offer a list of application-defined sub-protocols it can speak (a JSON chat format, a binary game-state format, an MQTT-over-WebSocket dialect). The server echoes back exactly one it also supports — never a list, never something the client didn't offer. This has nothing to do with the WebSocket protocol itself; it's a label for what the <em>messages</em> inside the frames will mean.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Sec-WebSocket-Extensions</span><span class="fam-count">transport-level</span></div>
+      <div class="fam-desc">Negotiates modifications to the framing layer itself — most commonly <code>permessage-deflate</code>, which compresses frame payloads. Unlike the subprotocol header, the server's response can add negotiated parameters, and the extension must be one both sides genuinely implement, not just recognize by name.</div>
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧩 Same Handshake, More Questions Answered at Once</div>
+    All of this — the core upgrade, the accept-key proof, subprotocol selection, and extension negotiation — happens inside <strong>one single request/response pair</strong>. Nothing about this requires a second round trip. That's the payoff of piggybacking on HTTP's existing header mechanism: arbitrarily many small negotiations can ride along for free on a handshake that was going to happen anyway.
+  </div>
+</div>
+</section>
+
+<!-- 06 LIVE CANVAS -->
+<section id="live">
+<div class="container">
+  <div class="section-num">06 — See It Happen</div>
+  <h2>Watch the <span class="accent">Handshake</span>, Live</h2>
+
+  <p class="reveal">Run the sequence below to see the whole exchange play out over one persistent TCP connection: the upgrade request crossing to the server, the server computing its answer, the 101 response crossing back — and then, critically, the connection itself changing character from "HTTP request/response" into "open duplex pipe."</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="hsLabel">▶ Click "Run the Handshake" to begin</div>
+    <canvas id="hsCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runHandshake()">▶ Run the Handshake</button>
+    <button class="ctrl-btn red" onclick="resetHandshake()">Reset</button>
+  </div>
+
+  <p class="reveal">Notice that the same physical connection (the same wall in the middle of the diagram) is present the entire time — nothing gets closed and reopened. Only what's <em>allowed to flow across it</em> changes, the instant the 101 response finishes.</p>
+</div>
+</section>
+
+<!-- 07 AFTERWARD -->
+<section id="afterward">
+<div class="container">
+  <div class="section-num">07 — The Turning Point</div>
+  <h2>Same Socket, <span class="accent">New Rules</span></h2>
+
+  <p class="reveal">This is the single most important sentence in this whole lesson, so it's worth saying plainly: <strong>after the 101 response, the underlying TCP connection does not close and reopen — it keeps running, but it stops speaking HTTP entirely.</strong> There is no more request line. There is no more status line. There are no more headers. Every byte that flows across that socket from this point forward is interpreted as part of the <strong>WebSocket framing protocol</strong> instead — a compact binary format built for sending discrete messages, in either direction, at any time.</p>
+
+  <p class="reveal">This is exactly what "Switching Protocols" means as a literal, technical description, not just a friendly status-code name. HTTP got the connection open — TCP handshake, then one HTTP request, then one HTTP response — and then handed the exact same wire over to a completely different protocol that has nothing to do with methods, status codes, or headers ever again for the life of that connection.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 One Handshake, Then Silence (From HTTP's Perspective)</div>
+    Everything HTTP-shaped about a WebSocket connection happens exactly once, at the very start. After that single request/response pair, HTTP is completely out of the picture — no more headers, no more methods, no more status codes ever cross that socket again. Every message from here on is a WebSocket <em>frame</em>: small, binary, and — as the companion deep-dive lesson covers — dramatically cheaper per message than another round of HTTP ever could be.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What actually goes wrong if the accept key doesn't match?</b> The client-side implementation is required to abort the connection immediately, treating it as a failed handshake — exactly as if the server had returned a 4xx error. It will not fall back to attempting WebSocket framing anyway. A mismatched (or missing) <code>Sec-WebSocket-Accept</code> is a hard stop, precisely because it's the one signal proving the other end genuinely speaks this protocol.
+  </div>
+
+  <p class="reveal">Once the switch has happened, the WebSocket framing layer defines a small, fixed vocabulary for what any given frame can mean — carried in a 4-bit <strong>opcode</strong> field in every frame's header. None of this existed in the HTTP phase; all of it is new, and it's what lets the connection stay alive and useful indefinitely instead of being a one-shot exchange.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">0x1</div><div class="lbl">Text frame (UTF-8 payload)</div></div>
+    <div class="stat-card"><div class="val">0x2</div><div class="lbl">Binary frame (raw bytes)</div></div>
+    <div class="stat-card"><div class="val">0x8</div><div class="lbl">Close frame (graceful shutdown)</div></div>
+    <div class="stat-card"><div class="val">0x9 / 0xA</div><div class="lbl">Ping / Pong (keepalive)</div></div>
+  </div>
+
+  <p class="reveal">That last pair matters more than it looks. Because the connection can now sit open and silent for minutes or hours between real application messages, either side can send a <strong>Ping</strong> frame at any time, and the other side is required to answer with a matching <strong>Pong</strong> — a lightweight heartbeat that lets both ends (and anything watching the connection, like a load balancer's idle-timeout logic) confirm the socket is still alive without the application ever needing to invent its own keepalive message format. None of this — pings, pongs, or a proper multi-step close handshake — has any HTTP equivalent, because HTTP was never designed to keep a connection meaningfully "alive" between exchanges in the first place.</p>
+</div>
+</section>
+
+<!-- 08 BEFORE VS AFTER TABLE -->
+<section id="beforeafter">
+<div class="container">
+  <div class="section-num">08 — Side by Side</div>
+  <h2>Before vs <span class="accent">After</span> the Upgrade</h2>
+
+  <p class="reveal">One TCP connection, two completely different protocols living on it in sequence. Here's what changes at the exact instant the 101 response finishes:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Aspect</th><th>Before the 101 (HTTP phase)</th><th>After the 101 (WebSocket phase)</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Protocol on the wire</td><td class="hl">HTTP/1.1</td><td class="hl">WebSocket framing (RFC 6455)</td></tr>
+        <tr><td class="gold">Unit of communication</td><td>Request / Response pair</td><td>Individual frame (message)</td></tr>
+        <tr><td class="gold">Headers present?</td><td class="pos">Yes, on every message</td><td class="neg">None — not one, ever again</td></tr>
+        <tr><td class="gold">Who can speak first</td><td>Only the client</td><td class="pos">Either side, at any time</td></tr>
+        <tr><td class="gold">How many exchanges fit</td><td>Exactly one (this handshake)</td><td>Unlimited, until either side closes</td></tr>
+        <tr><td class="gold">TCP connection</td><td class="hl" colspan="2" style="text-align:center">The exact same one, the whole time</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Why Reuse HTTP for the Handshake At All?</div>
+    Because it means a WebSocket connection can start life looking exactly like any other web request — using the same port (80 or, with TLS, 443), passing through the same proxies, firewalls, and load balancers that were already configured to handle HTTP traffic, and carrying the same cookies and <code>Origin</code> header the browser would send anyway. The "weird" part (persistent, bidirectional, low-overhead framing) only kicks in <em>after</em> all of that ordinary infrastructure has already let the connection through.
+  </div>
+</div>
+</section>
+
+<!-- 08b FAILURES -->
+<section id="failures">
+<div class="container">
+  <div class="section-num">08b — Reading the Failure Modes</div>
+  <h2>What Can Go <span class="accent r">Wrong</span> Along the Way</h2>
+
+  <p class="reveal">Because the handshake is just an HTTP request/response pair passing through ordinary web infrastructure, most WebSocket connection failures aren't exotic protocol bugs — they're one of a handful of well-understood breakdowns in that infrastructure, or in how strictly the two sides follow the spec. Knowing the short list makes debugging a failed <code>new WebSocket(...)</code> call far less mysterious.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Symptom</th><th>Likely Cause</th><th>Why It Fails Here Specifically</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Connection immediately closes, no 101 seen</td><td>Server doesn't support WebSockets</td><td>Answered with a normal HTTP response (200, 404, etc.) instead of 101 — client treats anything but 101 as a failed upgrade.</td></tr>
+        <tr><td class="gold">Handshake fails behind a corporate proxy</td><td>Proxy strips or rewrites <code>Upgrade</code>/<code>Connection</code></td><td>An HTTP-naive intermediary that doesn't recognize these headers may drop them, silently downgrading the request to a plain GET.</td></tr>
+        <tr><td class="gold">"Accept" mismatch, connection aborted</td><td>Non-compliant server implementation</td><td>Server computed <code>Sec-WebSocket-Accept</code> incorrectly (wrong GUID, skipped base64, hashed the wrong string) — client's independent recomputation catches it.</td></tr>
+        <tr><td class="gold">403 during handshake</td><td>Server-side Origin check rejected the request</td><td>A well-configured server refuses upgrades from origins it doesn't recognize — the primary defense against cross-site WebSocket hijacking (CSWSH).</td></tr>
+        <tr><td class="gold">Handshake succeeds, but no subprotocol agreed</td><td>No overlap between client's offered list and server's supported set</td><td>Server omits <code>Sec-WebSocket-Protocol</code> in its response rather than picking something the client never offered.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🔒 Origin Checking Is the Server's Job, Not the Handshake's</div>
+    Nothing about the handshake mechanism itself prevents a malicious page on a completely different site from opening a WebSocket to your server — the browser will happily send the <code>Origin</code> header and any cookies for that domain, exactly as it would for any other cross-origin request. It is entirely up to the <strong>server</strong> to read that <code>Origin</code> header and reject connections from origins it doesn't trust. This is covered in depth, with vulnerable and fixed server code, in the companion browser module <code>B18_websockets</code>.
+  </div>
+</div>
+</section>
+
+<!-- 09 GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">WebSocket</div><div class="glossary-def">A protocol providing a persistent, full-duplex message channel over a single TCP connection, established via an HTTP Upgrade handshake.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Upgrade Header</div><div class="glossary-def">A standard HTTP/1.1 header naming the protocol a client wants the connection switched to — <code>websocket</code> in this case.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Connection: Upgrade</div><div class="glossary-def">Tells intermediaries the <code>Upgrade</code> header should be honored for this specific hop-by-hop connection, not ignored.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sec-WebSocket-Key</div><div class="glossary-def">A fresh, random, base64-encoded nonce the client generates per handshake — proof material, not a secret or credential.</div></div>
+    <div class="glossary-card"><div class="glossary-term">101 Switching Protocols</div><div class="glossary-def">The HTTP status code meaning "request honored, and everything after this response uses a different protocol on this same connection."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sec-WebSocket-Accept</div><div class="glossary-def">The server's proof of understanding — deterministically derived from the client's key plus the fixed magic GUID, then SHA-1 hashed and base64-encoded.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Magic GUID</div><div class="glossary-def">The fixed constant <code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>, defined in RFC 6455, appended before hashing to fingerprint real WebSocket implementations.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Frame</div><div class="glossary-def">The basic binary unit of WebSocket communication after the handshake — replaces HTTP's request/response entirely for the life of the connection.</div></div>
+    <div class="glossary-card"><div class="glossary-term">wss://</div><div class="glossary-def">WebSocket over TLS — the encrypted counterpart to plain <code>ws://</code>, exactly as <code>https://</code> relates to <code>http://</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Origin Header</div><div class="glossary-def">Sent automatically by the browser during the handshake, identifying which page's script opened the connection — the server's main defense against cross-site WebSocket hijacking.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The WebSocket Upgrade · A companion lesson for bob_os/browser module <strong>B18_websockets</strong></p>
+  <p style="margin-top:.5rem;font-size:.78rem">One request opens the door. Everything after it is a different language. Continue to <em>02_why_websockets_deepdive.html</em> for why that language exists at all.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── HANDSHAKE CANVAS ─────────────────────────────────────────────────────────
+function drawHandshakeScene(t,phase){
+  const canvas=document.getElementById('hsCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=0, leftW=W*0.42, wallX=leftW, wallW=W*0.16, rightX=leftW+wallW, rightW=W-rightX;
+  const switched = (phase==='switched');
+
+  // client box
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(leftX,20,leftW,H-60);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX+2,20,leftW-4,H-60);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('CLIENT (browser)',leftX+leftW/2,40);
+
+  // wall — dashed HTTP wire, solid glowing once switched
+  ctx.fillStyle='rgba(122,155,191,.08)';ctx.fillRect(wallX,20,wallW,H-60);
+  if(switched){
+    ctx.strokeStyle=C.gold;ctx.lineWidth=2.5;ctx.shadowColor=C.gold;ctx.shadowBlur=10;
+    ctx.strokeRect(wallX+1,20,wallW-2,H-60);
+    ctx.shadowBlur=0;
+  } else {
+    ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,20,wallW-2,H-60);ctx.setLineDash([]);
+  }
+  ctx.save();ctx.translate(wallX+wallW/2,H/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=switched?C.gold:C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(switched?'ONE TCP SOCKET — NOW WEBSOCKET':'ONE TCP SOCKET',0,0);ctx.restore();
+
+  // server box
+  ctx.fillStyle='rgba(167,139,250,.06)';ctx.fillRect(rightX,20,rightW,H-60);
+  ctx.strokeStyle=C.purple;ctx.lineWidth=1.5;ctx.strokeRect(rightX+2,20,rightW-4,H-60);
+  ctx.fillStyle=C.purple;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SERVER',rightX+rightW/2,40);
+
+  const captions={
+    idle:'Click "Run the Handshake" to send the upgrade request',
+    request:'GET /chat HTTP/1.1 — with Upgrade, Connection, Sec-WebSocket-Key headers',
+    computing:'Server: SHA1(key + magic GUID), then base64-encodes the digest',
+    responding:'HTTP/1.1 101 Switching Protocols — with Sec-WebSocket-Accept',
+    switched:'HTTP is done. Both sides now exchange WebSocket frames, either direction, anytime.'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  if(phase==='request'){
+    const dotX=leftX+leftW*0.75+(wallW+rightW*0.1)*t, dotY=H*0.42;
+    drawDot(ctx,dotX,dotY,C.cyan,'GET + Upgrade');
+  } else if(phase==='computing'){
+    const pulse=6+3*Math.sin(t*Math.PI*4);
+    drawDot(ctx,rightX+rightW*0.35,H*0.42,C.purple,'SHA1 + base64',pulse);
+  } else if(phase==='responding'){
+    const dotX=rightX+rightW*0.3-(wallW+rightW*0.05+leftW*0.15)*t, dotY=H*0.42;
+    drawDot(ctx,dotX,dotY,C.gold,'101 + Accept');
+  } else if(phase==='switched'){
+    const p1=leftX+leftW*0.7+(wallW+rightW*0.5)*((t*1.3)%1);
+    const p2=rightX+rightW*0.6-(wallW+leftW*0.5)*((t*1.1)%1);
+    drawDot(ctx,p1,H*0.58,C.green,'frame →');
+    drawDot(ctx,p2,H*0.30,C.orange,'← frame');
+  }
+}
+
+function drawDot(ctx,x,y,col,label,r){
+  ctx.beginPath();ctx.arc(x,y,r||8,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle=col;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x,y-14);
+}
+
+function runHandshake(){
+  const phases=['request','computing','responding','switched'];
+  const durations=[650,700,650,2200];
+  let idx=0,start=performance.now();
+  document.getElementById('hsLabel').textContent='▶ Running the handshake…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawHandshakeScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('hsLabel').textContent='▶ Complete — the connection is now a WebSocket. Click Reset to run again.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetHandshake(){
+  document.getElementById('hsLabel').textContent='▶ Click "Run the Handshake" to begin';
+  drawHandshakeScene(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetHandshake(); });
+window.addEventListener('resize',()=>{ resetHandshake(); });
+</script>
+</body>
+</html>

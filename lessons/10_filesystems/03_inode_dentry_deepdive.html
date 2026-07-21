@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inodes and Dentries: How Linux's VFS Actually Represents Files</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.35);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.gold{color:var(--gold)}
+h2 .accent.cy{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--orange)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* dossier, reused for the inode field breakdown */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#whatisinode" title="What Is an Inode"></a>
+  <a class="toc-dot" href="#namelessness" title="Why No Filename"></a>
+  <a class="toc-dot" href="#hardlinks" title="Hard Links"></a>
+  <a class="toc-dot" href="#pathwalk" title="Resolving a Path"></a>
+  <a class="toc-dot" href="#dentrycache" title="Dentry Cache"></a>
+  <a class="toc-dot" href="#symlinks" title="vs Symlinks"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Filesystems · Inodes · Dentries · Linux VFS</div>
+    <h1>The File That<br><span>Has No Name</span></h1>
+    <p class="hero-sub">Ask Linux "what is this file's name," and the honest answer is: the file itself doesn't know. Its metadata record — the inode — stores size, permissions, timestamps, and where its data lives, but deliberately not a name. Names live one layer up, in directory entries. That split sounds like a technicality. It's actually the entire reason hard links, and fast path lookups, work at all.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Filename Fields Inside an Inode</div></div>
+      <div class="hero-stat"><div class="num">2+</div><div class="lbl">Different Names Can Point at One Inode (hard links)</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Component Resolved Per Directory Lookup Step</div></div>
+      <div class="hero-stat"><div class="num">dcache</div><div class="lbl">In-Memory Cache That Skips Repeated Disk Lookups</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- WHAT IS AN INODE -->
+<section id="whatisinode">
+<div class="container">
+  <div class="section-num">00 — Zooming In</div>
+  <h2>What Is an <span class="accent">Inode</span>, Really?</h2>
+
+  <p class="reveal">The earlier lesson in this cluster explained the VFS as a universal menu sitting in front of many different kitchens. This lesson walks into one specific kitchen — Linux's ext-family filesystems — and looks at exactly how it represents "a file" on disk. The answer starts with the <strong>inode</strong> (index node): one fixed-size record per file, holding every piece of metadata about it <em>except</em> its name.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Inode #142857</span><span style="color:var(--muted);font-size:.7rem">no name field anywhere in this record</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Size</div><div class="f-val">13,402 bytes</div><div class="f-desc">Exact byte length of the file's content.</div></div>
+      <div class="dossier-field"><div class="f-label">Permissions</div><div class="f-val">rw-r--r--</div><div class="f-desc">Owner/group/other read-write-execute bits.</div></div>
+      <div class="dossier-field"><div class="f-label">Owner / Group</div><div class="f-val">uid 1000 / gid 1000</div><div class="f-desc">Which user and group own this file.</div></div>
+      <div class="dossier-field"><div class="f-label">Timestamps</div><div class="f-val">atime, mtime, ctime</div><div class="f-desc">Last accessed, last content-modified, last metadata-changed.</div></div>
+      <div class="dossier-field"><div class="f-label">Link Count</div><div class="f-val">2</div><div class="f-desc">How many directory entries currently point at this inode — the key to hard links, below.</div></div>
+      <div class="dossier-field"><div class="f-label">Data Block Pointers</div><div class="f-val">direct + indirect blocks / extents</div><div class="f-desc">Where the actual file bytes physically live on disk.</div></div>
+    </div>
+  </div>
+
+  <p class="reveal">Everything a program might want to know about a file via <code>stat()</code> — its size, its permissions, when it was last touched, how many blocks it occupies — is answered entirely from this one record, using only a number (the inode number) as the lookup key. No name required. That's not an oversight. It's the whole design.</p>
+</div>
+</section>
+
+<!-- NAMELESSNESS -->
+<section id="namelessness">
+<div class="container">
+  <div class="section-num">01 — The Deliberate Omission</div>
+  <h2>Why the Inode <span class="accent">Doesn't Know Its Own Name</span></h2>
+
+  <p class="reveal">If you've only used Windows or a GUI file manager, this feels backwards — surely a file's name is one of its most basic properties? On Linux's underlying model, a name isn't a property <em>of</em> the file at all. It's a property of the <strong>directory that mentions it</strong>. A directory's actual content, on disk, is nothing more than a list of pairs: a name, and the inode number that name currently refers to. Those pairs are called <strong>directory entries</strong>, or <strong>dentries</strong>.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Name (in the directory's data)</th><th>Inode Number It Points To</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">report.txt</td><td class="center gold">142857</td></tr>
+        <tr><td class="hl">notes.txt</td><td class="center gold">88231</td></tr>
+        <tr><td class="hl">final_report.txt</td><td class="center gold">142857</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Look closely at that table: <code>report.txt</code> and <code>final_report.txt</code> both point at inode <strong>142857</strong>. That's not a typo, and it's not two copies of the same file. It's one file, one set of data blocks, one piece of metadata, reachable by two completely independent names in the directory. This is only possible <em>because</em> the name lives in the directory entry and not in the inode — the inode has no idea it even has two names, because it was never designed to know its own name in the first place.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">The Aha Moment</div>
+    A directory isn't a container that "holds" files the way a folder icon suggests. A directory is a <strong>lookup table</strong> — a list of (name → inode number) mappings, and nothing more. "Renaming" a file doesn't touch the file's data or its inode at all; it just edits one entry in the directory's name-to-number table. "Moving" a file within the same filesystem is the same operation: remove one (name → inode) pair, add another, in a different directory's table. The file itself — its inode, its data — never moves or changes.
+  </div>
+</div>
+</section>
+
+<!-- HARD LINKS -->
+<section id="hardlinks">
+<div class="container">
+  <div class="section-num">02 — Watch It Happen</div>
+  <h2>Hard Links: <span class="accent">Two Names, One File</span></h2>
+
+  <p class="reveal">Once you see the (name → inode) split, hard links stop being a special feature and become an obvious consequence of the data structure. Creating a hard link with <code>ln report.txt final_report.txt</code> does exactly one thing: it adds a <em>second</em> directory entry pointing at the same inode number, and bumps that inode's link count by one. No data is copied. No new inode is allocated.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="linkLabel">▶ Create a hard link, then delete the original name</div>
+    <canvas id="linkCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runLink('create')">▶ ln report.txt final_report.txt</button>
+    <button class="ctrl-btn gold" onclick="runLink('delete')">▶ rm report.txt</button>
+    <button class="ctrl-btn red" onclick="resetLink()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Before: one name, one inode, link count 1</strong><code>report.txt</code> is the only directory entry pointing at inode 142857.</div></li>
+    <li><div class="step-body"><strong>ln adds a second directory entry, same inode number</strong>No new data is written anywhere. The kernel just writes a new (name → inode) pair into the directory, and increments the inode's link count to 2.</div></li>
+    <li><div class="step-body"><strong>rm report.txt removes only that one directory entry</strong>The inode's link count drops back to 1 — but it does <em>not</em> hit zero, because <code>final_report.txt</code> still points at it.</div></li>
+    <li><div class="step-body"><strong>The data survives, reachable only through the surviving name</strong>Only when an inode's link count hits <strong>zero</strong> — meaning no directory entry anywhere points at it anymore — does the filesystem actually reclaim its data blocks.</div></li>
+  </ol>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">This Is Also Why "Deleting" a File Doesn't Always Free Space</div>
+    Unix's <code>unlink()</code> system call is named accurately: it removes one link (one directory entry), not "the file." If a process still has that same inode open via a file descriptor when the last directory entry is removed, the inode's data isn't freed until that process closes the file too — the kernel tracks both link count <em>and</em> open-file-descriptor count before actually reclaiming a data block. This is precisely the trick behind an anonymous temp file: <code>open()</code> it, immediately <code>unlink()</code> it, and it stays fully usable through your file descriptor while being invisible to everyone else and automatically cleaned up the moment you close it.
+  </div>
+</div>
+</section>
+
+<!-- PATH RESOLUTION -->
+<section id="pathwalk">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>Resolving <span class="accent">/usr/bin/ls</span>, One Component at a Time</h2>
+
+  <p class="reveal">Now put the pieces together to answer a deceptively simple question: how does the kernel turn the string <code>/usr/bin/ls</code> into an actual inode? Not in one leap — a path is resolved <strong>one directory-lookup at a time</strong>, each step using exactly the (name → inode) mechanism above.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="pathLabel">▶ Resolve /usr/bin/ls component by component</div>
+    <canvas id="pathCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runPath()">▶ Resolve the path</button>
+    <button class="ctrl-btn red" onclick="resetPath()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Start at the root inode</strong>Every absolute path resolution begins from a well-known inode: the root directory, <code>/</code>.</div></li>
+    <li><div class="step-body"><strong>Look up "usr" in the root directory's entries</strong>Read the root directory's data, scan its (name → inode) pairs for "usr", get back an inode number — call it the <em>usr</em> inode.</div></li>
+    <li><div class="step-body"><strong>Look up "bin" in the usr directory's entries</strong>Same operation, one level down: read <em>that</em> inode's directory data, find "bin", get the <em>bin</em> inode.</div></li>
+    <li><div class="step-body"><strong>Look up "ls" in the bin directory's entries</strong>One more lookup, and you finally have the inode for the actual <code>ls</code> executable — three separate directory reads for a three-component path.</div></li>
+  </ol>
+
+  <p class="reveal">That's the part worth sitting with: a "single" path lookup is really N separate directory reads for an N-component path, each one potentially a real disk I/O. For a short interactive command that's barely noticeable. For a kernel doing this constantly — every <code>open()</code>, every <code>exec()</code>, every shell script sourcing another file — those lookups add up fast.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">Why the Kernel Caps Symlink Depth</div>
+    Each step above assumed a plain directory entry. But any component along the way could instead be a symlink, which forces the resolver to detour into resolving <em>that</em> path before it can continue — and nothing stops a symlink from pointing at another symlink, which points at another. Without a limit, a maliciously (or accidentally) circular chain of symlinks would spin the kernel forever trying to resolve one path. This is exactly why Linux hard-caps symlink resolution depth (historically 8, now typically 40) and simply fails the lookup with <code>ELOOP</code> past that point — a small, unglamorous safety valve on an otherwise straightforward walk.
+  </div>
+</div>
+</section>
+
+<!-- DENTRY CACHE -->
+<section id="dentrycache">
+<div class="container">
+  <div class="section-num">04 — The Performance Layer</div>
+  <h2>The Dentry Cache: Skipping the <span class="accent">Disk</span>, Not the Steps</h2>
+
+  <p class="reveal">Linux doesn't eliminate the per-component nature of path resolution — it can't, the (name → inode) structure genuinely requires walking one level at a time. What it does instead is keep an in-memory cache, the <strong>dentry cache</strong> (often just "dcache"), holding recently-resolved (name → inode) results so that the second, third, and millionth time someone resolves <code>/usr/bin</code>, the kernel can answer straight from RAM instead of re-reading directory blocks off disk.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐌 Cold Lookup — Nothing Cached</h4>
+      Resolving <code>/usr/bin/ls</code> the first time means three separate directory reads, each a potential disk I/O: root → usr, usr → bin, bin → ls. Slow relative to everything else the kernel does.
+    </div>
+    <div class="compare-card good">
+      <h4>⚡ Warm Lookup — Dentry Cache Hit</h4>
+      The next process that resolves <code>/usr/bin/ls</code> — or even just <code>/usr/bin</code> as a prefix of some other path — finds each component's (name → inode) mapping already sitting in the dcache. Zero disk I/O, just following in-memory pointers.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why this matters more than it sounds like it should:</b> shells, compilers, and package managers resolve paths constantly, and a huge fraction of those paths share common prefixes — <code>/usr/bin</code>, <code>/usr/lib</code>, <code>/usr/include</code> are each resolved thousands of times a day on a busy machine, all sharing the same "root → usr" first hop. The dentry cache turns that repeated first hop into a cache hit instead of a repeated disk read, which is a meaningful chunk of why a warmed-up Linux system "feels" fast at anything filesystem-heavy — builds, package installs, shell tab-completion.
+  </div>
+
+  <p class="reveal">Crucially, the dentry cache is purely a performance layer sitting <em>in front of</em> the real structure, not a replacement for it. If an entry isn't cached, the kernel falls back to reading the actual directory data from the actual filesystem backend — exactly the walk described above — and then populates the cache with the result for next time. Nothing about correctness depends on the cache; only speed does.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">The Cache Also Remembers "No"</div>
+    A subtler trick: the dcache doesn't just cache successful lookups — it also caches <strong>negative</strong> results, called negative dentries, remembering "this name does <em>not</em> exist in this directory" so a repeated failed lookup (a shell checking a dozen <code>PATH</code> directories for a command that only lives in the last one) doesn't re-hit the disk each time either. A negative dentry gets invalidated the moment something with that name is actually created, keeping the cache honest without ever forcing a program to fall back to a slow path just because the answer happened to be "not found."
+  </div>
+</div>
+</section>
+
+<!-- SYMLINKS COMPARE -->
+<section id="symlinks">
+<div class="container">
+  <div class="section-num">05 — A Close Relative, Clarified</div>
+  <h2>Hard Link vs <span class="accent">Symbolic Link</span></h2>
+
+  <p class="reveal">It's worth explicitly separating hard links from symbolic links, because they solve superficially similar problems ("more than one name for a thing") through completely different mechanisms — one exploiting the (name → inode) split directly, the other sitting entirely outside it.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Hard Link</th><th>Symbolic Link</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">What it actually is</td><td>A second directory entry pointing at the same inode number</td><td>A tiny separate file whose data is a path string</td></tr>
+        <tr><td class="hl">Has its own inode?</td><td class="neg">No — shares the target's inode entirely</td><td class="pos">Yes — its own inode, own small data block holding the path text</td></tr>
+        <tr><td class="hl">Survives target deletion?</td><td class="pos">Yes — data lives until link count hits 0</td><td class="neg">No — becomes a "dangling" link pointing nowhere</td></tr>
+        <tr><td class="hl">Can cross filesystems?</td><td class="neg">No — inode numbers are only meaningful within one filesystem</td><td class="pos">Yes — it's just a stored string, resolved fresh each time</td></tr>
+        <tr><td class="hl">Can link a directory?</td><td class="neg">Generally forbidden (would break tree structure)</td><td class="pos">Yes, freely</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">A symbolic link resolves by being read like any other file — its "content" is a path — and then that path gets resolved fresh, from scratch, through the exact same component-by-component walk described above. A hard link needs no such extra step at all: the directory entry <em>is</em> already a direct (name → inode) pointer, indistinguishable at the filesystem level from any other name for that same file.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">Where bob_os Stops, On Purpose</div>
+    Module 19's own tutorial is upfront that its VFS "inode" is really just a loosely-borrowed word — an integer handle meaningful only to whichever backend owns it, with no permissions, no link count, no data-block pointers behind it, and BobFS itself has no directory structure at all, let alone (name → inode) entries or hard links. That's a deliberate, reasonable scope cut for a teaching kernel: everything in this lesson — the split between metadata and naming, link counts, dentries, the cache in front of them — is exactly the next layer of "real filesystem" bob_os's own modules choose not to build, so that Module 19 can stay focused on the dispatch mechanism instead of disk-format bookkeeping.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Inode</div><div class="glossary-def">The unique on-disk record holding a file's metadata — size, permissions, timestamps, link count, and data block pointers — deliberately excluding any filename.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dentry (Directory Entry)</div><div class="glossary-def">A (name → inode number) pair stored inside a directory's data — the only place a filename actually lives.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Link Count</div><div class="glossary-def">The number of directory entries currently pointing at a given inode; data is only reclaimed once this (and open file descriptor count) reaches zero.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hard Link</div><div class="glossary-def">A second directory entry pointing at an already-existing inode number — two independent names sharing one file's data and metadata exactly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Symbolic Link (Symlink)</div><div class="glossary-def">A separate small file whose own data is a path string, resolved fresh through a full path lookup each time it's followed.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Path Resolution</div><div class="glossary-def">Turning a path string into an inode by looking up one component at a time, each step reading the previous step's inode as a directory.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dentry Cache (dcache)</div><div class="glossary-def">An in-memory cache of recently resolved (name → inode) pairs, letting repeated path lookups skip disk reads without changing the underlying resolution mechanism.</div></div>
+    <div class="glossary-card"><div class="glossary-term">unlink()</div><div class="glossary-def">The system call behind "deleting" a file — it removes one directory entry and decrements a link count; it does not necessarily free any data.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Inodes and Dentries: How Linux's VFS Actually Represents Files · Companion lesson for bob_os modules <code>12_filesystem</code> and <code>19_vfs</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">The file never knew its own name. The directory did.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── HARD LINK CANVAS ──────────────────────────────────────────────
+let linkState='before'; // before, linked, unlinked
+
+function drawLink(){
+  const canvas=document.getElementById('linkCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // directory box
+  const dirX=20,dirY=30,dirW=Math.min(320,W*0.42),dirH=200;
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(dirX,dirY,dirW,dirH);
+  ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Directory data (name → inode)',dirX+10,dirY-10);
+
+  // entry: report.txt
+  const showReport = linkState!=='unlinked';
+  ctx.font='13px Source Code Pro,monospace';
+  if(showReport){
+    ctx.fillStyle='rgba(56,189,248,.1)';ctx.fillRect(dirX+15,dirY+20,dirW-30,36);
+    ctx.strokeStyle=C.cyan;ctx.strokeRect(dirX+15,dirY+20,dirW-30,36);
+    ctx.fillStyle=C.cyan;ctx.fillText('report.txt  →  inode 142857',dirX+25,dirY+43);
+  } else {
+    ctx.strokeStyle=C.red;ctx.setLineDash([4,4]);ctx.strokeRect(dirX+15,dirY+20,dirW-30,36);
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.red;ctx.fillText('report.txt  —  removed',dirX+25,dirY+43);
+  }
+
+  // entry: final_report.txt
+  const showFinal = linkState!=='before';
+  if(showFinal){
+    ctx.fillStyle='rgba(74,222,128,.1)';ctx.fillRect(dirX+15,dirY+70,dirW-30,36);
+    ctx.strokeStyle=C.green;ctx.strokeRect(dirX+15,dirY+70,dirW-30,36);
+    ctx.fillStyle=C.green;ctx.fillText('final_report.txt  →  inode 142857',dirX+25,dirY+93);
+  } else {
+    ctx.fillStyle=C.muted;ctx.font='11px Lato,sans-serif';
+    ctx.fillText('(final_report.txt does not exist yet)',dirX+25,dirY+93);
+    ctx.font='13px Source Code Pro,monospace';
+  }
+
+  // inode box
+  const inoX=dirX+dirW+40, inoY=60, inoW=Math.min(260,W-inoX-20), inoH=140;
+  if(inoW>80){
+    ctx.strokeStyle=C.purple;ctx.lineWidth=2;ctx.strokeRect(inoX,inoY,inoW,inoH);
+    ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(inoX,inoY,inoW,inoH);
+    ctx.fillStyle=C.purple;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText('inode 142857',inoX+12,inoY+22);
+    const linkCount = linkState==='before'?1:linkState==='linked'?2:1;
+    ctx.fillStyle=C.text;ctx.font='12px Source Code Pro,monospace';
+    ctx.fillText('size: 13,402 bytes',inoX+12,inoY+48);
+    ctx.fillText('data blocks: [...]',inoX+12,inoY+68);
+    ctx.fillStyle=linkCount>1?C.green:C.orange;
+    ctx.fillText('link count: '+linkCount,inoX+12,inoY+92);
+    if(linkState==='unlinked'){
+      ctx.fillStyle=C.green;ctx.font='10px Lato,sans-serif';
+      ctx.fillText('still alive — final_report.txt',inoX+12,inoY+114);
+      ctx.fillText('still points here',inoX+12,inoY+128);
+    }
+
+    // arrows
+    if(showReport){
+      ctx.strokeStyle=C.cyan;ctx.setLineDash([]);ctx.beginPath();
+      ctx.moveTo(dirX+dirW-15,dirY+38);ctx.lineTo(inoX,inoY+60);ctx.stroke();
+    }
+    if(showFinal){
+      ctx.strokeStyle=C.green;ctx.beginPath();
+      ctx.moveTo(dirX+dirW-15,dirY+88);ctx.lineTo(inoX,inoY+90);ctx.stroke();
+    }
+  }
+
+  // caption
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='left';
+  const captions={
+    before:'Before: one directory entry, one inode, link count 1',
+    linked:'After ln: a second entry points at the SAME inode. Link count is now 2. No data copied.',
+    unlinked:'After rm report.txt: that entry is gone, link count drops to 1 — data survives via final_report.txt'
+  };
+  ctx.fillText(captions[linkState],20,H-16);
+}
+
+function runLink(action){
+  if(action==='create') linkState='linked';
+  if(action==='delete') linkState= linkState==='before' ? 'before' : 'unlinked';
+  const labels={before:'▶ Create a hard link, then delete the original name',linked:'▶ Now try: rm report.txt',unlinked:'▶ Done — data survived under its second name'};
+  document.getElementById('linkLabel').textContent=labels[linkState];
+  drawLink();
+}
+function resetLink(){
+  linkState='before';
+  document.getElementById('linkLabel').textContent='▶ Create a hard link, then delete the original name';
+  drawLink();
+}
+
+// ── PATH RESOLUTION CANVAS ──────────────────────────────────────────────
+const pathSteps=[
+  {label:'root inode ( / )',dir:'root directory data',lookup:'usr',result:'usr inode'},
+  {label:'usr inode',dir:'usr directory data',lookup:'bin',result:'bin inode'},
+  {label:'bin inode',dir:'bin directory data',lookup:'ls',result:'ls inode (found!)'}
+];
+let pathIdx=-1;
+
+function drawPath(){
+  const canvas=document.getElementById('pathCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.muted;ctx.font='12px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Resolving:  /usr/bin/ls',16,26);
+
+  const boxW=Math.min(230,(W-80)/3), gap=(W-boxW*3-32)/2;
+  const y=70,h=90;
+  for(let i=0;i<3;i++){
+    const x=16+i*(boxW+gap);
+    const active = i<=pathIdx;
+    const current = i===pathIdx;
+    ctx.fillStyle = current ? 'rgba(167,139,250,.18)' : active ? 'rgba(74,222,128,.1)' : '#141c2e';
+    ctx.fillRect(x,y,boxW,h);
+    ctx.strokeStyle = current ? C.purple : active ? C.green : C.border;
+    ctx.lineWidth = current?2:1;
+    ctx.strokeRect(x,y,boxW,h);
+
+    ctx.textAlign='left';ctx.font='10px Source Code Pro,monospace';
+    ctx.fillStyle = active ? (current?C.purple:C.green) : C.muted;
+    ctx.fillText('step '+(i+1)+' — read '+pathSteps[i].dir,x+10,y+18);
+    ctx.fillStyle = active ? C.text : C.muted;
+    ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('look up "'+pathSteps[i].lookup+'"',x+10,y+42);
+    if(active){
+      ctx.fillStyle = current?C.purple:C.green;
+      ctx.fillText('→ '+pathSteps[i].result,x+10,y+64);
+    }
+
+    if(i<2){
+      ctx.strokeStyle=C.muted;ctx.beginPath();
+      ctx.moveTo(x+boxW+4,y+h/2);ctx.lineTo(x+boxW+gap-4,y+h/2);ctx.stroke();
+      ctx.fillStyle=C.muted;ctx.textAlign='center';ctx.font='14px sans-serif';
+      ctx.fillText('→',x+boxW+gap/2,y+h/2+5);
+    }
+  }
+
+  ctx.textAlign='left';ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';
+  let caption='Click "Resolve the path" to walk it one component at a time.';
+  if(pathIdx===0)caption='Step 1: root directory\'s entries scanned for "usr" → found usr inode.';
+  else if(pathIdx===1)caption='Step 2: usr directory\'s entries scanned for "bin" → found bin inode.';
+  else if(pathIdx===2)caption='Step 3: bin directory\'s entries scanned for "ls" → found the ls inode. Resolution complete — 3 lookups for 3 components.';
+  ctx.fillText(caption,16,H-16);
+}
+
+let pathRunning=false;
+function runPath(){
+  if(pathRunning)return;
+  pathRunning=true;
+  pathIdx=-1;
+  document.getElementById('pathLabel').textContent='▶ Resolving one component at a time…';
+  let step=0;
+  function advance(){
+    pathIdx=step;
+    drawPath();
+    step++;
+    if(step>2){
+      pathRunning=false;
+      document.getElementById('pathLabel').textContent='▶ Done — 3 directory reads for a 3-component path. Reset to try again.';
+      return;
+    }
+    setTimeout(advance,800);
+  }
+  advance();
+}
+function resetPath(){
+  pathRunning=false;
+  pathIdx=-1;
+  document.getElementById('pathLabel').textContent='▶ Resolve /usr/bin/ls component by component';
+  drawPath();
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetLink(); resetPath(); });
+window.addEventListener('resize',()=>{ drawLink(); drawPath(); });
+</script>
+</body>
+</html>

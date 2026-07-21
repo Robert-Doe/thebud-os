@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Gotchas: The Self-Pipe Trick, Reentrancy, and signalfd</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:var(--purple)} .ty{color:var(--cyan)} .fn{color:var(--gold)} .cm{color:var(--muted);font-style:italic} .st{color:var(--green)} .nu{color:var(--orange)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--purple);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#broken" title="A Concrete Break"></a>
+  <a class="toc-dot" href="#demo1" title="Watch It Corrupt"></a>
+  <a class="toc-dot" href="#selfpipe" title="The Self-Pipe Trick"></a>
+  <a class="toc-dot" href="#demo2" title="Watch The Trick Work"></a>
+  <a class="toc-dot" href="#signalfd" title="signalfd()"></a>
+  <a class="toc-dot" href="#compare" title="Comparing Approaches"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Signal Gotchas · Event-Loop Patterns</div>
+    <h1>Turning a Landmine<br><span>Into an Ordinary Event</span></h1>
+    <p class="hero-sub">You now know signal handlers can fire mid-instruction inside code that never expected to be interrupted, and that calling almost anything non-trivial from one is a gamble. So how does real, production networking and server code actually cope? By refusing to do any real work inside the handler at all — and turning the awkward, asynchronous signal into a boring, synchronous, ordinary file descriptor your event loop already knows how to wait on.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Byte Written Per Signal, By the Handler</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Non-Async-Signal-Safe Calls in the Fixed Handler</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">File Descriptors: the Pipe's Read and Write End</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Modern Linux Syscall That Builds This In: signalfd()</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Warning, <span class="accent">Restated</span> as a Practical Problem</h2>
+  <p class="reveal">The delivery lesson ended on a warning: a signal handler can interrupt your program at literally any instruction boundary, including in the middle of a non-reentrant function like <code>malloc()</code>, and only a short, POSIX-certified list of async-signal-safe functions are genuinely safe to call from inside one. That's the theory. This lesson is about what you actually <em>do</em> with that constraint when you need a handler to trigger real, non-trivial work — logging, cleaning up state, waking up a worker thread, reloading a config file.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Practical Question</div>
+    If a handler can't safely call <code>malloc()</code>, can't safely call <code>printf()</code>, can't safely touch most of your own program's data structures without careful precautions — how does any real program do <em>anything</em> useful in response to a signal? The answer, spoiler: it doesn't. It does almost nothing in the handler, and does everything else somewhere completely safe.
+  </div>
+</div>
+</section>
+
+<!-- BROKEN -->
+<section id="broken">
+<div class="container">
+  <div class="section-num">01 — A Concrete, Broken Example</div>
+  <h2>Two <span class="accent">printf()</span> Calls Walk Into a Handler</h2>
+
+  <p class="reveal">Let's make the danger from the last lesson completely concrete, with the single most tempting mistake beginners make: calling <code>printf()</code> from inside a handler "just to log that the signal arrived."</p>
+
+  <pre class="reveal"><code><span class="cm">#include &lt;signal.h&gt;</span>
+<span class="cm">#include &lt;stdio.h&gt;</span>
+
+<span class="kw">void</span> <span class="fn">handle_sigusr1</span>(<span class="ty">int</span> sig) {
+    printf(<span class="st">"[handler] got SIGUSR1\n"</span>);   <span class="cm">// looks completely innocent</span>
+}
+
+<span class="ty">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {
+    signal(SIGUSR1, handle_sigusr1);
+    <span class="kw">while</span> (<span class="nu">1</span>) {
+        printf(<span class="st">"working... this line is long enough to span multiple internal buffer writes\n"</span>);
+        <span class="cm">// somewhere in the middle of THIS printf's internal buffering,</span>
+        <span class="cm">// a SIGUSR1 can arrive and jump straight into handle_sigusr1() above</span>
+    }
+}</code></pre>
+
+  <p class="reveal"><code>printf()</code> is not a single atomic operation. Internally, glibc's stdio maintains a shared, per-stream buffer and a set of pointers tracking how much of that buffer is filled, protected in multi-threaded programs by a lock — but a signal handler running on the <em>same thread</em> doesn't go through that lock at all, because from the CPU's point of view it's not a separate thread, it's a detour taken by the very same one. If the main loop's <code>printf()</code> is mid-way through appending bytes to that shared buffer when the handler's own <code>printf()</code> fires, the handler's call reads and writes the exact same buffer state — pointers the main call assumed nobody else was touching a moment ago.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ What Actually Goes Wrong</div>
+    In the best case, you get visibly garbled or interleaved output — two partial lines mashed together. In the worse case, on an implementation where the same lock is involved, the handler's <code>printf()</code> tries to acquire a lock the interrupted <code>printf()</code> already holds — on the <em>same thread</em>, which can never release it because that thread is currently frozen inside the handler waiting for the lock. That's an instant, silent deadlock: the whole process just stops, with no crash, no error message, nothing — just gone.
+  </div>
+
+  <p class="reveal">Neither outcome is guaranteed — you might run this code a thousand times and never see it happen, because the timing window is narrow. That's exactly what makes this class of bug so miserable: it's not that the code is wrong every time, it's that it's wrong <em>some</em> of the time, under load, in production, at 3am, in a way that's nearly impossible to reproduce on demand.</p>
+</div>
+</section>
+
+<!-- DEMO 1 -->
+<section id="demo1">
+<div class="container">
+  <div class="section-num">02 — Watch It Happen</div>
+  <h2>Same Buffer, <span class="accent">Two Writers</span></h2>
+
+  <p class="reveal">Here's the collision from the previous section, slowed down: the main loop's <code>printf()</code> is partway through writing into stdio's shared internal buffer when the handler's own <code>printf()</code> gets spliced in on top of it.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="bufLabel">▶ Watch two printf() calls collide on one shared buffer</div>
+    <canvas id="bufCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runBuf()">▶ Deliver signal mid-printf()</button>
+    <button class="ctrl-btn purple" onclick="resetBuf()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- SELF-PIPE -->
+<section id="selfpipe">
+<div class="container">
+  <div class="section-num">03 — The Classic Fix</div>
+  <h2>The <span class="accent">Self-Pipe</span> Trick</h2>
+
+  <p class="reveal">The self-pipe trick is old (it predates Linux's <code>signalfd()</code> by decades, and shows up in classic Unix networking code like <code>libevent</code> and early <code>nginx</code>), and the idea is almost embarrassingly simple once you see it: create an ordinary <strong>pipe</strong> at startup — the same kind you'd use for any other inter-process communication — and have the signal handler do <em>one</em> thing and one thing only: write a single byte to the pipe's write end.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">⚡</div><div class="pipe-name">Signal Arrives</div><div class="pipe-desc">Delivered at the usual checkpoint, interrupting whatever was running</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">✍️</div><div class="pipe-name">Handler Writes 1 Byte</div><div class="pipe-desc"><code>write(pipe_fd[1], "x", 1)</code> — the ONLY thing the handler does</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">↩️</div><div class="pipe-name">Handler Returns</div><div class="pipe-desc">Immediately — no logic, no allocation, nothing else</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">👁️</div><div class="pipe-name">Event Loop Wakes</div><div class="pipe-desc">select()/poll() was already watching the pipe's read end</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">⚙️</div><div class="pipe-name">Real Work Happens</div><div class="pipe-desc">Safely, synchronously, in ordinary program flow — not in a handler</div></div>
+  </div>
+
+  <p class="reveal">The trick's entire value is in that last step: by the time your actual logic runs, you are <strong>not inside a signal handler anymore</strong>. You're back in ordinary code, on the normal call stack, free to call <code>malloc()</code>, <code>printf()</code>, touch any data structure you like — because nothing about this code path can be re-entered mid-instruction by itself. The signal's asynchronicity has been fully absorbed and converted into a completely ordinary, synchronous "a byte showed up on this file descriptor" event, indistinguishable to your event loop from a byte arriving on a network socket.</p>
+
+  <pre class="reveal"><code><span class="cm">#include &lt;signal.h&gt;</span>
+<span class="cm">#include &lt;unistd.h&gt;</span>
+<span class="cm">#include &lt;sys/select.h&gt;</span>
+<span class="cm">#include &lt;fcntl.h&gt;</span>
+
+<span class="kw">static</span> <span class="ty">int</span> selfpipe[<span class="nu">2</span>];   <span class="cm">// [0] = read end, [1] = write end</span>
+
+<span class="kw">void</span> <span class="fn">handle_sigusr1</span>(<span class="ty">int</span> sig) {
+    <span class="ty">char</span> byte = <span class="nu">1</span>;
+    write(selfpipe[<span class="nu">1</span>], &byte, <span class="nu">1</span>);   <span class="cm">// write() IS on the async-signal-safe list</span>
+    <span class="cm">// that's it. nothing else. return immediately.</span>
+}
+
+<span class="ty">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {
+    pipe(selfpipe);
+    fcntl(selfpipe[<span class="nu">1</span>], F_SETFL, O_NONBLOCK);  <span class="cm">// never let the handler block on a full pipe</span>
+    signal(SIGUSR1, handle_sigusr1);
+
+    fd_set readfds;
+    <span class="kw">while</span> (<span class="nu">1</span>) {
+        FD_ZERO(&readfds);
+        FD_SET(selfpipe[<span class="nu">0</span>], &readfds);
+        FD_SET(listen_sock, &readfds);         <span class="cm">// the pipe sits ALONGSIDE ordinary fds</span>
+        select(max_fd + <span class="nu">1</span>, &readfds, NULL, NULL, NULL);
+
+        <span class="kw">if</span> (FD_ISSET(selfpipe[<span class="nu">0</span>], &readfds)) {
+            <span class="ty">char</span> buf[<span class="nu">64</span>];
+            read(selfpipe[<span class="nu">0</span>], buf, <span class="kw">sizeof</span>(buf));  <span class="cm">// drain it</span>
+            handle_sigusr1_for_real();          <span class="cm">// safe: ordinary code, ordinary stack, malloc()/printf() all fine</span>
+        }
+        <span class="kw">if</span> (FD_ISSET(listen_sock, &readfds)) { <span class="cm">/* handle a normal network event */</span> }
+    }
+}</code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A pipe's write end is (by default) buffered by the kernel — writing one byte to it never blocks under normal conditions, and the handler's <code>write()</code> is on the async-signal-safe list, so this is legal even under the strictest reading of the rules from the last lesson. The self-pipe trick doesn't work around the async-signal-safety problem — it <em>fully complies</em> with it, by making sure the handler's only job is something already certified safe.
+  </div>
+
+  <div class="sidenote reveal"><b>Why non-blocking on the write end?</b> If your event loop is slow to drain the pipe and many signals arrive in a burst, the pipe's kernel buffer could theoretically fill up. A blocking <code>write()</code> inside a signal handler that can't complete would hang the handler forever. Marking the write end <code>O_NONBLOCK</code> means a full pipe just makes <code>write()</code> fail immediately (harmlessly — you only needed to wake the loop up once anyway) instead of hanging.</div>
+</div>
+</section>
+
+<!-- DEMO 2 -->
+<section id="demo2">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>The Trick, <span class="accent">Live</span></h2>
+
+  <p class="reveal">Compare this to the delivery pipeline from the previous lesson: the handler itself is now a single, near-instant step, and everything that used to be dangerous — memory allocation, logging, complex logic — happens later, safely, back on the main event-loop stack.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="pipeLabel">▶ Run the self-pipe trick end to end</div>
+    <canvas id="pipeCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn purple" onclick="runPipe()">▶ Deliver SIGUSR1 via the self-pipe</button>
+    <button class="ctrl-btn red" onclick="resetPipe()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- SIGNALFD -->
+<section id="signalfd">
+<div class="container">
+  <div class="section-num">05 — Linux Builds the Trick Into the Kernel</div>
+  <h2><span class="accent">signalfd()</span>: The Same Idea, No Pipe Required</h2>
+
+  <p class="reveal">Linux eventually noticed how common the self-pipe trick had become and gave it a first-class syscall: <code>signalfd()</code>. Instead of manually wiring up a pipe and a handler, you tell the kernel "give me a file descriptor that becomes readable whenever any of these specific signals are pending" — and the kernel handles the plumbing that the self-pipe trick used to require you to write by hand.</p>
+
+  <pre class="reveal"><code><span class="cm">#include &lt;sys/signalfd.h&gt;</span>
+<span class="cm">#include &lt;signal.h&gt;</span>
+
+sigset_t mask;
+sigemptyset(&mask);
+sigaddset(&mask, SIGUSR1);
+sigaddset(&mask, SIGTERM);
+sigprocmask(SIG_BLOCK, &mask, NULL);   <span class="cm">// IMPORTANT: block them from normal delivery first</span>
+
+<span class="ty">int</span> sfd = signalfd(-<span class="nu">1</span>, &mask, <span class="nu">0</span>);   <span class="cm">// -1 = create a new fd</span>
+
+<span class="cm">// no handler function anywhere in this program at all —</span>
+<span class="cm">// just add sfd to your select()/poll()/epoll() set like any other fd</span>
+
+<span class="kw">struct</span> signalfd_siginfo info;
+read(sfd, &info, <span class="kw">sizeof</span>(info));   <span class="cm">// blocks until a blocked signal is pending, then reads its details</span>
+<span class="cm">// info.ssi_signo tells you exactly which signal number arrived</span></code></pre>
+
+  <p class="reveal">Notice what disappeared entirely: there's no <code>signal()</code>/<code>sigaction()</code> call, no handler function, no async-signal-safety tightrope to walk at all. You explicitly <strong>block</strong> the signals from ever going through the normal handler-delivery checkpoint from the last lesson, and instead read them out through <code>sfd</code> whenever it's convenient — which is always inside your ordinary, synchronous event loop.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Same Trick, Fewer Moving Parts</div>
+    <code>signalfd()</code> is conceptually identical to the self-pipe trick — "turn signal delivery into a readable file descriptor" — just implemented by the kernel instead of hand-rolled with a real pipe and a tiny handler. You get one fewer fd (no separate write end to manage), structured information about exactly which signal and why (via <code>signalfd_siginfo</code>, including things like the sending PID), and zero risk of ever accidentally calling something async-signal-unsafe, because there's no handler code path left to put it in.
+  </div>
+
+  <div class="sidenote reveal"><b>The catch:</b> <code>signalfd()</code> is Linux-specific — it's not in POSIX, and portable code that needs to run on macOS/BSD still reaches for the self-pipe trick (or <code>kqueue</code>'s own native signal-as-event support on BSD-family systems, a different OS-specific answer to the same underlying problem).</div>
+</div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">06 — Choosing an Approach</div>
+  <h2>Three Ways to Handle a <span class="accent">Signal</span>, Compared</h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Approach</th><th>Portability</th><th>Async-Signal-Safety Risk</th><th>Coalescing Behavior</th><th>Extra FD?</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Naive handler (do real work inline)</td><td class="pos">POSIX-portable</td><td class="neg">High — easy to call unsafe functions by accident</td><td>Multiple same-signal arrivals still collapse to one pending bit</td><td class="center">No</td></tr>
+        <tr><td class="hl">Self-pipe trick</td><td class="pos">POSIX-portable</td><td class="pos">None — handler only does an async-signal-safe write()</td><td>One byte per delivery; loop can coalesce bytes itself if needed</td><td class="center">Yes — one pipe (2 fds)</td></tr>
+        <tr><td class="hl">signalfd()</td><td class="neg">Linux-only</td><td class="pos">None — no handler code path exists at all</td><td>Kernel-managed; one read() per pending signal, structured info included</td><td class="center">Yes — one fd</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🚫 When the Naive Approach Actually Fails You</h4>
+      The moment your handler needs to do anything beyond setting one <code>volatile sig_atomic_t</code> flag — logging, updating a linked list, calling into any library that might allocate — you're gambling on timing windows that pass every test run and fail in production under load.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ When to Reach for the Self-Pipe / signalfd Pattern</h4>
+      Any time your program already has (or could have) a central <code>select()</code>/<code>poll()</code>/<code>epoll()</code> event loop — which describes most non-trivial servers and daemons. The signal stops being a special case at all; it's just one more fd among many.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Self-Pipe Trick</div><div class="glossary-def">A pattern where a signal handler only writes one byte to a pipe; the real logic runs later in the main event loop when that pipe's read end becomes readable.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Event Loop</div><div class="glossary-def">A central loop, typically built on select()/poll()/epoll(), that blocks until any of several file descriptors has activity, then dispatches accordingly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">select() / poll()</div><div class="glossary-def">System calls that block a process until one or more file descriptors in a watched set become ready for I/O.</div></div>
+    <div class="glossary-card"><div class="glossary-term">signalfd()</div><div class="glossary-def">A Linux-specific syscall that exposes pending signals as a readable file descriptor, replacing the need for a handler entirely.</div></div>
+    <div class="glossary-card"><div class="glossary-term">O_NONBLOCK</div><div class="glossary-def">A file descriptor flag ensuring an operation like write() fails immediately instead of blocking — critical for a pipe's write end used inside a handler.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Shared Buffer Corruption</div><div class="glossary-def">The failure mode when a handler and the code it interrupted both mutate the same non-reentrant internal state, like stdio's buffering.</div></div>
+    <div class="glossary-card"><div class="glossary-term">signalfd_siginfo</div><div class="glossary-def">The structured record returned by reading a signalfd, including which signal arrived and metadata like the sending process's PID.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Coalescing</div><div class="glossary-def">The fact that standard POSIX signals don't queue — multiple deliveries of the same signal before it's processed collapse into one.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Signal Gotchas: The Self-Pipe Trick, Reentrancy, and signalfd · Companion lesson for bob_os module <code>18_signals</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">The safest signal handler is the one that does almost nothing.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── BUFFER COLLISION CANVAS ──────────────────────────────────────────────────
+function drawBuf(t,phase){
+  const canvas=document.getElementById('bufCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // shared buffer slots
+  const slots=10, slotW=(W-40)/slots;
+  const by=H*0.32;
+  for(let i=0;i<slots;i++){
+    const x=20+i*slotW;
+    let filledByMain = (phase==='mainwrite'||phase==='interrupt'||phase==='handlerwrite'||phase==='collide') && i < (phase==='mainwrite'? Math.floor(slots*0.5*t) : Math.floor(slots*0.5));
+    let filledByHandler = (phase==='handlerwrite'||phase==='collide') && i>=2 && i < 2+(phase==='handlerwrite'? Math.floor(4*t):4);
+    ctx.strokeStyle=C.border;ctx.lineWidth=1;ctx.strokeRect(x+2,by,slotW-4,36);
+    if(filledByHandler){ ctx.fillStyle='rgba(248,113,113,.5)'; ctx.fillRect(x+2,by,slotW-4,36); }
+    else if(filledByMain){ ctx.fillStyle='rgba(56,189,248,.35)'; ctx.fillRect(x+2,by,slotW-4,36); }
+  }
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('stdio shared internal buffer (one per stream)',20,by-10);
+
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('■ written by main loop printf()',20,by+56);
+  ctx.fillStyle=C.red;
+  ctx.fillText('■ written by handler printf() — SAME buffer',20,by+72);
+
+  const captions={
+    idle:'Click to run the collision',
+    mainwrite:'Main loop calls printf() — begins appending bytes into the shared buffer',
+    interrupt:'⚡ SIGUSR1 delivered mid-write — main printf() is paused, not finished',
+    handlerwrite:'Handler’s printf() runs on the SAME thread, writes into the SAME buffer',
+    collide:'Buffer now holds an interleaved mess — main printf() resumes writing on top of it',
+    result:'Result: garbled output, or — if a lock is involved — a silent, permanent deadlock'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  if(phase==='interrupt'){
+    ctx.fillStyle=C.orange;ctx.font='bold 20px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',W*0.5,by-24);
+  }
+  if(phase==='result'){
+    ctx.fillStyle=C.red;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('working... [handler] got SIGwork...US1',W/2,by+100);
+  }
+}
+
+function runBuf(){
+  const phases=['mainwrite','interrupt','handlerwrite','collide','result'];
+  const durations=[600,450,600,500,700];
+  let idx=0,start=performance.now();
+  document.getElementById('bufLabel').textContent='▶ Running...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawBuf(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('bufLabel').textContent='▶ Buffer corrupted. Run again?';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetBuf(){
+  document.getElementById('bufLabel').textContent='▶ Watch two printf() calls collide on one shared buffer';
+  drawBuf(0,'idle');
+}
+
+// ── SELF-PIPE TRICK CANVAS ───────────────────────────────────────────────────
+function drawPipe(t,phase){
+  const canvas=document.getElementById('pipeCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const handlerY=H*0.18, pipeY=H*0.45, loopY=H*0.72;
+
+  ctx.strokeStyle=C.red;ctx.lineWidth=1;
+  ctx.strokeRect(20,handlerY,W-40,44);
+  ctx.fillStyle=C.red;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('SIGNAL HANDLER — does exactly one thing: write(pipe_fd[1], "x", 1)',30,handlerY-8);
+
+  ctx.strokeStyle=C.gold;
+  ctx.strokeRect(20,pipeY,W-40,44);
+  ctx.fillStyle=C.gold;
+  ctx.fillText('KERNEL PIPE BUFFER',30,pipeY-8);
+
+  ctx.strokeStyle=C.green;
+  ctx.strokeRect(20,loopY,W-40,44);
+  ctx.fillStyle=C.green;
+  ctx.fillText('MAIN EVENT LOOP — select() was already watching this pipe + other fds',30,loopY-8);
+
+  const captions={
+    idle:'Click to run the self-pipe trick',
+    fire:'⚡ SIGUSR1 delivered — handler starts running',
+    write:'Handler calls write(pipe_fd[1], "x", 1) — the ONLY async-signal-safe call it makes',
+    returned:'Handler returns immediately — back to whatever was interrupted, uninvolved and untouched',
+    wake:'select() was blocked waiting on the pipe’s read end — it wakes up NOW, on an ordinary fd event',
+    drain:'Event loop reads the byte, drains the pipe',
+    work:'Real logic runs HERE — safely, synchronously, malloc()/printf() all fine — not inside a handler'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+
+  let dotX=W*0.5,dotY=handlerY+22,col=C.orange;
+  if(phase==='fire'){dotX=W*0.5;dotY=handlerY+22;col=C.orange;
+    ctx.fillStyle=C.orange;ctx.font='bold 18px sans-serif';ctx.textAlign='center';ctx.fillText('⚡',W*0.5,handlerY-24);}
+  else if(phase==='write'){dotX=W*0.5;dotY=handlerY+22+(pipeY-handlerY)*t;col=C.gold;}
+  else if(phase==='returned'){dotX=W*(0.5-0.3*t);dotY=handlerY+22;col=C.red;}
+  else if(phase==='wake'){dotX=W*0.5;dotY=pipeY+22;col=C.green;}
+  else if(phase==='drain'){dotX=W*0.5;dotY=pipeY+22+(loopY-pipeY)*t;col=C.green;}
+  else if(phase==='work'){dotX=W*(0.5+0.25*t);dotY=loopY+22;col=C.cyan;}
+
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+}
+
+function runPipe(){
+  const phases=['fire','write','returned','wake','drain','work'];
+  const durations=[450,550,500,500,500,600];
+  let idx=0,start=performance.now();
+  document.getElementById('pipeLabel').textContent='▶ Running...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawPipe(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('pipeLabel').textContent='▶ Done — the signal became an ordinary, safe event. Run again?';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetPipe(){
+  document.getElementById('pipeLabel').textContent='▶ Run the self-pipe trick end to end';
+  drawPipe(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetBuf(); resetPipe(); });
+window.addEventListener('resize',()=>{ resetBuf(); resetPipe(); });
+</script>
+</body>
+</html>

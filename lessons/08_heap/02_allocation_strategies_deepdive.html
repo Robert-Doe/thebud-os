@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>First-Fit, Best-Fit, Worst-Fit: Picking a Chunk, and the Fragmentation Bill You Pay Later</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.4rem,5.6vw,4.6rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:730px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--cyan);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.orange{border-color:var(--orange);color:var(--orange);background:rgba(251,146,60,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: strategy-picker legend chips */
+.strategy-chip{display:inline-flex;align-items:center;gap:.5rem;background:var(--card);border:1px solid var(--border);border-radius:2rem;padding:.4rem 1rem;font-family:'Source Code Pro',monospace;font-size:.78rem;margin:.3rem .4rem .3rem 0;}
+.strategy-chip .dot{width:10px;height:10px;border-radius:50%;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#question" title="The Question"></a>
+  <a class="toc-dot" href="#firstfit" title="First-Fit"></a>
+  <a class="toc-dot" href="#bestfit" title="Best-Fit"></a>
+  <a class="toc-dot" href="#worstfit" title="Worst-Fit"></a>
+  <a class="toc-dot" href="#compare" title="Head to Head"></a>
+  <a class="toc-dot" href="#fragmentation" title="Fragmentation"></a>
+  <a class="toc-dot" href="#coalescing" title="Coalescing"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Module 08 · Heap Deep Dive · Allocation Strategies</div>
+    <h1>First-Fit, Best-Fit,<br><span>Worst-Fit</span></h1>
+    <p class="hero-sub">The last lesson showed <em>that</em> a free list works. This one asks the harder question: when three, four, five free chunks are all big enough for a request, which one do you actually hand out? The answer isn't obvious, and every choice quietly bills you later — in speed, in wasted bytes, or in a heap riddled with slivers nothing can use.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Classic Strategies</div></div>
+      <div class="hero-stat"><div class="num">O(1)*</div><div class="lbl">First-Fit's Best Case</div></div>
+      <div class="hero-stat"><div class="num">O(n)</div><div class="lbl">Best-/Worst-Fit, Always</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Kinds of Fragmentation</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- QUESTION -->
+<section id="question">
+<div class="container">
+  <div class="section-num">00 — Setting the Scene</div>
+  <h2>The Question <span class="accent">kmalloc()</span> Never Gets to Skip</h2>
+
+  <p class="reveal">Picture the free list mid-program, after a realistic mix of allocations and frees. It isn't one tidy chunk anymore — it's a scattered handful of leftover pieces of different sizes:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Position in free list</th><th>Chunk</th><th>Size (bytes)</th></tr></thead>
+      <tbody>
+        <tr><td class="center">1st</td><td class="hl">P</td><td>20</td></tr>
+        <tr><td class="center">2nd</td><td class="hl">Q</td><td>200</td></tr>
+        <tr><td class="center">3rd</td><td class="hl">R</td><td>48</td></tr>
+        <tr><td class="center">4th</td><td class="hl">S</td><td>60</td></tr>
+        <tr><td class="center">5th</td><td class="hl">T</td><td>500</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Now a request comes in: <code>kmalloc(50)</code>. Chunks Q, S, and T are all large enough (P and R are too small, at 20 and 48 bytes). <strong>Three candidates qualify. Which one does the allocator pick?</strong> This single decision — made fresh on every single allocation, thousands of times over a kernel's lifetime — is what separates the three classic strategies this lesson covers. Same free list, same request, three different outcomes.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">Why This Isn't a Minor Detail</div>
+    It's tempting to think "any correct chunk works, so who cares which one gets picked." But the choice compounds. Pick badly a thousand times in a row and you don't get a thousand independent small mistakes — you get a heap shaped by a thousand compounding decisions, which is exactly how allocators end up either fast-but-wasteful or careful-but-slow. There is no free lunch here, only different bills.
+  </div>
+</div>
+</section>
+
+<!-- FIRST FIT -->
+<section id="firstfit">
+<div class="container">
+  <div class="section-num">01 — Strategy One</div>
+  <h2><span class="accent">First-Fit</span>: Take the First One That Works</h2>
+
+  <p class="reveal">First-fit is the strategy you'd invent if nobody told you there was a choice to make: walk the free list from the head, and the instant you find a chunk big enough, stop and use it. No further looking. Applied to the table above, requesting 50 bytes, first-fit scans P (20, too small), Q (200, <strong>big enough — stop here</strong>). It never even looks at R, S, or T.</p>
+
+  <pre class="reveal"><span class="tag">C — first-fit search</span><code><span class="kw">struct</span> block_header *<span class="fn">find_first_fit</span>(<span class="cls">uint32_t</span> size) {
+    <span class="kw">struct</span> block_header *blk = heap_start;
+    <span class="kw">while</span> (blk) {
+        <span class="kw">if</span> (blk->free && blk->size >= size) {
+            <span class="kw">return</span> blk;   <span class="cm">// stop at the FIRST fit — don't keep looking</span>
+        }
+        blk = blk->next;
+    }
+    <span class="kw">return</span> <span class="kw">NULL</span>;  <span class="cm">// out of memory</span>
+}</code></pre>
+
+  <p class="reveal">Split into 50 used + 150 free remainder, chunk Q becomes <code>Q₁</code> (50, used) followed immediately by <code>Q₂</code> (150, free), and the free list now reads P, Q₂, R, S, T. Notice what just happened to Q's leftover: it's still perfectly usable — 150 bytes is plenty for future requests — so this particular split isn't the problem case. The trouble with first-fit shows up over <em>many</em> allocations of small sizes clustered near the head of the list.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Real Cost of First-Fit</div>
+    Because first-fit always starts scanning from the head, and small leftover slivers tend to accumulate near the front of the list (repeatedly split, repeatedly slightly-too-small for the next request), later searches waste time walking past a graveyard of tiny unusable fragments before reaching a chunk that's actually large enough. The search is cheap in the best case — sometimes literally the very first chunk — but the <em>quality</em> of what accumulates near the head degrades over the program's lifetime.
+  </div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">Fast</div><div class="lbl">Typical search time</div></div>
+    <div class="stat-card"><div class="val">Low</div><div class="lbl">Implementation complexity</div></div>
+    <div class="stat-card"><div class="val">Front-loaded</div><div class="lbl">Where slivers accumulate</div></div>
+  </div>
+</div>
+</section>
+
+<!-- BEST FIT -->
+<section id="bestfit">
+<div class="container">
+  <div class="section-num">02 — Strategy Two</div>
+  <h2><span class="accent">Best-Fit</span>: Search Everything, Waste the Least</h2>
+
+  <p class="reveal">Best-fit refuses to settle for the first candidate — it walks the <em>entire</em> free list, considers every chunk that's big enough, and picks whichever one leaves the smallest leftover remainder. Applied to the same 50-byte request over P/Q/R/S/T: Q (200), S (60), and T (500) all qualify. Their remainders after taking 50 bytes would be 150, 10, and 450 respectively. Best-fit picks <strong>S</strong> — the 60-byte chunk — because a 10-byte remainder is the smallest waste of the three.</p>
+
+  <pre class="reveal"><span class="tag">C — best-fit search</span><code><span class="kw">struct</span> block_header *<span class="fn">find_best_fit</span>(<span class="cls">uint32_t</span> size) {
+    <span class="kw">struct</span> block_header *blk = heap_start;
+    <span class="kw">struct</span> block_header *best = <span class="kw">NULL</span>;
+    <span class="kw">while</span> (blk) {
+        <span class="kw">if</span> (blk->free && blk->size >= size) {
+            <span class="kw">if</span> (!best || blk->size < best->size) {
+                best = blk;   <span class="cm">// tightest fit seen so far</span>
+            }
+        }
+        blk = blk->next;   <span class="cm">// MUST check every chunk — no early exit</span>
+    }
+    <span class="kw">return</span> best;
+}</code></pre>
+
+  <p class="reveal">On paper this sounds strictly better — why would you ever want to waste <em>more</em> space than you have to? The catch is twofold. First, the search itself is more expensive: first-fit can stop the moment it finds any candidate, but best-fit has no early exit — it must walk the <em>entire</em> list every single time, even when the very first chunk it saw turns out to be optimal. Second, and more subtly damaging: best-fit's whole strategy is to leave the smallest possible leftover — which means it systematically manufactures tiny remainders. A 10-byte sliver like the one left behind in S is too small to satisfy almost any future request, and now it's a permanent, useless resident of the free list.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">The Irony of "Optimal" Per-Allocation Choices</div>
+    Best-fit optimizes each individual decision — minimize this one allocation's waste — but that greedy local optimum is exactly what produces the worst long-term litter of unusable fragments. Minimizing waste <em>per chunk</em> is not the same goal as minimizing the <em>total number of useless fragments</em> in the heap over time, and best-fit chases the former while quietly making the latter worse.
+  </div>
+
+  <div class="sidenote reveal"><b>Worth knowing:</b> despite the fragmentation downside, best-fit is genuinely used in production — it's one of the strategies available in dlmalloc-family allocators for certain size classes, particularly when memory is tight and search cost matters less than squeezing out every usable byte. There's no universally "correct" strategy; it's a trade-off selected per workload.</div>
+</div>
+</section>
+
+<!-- WORST FIT -->
+<section id="worstfit">
+<div class="container">
+  <div class="section-num">03 — Strategy Three</div>
+  <h2><span class="accent">Worst-Fit</span>: Take the Biggest, On Purpose</h2>
+
+  <p class="reveal">Worst-fit sounds like a joke until you see the reasoning: deliberately choose the <em>largest</em> free chunk available, on the theory that a big leftover remainder is far more likely to be useful for some future request than a small one. Over the same table, worst-fit compares Q (200), S (60), and T (500), and picks <strong>T</strong> — leaving a 450-byte remainder behind, which is roomy enough to satisfy plenty of future allocations without needing to be split again.</p>
+
+  <pre class="reveal"><span class="tag">C — worst-fit search</span><code><span class="kw">struct</span> block_header *<span class="fn">find_worst_fit</span>(<span class="cls">uint32_t</span> size) {
+    <span class="kw">struct</span> block_header *blk = heap_start;
+    <span class="kw">struct</span> block_header *worst = <span class="kw">NULL</span>;
+    <span class="kw">while</span> (blk) {
+        <span class="kw">if</span> (blk->free && blk->size >= size) {
+            <span class="kw">if</span> (!worst || blk->size > worst->size) {
+                worst = blk;   <span class="cm">// LARGEST fit seen so far</span>
+            }
+        }
+        blk = blk->next;   <span class="cm">// also a full scan, like best-fit</span>
+    }
+    <span class="kw">return</span> worst;
+}</code></pre>
+
+  <p class="reveal">Worst-fit shares best-fit's cost profile — a full O(n) scan every time, no early exit — but flips the outcome philosophy entirely. Instead of minimizing this allocation's leftover, it maximizes it, betting that a big remainder stays useful longer than a small one would. In workloads where allocation sizes vary a lot and unpredictably, this can genuinely reduce how often the allocator gets stuck with a pile of same-sized unusable slivers, because it's actively avoiding the creation of small remainders in the first place.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">Why Worst-Fit Is the Least Common of the Three</div>
+    The bet doesn't always pay off. If allocation sizes are fairly uniform, worst-fit ends up repeatedly carving down the <em>same</em> large chunk (or whatever's currently largest) — and once the largest chunks are all whittled down, you're right back to a free list of mid-sized leftovers, just having spent more CPU cycles per allocation to get there than first-fit would have. It's a real, historically documented strategy, but production general-purpose allocators rarely choose it as their default.
+  </div>
+</div>
+</section>
+
+<!-- CANVAS COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">04 — See It Happen</div>
+  <h2>Same Free List, <span class="accent">Three</span> Different Outcomes</h2>
+
+  <p class="reveal">Below is the exact P/Q/R/S/T free list from section 00. Run <code>kmalloc(50)</code> against it under each strategy and watch which chunk gets scanned, which gets chosen, and how large a remainder gets left behind.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="stratLabel">▶ Pick a strategy to allocate 50 bytes from P(20) Q(200) R(48) S(60) T(500)</div>
+    <canvas id="stratCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runStrategy('first')">▶ First-Fit</button>
+    <button class="ctrl-btn gold" onclick="runStrategy('best')">▶ Best-Fit</button>
+    <button class="ctrl-btn orange" onclick="runStrategy('worst')">▶ Worst-Fit</button>
+    <button class="ctrl-btn red" onclick="resetStratCanvas()">Reset</button>
+  </div>
+
+  <div style="margin:1rem 0 0;">
+    <span class="strategy-chip"><span class="dot" style="background:var(--cyan)"></span>Scanning</span>
+    <span class="strategy-chip"><span class="dot" style="background:var(--gold)"></span>Chosen chunk</span>
+    <span class="strategy-chip"><span class="dot" style="background:var(--green)"></span>Free remainder</span>
+    <span class="strategy-chip"><span class="dot" style="background:var(--red)"></span>Used (allocated)</span>
+  </div>
+
+  <div class="data-table-wrap reveal" style="margin-top:1.8rem;">
+    <table>
+      <thead><tr><th>Strategy</th><th>Chunk chosen</th><th>Remainder left behind</th><th>Chunks scanned</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">First-Fit</td><td>Q (200)</td><td class="gold">150</td><td class="center">2 of 5</td></tr>
+        <tr><td class="hl">Best-Fit</td><td>S (60)</td><td class="pos">10</td><td class="center">5 of 5</td></tr>
+        <tr><td class="hl">Worst-Fit</td><td>T (500)</td><td class="neg">450</td><td class="center">5 of 5</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- FRAGMENTATION -->
+<section id="fragmentation">
+<div class="container">
+  <div class="section-num">05 — The Bill Comes Due</div>
+  <h2>Two Kinds of <span class="accent r">Fragmentation</span></h2>
+
+  <p class="reveal">"Fragmentation" gets used loosely, but it names two genuinely different problems, and every strategy above trades one against the other.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>External Fragmentation</h4>
+      Enough free memory exists <em>in total</em> to satisfy a request, but it's scattered across chunks too small individually. Picture a free list of five 10-byte chunks (50 bytes free, total) and a request for 40 bytes — it fails, even though 50 &gt; 40, because no single chunk is big enough. The memory isn't gone; it's just unusably scattered.
+    </div>
+    <div class="compare-card bad">
+      <h4>Internal Fragmentation</h4>
+      A chunk handed out is bigger than what was actually requested, and the difference is wasted inside the allocation itself — invisible to the free list, because that space isn't free, it's just unused. This happens whenever an allocator rounds sizes up (for alignment, or because splitting further wasn't worth it) or deliberately avoids splitting a chunk that's only slightly larger than requested.
+    </div>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">Where each strategy lands</span>
+    Best-fit minimizes internal fragmentation per allocation, but maximizes external fragmentation over time (tiny unusable slivers pile up). Worst-fit does roughly the opposite. First-fit sits in between, biased toward whichever end of the list gets scanned first.
+    <span class="sub">No strategy eliminates both kinds at once — that's the actual, unavoidable trade-off this whole lesson has been building toward.</span>
+  </div>
+
+  <h3>A Worked External-Fragmentation Example</h3>
+  <p class="reveal">Concrete numbers make this stick better than the general statement does. Suppose a run of best-fit allocations has left the free list looking like this:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Free chunk</th><th>Size</th><th>Can it satisfy kmalloc(32)?</th></tr></thead>
+      <tbody>
+        <tr><td>W</td><td>9 B</td><td class="neg">No — too small</td></tr>
+        <tr><td>X</td><td>11 B</td><td class="neg">No — too small</td></tr>
+        <tr><td>Y</td><td>7 B</td><td class="neg">No — too small</td></tr>
+        <tr><td>Z</td><td>5 B</td><td class="neg">No — too small</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Total free memory: 9 + 11 + 7 + 5 = <strong>32 bytes exactly</strong> — precisely enough, in aggregate, to satisfy a 32-byte request. And yet <code>kmalloc(32)</code> fails, because no single chunk reaches 32 bytes on its own, and none of these four chunks are physically adjacent (so forward coalescing, which only merges neighbors, can't help either). This is external fragmentation in its purest, most unambiguous form: the memory hasn't leaked, it hasn't vanished — it's simply scattered too finely to be usable.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">The Diagnostic Question</div>
+    Whenever an allocation fails, ask: is <code>heap_get_free_bytes()</code> (bob_os's diagnostic from <code>heap.h</code>) still comfortably larger than the request? If yes, this is external fragmentation, not genuine exhaustion — the fix is better coalescing or a smarter placement strategy, not more physical memory. If <code>heap_get_free_bytes()</code> is itself smaller than the request, that's real out-of-memory, and no allocation strategy in this lesson can rescue it.
+  </div>
+
+  <p class="reveal">Go back to bob_os's real <code>heap.c</code> from the first lesson in this module: recall the <code>MIN_SPLIT</code> constant, which refuses to split a chunk if the leftover would be smaller than 16 bytes, instead handing the caller the <em>whole</em> chunk. That's a deliberate, explicit acceptance of internal fragmentation — "a few wasted bytes inside this allocation is a better trade than an unusable 3-byte sliver haunting the free list forever."</p>
+
+  <pre class="reveal"><span class="tag">C — from bob_os/08_heap/heap.c (excerpted)</span><code><span class="cm">/* split if there's room for another header + at least 4 bytes */</span>
+<span class="kw">if</span> (b->size >= size + <span class="fn">sizeof</span>(<span class="cls">heap_block_t</span>) + <span class="numc">4</span>) {
+    <span class="cm">// ...split into used + free remainder...</span>
+}
+<span class="cm">// else: hand over the WHOLE block, accepting internal fragmentation
+// rather than creating an unusably small free sliver.</span></code></pre>
+</div>
+</section>
+
+<!-- COALESCING -->
+<section id="coalescing">
+<div class="container">
+  <div class="section-num">06 — The Standard Mitigation</div>
+  <h2><span class="accent">Coalescing</span>: Undoing Fragmentation After the Fact</h2>
+
+  <p class="reveal">Every strategy above eventually produces some external fragmentation — it's a question of how much and how fast, not whether. The standard fix isn't a smarter search; it's cleanup after the fact: when a chunk is freed, check whether the chunk physically next to it (or, in a fancier allocator, physically before it too) is <em>also</em> free, and if so, merge them into one larger chunk on the spot.</p>
+
+  <pre class="reveal"><span class="tag">C — forward coalescing, from bob_os/08_heap/heap.c</span><code><span class="kw">void</span> <span class="fn">kfree</span>(<span class="kw">void</span> *ptr) {
+    <span class="kw">struct</span> block_header *blk = (<span class="kw">struct</span> block_header *)ptr - <span class="numc">1</span>;
+    blk->flags = BLOCK_FREE;
+
+    <span class="cm">// If the NEXT block is also free, merge them into one.
+    // Repeat in case several consecutive free blocks now exist.</span>
+    <span class="kw">struct</span> block_header *next = (<span class="kw">struct</span> block_header *)((<span class="kw">char</span>*)blk + HDR_SIZE + blk->size);
+    <span class="kw">while</span> (next->flags == BLOCK_FREE && next->size > <span class="numc">0</span>) {
+        blk->size += HDR_SIZE + next->size;
+        next = (<span class="kw">struct</span> block_header *)((<span class="kw">char</span>*)blk + HDR_SIZE + blk->size);
+    }
+}</code></pre>
+
+  <p class="reveal">Coalescing directly attacks external fragmentation: instead of five scattered 10-byte free chunks sitting inert forever, adjacent ones get glued back together the moment both halves become free, regenerating larger usable chunks out of the wreckage that splitting left behind. It's the single most important reason a long-running allocator doesn't slowly grind to a halt, unable to satisfy requests it should easily be able to fill.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">Why Only "Forward" Coalescing Isn't the Full Story</div>
+    bob_os's <code>kfree()</code> only checks the <em>next</em> physical block — it never checks whether the block <em>before</em> the one just freed is also free. That's a real, acknowledged limitation (bob_os's own tutorial calls it out as a "Sharpen Your Pencil" exercise): production allocators like glibc's ptmalloc coalesce in <strong>both</strong> directions, using a technique called <em>boundary tags</em> — a second, trailing copy of the header at the very end of each chunk, so a block can cheaply check its previous neighbor without needing a full backward scan. Module 08's simpler forward-only coalescing is intentionally a subset of the real technique, not a different one.
+  </div>
+
+  <p class="reveal">Put together, this is the full lifecycle every kernel-heap byte goes through: a chunk gets split (creating some internal fragmentation, and possibly a small new free chunk), gets handed out, eventually gets freed, and — if its neighbor is also free — gets coalesced back into something larger. Strategy decides <em>which</em> chunk gets split each time; coalescing decides how much of that splitting's damage gets undone afterward. Neither one alone is the whole picture.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">First-Fit</div><div class="glossary-def">Use the first free chunk encountered that's large enough. Cheap search, but slivers tend to accumulate near the head of the list.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Best-Fit</div><div class="glossary-def">Scan the whole list, pick the smallest chunk that still fits. Minimizes waste per allocation, but manufactures many tiny unusable fragments over time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Worst-Fit</div><div class="glossary-def">Scan the whole list, deliberately pick the largest chunk. Leaves big, probably-useful remainders, at the cost of a full scan every time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">External Fragmentation</div><div class="glossary-def">Enough total free memory exists, but it's scattered across chunks too small individually to satisfy a request.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Internal Fragmentation</div><div class="glossary-def">A handed-out chunk is larger than what was requested; the unused difference is wasted but invisible to the free list.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Coalescing</div><div class="glossary-def">Merging two adjacent free chunks back into one larger chunk, typically performed at free-time, to undo external fragmentation.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Boundary Tags</div><div class="glossary-def">A trailing copy of a chunk's header placed at its end, letting an allocator check its previous physical neighbor without a backward scan — enables bidirectional coalescing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Split</div><div class="glossary-def">Dividing a free chunk larger than requested into a used front piece and a smaller free remainder, when that remainder is large enough to be worth keeping.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>First-Fit, Best-Fit, Worst-Fit · Companion lesson for bob_os module 08_heap</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: How Real Allocators Do Better — buddy systems, bins, and slabs.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── Shared free-list layout: P(20) Q(200) R(48) S(60) T(500) ───────────────
+const chunkDefs=[
+  {label:'P',size:20},
+  {label:'Q',size:200},
+  {label:'R',size:48},
+  {label:'S',size:60},
+  {label:'T',size:500}
+];
+const REQUEST=50;
+
+function stratLayout(W){
+  const pad=16, top=90, h=90;
+  const usable=W-pad*2;
+  const total=chunkDefs.reduce((s,c)=>s+c.size,0);
+  let x=pad, out=[];
+  chunkDefs.forEach(c=>{
+    // sqrt scaling so tiny (20B) and huge (500B) chunks are both visible
+    const w=usable*(Math.sqrt(c.size)/chunkDefs.reduce((s,cc)=>s+Math.sqrt(cc.size),0));
+    out.push({...c,x,w,y:top,h});
+    x+=w;
+  });
+  return out;
+}
+
+function drawStratChunk(ctx,c,state){
+  // state: 'idle' | 'toosmall' | 'scanning' | 'chosen' | 'used' | 'remainder'
+  const hdrH=20;
+  let dataCol=C.muted, dataBg='rgba(122,155,191,.08)', label=c.label+' · '+c.size+'B';
+  if(state==='toosmall'){dataCol=C.muted;dataBg='rgba(122,155,191,.05)';}
+  if(state==='scanning'){dataCol=C.cyan;dataBg='rgba(56,189,248,.15)';}
+  if(state==='chosen'){dataCol=C.gold;dataBg='rgba(245,200,66,.18)';}
+  if(state==='used'){dataCol=C.red;dataBg='rgba(248,113,113,.14)';}
+  if(state==='remainder'){dataCol=C.green;dataBg='rgba(74,222,128,.14)';}
+
+  ctx.fillStyle='rgba(245,200,66,.12)';ctx.strokeStyle=C.gold;ctx.lineWidth=1;
+  ctx.fillRect(c.x,c.y,c.w,hdrH);ctx.strokeRect(c.x,c.y,c.w,hdrH);
+
+  ctx.fillStyle=dataBg;ctx.strokeStyle=dataCol;ctx.lineWidth=state==='chosen'?2.5:1.2;
+  ctx.fillRect(c.x,c.y+hdrH,c.w,c.h-hdrH);
+  ctx.strokeRect(c.x,c.y+hdrH,c.w,c.h-hdrH);
+
+  ctx.fillStyle=dataCol;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,c.x+c.w/2,c.y+hdrH+(c.h-hdrH)/2+3);
+}
+
+function drawStratScene(mode,phase,scanIdx,chosenIdx){
+  const canvas=document.getElementById('stratCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText('kmalloc(50) against P(20) Q(200) R(48) S(60) T(500)',W/2,26);
+
+  const cs=stratLayout(W);
+  const fits=cs.map(c=>c.size>=REQUEST);
+
+  cs.forEach((c,i)=>{
+    let state='idle';
+    if(!fits[i]) state='toosmall';
+    if(phase==='scan' && i===scanIdx) state='scanning';
+    if(phase==='chosen' && i===chosenIdx) state='chosen';
+    if((phase==='split'||phase==='done') && i===chosenIdx) state='used';
+    drawStratChunk(ctx,c,state);
+  });
+
+  // draw remainder box for the chosen chunk once split
+  if((phase==='split'||phase==='done') && chosenIdx!=null){
+    const c=cs[chosenIdx];
+    const usedFrac=REQUEST/c.size;
+    const remW=c.w*(1-usedFrac);
+    const remX=c.x+c.w*usedFrac;
+    const remBlk={x:remX,y:c.y,w:remW,h:c.h,size:c.size-REQUEST,label:'rem'};
+    if(remW>4){
+      drawStratChunk(ctx,remBlk,'remainder');
+      ctx.fillStyle=C.green;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText((c.size-REQUEST)+'B free',remX+remW/2,c.y-6);
+    }
+    ctx.fillStyle=C.red;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('50B used',c.x+c.w*usedFrac/2,c.y-6);
+  }
+
+  const captions={
+    scan:mode==='first'?'First-Fit scans until it finds ANY fit, then stops immediately':'Scanning every chunk — no early exit for this strategy',
+    chosen:mode==='first'?'First fit found: stop scanning here':(mode==='best'?'Best fit found: smallest chunk that still satisfies the request':'Worst fit found: largest chunk available'),
+    split:'Chosen chunk split into a 50B used piece + a free remainder',
+    done:'Allocation complete — free list now has one more chunk than before'
+  };
+  ctx.fillStyle=C.muted;ctx.font='11px Lato,sans-serif';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function runStrategy(mode){
+  const cs=chunkDefs;
+  const fitIdxs=[];
+  cs.forEach((c,i)=>{ if(c.size>=REQUEST) fitIdxs.push(i); });
+
+  let chosenIdx;
+  if(mode==='first'){ chosenIdx=fitIdxs[0]; }
+  else if(mode==='best'){ chosenIdx=fitIdxs.reduce((best,i)=> cs[i].size<cs[best].size?i:best, fitIdxs[0]); }
+  else { chosenIdx=fitIdxs.reduce((worst,i)=> cs[i].size>cs[worst].size?i:worst, fitIdxs[0]); }
+
+  // scan order: first-fit stops at chosenIdx; best/worst scan everything
+  const scanOrder = mode==='first'
+    ? Array.from({length:chosenIdx+1},(_,i)=>i)
+    : cs.map((_,i)=>i);
+
+  const labelText={first:'First-Fit',best:'Best-Fit',worst:'Worst-Fit'}[mode];
+  document.getElementById('stratLabel').textContent='▶ Running '+labelText+' for kmalloc(50)…';
+
+  let step=0;
+  function scanStep(){
+    if(step<scanOrder.length){
+      drawStratScene(mode,'scan',scanOrder[step],chosenIdx);
+      step++;
+      setTimeout(()=>requestAnimationFrame(scanStep),260);
+    } else {
+      drawStratScene(mode,'chosen',null,chosenIdx);
+      setTimeout(()=>{
+        drawStratScene(mode,'split',null,chosenIdx);
+        setTimeout(()=>{
+          drawStratScene(mode,'done',null,chosenIdx);
+          document.getElementById('stratLabel').textContent='▶ '+labelText+' chose chunk '+cs[chosenIdx].label+' ('+cs[chosenIdx].size+'B) — remainder: '+(cs[chosenIdx].size-REQUEST)+'B';
+        },800);
+      },700);
+    }
+  }
+  requestAnimationFrame(scanStep);
+}
+
+function resetStratCanvas(){
+  document.getElementById('stratLabel').textContent='▶ Pick a strategy to allocate 50 bytes from P(20) Q(200) R(48) S(60) T(500)';
+  drawStratScene('idle','idle',null,null);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetStratCanvas(); });
+window.addEventListener('resize',()=>{ resetStratCanvas(); });
+</script>
+</body>
+</html>

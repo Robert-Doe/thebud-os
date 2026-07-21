@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anonymous Pipes: A Byte Stream With Two File Descriptors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+.fdtable{font-family:'Source Code Pro',monospace;font-size:.8rem;border-collapse:collapse;margin:.5rem 0;}
+.fdtable td{border:1px solid var(--border);padding:.3rem .6rem;background:var(--card);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#pipecall" title="pipe() the Syscall"></a>
+  <a class="toc-dot" href="#simplest" title="Simplest Possible IPC"></a>
+  <a class="toc-dot" href="#shellpipeline" title="ls | grep foo"></a>
+  <a class="toc-dot" href="#dup2" title="dup2() Mechanics"></a>
+  <a class="toc-dot" href="#closingends" title="Closing Unused Ends"></a>
+  <a class="toc-dot" href="#compare" title="Pipe vs FIFO vs Shared Mem"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · IPC · pipe() · fork() · dup2()</div>
+    <h1>Two File Descriptors,<br><span>One Byte Stream</span></h1>
+    <p class="hero-sub">You already know a process has an Open File Table on its PCB — a list of file descriptors pointing at things it can read and write. This lesson is about the strangest entries that table can hold: two file descriptors that don't point at a file at all, but at each other, through one small buffer the kernel manages entirely on your behalf. That's <code>pipe()</code> — and it's the mechanism quietly running every time you type a <code>|</code> at a shell prompt.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">File Descriptors From One pipe() Call</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Kernel Buffer Connecting Them</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">fork() Calls Behind Every Shell `\|`</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Calls (dup2+close×2) That Rewire One Child</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>That "Open File Table" Field Had <span class="accent">More In It Than Files</span></h2>
+  <p class="reveal">Back in the PCB dossier, one field read <code>fd 0,1,2,5,7…</code>, captioned "which files, sockets, and pipes this process currently has open." We treated that word "pipes" as a footnote. It isn't one — it's a whole IPC mechanism, and it's the simplest one the kernel offers. Today we open that footnote all the way up: what a pipe actually is, why it's built from exactly two file descriptors instead of one, and how an entire feature of your shell — the <code>|</code> character — is just those two file descriptors getting handed to two different processes.</p>
+  <p class="reveal">This lesson is deliberately narrow. We're not touching shared memory here — Module 3's explainer already walked through <code>shmget()</code>/<code>mmap(MAP_SHARED)</code> and the pipe-vs-shared-memory cost tradeoff in real depth, and we won't repeat that. Here, the pipe is the whole show: what it is, and the exact mechanical trick that makes <code>ls | grep foo</code> work.</p>
+</div>
+</section>
+
+<!-- PIPE() THE SYSCALL -->
+<section id="pipecall">
+<div class="container">
+  <div class="section-num">01 — The Syscall Itself</div>
+  <h2>What Does <span class="accent">pipe()</span> Actually Hand You?</h2>
+
+  <p class="reveal">Forget shells and forget IPC for a second. At the syscall level, <code>pipe()</code> is almost insultingly simple:</p>
+
+  <pre><code>int fds[2];
+int rc = pipe(fds);
+/* fds[0] = read end  — a file descriptor you can read() from
+ * fds[1] = write end — a file descriptor you can write() to
+ * rc == 0 on success, -1 on failure                          */</code></pre>
+
+  <p class="reveal">That's the entire interface. One syscall, one output parameter, two integers written into it. But those two integers are doing something no ordinary file descriptor does: they don't point at anything on disk. They point at each other, mediated by a fixed-size buffer the kernel allocates in its own memory, invisible to user space, that lives exactly as long as somebody still has one of the two ends open.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">📝</div><div class="pipe-name">fds[1] — write end</div><div class="pipe-desc">write() here appends bytes to the buffer's tail</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🗄️</div><div class="pipe-name">kernel pipe buffer</div><div class="pipe-desc">fixed-size, in kernel memory, not on any filesystem</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">📖</div><div class="pipe-name">fds[0] — read end</div><div class="pipe-desc">read() here pulls bytes off the buffer's head</div></div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A pipe isn't a special case bolted onto the filesystem — it's proof of how far "everything is a file descriptor" goes in a UNIX-family kernel. <code>fds[0]</code> and <code>fds[1]</code> behave like completely ordinary file descriptors to the process holding them: you <code>read()</code> and <code>write()</code> exactly as you would on any fd. Underneath, bob_os's own VFS layer treats them exactly this way — <code>pipe_alloc()</code> installs a <code>pipe_read_ops</code> vtable on one fd slot and a <code>pipe_write_ops</code> vtable on the other, both pointing at the same slot in a shared <code>pipe_table[]</code>. Same <code>read()</code>/<code>write()</code> syscalls your program already knows, different backing implementation underneath.
+  </div>
+
+  <p class="reveal">Here's bob_os's own version of that buffer, straight out of <code>20_pipes/pipe.h</code> — deliberately small enough to reason about in full:</p>
+
+  <pre><code>#define PIPE_BUF  4096
+#define MAX_PIPES 8
+
+struct pipe_buf {
+    char     data[PIPE_BUF];
+    uint32_t head;       /* read index (mod PIPE_BUF)  */
+    uint32_t tail;       /* write index                 */
+    uint32_t count;      /* bytes currently available   */
+    int      read_open;
+    int      write_open;
+    int      valid;
+};</code></pre>
+
+  <p class="reveal">Notice what's <em>not</em> in that struct: no filename, no inode on any disk, no directory entry. A pipe has no address in the filesystem at all — which is exactly the limitation Lesson 3 in this module exists to fix with named pipes. For now, an anonymous pipe is just this: a slot in a kernel-side array, referenced only by the two file descriptors that happen to point at it.</p>
+</div>
+</section>
+
+<!-- SIMPLEST POSSIBLE IPC -->
+<section id="simplest">
+<div class="container">
+  <div class="section-num">02 — Why Bother Comparing It to Anything</div>
+  <h2>The <span class="accent">Simplest Possible</span> IPC Mechanism</h2>
+
+  <p class="reveal">Every other IPC mechanism you'll meet — sockets, message queues, shared memory — adds some kind of structure: addresses, message boundaries, explicit synchronization primitives you have to manage yourself. A pipe adds none of that. It makes exactly one guarantee, and the guarantee is the entire feature:</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The One Guarantee a Pipe Makes</span>
+    Whatever bytes go in the write end come out the read end, in the same order, and nothing else.
+    <span class="sub">No message boundaries. No addresses. No "who am I talking to." Just an ordered stream of bytes, exactly like a file — except the other side is a live process, not a disk.</span>
+  </div>
+
+  <p class="reveal">That single guarantee is why a pipe is often described as "a FIFO byte stream" (first-in-first-out). If the writer calls <code>write(fds[1], "AB", 2)</code> and then <code>write(fds[1], "CD", 2)</code>, a reader doing one big <code>read()</code> is guaranteed to see <code>"ABCD"</code> — never <code>"CDAB"</code>, never interleaved out of order. The kernel enforces this ordering by construction: it's literally just appending bytes to one end of its buffer and removing them from the other, so order falls out for free.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Kernel Does All the Buffering — You Do None</div>
+    Notice what the two processes on either end of a pipe never have to do: allocate a shared buffer, agree on its size, synchronize access to it with a lock, or handle the case where one side is faster than the other. All of that is handled by the kernel's single buffer and its blocking <code>read()</code>/<code>write()</code> semantics (the subject of the next lesson in this module). The two processes just call <code>read()</code> and <code>write()</code> like they would on any file — the pipe's entire job is to make "talking to another process" look exactly like "talking to a file you already know how to use."
+  </div>
+
+  <p class="reveal">One important consequence worth naming explicitly: a pipe carries <strong>bytes</strong>, not messages. If you write <code>"HELLO"</code> then <code>"WORLD"</code> in two separate calls, a reader that calls <code>read()</code> with a big enough buffer may get back <code>"HELLOWORLD"</code> in one shot, or <code>"HEL"</code> then <code>"LOWORLD"</code> in two — the pipe makes no promise about preserving your original write boundaries. If your protocol needs to know where one logical message ends and the next begins, that's something <em>you</em> have to encode into the byte stream (a length prefix, a delimiter like <code>\n</code>) — the pipe itself doesn't know or care.</p>
+
+  <div class="sidenote reveal">
+    <b>Sidenote:</b> This is exactly how a Unix pipeline like <code>cat access.log | wc -l</code> works at the byte level too — <code>wc</code> doesn't receive "lines" as discrete IPC messages, it receives a raw byte stream and does its own scanning for <code>\n</code> characters, same as if it had opened a regular file. The pipe never had any concept of "line" in the first place.
+  </div>
+</div>
+</section>
+
+<!-- SHELL PIPELINE PATTERN -->
+<section id="shellpipeline">
+<div class="container">
+  <div class="section-num">03 — The Feature You Use Every Day</div>
+  <h2>What Is <span class="accent">`ls | grep foo`</span>, Really?</h2>
+
+  <p class="reveal">You've typed a pipeline like this hundreds of times. Two commands, one pipe character between them, and somehow the output of the left command becomes the input of the right one — as if by magic. There's no magic. There's exactly one syscall (<code>pipe()</code>), two <code>fork()</code> calls, and a small dance of <code>dup2()</code>/<code>close()</code> calls that your shell performs on your behalf, every single time.</p>
+
+  <p class="reveal">Here's the crucial reframe: <strong><code>ls</code> and <code>grep</code> know absolutely nothing about pipes.</strong> Neither program contains a single line of code that mentions IPC. <code>ls</code> just calls <code>write()</code> on file descriptor 1 (its stdout) like it always does — whether that's your terminal or a pipe is invisible to it. <code>grep</code> just calls <code>read()</code> on file descriptor 0 (its stdin) like it always does. The entire trick is that the <em>shell</em>, before it execs either program, secretly rewires what fd 0 and fd 1 point at. That rewiring is the real mechanism behind <code>|</code>, and it's what the rest of this lesson unpacks in full.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why This Design Is Actually Brilliant</div>
+    Because the rewiring happens entirely at the file-descriptor level, before <code>ls</code> or <code>grep</code> even exist as running programs (post-<code>exec()</code>), <strong>no program anywhere needs to be "pipe-aware."</strong> Any program that reads from stdin and writes to stdout — which is nearly every command-line tool ever written — automatically works in a pipeline, with zero code written specifically to support it. The generality of "everything is a file descriptor" is what makes this possible.
+  </div>
+</div>
+</section>
+
+<!-- DUP2 MECHANICS + CANVAS -->
+<section id="dup2">
+<div class="container">
+  <div class="section-num">04 — The Real Mechanical Trick</div>
+  <h2>fork(), dup2(), and the <span class="accent">Rewiring</span></h2>
+
+  <p class="reveal">Let's build the pipeline step by step, exactly the way a real shell does it. Three ingredients, used in a specific order:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The shell calls pipe() once, before forking anything</strong>This creates fd3 (read end) and fd4 (write end) inside the <em>shell's own</em> fd table. Nothing has forked yet — these two fds exist only in the shell process, for now.</div></li>
+    <li><div class="step-body"><strong>fork() — Child A is born, an exact fd-table clone</strong><code>fork()</code> duplicates the shell's entire fd table into the child, including fd3 and fd4. Child A now has its own fd0/1/2 (its own stdin/stdout/stderr) <em>and</em> its own copies of fd3/fd4, all pointing at the same underlying pipe.</div></li>
+    <li><div class="step-body"><strong>Child A calls dup2(fd4, 1)</strong>This is the actual rewiring instruction: "make file descriptor 1 (stdout) point at whatever fd4 points at." After this call, fd1 and fd4 are two different numbers pointing at the exact same open pipe write-end — writing to either one writes to the pipe.</div></li>
+    <li><div class="step-body"><strong>Child A closes fd3 and fd4</strong>It no longer needs the original names — fd1 already does the job. Closing the extras keeps the fd table clean and, critically, makes sure Child A doesn't accidentally hold the read end open too (more on why that matters two sections from now).</div></li>
+    <li><div class="step-body"><strong>Child A execs ls</strong><code>exec()</code> replaces Child A's program code with <code>ls</code>'s — but the fd table survives <code>exec()</code> untouched. <code>ls</code> starts running, calls <code>write()</code> on fd1 like any program would, and every byte lands in the pipe without <code>ls</code> ever knowing it isn't a terminal.</div></li>
+    <li><div class="step-body"><strong>The shell forks Child B, from itself — not from Child A</strong>Child B inherits the shell's <em>original</em> fd3/fd4 (Child A's copies were local to Child A and already closed). Child B calls <code>dup2(fd3, 0)</code> — wiring its stdin to the pipe's read end — closes fd3/fd4, and execs <code>grep foo</code>.</div></li>
+    <li><div class="step-body"><strong>The shell closes its own fd3 and fd4, then waits</strong>The shell was never meant to read or write the pipe itself — it only existed to set the plumbing up. Once both children are wired and running, the shell drops its own references and waits for both to exit.</div></li>
+  </ol>
+
+  <p class="reveal">Stripped of shell-specific bookkeeping, here's roughly what that first child (the one that becomes <code>ls</code>) is actually doing, in C:</p>
+
+  <pre><code>int fds[2];
+pipe(fds);                 /* fds[0]=read end, fds[1]=write end */
+
+pid_t child_a = fork();
+if (child_a == 0) {
+    /* --- this code runs inside Child A only --- */
+    dup2(fds[1], STDOUT_FILENO);   /* fd 1 now IS the pipe write end */
+    close(fds[0]);                  /* don't need the read end at all */
+    close(fds[1]);                  /* don't need the original number either */
+    execlp("ls", "ls", NULL);       /* fd table survives; ls inherits fd1 wired to the pipe */
+    _exit(127);                      /* only reached if execlp() itself fails */
+}
+
+pid_t child_b = fork();
+if (child_b == 0) {
+    /* --- this code runs inside Child B only --- */
+    dup2(fds[0], STDIN_FILENO);    /* fd 0 now IS the pipe read end */
+    close(fds[0]);
+    close(fds[1]);
+    execlp("grep", "grep", "foo", NULL);
+    _exit(127);
+}
+
+/* --- back in the shell (parent) --- */
+close(fds[0]);
+close(fds[1]);
+waitpid(child_a, NULL, 0);
+waitpid(child_b, NULL, 0);</code></pre>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">1×</div><div class="lbl">pipe() call, total, for the whole pipeline</div></div>
+    <div class="stat-card"><div class="val">2×</div><div class="lbl">fork() calls — one per command in the pipeline</div></div>
+    <div class="stat-card"><div class="val">2×</div><div class="lbl">dup2() calls — one per child, rewiring exactly one fd</div></div>
+    <div class="stat-card"><div class="val">6×</div><div class="lbl">close() calls total — 2 per process × 3 processes</div></div>
+  </div>
+
+  <p class="reveal">A pipeline of three commands (<code>a | b | c</code>) is the same idea extended: two pipes, three forks, and each middle command gets <em>both</em> ends rewired — its stdin from the pipe on its left, its stdout to the pipe on its right. The pattern doesn't change; it just repeats once per extra stage.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="dupLabel">▶ Watch the shell build `ls | grep foo`</div>
+    <canvas id="dupCanvas" height="380"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runPipeline()">▶ Run the Pipeline Build, Step by Step</button>
+    <button class="ctrl-btn red" onclick="resetPipeline()">Reset</button>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ Why dup2(), Not Just "Assign the Handle"</div>
+    You can't just tell <code>ls</code> to "use fd4 as its output" — by convention, and by the standard C library, every program assumes its stdin/stdout/stderr are specifically fd 0, 1, and 2. There's no way to tell <code>printf</code> to write to fd4 instead. <code>dup2(old, new)</code> solves this by making file descriptor number <code>new</code> become a duplicate reference to whatever <code>old</code> points at — so after <code>dup2(fd4, 1)</code>, fd1 <em>is</em> the pipe's write end, satisfying every piece of code that hardcodes "stdout is fd 1."
+  </div>
+</div>
+</section>
+
+<!-- CLOSING UNUSED ENDS -->
+<section id="closingends">
+<div class="container">
+  <div class="section-num">05 — The Bug Everyone Writes Once</div>
+  <h2>Why You Must <span class="accent">Close</span> the End You Don't Use</h2>
+
+  <p class="reveal">Look back at step 4 and step 6 above: each child closes <em>both</em> of the original fd3/fd4 copies, even the one it just duplicated with <code>dup2()</code>, and even the one it never touches at all. This looks like unnecessary housekeeping. It is not — skipping it is the single most common bug in hand-written pipe code.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>If you forget to close…</th><th>What actually happens</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">The writer's copy of the read end</td><td>Harmless in most cases, but wastes an fd slot and can mask bugs where you meant to read from your own pipe.</td></tr>
+        <tr><td class="hl">A reader's copy of the write end</td><td class="neg">The reader will <strong>block forever</strong> on read(), even after the real writer has exited — because the kernel still sees the write end as "open somewhere," so it never signals end-of-file.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">That second row is the one that bites people. A pipe's read() only returns 0 (end-of-file) once <strong>every</strong> copy of the write end, across every process that ever held one, has been closed. If Child B in our pipeline forgot to close its inherited copy of fd4 (the write end) before reading, then even after <code>ls</code> finishes and its own fd1/fd4 close, <em>grep's own leftover copy</em> keeps the write end alive from the kernel's point of view — so grep hangs, waiting for a write that will never come, from a process (itself) that will never send one.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🐛 The Golden Rule of Pipe + fork()</div>
+    After every <code>fork()</code> that's followed by <code>dup2()</code>-based rewiring, immediately close every fd you copied that you don't personally still need — <em>especially</em> the end of the pipe you're not using. A leaked write-end fd is invisible until the exact moment someone's <code>read()</code> hangs and never returns, which makes it one of the most confusing classes of bug to debug after the fact.
+  </div>
+</div>
+</section>
+
+<!-- COMPARE TABLE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">06 — Where This Fits Among IPC Options</div>
+  <h2>Anonymous Pipe vs Named Pipe vs <span class="accent p">Shared Memory</span></h2>
+
+  <p class="reveal">This lesson is entirely about the left column below. The other two are covered elsewhere in bob_os — named pipes get their own deep-dive later in this module, and shared memory is covered in full in Module 3's explainer and in <code>23_shared_memory</code>. Keep this table as a map of the territory:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Anonymous Pipe</th><th>Named Pipe (FIFO)</th><th>Shared Memory</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Who can use it</td><td>Only processes descended from a common ancestor that created it</td><td class="pos">Any process that can open() the path</td><td>Any process granted the mapping</td></tr>
+        <tr><td class="hl">How it's found</td><td>Inherited fd, via fork()</td><td class="pos">A real filesystem path (mkfifo)</td><td>A key/handle passed out-of-band</td></tr>
+        <tr><td class="hl">Data touches disk?</td><td class="pos">Never</td><td class="pos">Never (name only, no data)</td><td class="pos">Never</td></tr>
+        <tr><td class="hl">Data path</td><td>Copied through a kernel buffer</td><td>Copied through a kernel buffer</td><td class="gold">Zero-copy — same RAM, both processes</td></tr>
+        <tr><td class="hl">Ordering guarantee</td><td class="pos">Strict FIFO byte stream</td><td class="pos">Strict FIFO byte stream</td><td class="neg">None — you build your own protocol</td></tr>
+        <tr><td class="hl">Synchronization</td><td class="pos">Built in (blocking read/write)</td><td class="pos">Built in (blocking read/write)</td><td class="neg">You must add your own (lock/semaphore)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ How to Choose, in One Sentence</div>
+    Reach for an anonymous pipe when the two processes share a parent (the overwhelmingly common case, e.g. a shell launching a pipeline); reach for a named pipe when two already-running, unrelated processes need to rendezvous by name; reach for shared memory when the volume or frequency of data makes the per-byte cost of a kernel-mediated buffer too expensive.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">pipe()</div><div class="glossary-def">The syscall that allocates a kernel buffer and returns two new file descriptors bound to it: fds[0] for reading, fds[1] for writing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Anonymous Pipe</div><div class="glossary-def">A pipe with no filesystem name — reachable only via file descriptors that were inherited through fork(), never by opening a path.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Read End / Write End</div><div class="glossary-def">The two file descriptors a pipe() call produces. Bytes written to the write end appear, in order, on the read end.</div></div>
+    <div class="glossary-card"><div class="glossary-term">FIFO Byte Stream</div><div class="glossary-def">A pipe's core guarantee: bytes come out in the same order they went in, with no preserved message boundaries.</div></div>
+    <div class="glossary-card"><div class="glossary-term">fork()</div><div class="glossary-def">The syscall that clones a process, including a full copy of its open file descriptor table — the mechanism by which both ends of a pipe reach two different processes in the first place.</div></div>
+    <div class="glossary-card"><div class="glossary-term">dup2(old, new)</div><div class="glossary-def">Makes file descriptor number "new" become a duplicate reference to whatever "old" points at — the exact call that rewires a child's stdin/stdout onto a pipe end.</div></div>
+    <div class="glossary-card"><div class="glossary-term">exec()</div><div class="glossary-def">Replaces a process's running program with a new one, in place, while leaving its file descriptor table untouched — why a pipe wired up before exec() still works after it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Shell Pipeline</div><div class="glossary-def">The `cmd1 | cmd2` syntax: the shell creates one pipe, forks twice, and uses dup2()/close() in each child before exec()-ing the two commands.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Anonymous Pipes: A Byte Stream With Two File Descriptors · bob_os Lessons, Module 14 · Part 1 of 3</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Companion lesson for bob_os modules 20_pipes and 23_shared_memory.</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: Inside the Pipe — Ring Buffer, Blocking &amp; SIGPIPE →</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── PIPELINE BUILD CANVAS ───────────────────────────────────────────────
+// Phase-based scene: three process boxes (Shell, Child A -> ls, Child B -> grep)
+// each with a small fd list, plus a pipe buffer box. Phases mutate a state
+// object describing what each box currently shows.
+
+const boxW=230, boxH=150;
+function boxPos(W,i){ // i: 0=shell,1=childA,2=childB
+  const gap=(W-3*boxW)/4;
+  return {x:gap+i*(boxW+gap), y:70};
+}
+
+function fdRow(ctx,x,y,label,color){
+  ctx.fillStyle=color;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(label,x,y);
+}
+
+const phaseScripts = {
+  idle:      {caption:'Click Run to build ls | grep foo, one syscall at a time', shell:['fd0 stdin','fd1 stdout','fd2 stderr'], a:null, b:null, pipeLabel:'(no pipe yet)'},
+  shell_pipe:{caption:'Shell calls pipe() — fd3 (read) and fd4 (write) appear, both bound to one kernel buffer', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:null, b:null, pipeLabel:'pipe buffer (empty)'},
+  fork1:     {caption:'fork() — Child A is an exact fd-table clone, including fd3 and fd4', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'Child A',fds:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE']}, b:null, pipeLabel:'pipe buffer (empty)'},
+  dup2_a:    {caption:'Child A calls dup2(fd4, 1) — fd1 now points at the SAME write end as fd4', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'Child A',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'],hl:1}, b:null, pipeLabel:'pipe buffer (empty)'},
+  close_a:   {caption:'Child A closes fd3 and fd4 — fd1 alone is enough, already wired to the pipe', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'Child A',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr']}, b:null, pipeLabel:'pipe buffer (empty)'},
+  exec_a:    {caption:'Child A execs ls — the fd table survives exec() untouched; ls just writes to "stdout"', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'ls (was Child A)',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr'],running:true}, b:null, pipeLabel:'pipe buffer (empty)'},
+  fork2:     {caption:'Shell forks again — Child B inherits the ORIGINAL fd3/fd4, straight from the shell', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'ls (was Child A)',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr'],running:true}, b:{label:'Child B',fds:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE']}, pipeLabel:'pipe buffer (empty)'},
+  dup2_b:    {caption:'Child B calls dup2(fd3, 0) — fd0 now points at the SAME read end as fd3', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'ls (was Child A)',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr'],running:true}, b:{label:'Child B',fds:['fd0 → pipe READ','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'],hl:0}, pipeLabel:'pipe buffer (empty)'},
+  close_b:   {caption:'Child B closes fd3 and fd4, then execs grep foo', shell:['fd0 stdin','fd1 stdout','fd2 stderr','fd3 → pipe READ','fd4 → pipe WRITE'], a:{label:'ls (was Child A)',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr'],running:true}, b:{label:'grep foo (was Child B)',fds:['fd0 → pipe READ','fd1 stdout','fd2 stderr'],running:true}, pipeLabel:'pipe buffer (empty)'},
+  shell_close:{caption:'Shell closes its own fd3/fd4 — it never needed the pipe itself, only to wire it up — then waits', shell:['fd0 stdin','fd1 stdout','fd2 stderr'], a:{label:'ls (was Child A)',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr'],running:true}, b:{label:'grep foo (was Child B)',fds:['fd0 → pipe READ','fd1 stdout','fd2 stderr'],running:true}, pipeLabel:'pipe buffer (empty)'},
+  final:     {caption:'Result: ls’s stdout IS the pipe write end, grep’s stdin IS the pipe read end — that’s the whole trick behind |', shell:['fd0 stdin','fd1 stdout','fd2 stderr'], a:{label:'ls (was Child A)',fds:['fd0 stdin','fd1 → pipe WRITE','fd2 stderr'],running:true}, b:{label:'grep foo (was Child B)',fds:['fd0 → pipe READ','fd1 stdout','fd2 stderr'],running:true}, pipeLabel:'bytes flowing: ls → pipe → grep', flow:true}
+};
+
+function drawProcBox(ctx,x,y,title,fds,color,opts){
+  opts=opts||{};
+  ctx.fillStyle='rgba(56,189,248,.04)';ctx.strokeStyle=color;ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,boxW,boxH,8):ctx.rect(x,y,boxW,boxH);ctx.fill();ctx.stroke();
+  ctx.fillStyle=color;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(title,x+12,y+22);
+  fds.forEach((f,i)=>{
+    const rowY=y+42+i*18;
+    const isHl = opts.hl===i;
+    fdRow(ctx, x+12, rowY, f, isHl? C.gold : C.text);
+  });
+}
+
+function drawPipeBox(ctx,x,y,w,h,label,flow){
+  ctx.fillStyle='rgba(245,200,66,.06)';ctx.strokeStyle=C.gold;ctx.lineWidth=1.3;
+  ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,8):ctx.rect(x,y,w,h);ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2+4);
+  if(flow){
+    ctx.fillStyle=C.green;ctx.font='16px sans-serif';
+    ctx.fillText('→ → →',x+w/2,y+h/2+24);
+  }
+}
+
+function drawDupScene(phaseKey,alpha){
+  const canvas=document.getElementById('dupCanvas');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const s = phaseScripts[phaseKey] || phaseScripts.idle;
+  const p0 = boxPos(W,0), p1 = boxPos(W,1), p2 = boxPos(W,2);
+
+  drawProcBox(ctx, p0.x, p0.y, 'Shell', s.shell, C.cyan);
+  if(s.a) drawProcBox(ctx, p1.x, p1.y, s.a.label, s.a.fds, s.a.running?C.green:C.purple, {hl:s.a.hl});
+  else { ctx.strokeStyle=C.border; ctx.setLineDash([4,4]); ctx.strokeRect(p1.x,p1.y,boxW,boxH); ctx.setLineDash([]); ctx.fillStyle=C.muted; ctx.font='11px Source Code Pro,monospace'; ctx.textAlign='center'; ctx.fillText('(not forked yet)', p1.x+boxW/2, p1.y+boxH/2); }
+  if(s.b) drawProcBox(ctx, p2.x, p2.y, s.b.label, s.b.fds, s.b.running?C.green:C.orange, {hl:s.b.hl});
+  else { ctx.strokeStyle=C.border; ctx.setLineDash([4,4]); ctx.strokeRect(p2.x,p2.y,boxW,boxH); ctx.setLineDash([]); ctx.fillStyle=C.muted; ctx.font='11px Source Code Pro,monospace'; ctx.textAlign='center'; ctx.fillText('(not forked yet)', p2.x+boxW/2, p2.y+boxH/2); }
+
+  drawPipeBox(ctx, W/2-140, p0.y+boxH+30, 280, 46, s.pipeLabel, s.flow);
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx, s.caption, W/2, H-24, W-60, 18);
+}
+
+function wrapText(ctx,text,cx,y,maxWidth,lineHeight){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxWidth && line){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY = y - (lines.length-1)*lineHeight/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lineHeight));
+}
+
+const PHASE_ORDER=['shell_pipe','fork1','dup2_a','close_a','exec_a','fork2','dup2_b','close_b','shell_close','final'];
+function runPipeline(){
+  let idx=0,start=performance.now();
+  const dur=700;
+  document.getElementById('dupLabel').textContent='▶ Building ls | grep foo …';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur);
+    drawDupScene(PHASE_ORDER[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=PHASE_ORDER.length){
+        document.getElementById('dupLabel').textContent='▶ Done — this is exactly what your shell does on every |';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetPipeline(){
+  document.getElementById('dupLabel').textContent='▶ Watch the shell build `ls | grep foo`';
+  drawDupScene('idle',1);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetPipeline(); });
+window.addEventListener('resize',()=>{ resetPipeline(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Long Mode — What Happened to Segmentation on a 64-bit CPU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)} h2 .accent.c{color:var(--cyan)} h2 .accent.g{color:var(--gold)} h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+code{font-family:'Source Code Pro',monospace;font-size:.88em;background:rgba(122,155,191,.12);padding:.1em .4em;border-radius:4px;color:var(--gold);}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.red{border-color:var(--red);color:var(--red)}
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.gold{color:var(--gold)} td.neg{color:var(--red)} td.pur{color:var(--purple);font-weight:600} td.muted{color:var(--muted)}
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.2);}
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:760px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.a h4{color:var(--red)} .compare-card.b h4{color:var(--green)} .compare-card.c h4{color:var(--purple)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+/* bitfield diagram */
+.bitfield{display:flex;border:1.5px solid var(--gold2);border-radius:8px;overflow:hidden;margin:1.8rem 0;font-family:'Source Code Pro',monospace;}
+.bitfield .bf-seg{padding:1.2rem .5rem;text-align:center;border-right:1px solid var(--border);}
+.bitfield .bf-seg:last-child{border-right:none}
+.bitfield .bf-name{font-size:.85rem;font-weight:700;margin-bottom:.3rem;}
+.bitfield .bf-bits{font-size:.68rem;color:var(--muted);}
+.bitfield .bf-sub{font-size:.65rem;color:var(--muted);margin-top:.25rem;line-height:1.3;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Setting the Stage"></a>
+  <a class="toc-dot" href="#neutered" title="Segmentation Neutered"></a>
+  <a class="toc-dot" href="#collapse" title="The Formula Collapses"></a>
+  <a class="toc-dot" href="#tls" title="FS/GS Survive"></a>
+  <a class="toc-dot" href="#cpl" title="CS Still Carries CPL"></a>
+  <a class="toc-dot" href="#entering" title="Entering Long Mode"></a>
+  <a class="toc-dot" href="#paging" title="Paging Takes Over"></a>
+  <a class="toc-dot" href="#canonical" title="Canonical Addresses"></a>
+  <a class="toc-dot" href="#practical" title="In the Wild"></a>
+  <a class="toc-dot" href="#thennow" title="Then vs Now"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Companion Deep-Dive · x86-64 Long Mode</div>
+    <h1>Segmentation's<br><span>Quiet Retirement</span></h1>
+    <p class="hero-sub">You've watched the segmentation unit compute <code>Linear Address = Descriptor.Base + Offset</code>, and you've watched the GDT hand it that Base field, one 8-byte descriptor at a time. Now boot a 64-bit CPU into long mode and ask it to do that same math — and mostly, it just won't. This is the story of what survived the transition to 64 bits, what got hard-disabled in silicon, and why the two leftover exceptions (yes, exceptions) turned out to matter more than anyone expected.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Segments Doing Real Translation</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Base Registers Still Live: FS / GS</div></div>
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">Page-Table Levels Doing the Work</div></div>
+      <div class="hero-stat"><div class="num">48/57</div><div class="lbl">Canonical Address Bits in Use</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<section id="recap">
+<div class="container">
+  <div class="section-num">01 — Setting the Stage</div>
+  <h2>A Feature's <span class="accent">Slow Fade</span></h2>
+  <p class="reveal">Segmentation wasn't always a formality. Rewind to the original 16-bit 8086, and segment:offset addressing was load-bearing in the most literal sense: a "segment" really was a relocatable 64KB window into memory, real-mode code juggled "near" and "far" pointers explicitly, and C compilers of the era offered entire named memory models — tiny, small, medium, compact, large, huge — just to describe how aggressively a given program depended on crossing multiple segments. There was no paging unit yet to fall back on. Segmentation wasn't a first line of defense; it was the entire translation story.</p>
+  <p class="reveal">The two base modules in this series pick the story up at its second act: 32-bit protected mode, where segmentation stays a real, active participant — Base and Limit genuinely computed with, on every access — while paging joins as a second, independent stage running in series right after it. Two circuits, both doing real work, wired together into the MMU.</p>
+  <p class="reveal">This article covers the third act. In 64-bit long mode, segmentation's translation duties get switched off in silicon for four of the six segment registers, and paging inherits the entire job alone. What follows is exactly how that happened, and exactly which two registers didn't get the memo.</p>
+
+  <div class="compare-grid reveal" style="grid-template-columns:1fr 1fr 1fr;">
+    <div class="compare-card a"><h4>1️⃣ 16-bit Real Mode</h4>Segmentation is the <em>only</em> translation mechanism in existence. Segment:offset addresses real, 64KB-windowed memory directly — no paging unit exists yet to share the job.</div>
+    <div class="compare-card b"><h4>2️⃣ 32-bit Protected Mode</h4>Segmentation and paging both run, genuinely in series, each doing real translation and protection work — the subject of the two base modules this article builds directly on.</div>
+    <div class="compare-card c"><h4>3️⃣ 64-bit Long Mode</h4>Segmentation's translation role is hardware-disabled for CS/SS/DS/ES; paging translates alone; FS/GS survive for one narrow, genuinely useful job.</div>
+  </div>
+</div>
+</section>
+
+<section id="neutered">
+<div class="container">
+  <div class="section-num">02 — The Big Change</div>
+  <h2>Segmentation Gets <span class="accent">Neutered</span></h2>
+  <p class="reveal">Ask this question honestly: in 64-bit long mode, what does the CPU actually do with the Base and Limit fields sitting inside a CS, SS, DS, or ES segment descriptor? The answer isn't "not much." The answer is <strong>nothing</strong>. The processor does not read them. For those four segment registers, long mode hardwires the behavior as if every descriptor said Base = 0 and Limit = unbounded, regardless of what bits are actually sitting in the GDT slot the selector points to.</p>
+  <p class="reveal">This is not an OS convention, the way Linux's flat 32-bit segments were a convention. A convention is something software chooses and could, in principle, choose differently. This is different: it's a hardware mandate. Even if a kernel deliberately loaded a CS descriptor with Base = <code>0xdeadbeef</code> and a Limit of 4KB, a 64-bit CPU running that code segment in long mode would silently disregard both fields and behave exactly as if Base were 0 and the segment were unbounded. There's no way to opt back in for CS, SS, DS, or ES. The hardware simply stopped implementing the feature for them.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 You Can Write Whatever You Want In the Descriptor — the CPU Won't Read It</div>
+    This is the detail that trips people up. In 32-bit protected mode, a "flat" segment (Base=0, Limit=4GB) is a <em>choice</em> the OS makes, and the segmentation unit still genuinely performs that addition and that limit check on every access — it just happens to add zero. In 64-bit long mode for CS/SS/DS/ES, the circuitry that would perform that addition and that check has been switched off entirely. Base and Limit for those four registers become <strong>dead fields</strong> — present in the descriptor's bit layout for backward compatibility, invisible to the address-translation logic.
+  </div>
+
+  <p class="reveal">One more piece falls with it: <strong>segment-limit protection</strong>. In 32-bit protected mode, an offset larger than the segment's Limit field triggers a general-protection fault — the segmentation unit was, among other things, a bounds checker. In long mode, for CS/SS/DS/ES, that bounds check is gone too. There's no limit to violate because there's no limit being enforced. That includes the Stack Segment: 32-bit protected mode could rely on the SS Limit field to catch a stack that grew past its allotted segment and raise a fault right there. Long mode gives that up completely — a 64-bit OS instead relies on <strong>guard pages</strong> (unmapped pages sitting just past the end of a stack region) and lets the ordinary paging fault mechanism catch an overrun instead. One less job for segmentation, one more job quietly absorbed by paging.</p>
+
+  <p class="reveal">Register-by-register, here's exactly what long mode keeps versus discards. Notice DS and ES don't just lose their translation power — 64-bit code frequently doesn't bother loading them with anything meaningful at all, since every instruction that would have used them can simply address memory without a segment override and get the identical (Base=0) result.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Register</th><th>Base in Long Mode</th><th>Limit Checked?</th><th>Still Actively Used For</th></tr>
+      <tr><td class="pur">CS</td><td class="neg">Forced to 0</td><td class="neg">No</td><td class="pos">Carries CPL via DPL; L-bit marks 64-bit code</td></tr>
+      <tr><td class="pur">SS</td><td class="neg">Forced to 0</td><td class="neg">No</td><td class="hl">Carries DPL for stack-switch privilege checks</td></tr>
+      <tr><td class="pur">DS</td><td class="neg">Forced to 0</td><td class="neg">No</td><td class="muted">Rarely loaded meaningfully in 64-bit code</td></tr>
+      <tr><td class="pur">ES</td><td class="neg">Forced to 0</td><td class="neg">No</td><td class="muted">Rarely loaded meaningfully in 64-bit code</td></tr>
+      <tr><td class="pos">FS</td><td class="pos">Real, per-thread</td><td class="neg">No</td><td class="pos">TLS base (Linux convention)</td></tr>
+      <tr><td class="pos">GS</td><td class="pos">Real, per-thread</td><td class="neg">No</td><td class="pos">TLS/TEB base (Windows); kernel per-CPU data via SWAPGS</td></tr>
+    </table>
+  </div>
+
+  <div class="sidenote reveal"><b>So why not just remove CS/SS/DS/ES entirely?</b> Instruction-set compatibility. Decades of encoded instructions still carry segment-override prefixes, and <code>MOV</code> to/from a segment register is still a legal, decodable instruction. Removing the registers would mean removing instructions — breaking encodings rather than just disabling a behavior. It was far cheaper, silicon-wise, to keep the registers and the descriptor format intact and simply stop consulting Base/Limit for four of the six.</div>
+
+  <p class="reveal">One more small consequence worth naming: since DS and ES no longer contribute anything to address translation, 64-bit code frequently just loads them with a <strong>null selector</strong> — index 0, pointing nowhere meaningful — and leaves them alone for the rest of the program's life. That's not laziness; it's a completely valid, deliberate simplification once you know the descriptor those selectors would have pointed to wouldn't have been consulted for its Base or Limit anyway.</p>
+</div>
+</section>
+
+<section id="collapse">
+<div class="container">
+  <div class="section-num">03 — The Arithmetic, Simplified to Nothing</div>
+  <h2>Why the <span class="accent">Formula Collapses</span></h2>
+  <p class="reveal">Put the two base modules' central formula next to what long mode actually computes, and the shift is almost anticlimactic:</p>
+
+  <div class="formula gold reveal">
+    <span class="label">32-bit protected mode — the segmentation unit's real job</span>
+    Linear Address = Descriptor.Base + Offset
+    <span class="sub">Base comes from a real GDT/LDT lookup, and really gets added.</span>
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">64-bit long mode — CS, SS, DS, ES</span>
+    Linear Address = 0 + Offset = Offset
+    <span class="sub">Base is hardwired to zero. The segmentation "stage" of the MMU pipeline is now a pass-through wire.</span>
+  </div>
+
+  <p class="reveal">Why would Intel and AMD's engineers do this? Because the entire reason segmentation's Base field existed in the first place was to solve a <strong>capacity problem</strong> — relocating a program, or a segment, somewhere inside a limited flat address space smaller than what programs collectively wanted to address. A 32-bit offset alone only reaches 4GB, so if you needed more structure than "one 4GB pile," Base gave you a second knob to work with.</p>
+  <p class="reveal">A 64-bit offset does not have that problem. Sixty-four bits of raw offset already reaches 16 exbibytes — a number so far past any RAM you could physically rack into a data center, let alone screw into a desktop, that "relocate a segment to make room" stopped being a real engineering constraint. There was no capacity left to solve. So rather than requiring every OS on earth to remember to manually set up four flat, Base=0 segments the way Linux already did by convention in 32-bit mode (as covered in the GDT article's Linux section), the hardware designers simply <strong>hard-disabled</strong> the feature for CS/SS/DS/ES. Nobody can get it wrong, because nobody can turn it back on.</p>
+
+  <p class="reveal">There's a pleasing bit of historical closure here, too. Segmentation's Base field was originally one of the tools programs used for <em>relocation</em> — loading the same code at different addresses in memory without recompiling it. Modern position-independent executables (PIE binaries, the default on virtually every current Linux distribution) still need exactly that capability, for exactly the same reason it always mattered plus a new one: <strong>ASLR</strong> (Address Space Layout Randomization) deliberately loads a program at a different address on every run, to make memory-corruption exploits harder to aim. Segmentation isn't involved in any of that anymore — it's paging, and the OS's own loader, picking a fresh base address and building fresh page tables to match, with zero help from a Base register that no longer does anything.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🧠 Long Mode Made Mandatory What Linux Already Chose Voluntarily</div>
+    Remember the GDT article's punchline: Linux, even back in 32-bit protected mode, defined its kernel and user code/data segments with Base=0 and a Limit spanning the whole address space — deliberately flattening segmentation down to "cover everything, differ only by privilege level" and leaning on paging for real protection. Long mode takes that same design decision and <strong>bakes it into the silicon</strong> for CS/SS/DS/ES. What was smart OS engineering in 1998 became a hardware guarantee by the time 64-bit chips shipped in the 2000s.
+  </div>
+</div>
+</section>
+
+<section id="tls">
+<div class="container">
+  <div class="section-num">04 — The Exception That Survived</div>
+  <h2><span class="accent">FS</span> and <span class="accent">GS</span>: Still Armed</h2>
+  <p class="reveal">Here's the twist: two of the six segment registers were <em>not</em> neutered. <strong>FS</strong> and <strong>GS</strong> keep a genuinely live, genuinely usable Base field in long mode — the CPU really does compute <code>FS.base + Offset</code> when you address memory through them. Everything you just read about CS/SS/DS/ES simply doesn't apply to these two.</p>
+  <p class="reveal">Why keep exactly two? Because a real problem remained that a flat, single global address space can't solve on its own: <strong>every thread in a process needs some private storage that the exact same compiled code can reach without a lookup, a branch, or a pointer chase.</strong> That's <strong>Thread-Local Storage (TLS)</strong>, and FS/GS are the hardware feature that makes it essentially free.</p>
+  <p class="reveal">And why two registers rather than just one? Because userspace TLS and the kernel's own per-CPU bookkeeping both want exactly this trick, at the same time, without stepping on each other. On Linux, userspace claims FS for <code>__thread</code> variables while the kernel reserves GS (swapped via <code>SWAPGS</code>) for its own per-CPU structures — one register per "customer," each fully independent of the other, both riding the identical hardware mechanism.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card a"><h4>🚫 CS / SS / DS / ES</h4>Base forced to 0. Limit ignored. In long mode these four registers do no translation work at all — they're along for the ride.</div>
+    <div class="compare-card b"><h4>✅ FS / GS</h4>Base field is real, per-register, and settable independently for every thread. The last surviving piece of "real" segmentation math in 64-bit mode.</div>
+  </div>
+
+  <p class="reveal">Here's the mechanism, concretely. Compilers implement a C/C++ <code>__thread</code> global (or C11 <code>_Thread_local</code>) by emitting memory operands like <code>mov rax, fs:[0x28]</code> or <code>mov rax, gs:[0x28]</code> — the exact same machine instruction, byte for byte, in every thread's copy of the compiled binary. What differs between threads isn't the instruction — it's the value sitting in the FS (or GS) base register at the moment that instruction executes. Thread A might have FS.base = <code>0x00007f1a40008700</code>; Thread B, running the identical instruction stream, might have FS.base = <code>0x00007f1a40009d00</code>. Same offset, same opcode, two completely different physical variables — resolved automatically, in hardware, with zero branching and zero table lookups.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The one segment-math formula that still really runs</span>
+    Linear Address (FS- or GS-relative) = FS.base (or GS.base) + Offset
+    <span class="sub">Identical shape to the old Descriptor.Base + Offset formula — just restricted to two registers, and loaded per-thread instead of per-segment-type.</span>
+  </div>
+
+  <p class="reveal">There isn't just one way to load that base value, either — three mechanisms exist, layered across roughly two decades of hardware, and a modern OS typically supports all three so it keeps working on older silicon:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--purple)">WRFSBASE / RDFSBASE</span><span class="fam-count">fastest</span></div><div class="fam-desc">Ring-3 instructions, available since Ivy Bridge when the kernel sets <code>CR4.FSGSBASE</code>. Userspace sets its own FS/GS base directly — no syscall, no ring transition, ideal for user-mode threading libraries and JIT runtimes that create threads constantly.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">WRMSR on IA32_FS_BASE/GS_BASE</span><span class="fam-count">universal fallback</span></div><div class="fam-desc">The original mechanism, present on every 64-bit x86 chip. <code>WRMSR</code> is a Ring-0-only instruction, so this path always requires a trip into the kernel — slower, but guaranteed to exist even on the oldest AMD64/Opteron-era silicon.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">arch_prctl(ARCH_SET_FS, …)</span><span class="fam-count">Linux syscall wrapper</span></div><div class="fam-desc">The portable interface glibc actually calls — it picks whichever underlying mechanism (WRFSBASE or WRMSR) the running kernel and CPU support, so userspace code never has to care which generation of hardware it's on.</div></div>
+  </div>
+
+  <p class="reveal">By convention (not hardware mandate — the silicon doesn't care which register an OS picks), <strong>Linux uses FS</strong> to point at each thread's Thread Control Block, which is where <code>__thread</code> variables and glibc's own per-thread state (like <code>errno</code>) actually live. <strong>Windows uses GS</strong> to point at the Thread Environment Block (TEB), the data structure the Win32 API and the CLR both lean on constantly. Two different operating systems, two different registers, one identical hardware trick underneath both.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="tlsLabel">▶ Run the same instruction on two threads — watch FS.base do all the work</div>
+    <canvas id="tlsCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn purple" onclick="runTLS()">▶ Execute <code style="color:inherit">mov rax, fs:[0x28]</code> on both threads</button>
+    <button class="ctrl-btn red" onclick="resetTLS()">Reset</button>
+  </div>
+
+  <p class="reveal">Written out as plain arithmetic instead of an animation, here's exactly what each thread's CPU computed:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Thread</th><th>FS.base</th><th>+ Offset</th><th>Linear Address</th></tr>
+      <tr><td class="hl">Thread A</td><td class="pos">0x00007f1a40008700</td><td class="gold">0x28</td><td class="pur">0x00007f1a40008728</td></tr>
+      <tr><td class="hl">Thread B</td><td class="pos">0x00007f1a40009d00</td><td class="gold">0x28</td><td class="pur">0x00007f1a40009d28</td></tr>
+    </table>
+  </div>
+
+  <h3>How the Base Actually Gets Set</h3>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>A new thread is created</strong>The thread library (glibc's <code>pthread_create</code> on Linux, or the Windows thread-creation path) allocates a fresh block of memory to hold that thread's private TLS data.</div></li>
+    <li><div class="step-body"><strong>The kernel is asked to point FS or GS at it</strong>On Linux, glibc issues the <code>arch_prctl(ARCH_SET_FS, addr)</code> syscall, handing the kernel the address of the new thread's TLS block. This is a privileged operation — user code can't just scribble into the base register from nowhere.</div></li>
+    <li><div class="step-body"><strong>...or, on newer CPUs, userspace sets it directly</strong>Since Ivy Bridge, if the kernel has enabled <code>CR4.FSGSBASE</code>, userspace itself can use the <code>WRFSBASE</code> / <code>WRGSBASE</code> instructions (and read them back with <code>RDFSBASE</code>/<code>RDGSBASE</code>) without a syscall at all — faster thread setup, same underlying idea. The older, universally-supported fallback writes the base through Model-Specific Registers <code>IA32_FS_BASE</code> (MSR 0xC0000100) and <code>IA32_GS_BASE</code> (0xC0000101) via the privileged <code>WRMSR</code> instruction.</div></li>
+    <li><div class="step-body"><strong>Every later fs:/gs:-relative access just works</strong>From that point on, any instruction the compiler emitted with an FS or GS prefix resolves through <em>that thread's</em> base value — automatically, on every core, with no per-access decision-making required from software.</div></li>
+  </ol>
+
+  <div class="sidenote reveal"><b>GS's other job: SWAPGS.</b> The kernel needs its own private "GS.base" too — pointing at per-CPU kernel data structures — but a thread's user-mode GS.base is obviously the wrong value to use once you're inside the kernel. The <code>SWAPGS</code> instruction, run automatically on kernel entry/exit (via <code>syscall</code>/<code>sysret</code> and interrupt handling), atomically swaps the live GS.base with a shadow value cached in the <code>IA32_KERNEL_GS_BASE</code> MSR. It's fast enough to run on every single system call — and, as a fun/alarming real-world footnote, a timing side channel in exactly this swap logic was the basis of the 2019 "SWAPGS" speculative-execution vulnerability (CVE-2019-1125), a reminder that even a register nobody thinks about is still real, exploitable hardware state.</div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 The Windows Mirror Image</div>
+    Everything said above about FS on Linux has a near-exact Windows counterpart on GS. On 64-bit Windows, <strong>GS:[0x30]</strong> holds the linear address of the calling thread's own <strong>TEB</strong> (Thread Environment Block) — the same self-referential trick glibc uses, just at a different fixed offset and through the other register. The Windows API intrinsic <code>__readgsqword(0x30)</code>, and the equivalent <code>NtCurrentTeb()</code> helper, both boil down to exactly one FS/GS-relative memory read. Same hardware feature, same one-instruction cost, two unrelated operating systems independently landing on the identical design.
+  </div>
+
+  <h3>The Same Idea, Three Spellings</h3>
+  <p class="reveal">None of this requires a programmer to ever type <code>fs:</code> or <code>gs:</code> by hand — the compiler emits the segment-prefixed instructions automatically, triggered by nothing more than a keyword on a variable declaration:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--purple)">__thread</span><span class="fam-count">GCC / Clang</span></div><div class="fam-desc">The original GNU C extension: <code>static __thread int counter;</code> — one keyword, and every access to <code>counter</code> compiles down to an FS-relative load or store.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">thread_local / _Thread_local</span><span class="fam-count">C11 / C++11</span></div><div class="fam-desc">The standardized spelling — <code>thread_local int counter;</code> — that compiles to the identical FS/GS-relative machine code on any conforming x86-64 compiler.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">__declspec(thread)</span><span class="fam-count">MSVC</span></div><div class="fam-desc">Microsoft's pre-C11 equivalent on Windows — same underlying GS-relative mechanism, different keyword predating the C++11 standard.</div></div>
+  </div>
+</div>
+</section>
+
+<section id="cpl">
+<div class="container">
+  <div class="section-num">05 — What's Left in the GDT</div>
+  <h2>Segmentation's Second Job: <span class="accent">Carrying the CPL</span></h2>
+  <p class="reveal">If Base and Limit are dead weight for CS/SS/DS/ES, does the GDT itself become pointless in long mode? No — and this is the piece that ties directly back to the GDT article's core lesson: <strong>a CS selector's DPL bits are still how the CPU tracks Ring 0 vs. Ring 3, even in 64-bit mode.</strong> Segmentation didn't disappear. It got demoted from "does address translation" down to "carries privilege level, and occasionally a TLS base."</p>
+  <p class="reveal">A 64-bit OS still needs a valid Code Segment descriptor sitting in the GDT — one with the <strong>L bit</strong> (Long-mode) set to 1, marking it as a 64-bit code segment, and the D bit cleared, since operand size defaults are handled differently once L=1. The CPU still loads a CS <em>selector</em> into the CS register on every privilege transition, still reads that selector's RPL and the descriptor's DPL, and still uses exactly that comparison to decide whether code is currently executing as the kernel or as an ordinary user process. Every ring-crossing check from the segmentation article — GP faults on privilege violations, the whole DPL-vs-CPL-vs-RPL dance — is alive and well. It's just no longer doing anything about <em>where memory physically is</em>.</p>
+
+  <div class="formula gold reveal">
+    <span class="label">What's genuinely still computed on every access, long mode or not</span>
+    Current Privilege Level (CPL) = RPL / DPL of the active CS selector
+    <span class="sub">Untouched by the 64-bit transition — segmentation's protection role survives even though its translation role doesn't.</span>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 A Faster Path That Still Needs Real Descriptors</div>
+    For speed, the actual ring transition on a system call doesn't always walk the full GDT lookup path you traced in the GDT article's worked example. The <code>SYSCALL</code>/<code>SYSRET</code> instruction pair — the normal way user code enters the kernel on x86-64 — loads CS and SS selector values straight out of a Model-Specific Register called <code>IA32_STAR</code>, rather than taking a far-call-style path through descriptor tables on every single call. But those selector values still name real slots in the GDT, whose L-bit, DPL, and other attributes still have to be set up correctly at boot — the shortcut is in how fast the selector gets loaded, not in whether a legitimate descriptor has to exist.
+  </div>
+
+  <p class="reveal">There's a second GDT resident that survives for a related reason: the <strong>Task State Segment (TSS)</strong>. Its descriptor is still a real, system-type entry in the GDT — still needed even though x86-64 dropped hardware task-switching (the classic 32-bit feature of jumping between TSSs to context-switch) entirely. What's left of the TSS in long mode is narrower but essential: a 64-bit TSS holds <strong>RSP0, RSP1, RSP2</strong> — the stack pointers the CPU should load automatically when a lower-privileged context traps or interrupts into Ring 0, 1, or 2 — plus up to seven <strong>Interrupt Stack Table (IST)</strong> entries, alternate known-good stacks that specific interrupt vectors (like a double fault or an NMI) can be forced onto regardless of whatever the current stack pointer happens to be doing.</p>
+
+  <div class="sidenote reveal"><b>Why IST matters more than it sounds like it should.</b> If a stack overflow itself is what triggers a fault, handling that fault on the same (already-broken) stack is a recipe for a silent, unrecoverable failure. By pointing specific interrupt vectors at a dedicated IST stack instead of RSP0, the kernel guarantees the handler always starts from clean, known-good memory — a small mechanism, but the reason a kernel stack overflow reliably produces a diagnosable double-fault instead of just corrupting memory silently.</div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>64-bit TSS Field</th><th>Purpose</th></tr>
+      <tr><td class="pur">RSP0</td><td>Stack pointer loaded automatically on a Ring 3 → Ring 0 transition — the normal user-to-kernel path on every system call and interrupt.</td></tr>
+      <tr><td class="pur">RSP1 / RSP2</td><td>Equivalent stacks for transitions landing in Ring 1 / Ring 2 — present in the format, though most OSes (Linux and Windows included) never actually use rings 1–2.</td></tr>
+      <tr><td class="pur">IST1–IST7</td><td>Seven alternate emergency stacks, individually assignable to specific interrupt vectors (double fault, NMI, machine check) regardless of the current stack's condition.</td></tr>
+    </table>
+  </div>
+
+  <p class="reveal">So the honest one-line summary of this section: the GDT survives 64-bit long mode fully intact as a data structure — same 8-byte descriptor format, same <code>gdtr</code> register, same <code>base + index×8</code> arithmetic you saw in the GDT article. What changed is how much of each descriptor the CPU actually <em>uses</em>. For CS, essentially just the privilege and long-mode bits. For SS, similarly little. For DS and ES, in 64-bit code, often nothing at all — many 64-bit OSes barely bother loading them meaningfully.</p>
+</div>
+</section>
+
+<section id="entering">
+<div class="container">
+  <div class="section-num">06 — A Detail Worth Knowing</div>
+  <h2>How a CPU Actually <span class="accent">Gets Into</span> Long Mode</h2>
+  <p class="reveal">None of the previous four sections happen automatically the instant you power on a 64-bit chip. Every x86-64 CPU still boots up in the old 16-bit real mode your grandfather's BIOS used, and has to be walked, deliberately, step by step, through protected mode and finally into long mode by the bootloader and early kernel code — the exact same segmentation and paging machinery from the base modules gets used as scaffolding to bootstrap the very system that will later retire most of it.</p>
+  <p class="reveal">This isn't theoretical — it's code you can go read. On a Linux box, the relevant handoff lives in the kernel's own boot assembly (historically <code>arch/x86/boot/compressed/head_64.S</code> and neighboring files): firmware hands off in 16- or 32-bit mode, GRUB or another bootloader gets the kernel image into memory, and the kernel's earliest instructions perform precisely the five-step dance below before a single line of "normal" 64-bit C code ever runs.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Enable PAE</strong>Set <code>CR4.PAE</code> = 1. Physical Address Extension was originally a 32-bit feature for reaching more than 4GB of RAM, but it's also a hard prerequisite for long mode's page-table format — long mode paging is, structurally, PAE paging with two extra levels bolted on top.</div></li>
+    <li><div class="step-body"><strong>Build an initial page-table hierarchy</strong>The bootstrap code hand-constructs at least one PML4 table (and the PDPT/PD/PT beneath it) somewhere in RAM — typically an "identity map" where linear addresses equal physical addresses, just enough to keep execution coherent through the switch — then loads that table's physical address into <strong>CR3</strong>.</div></li>
+    <li><div class="step-body"><strong>Set IA32_EFER.LME</strong>Using the privileged <code>WRMSR</code> instruction, set the LME (Long Mode Enable) bit in the <strong>EFER</strong> (Extended Feature Enable Register) MSR. This doesn't turn long mode on yet — it tells the CPU "turn it on the moment paging is enabled."</div></li>
+    <li><div class="step-body"><strong>Enable paging</strong>Set <code>CR0.PG</code> = 1. The instant paging switches on with LME already set, the CPU automatically sets <strong>IA32_EFER.LMA</strong> (Long Mode Active) and drops into <strong>compatibility mode</strong> — long mode is technically live, but the CPU is still executing 32-bit-style code, because CS still points at an old-style 32-bit code descriptor.</div></li>
+    <li><div class="step-body"><strong>Load CS with an L=1 descriptor</strong>A far jump (or equivalent) into a GDT code-segment descriptor with the <strong>L bit</strong> set to 1 is what finally flips execution into genuine 64-bit mode — full 64-bit registers, RIP-relative addressing, the works. This is the exact same L bit mentioned back in the CPL section, now shown as the actual on/off switch for 64-bit execution.</div></li>
+  </ol>
+
+  <p class="reveal">EFER carries a few other bits worth knowing by name, since kernel boot code sets several of them in the same breath as LME:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>EFER Bit</th><th>Name</th><th>What It Actually Does</th></tr>
+      <tr><td class="pur">0</td><td class="hl">SCE</td><td>Enables the <code>SYSCALL</code>/<code>SYSRET</code> instruction pair — without it, that fast kernel-entry path from the CPL section doesn't exist.</td></tr>
+      <tr><td class="pur">8</td><td class="hl">LME</td><td>Long Mode Enable — the "arm it" bit the OS sets before turning paging on.</td></tr>
+      <tr><td class="pur">10</td><td class="hl">LMA</td><td>Long Mode Active — a read-mostly status bit the CPU itself sets once LME and CR0.PG are both live.</td></tr>
+      <tr><td class="pur">11</td><td class="hl">NXE</td><td>No-Execute Enable — lets page-table entries mark pages non-executable, the hardware backbone of W^X / DEP protections.</td></tr>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ Compatibility Mode Isn't a Third Address-Translation Scheme</div>
+    Compatibility mode can feel like a mysterious in-between state, but it isn't a third translation mechanism to memorize — it's IA-32e paging (the same 4-level walk described next) running underneath what's still, instruction-encoding-wise, 32-bit-looking code, because CS hasn't been switched to an L=1 descriptor yet. It exists purely so a kernel can run brief stretches of legacy 32-bit boot/initialization code without tearing down paging first. Production 64-bit kernels spend virtually their entire runtime in true 64-bit mode, not compatibility mode.
+  </div>
+
+  <p class="reveal">Three genuinely different execution submodes exist inside "a 64-bit-capable CPU," and it's worth keeping them straight — the terminology gets thrown around loosely enough that it's easy to conflate them:</p>
+
+  <div class="compare-grid reveal" style="grid-template-columns:1fr 1fr 1fr;">
+    <div class="compare-card a"><h4>🕰️ Legacy Mode</h4>EFER.LMA = 0. Ordinary 16-bit real mode or 32-bit protected mode. Full segmentation from the base modules applies exactly as written — Base and Limit are real, and paging (if on at all) is 2- or 3-level.</div>
+    <div class="compare-card b"><h4>🌗 Compatibility Mode</h4>EFER.LMA = 1, but the active CS descriptor has L=0. Paging is already 4-level IA-32e paging, but code executes with 32-bit-style semantics — a deliberately brief stepping-stone, not a destination.</div>
+    <div class="compare-card c"><h4>⚡ 64-bit Mode</h4>EFER.LMA = 1 and the active CS descriptor has L=1. Full 64-bit registers, RIP-relative addressing, and everything described in this article — where a 64-bit OS spends essentially all of its runtime.</div>
+  </div>
+
+  <div class="sidenote reveal"><b>A brief history of the name.</b> AMD designed this 64-bit extension first and called it <strong>AMD64</strong> (originally "x86-64"), shipping it in 2003 on the Opteron server line. Intel licensed the same instruction set rather than shipping an incompatible alternative, initially under the name "IA-32e" and later "EM64T," before eventually settling on the marketing name <strong>Intel 64</strong>. Different names, same architecture — a rare case of a full 64-bit ISA extension arriving from the "smaller" of the two x86 vendors first.</div>
+</div>
+</section>
+
+<section id="paging">
+<div class="container">
+  <div class="section-num">07 — Who Actually Does the Work Now</div>
+  <h2><span class="accent">Paging</span> Takes Over Completely</h2>
+  <p class="reveal">If segmentation isn't translating addresses anymore, something has to be — and the answer is the same paging unit from the base module, just scaled up dramatically. Where 32-bit protected mode typically used two-level paging (a Page Directory and a Page Table), 64-bit long mode uses <strong>four-level paging</strong> (Intel calls it IA-32e paging): a linear address gets sliced into five pieces, four of them table indices and one a final byte offset.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--purple)">PML4</span><span class="fam-count">Level 4</span></div><div class="fam-desc">Page Map Level 4 — the top table. Its physical address is loaded into register <strong>CR3</strong>, exactly the way <code>gdtr</code> anchors the GDT.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">PDPT</span><span class="fam-count">Level 3</span></div><div class="fam-desc">Page-Directory-Pointer Table — each PML4 entry points to one of these.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--teal)">PD</span><span class="fam-count">Level 2</span></div><div class="fam-desc">Page Directory — the same structure 32-bit paging already used, one level deeper now.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--orange)">PT</span><span class="fam-count">Level 1</span></div><div class="fam-desc">Page Table — its entries finally point at actual 4KB physical page frames.</div></div>
+  </div>
+
+  <p class="reveal">Each table is itself just one 4KB page holding 512 entries, and each entry is 8 bytes — 512 × 8 = 4096. That regularity is exactly why the bit-slicing works out so cleanly: 9 bits is precisely enough to index 512 (2⁹) entries, so a 64-bit linear address hands 9 bits to each of the four levels, plus 12 bits of byte offset within the final 4KB page.</p>
+
+  <div class="bitfield reveal">
+    <div class="bf-seg" style="flex:16;background:rgba(122,155,191,.08)"><div class="bf-name" style="color:var(--muted)">sign-ext</div><div class="bf-bits">bits 63–48</div><div class="bf-sub">must mirror bit 47</div></div>
+    <div class="bf-seg" style="flex:9;background:rgba(167,139,250,.14)"><div class="bf-name" style="color:var(--purple)">PML4 idx</div><div class="bf-bits">bits 47–39</div><div class="bf-sub">9 bits → 512 entries</div></div>
+    <div class="bf-seg" style="flex:9;background:rgba(56,189,248,.14)"><div class="bf-name" style="color:var(--cyan)">PDPT idx</div><div class="bf-bits">bits 38–30</div><div class="bf-sub">9 bits → 512 entries</div></div>
+    <div class="bf-seg" style="flex:9;background:rgba(13,148,136,.18)"><div class="bf-name" style="color:var(--teal)">PD idx</div><div class="bf-bits">bits 29–21</div><div class="bf-sub">9 bits → 512 entries</div></div>
+    <div class="bf-seg" style="flex:9;background:rgba(251,146,60,.18)"><div class="bf-name" style="color:var(--orange)">PT idx</div><div class="bf-bits">bits 20–12</div><div class="bf-sub">9 bits → 512 entries</div></div>
+    <div class="bf-seg" style="flex:12;background:rgba(74,222,128,.14)"><div class="bf-name" style="color:var(--green)">offset</div><div class="bf-bits">bits 11–0</div><div class="bf-sub">byte within the 4KB page</div></div>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>CR3 anchors the walk</strong>Just like <code>gdtr</code> holds the GDT's base, CR3 holds the physical address of the current process's top-level PML4 table.</div></li>
+    <li><div class="step-body"><strong>Bits 47–39 index the PML4</strong>The CPU multiplies that 9-bit index by 8 bytes and reads one PML4 entry — which itself is just a pointer to a PDPT table's physical address.</div></li>
+    <li><div class="step-body"><strong>Bits 38–30 index the PDPT, bits 29–21 index the PD</strong>Same pattern, two more times — each step following a pointer down one more level, entirely in hardware (with the results cached by the TLB so this full walk isn't repeated on every access).</div></li>
+    <li><div class="step-body"><strong>Bits 20–12 index the final Page Table</strong>This entry finally contains the physical page frame number — the actual location in RAM, plus permission bits (writable, user/supervisor, no-execute, and more).</div></li>
+    <li><div class="step-body"><strong>Bits 11–0 finish the job untouched</strong>The low 12 bits of the linear address are simply appended to the physical frame number as-is — the byte offset within that 4KB page needs no translation at all.</div></li>
+  </ol>
+
+  <h3>A Worked Example</h3>
+  <p class="reveal">Take a concrete canonical linear address: <code>0x00007F3C88A01FE0</code>. Slicing it exactly along the boundaries in the bitfield above — no rounding, just shifting and masking the real bits — produces one specific path through the hierarchy:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Field</th><th>Bits</th><th>Extracted Value</th></tr>
+      <tr><td class="gold">PML4 index</td><td class="hl">47–39</td><td class="pos">254</td></tr>
+      <tr><td class="gold">PDPT index</td><td class="hl">38–30</td><td class="pos">242</td></tr>
+      <tr><td class="gold">PD index</td><td class="hl">29–21</td><td class="pos">69</td></tr>
+      <tr><td class="gold">PT index</td><td class="hl">20–12</td><td class="pos">1</td></tr>
+      <tr><td class="gold">Byte offset</td><td class="hl">11–0</td><td class="pos">0xFE0</td></tr>
+    </table>
+  </div>
+
+  <p class="reveal">Four separate 8-byte reads — CR3-plus-254×8 for the PML4 entry, then that entry's pointer plus 242×8 for the PDPT entry, then plus 69×8 for the PD entry, then plus 1×8 for the final PT entry — followed by adding the untouched offset <code>0xFE0</code> to whatever physical frame number that last entry contains. Four table walks for one memory access sounds expensive, and it would be, every single time, if it weren't for the <strong>TLB</strong> (Translation Lookaside Buffer) caching recently-used translations so the full four-level walk only actually happens on a cache miss.</p>
+
+  <div class="sidenote reveal"><b>Why context switches aren't free.</b> Reloading CR3 with a different process's PML4 address — the normal thing a kernel does on every context switch — historically flushed the entire TLB, since cached translations from the old address space are meaningless for the new one. Modern CPUs soften this with <strong>PCID</strong> (Process-Context Identifiers), tagging TLB entries by address space so switching back to a recently-active process doesn't necessarily require re-walking everything from scratch. It's a detail that never shows up in the formula, but it's a large part of why "just switch CR3" isn't quite as free as the one-line description makes it sound.</div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">💡 And When 48 Bits Isn't Enough: 5-Level Paging</div>
+    Four levels of 9-bit indices plus a 12-bit offset covers exactly 48 bits of usable address space — 256 TiB. That was enormous in 2003 when AMD64 shipped, and it's still enormous for almost everyone, but very large servers (think in-memory databases, huge sparse address-space allocators) started bumping into it. Since Intel's Ice Lake server chips, a fifth level — <strong>PML5</strong> — can be enabled via <code>CR4.LA57</code>, stretching usable addresses to 57 bits (128 PiB). Same mechanism, same 9-bit-per-level slicing, one more hop before you reach the PDPT.
+  </div>
+
+  <p class="reveal">One more piece of realism worth having: the walk doesn't always go all the way down to a PT. Each PD entry (and each PDPT entry) has a <strong>PS (Page Size)</strong> bit. Set it in a PD entry, and that entry stops pointing at a PT and instead directly maps a <strong>2MB huge page</strong> — the PT idx and offset fields of the linear address effectively merge into one 21-bit offset. Set it in a PDPT entry, and you get a <strong>1GB huge page</strong> straight from the third level. Databases, hypervisors, and JVMs reach for huge pages constantly, for a very concrete reason: fewer page-table levels to walk per access means fewer TLB entries needed to cover the same amount of memory, which means far fewer expensive page-table walks on a TLB miss.</p>
+
+  <div class="sidenote reveal"><b>Why this doesn't need its own bitfield diagram.</b> A 2MB huge page just means the walk stops one level early — PML4 idx and PDPT idx still work exactly as drawn above, the PD entry itself is marked "this is a leaf," and its remaining bits (21 of them) become the in-page offset instead of a pointer to yet another table.</div>
+</div>
+</section>
+
+<section id="canonical">
+<div class="container">
+  <div class="section-num">08 — The Bits That Don't Get Used</div>
+  <h2><span class="accent">Canonical Addresses</span> and the Fault Nobody Expects</h2>
+  <p class="reveal">Look back at that bitfield diagram: bits 63 through 48 aren't assigned to any paging level at all. Current x86-64 hardware only actually consults 48 bits (or 57, with 5-level paging enabled) when it walks the page tables — a full 64-bit register genuinely offers more bits than any implemented paging hierarchy currently uses.</p>
+  <p class="reveal">Rather than silently ignoring those unused upper bits, the architecture makes a rule out of them: every one of those top bits (63 down to 47, or 63 down to 56 with 5-level paging) must be an exact copy of the highest bit the paging hardware <em>does</em> use — bit 47 in the common case. An address obeying that rule is called <strong>canonical</strong>. One that doesn't is <strong>non-canonical</strong>, and using it — loading it into RIP, or referencing it as most kinds of memory operand — doesn't produce a page fault. It produces a <strong>#GP(0)</strong> general-protection fault instead, because the CPU refuses the address before the page-table walk even begins.</p>
+
+  <div class="formula red reveal">
+    <span class="label">The canonical-address rule (48-bit / 4-level case)</span>
+    bits[63:47] must all equal bit 47 (0×0000… or 0xFFFF… prefix only)
+    <span class="sub">Anything else is non-canonical — rejected with #GP before paging is ever consulted.</span>
+  </div>
+
+  <p class="reveal">This is exactly why user-space and kernel-space addresses on a 64-bit Linux box look like they jump dramatically instead of sitting side by side: valid user addresses run from <code>0x0000000000000000</code> up to about <code>0x00007fffffffffff</code> (bit 47 = 0, so the prefix must be all zero), and valid kernel addresses start around <code>0xffff800000000000</code> (bit 47 = 1, so the prefix must be all one). Everything in between — the vast <strong>canonical hole</strong> — is simply unusable address space by architectural rule, not by OS policy.</p>
+
+  <p class="reveal">Put two addresses side by side and the rule becomes concrete instead of abstract. Take <code>0x00007F3C88A01FE0</code> — the same address sliced into page-table indices two sections ago. Bit 47 of that address is 0, and every bit above it (63 down to 48) is also 0, so it's canonical: valid, usable, ready for the page-table walk. Now flip exactly one higher bit — bit 48 — leaving every lower bit untouched: <code>0x00017F3C88A01FE0</code>. Bit 47 is still 0, but bit 48 is now 1, so the "must all match bit 47" rule breaks on the very first bit it checks. That single flipped bit is enough to turn a perfectly normal-looking address into one the CPU refuses outright.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Address</th><th>Bit 47</th><th>Bits 63–48</th><th>Verdict</th></tr>
+      <tr><td class="hl">0x00007F3C88A01FE0</td><td class="pos">0</td><td class="pos">all 0 — matches bit 47</td><td class="pos">Canonical — walk proceeds</td></tr>
+      <tr><td class="hl">0x00017F3C88A01FE0</td><td class="pos">0</td><td class="neg">not all 0 (bit 48 = 1)</td><td class="neg">Non-canonical — #GP(0)</td></tr>
+    </table>
+  </div>
+
+  <div class="sidenote reveal"><b>Not the same fault as a bad page.</b> Don't confuse this with a page fault. A page fault means "this address is canonical and well-formed, but the page tables say nothing is mapped there" — recoverable, and exactly the mechanism that backs demand paging and swapping. A non-canonical #GP means "this address could never have been valid in the first place" — the hardware rejected the very shape of the number.</div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Even the "Wasted" Bits Are Getting Reclaimed</div>
+    Those unused upper bits didn't stay idle forever. Newer Intel chips support <strong>Linear Address Masking (LAM)</strong>, which lets software stash metadata — a pointer tag for a memory-safety sanitizer, say — directly inside a pointer's otherwise-unused canonical bits, while the CPU quietly masks them off before doing the real page-table walk. It's the same instinct behind ARM's Top-Byte Ignore, arriving on x86 only after decades of those bits sitting completely unused — proof the "canonical hole" isn't just an accident of history, it's inventory the industry is still finding new ways to spend.
+  </div>
+</div>
+</section>
+
+<section id="practical">
+<div class="container">
+  <div class="section-num">09 — Theory Meets Terminal</div>
+  <h2>Where You'll Actually <span class="accent">See</span> This</h2>
+  <p class="reveal">All of this is easy to wave off as trivia until you notice it staring back at you from a debugger or a disassembly. A few concrete places this exact material shows up in ordinary day-to-day tooling:</p>
+
+  <ul class="reveal">
+    <li><strong>GDB's <code>info registers</code></strong> on any x86-64 process prints <code>fs_base</code> and <code>gs_base</code> as real, named registers, right alongside <code>rax</code> and <code>rip</code> — direct confirmation that these two bases are live CPU state, not some software-level abstraction.</li>
+    <li><strong><code>strace</code> on a freshly-started multi-threaded Linux program</strong> shows a burst of <code>arch_prctl(ARCH_SET_FS, 0x7f...)</code> calls, one per thread creation — glibc quietly wiring up TLS exactly as described in this article, one syscall at a time.</li>
+    <li><strong><code>readelf -S</code> on almost any dynamically linked ELF binary</strong> lists <code>.tdata</code> and <code>.tbss</code> sections — the actual on-disk storage for initialized and zero-initialized <code>__thread</code> variables, which the loader copies into each new thread's TLS block.</li>
+    <li><strong>Disassembling stack-protector-enabled code</strong> (the GCC/Clang default almost everywhere) with <code>objdump -d</code> turns up exactly the instruction used as this article's running example: <code>mov %fs:0x28,%rax</code> in a function's prologue, followed by a matching check in the epilogue.</li>
+    <li><strong>A crash in a Linux kernel oops report</strong> often prints an address like <code>0xffff888012345678</code> — the <code>ffff88…</code> prefix is a dead giveaway of the kernel's direct-mapped physical-memory region, a canonical address whose fixed upper bits alone tell you you're looking at kernel space before reading a single further digit.</li>
+  </ul>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 That 0x28 Offset Wasn't Arbitrary</div>
+    The <code>fs:[0x28]</code> instruction used throughout the TLS canvas above isn't a made-up teaching example — it's the real, well-known offset where glibc's Thread Control Block stores the <strong>stack canary</strong> on Linux x86-64. Every function compiled with <code>-fstack-protector</code> (the default in most modern distros) loads that canary through exactly this FS-relative access at the top of the function and checks it again before returning, catching stack-buffer overruns before they can hijack a return address. One instruction, one offset, and it's simultaneously a textbook TLS access and a piece of real exploit mitigation running in essentially every userspace program on your machine right now.
+  </div>
+
+  <div class="sidenote reveal"><b>Newer kernels make it even easier to inspect.</b> Since Linux 5.9, <code>/proc/[pid]/task/[tid]/arch_status</code> exposes a running thread's current <code>fs_base</code> and <code>gs_base</code> values directly as text, without needing <code>ptrace</code> at all — a small but telling sign of how ordinary these two registers have become in everyday systems work.</div>
+</div>
+</section>
+
+<section id="thennow">
+<div class="container">
+  <div class="section-num">10 — The Complete Picture</div>
+  <h2><span class="accent">Then</span> vs. <span class="accent c">Now</span></h2>
+  <p class="reveal">Put the whole story side by side, and long mode's real move becomes obvious: it didn't add a new translation mechanism, it retired an old one and let the mechanism that was already doing the harder job — paging — take over everything.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <tr><th>Aspect</th><th>32-bit Protected Mode</th><th>64-bit Long Mode</th></tr>
+      <tr><td class="gold">CS / SS / DS / ES Base</td><td class="hl">Real field, really added to the offset</td><td class="neg">Hardwired to 0 — field ignored</td></tr>
+      <tr><td class="gold">CS / SS / DS / ES Limit</td><td class="hl">Real bounds check on every access</td><td class="neg">Ignored — no limit enforced</td></tr>
+      <tr><td class="gold">FS / GS Base</td><td class="hl">Real, usable, but rarely exploited this way</td><td class="pos">Real, and the backbone of TLS (per-thread)</td></tr>
+      <tr><td class="gold">Who does real address translation</td><td class="hl">Segmentation unit + paging unit, both genuinely active</td><td class="pos">Paging unit almost alone (4 or 5 levels)</td></tr>
+      <tr><td class="gold">Max linear address space</td><td class="hl">4 GiB (32-bit flat)</td><td class="pos">256 TiB (48-bit) or 128 PiB (57-bit, 5-level)</td></tr>
+      <tr><td class="gold">Source of CPL (Ring 0 / Ring 3)</td><td class="hl">CS selector's RPL vs. descriptor DPL</td><td class="hl">Identical mechanism, unchanged</td></tr>
+      <tr><td class="gold">GDT / segment descriptors</td><td class="hl">Actively define translation + protection</td><td class="pur">Still present — now mainly carry CPL, L-bit, and TLS base data</td></tr>
+      <tr><td class="gold">Address validity rule</td><td class="hl">Any 32-bit value is inherently valid</td><td class="neg">Must be canonical, or #GP fires</td></tr>
+      <tr><td class="gold">Paging depth</td><td class="hl">2-level (or 3-level with PAE)</td><td class="pos">4-level (PML4→PT), or 5-level with LA57</td></tr>
+      <tr><td class="gold">Thread-local storage</td><td class="hl">Possible, but typically via an LDT segment per thread — clunky</td><td class="pos">One FS/GS base swap per thread — cheap and hardware-native</td></tr>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 The One-Sentence Version</div>
+    In 32-bit protected mode, segmentation and paging <em>share</em> the translation job — two hardware circuits in series, both doing real arithmetic. In 64-bit long mode, segmentation keeps the badge (CPL) and one spare tool (FS/GS for TLS), but hands the entire translation job to paging alone — because a 64-bit offset made the capacity problem segmentation was built to solve simply disappear.
+  </div>
+
+  <p class="reveal">None of this makes the earlier two articles in this series obsolete — quite the opposite. The GDT, segment selectors, descriptors, DPL, and the whole privilege-checking apparatus are still exactly what a 64-bit kernel configures at boot and still exactly what the CPU consults on every ring transition. What changed is narrower and, once you see it, obvious in hindsight: the one job segmentation used to share with paging — turning an offset into a real address — got handed over entirely, for all but two registers, the moment the offset alone became big enough to need no help.</p>
+
+  <div class="sidenote reveal"><b>Not an x86-only idea.</b> The FS/GS-for-TLS pattern is specific to this architecture, but the underlying need isn't. ARM64 solves the identical problem with a dedicated register built for exactly this purpose from day one — <code>TPIDR_EL0</code> — read directly by a single <code>MRS</code> instruction rather than repurposing a legacy segmentation register. Different architecture, same problem, a cleaner-slate solution once there was no 1978-vintage segmentation hardware left to repurpose.</div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">11 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Long Mode</div><div class="glossary-def">x86-64's native 64-bit execution mode, where CS/SS/DS/ES segment Base and Limit fields are hardwired inactive and paging alone performs address translation.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Thread-Local Storage (TLS)</div><div class="glossary-def">Per-thread private variables (C/C++ __thread) implemented by giving each thread a different FS (Linux) or GS (Windows) base address, resolved automatically in hardware.</div></div>
+    <div class="glossary-card"><div class="glossary-term">FSGSBASE</div><div class="glossary-def">CPU feature (enabled via CR4.FSGSBASE) letting userspace read/write FS.base and GS.base directly with WRFSBASE/RDFSBASE/WRGSBASE/RDGSBASE, skipping a syscall.</div></div>
+    <div class="glossary-card"><div class="glossary-term">arch_prctl</div><div class="glossary-def">Linux syscall used (with ARCH_SET_FS) to set a thread's FS base address — the traditional, universally-supported way to establish TLS.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SWAPGS</div><div class="glossary-def">Instruction that swaps the live GS.base with the value cached in the IA32_KERNEL_GS_BASE MSR on kernel entry/exit, giving the kernel its own private per-CPU GS-relative data.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PML4 / PDPT / PD / PT</div><div class="glossary-def">The four levels of x86-64 paging (Page Map Level 4, Page-Directory-Pointer Table, Page Directory, Page Table), each a 512-entry, 4KB table indexed by 9 bits of the linear address.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CR3</div><div class="glossary-def">Control register holding the physical address of the current process's top-level page table (PML4) — the paging-side analog of gdtr.</div></div>
+    <div class="glossary-card"><div class="glossary-term">5-Level Paging (LA57)</div><div class="glossary-def">Extension adding a PML5 level, expanding usable linear addresses from 48 to 57 bits (128 PiB), enabled via CR4.LA57 on supporting CPUs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Canonical Address</div><div class="glossary-def">A 64-bit address whose unused upper bits are all copies of the highest bit paging actually uses; using a non-canonical address triggers #GP instead of a page fault.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CPL (Current Privilege Level)</div><div class="glossary-def">Ring 0 vs. Ring 3, still tracked in long mode via the active CS selector's RPL compared against its descriptor's DPL — segmentation's one surviving protection duty.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EFER (Extended Feature Enable Register)</div><div class="glossary-def">MSR holding the LME (Long Mode Enable), LMA (Long Mode Active), SCE, and NXE bits — the switches a bootloader flips to bring a CPU into long mode and enable SYSCALL/NX protections.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Compatibility Mode</div><div class="glossary-def">A transitional IA-32e submode where paging (and long mode) is active but CS still points at a 32-bit-style descriptor (L=0) — used briefly during boot before switching CS to L=1.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TSS (Task State Segment)</div><div class="glossary-def">A system-type GDT descriptor still required in long mode; its 64-bit form holds RSP0–2 and the Interrupt Stack Table, not the old hardware task-switch state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TLB (Translation Lookaside Buffer)</div><div class="glossary-def">On-chip cache of recently-used linear-to-physical translations, letting most memory accesses skip the full 4-level (or 5-level) page-table walk entirely.</div></div>
+    <div class="glossary-card"><div class="glossary-term">LAM (Linear Address Masking)</div><div class="glossary-def">Newer Intel feature letting software store metadata in a pointer's unused canonical bits, which the CPU masks off before the real page-table walk — reclaiming address bits paging never used.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PAE (Physical Address Extension)</div><div class="glossary-def">CR4 bit required as a prerequisite for long mode; long mode's 4-level page-table format is structurally PAE paging extended with two more levels.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Guard Page</div><div class="glossary-def">An intentionally unmapped page placed just past a stack's end; touching it triggers an ordinary page fault, replacing the SS-limit check long mode no longer performs.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Long Mode: What Happened to Segmentation on a 64-bit CPU · Memory Addressing Series, Companion Deep-Dive</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A follow-on to "Logical, Linear &amp; Physical Addresses" and "The GDT" — same pipeline, same catalog, a very different set of registers actually doing the math.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const THREADS=[
+  {name:'Thread A',base:'0x00007f1a40008700',col:C.cyan,y0:0},
+  {name:'Thread B',base:'0x00007f1a40009d00',col:C.orange,y0:0}
+];
+
+function drawTLS(t,phase){
+  const canvas=document.getElementById('tlsCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('SAME COMPILED INSTRUCTION, TWO THREADS: mov rax, fs:[0x28]',16,20);
+
+  const laneH=110, laneGap=14, topY=36;
+  THREADS.forEach((th,i)=>{
+    const y=topY+i*(laneH+laneGap);
+    // lane label
+    ctx.fillStyle=th.col;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText(th.name,16,y+16);
+
+    // instruction box
+    const instX=16,instW=W*0.22;
+    ctx.fillStyle=th.col+'1f';ctx.fillRect(instX,y+26,instW,50);
+    ctx.strokeStyle=th.col;ctx.lineWidth=1.3;ctx.strokeRect(instX,y+26,instW,50);
+    ctx.fillStyle=th.col;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('mov rax,',instX+instW/2,y+46);
+    ctx.fillText('fs:[0x28]',instX+instW/2,y+58);
+
+    // FS.base register box
+    const fbX=instX+instW+W*0.05,fbW=W*0.30;
+    ctx.fillStyle='rgba(167,139,250,.10)';ctx.fillRect(fbX,y+26,fbW,50);
+    ctx.strokeStyle=C.purple;ctx.strokeRect(fbX,y+26,fbW,50);
+    ctx.fillStyle=C.purple;ctx.font='bold 9px Source Code Pro,monospace';
+    ctx.fillText('FS.base (this thread)',fbX+fbW/2,y+42);
+    ctx.font='8.5px Source Code Pro,monospace';ctx.fillStyle=C.text;
+    ctx.fillText(th.base,fbX+fbW/2,y+58);
+
+    // result box
+    const resX=fbX+fbW+W*0.05,resW=W-resX-16;
+    ctx.fillStyle='rgba(74,222,128,.10)';ctx.fillRect(resX,y+26,resW,50);
+    ctx.strokeStyle=C.green;ctx.strokeRect(resX,y+26,resW,50);
+    ctx.fillStyle=C.green;ctx.font='bold 9px Source Code Pro,monospace';
+    ctx.fillText('linear addr = base+0x28',resX+resW/2,y+42);
+    ctx.font='8.5px Source Code Pro,monospace';ctx.fillStyle=C.text;
+    const resultVal = phase==='idle' ? '…' : (th.base.slice(0,-2) + (parseInt(th.base.slice(-2),16)+0x28).toString(16));
+    ctx.fillText(phase==='idle' ? '…awaiting execution…' : resultVal, resX+resW/2, y+58);
+
+    // moving dot
+    if(phase!=='idle'){
+      let dotX, dotY=y+51, col=th.col;
+      const seg1End = instX+instW, seg2Start = fbX, seg2End = fbX+fbW, seg3Start = resX, seg3End=resX+resW;
+      if(phase==='s1'){ dotX = instX + instW*Math.min(1,t*1.3); }
+      else if(phase==='s2'){ dotX = seg1End + (seg2Start-seg1End)*t; }
+      else if(phase==='s3'){ dotX = seg2Start + fbW*t; col=C.purple; }
+      else if(phase==='s4'){ dotX = seg2End + (seg3Start-seg2End)*t; col=C.purple; }
+      else if(phase==='s5'){ dotX = seg3Start + resW*t; col=C.green; }
+      else { dotX = seg3End; col=C.green; }
+      ctx.beginPath();ctx.arc(dotX,dotY,5,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+    }
+  });
+
+  const captions={
+    idle:'Click "Execute" — both threads run the identical instruction',
+    s1:'CPU decodes: mov rax, fs:[0x28] — offset 0x28, prefix FS',
+    s2:'CPU fetches THIS thread’s FS.base value (different per thread)',
+    s3:'Reads FS.base out of the per-thread register state',
+    s4:'Adds the fixed offset 0x28 to that thread-specific base',
+    s5:'Produces two different linear addresses from one instruction',
+    done:'Same code, same offset, different physical variable — zero branching'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function runTLS(){
+  const phases=['s1','s2','s3','s4','s5','done'];
+  const durations=[450,450,450,450,500,10];
+  let i=0,start=performance.now();
+  document.getElementById('tlsLabel').textContent='▶ Executing on both threads…';
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[i]);
+    drawTLS(t,phases[i]);
+    if(t>=1){i++;if(i>=phases.length){document.getElementById('tlsLabel').textContent='▶ Done — same instruction, two different results. Run again?';return;}start=now;}
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetTLS(){document.getElementById('tlsLabel').textContent='▶ Run the same instruction on two threads — watch FS.base do all the work';drawTLS(0,'idle');}
+
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+window.addEventListener('load',resetTLS);
+window.addEventListener('resize',resetTLS);
+</script>
+</body>
+</html>

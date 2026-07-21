@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B14 — CORS | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(56,189,248,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--cyan);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--cyan);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--cyan);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--cyan);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(56,189,248,0.08),rgba(13,148,136,0.08));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--cyan);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .flow{display:flex;flex-direction:column;gap:6px;margin:20px 0;}
+  .flow-row{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-family:'Source Code Pro',monospace;font-size:13px;}
+  .flow-tag{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700;white-space:nowrap;margin-top:1px;}
+  .tag-browser{background:rgba(56,189,248,0.15);color:var(--cyan);}
+  .tag-server{background:rgba(74,222,128,0.15);color:var(--green);}
+  .tag-blocked{background:rgba(248,113,113,0.15);color:var(--red);}
+  .flow-text{color:var(--text);line-height:1.4;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B14 — CORS</div>
+  <h1>Cross-Origin <span>Resource Sharing</span></h1>
+  <p class="tagline">SOP blocks cross-origin reads by default. CORS is the server's opt-in to allow them. Get it wrong — <code>Access-Control-Allow-Origin: *</code> with credentials — and any website can read your users' private API responses.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">preflight</div><div class="label">OPTIONS request before complex methods</div></div>
+    <div class="hero-stat"><div class="num">ACAO</div><div class="label">Access-Control-Allow-Origin header</div></div>
+    <div class="hero-stat"><div class="num">null origin</div><div class="label">sandboxed iframe bypass</div></div>
+    <div class="hero-stat"><div class="num">CORB</div><div class="label">cross-origin read blocking</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-numbers">Number Systems</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>SOP is the default locked door between websites. CORS is the server sliding a note under the door: "I'll allow visitors from example.com." The browser checks this note before passing the response to the requesting script. If the note says "everyone welcome" (<code>*</code>) but also "with credentials" — that's like leaving your front door open with your diary on the table.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Simple vs Preflighted Requests</h2>
+    <pre><code>/* cors.c — CORS check implementation */
+
+/* "Simple" requests (GET/POST with simple headers) go directly.
+   "Complex" requests (PUT/DELETE/custom headers) require preflight. */
+
+int is_simple_request(const char *method, http_headers_t *headers) {
+    if (strcmp(method,"GET")==0 || strcmp(method,"HEAD")==0 ||
+        strcmp(method,"POST")==0)
+    {
+        /* also check Content-Type for POST */
+        const char *ct = get_header(headers, "Content-Type");
+        if (ct && strstr(ct,"application/json")) return 0; /* complex */
+        return 1;
+    }
+    return 0;  /* PUT, DELETE, etc. = complex */
+}
+
+/* Preflight: browser sends OPTIONS first */
+void send_preflight(const char *url, const char *method,
+                    const char *origin) {
+    http_request_t req = {
+        .method = "OPTIONS",
+        .url    = url,
+        .headers = {
+            {"Origin",                        origin},
+            {"Access-Control-Request-Method", method},
+            {"Access-Control-Request-Headers","Authorization"},
+        }
+    };
+    http_send(&req);
+    /* Server must respond with:
+       Access-Control-Allow-Origin: https://your-site.com
+       Access-Control-Allow-Methods: PUT, DELETE
+       Access-Control-Allow-Headers: Authorization
+       Only then does browser send the actual request */
+}</code></pre>
+
+    <div class="flow">
+      <div class="flow-row"><span class="flow-tag tag-browser">BROWSER</span><span class="flow-text">OPTIONS /api/data<br>Origin: https://evil.com<br>Access-Control-Request-Method: DELETE</span></div>
+      <div class="flow-row"><span class="flow-tag tag-server">SERVER</span><span class="flow-text">Access-Control-Allow-Origin: https://trusted.com<br>Access-Control-Allow-Methods: GET, POST</span></div>
+      <div class="flow-row"><span class="flow-tag tag-blocked">BROWSER</span><span class="flow-text">evil.com not in ACAO, DELETE not in ACAM → preflight FAILED → actual request never sent</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — Three CORS Misconfigurations</h2>
+    <pre><code>/* MISCONFIGURATION 1: reflect Origin header blindly */
+void cors_handler_bad1(http_request_t *req, http_response_t *res) {
+    const char *origin = get_header(req, "Origin");
+    /* BUG: echo back whatever origin was sent */
+    set_header(res, "Access-Control-Allow-Origin", origin);
+    set_header(res, "Access-Control-Allow-Credentials", "true");
+    /* attacker sends Origin: https://evil.com
+       response: Access-Control-Allow-Origin: https://evil.com
+       browser lets evil.com read the credentialed response! */
+}
+
+/* MISCONFIGURATION 2: null origin */
+void cors_handler_bad2(http_request_t *req, http_response_t *res) {
+    const char *origin = get_header(req, "Origin");
+    if (strcmp(origin,"null")==0 || is_trusted(origin))
+        set_header(res, "Access-Control-Allow-Origin", origin);
+    /* "null" origin is sent by sandboxed iframes and data: URLs
+       attacker creates: &lt;iframe sandbox="allow-scripts" src="data:..."&gt;
+       which sends Origin: null — trusted! */
+}
+
+/* MISCONFIGURATION 3: overly broad wildcard */
+void cors_handler_bad3(http_request_t *req, http_response_t *res) {
+    set_header(res, "Access-Control-Allow-Origin", "*");
+    set_header(res, "Access-Control-Allow-Credentials", "true");
+    /* INVALID: spec forbids * with credentials, but some servers
+       try it anyway. Modern browsers reject this combination. */
+}
+
+/* CORRECT implementation */
+void cors_handler_good(http_request_t *req, http_response_t *res) {
+    static const char *ALLOWED[] = {
+        "https://app.example.com", "https://www.example.com", NULL
+    };
+    const char *origin = get_header(req, "Origin");
+    for (int i = 0; ALLOWED[i]; i++) {
+        if (strcmp(origin, ALLOWED[i]) == 0) {
+            set_header(res, "Access-Control-Allow-Origin", origin);
+            set_header(res, "Vary", "Origin");  /* important for caches */
+            set_header(res, "Access-Control-Allow-Credentials", "true");
+            return;
+        }
+    }
+    /* Origin not in allowlist: send no CORS headers → blocked */
+}</code></pre>
+
+    <div class="callout red">
+      <div class="label">Vary: Origin Is Critical</div>
+      <p>If the server reflects the Origin header in ACAO and a CDN caches the response without <code>Vary: Origin</code>, the first requester's allowed origin gets cached and served to everyone — including blocked origins. Always add <code>Vary: Origin</code> when reflecting the Origin header.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B14 — CORS</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B14_cors && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>Simple request from https://trusted.com → ALLOWED ✓
+Simple request from https://evil.com    → BLOCKED ✓
+
+Preflight: OPTIONS PUT from https://trusted.com
+  ACAO: https://trusted.com, ACAM: GET,PUT → passes
+  Actual PUT → ALLOWED ✓
+
+Preflight: OPTIONS DELETE from https://evil.com
+  ACAO mismatch → preflight FAILED
+  Actual request never sent ✓
+
+Null-origin attack:
+  Bad config: null origin ALLOWED → VULNERABLE
+  Good config: null origin BLOCKED ✓
+CORS: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>CORS only restricts reading responses — it doesn't stop the request from being sent (for simple requests). A GET to <code>https://bank.com/transfer?to=attacker&amount=1000</code> would be sent by the browser even from evil.com; the attacker just can't read the response.</p>
+      <p style="margin-top:14px;color:var(--muted);">But wait — if the transfer happens server-side on GET receipt, the attacker doesn't need to read the response. They just need the request to be sent. What web security mechanism exists specifically to prevent this type of cross-site request forgery? (Hint: B17 covers it.) And why doesn't CORS help here?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: What is CORB (Cross-Origin Read Blocking)?</div>
+      <div class="a">CORB is a browser defence that blocks cross-origin reads of HTML, JSON, and XML responses even when the server sends permissive CORS headers, if the request was not an XHR or fetch (e.g., it came from an img or script tag). This prevents Spectre-based attacks from loading sensitive data into the renderer's memory via side-channel-readable tags. It's an automatic browser mitigation, not a header you set.</div>
+      <div class="q">Q: Can CORS be used to call an API on localhost from a web page?</div>
+      <div class="a">The browser sends the request (localhost is a different origin from example.com), and if localhost's server responds with the right CORS headers, the response is readable. This is how browser devtools extensions communicate with local servers. Security consideration: any website can probe your localhost if your local server has permissive CORS, potentially fingerprinting installed software or attacking local admin UIs.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B15 — HTTP Request Smuggling</div>
+      <p>CORS is about what the browser allows. HTTP smuggling is about confusing the server. When a front-end proxy and back-end server disagree on where one HTTP request ends and the next begins, an attacker can "smuggle" a partial request that gets prepended to another user's next request — rewriting their headers or poisoning cache entries.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>cors.c</code> · <code>preflight.c</code> · <code>null_origin.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B14 of 18 &nbsp;|&nbsp; <a href="../B13_csp/tutorial.html">← B13</a> &nbsp;·&nbsp; <a href="../B15_http_parser/tutorial.html">B15 →</a></footer>
+</body>
+</html>

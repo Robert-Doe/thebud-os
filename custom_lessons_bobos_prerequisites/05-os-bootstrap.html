@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Build an OS — Assembly &amp; OS-from-Scratch Refresher</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: rgba(18,25,47,0.88); --panel-2: rgba(25,33,60,0.9);
+  --text: #e9edf7; --muted: #aab4cf; --soft: #7f8bb0; --line: rgba(255,255,255,0.08);
+  --blue: #7aa2ff; --blue-2: #5f87f8; --green: #4ade80; --red: #fb7185; --amber: #fbbf24; --purple: #a78bfa;
+  --cyan: #5eead4; --pink: #f472b6;
+  --shadow: 0 20px 60px rgba(0,0,0,0.35); --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: radial-gradient(circle at top, #121a35 0%, #09101f 55%, #060a14 100%); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { line-height: 1.6; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 28px; }
+.hero { padding: 28px; background: linear-gradient(180deg, rgba(119,157,255,0.15), rgba(255,255,255,0.03)); border:1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content:''; position:absolute; inset:auto -10% -45% auto; width:340px; height:340px; background: radial-gradient(circle, rgba(122,162,255,0.28), transparent 65%); pointer-events:none; }
+h1,h2,h3,h4 { margin:0 0 10px; line-height:1.2; }
+h1 { font-size: 34px; letter-spacing: -0.03em; }
+h2 { font-size: 23px; margin-top: 4px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 10px 0; color: var(--muted); }
+a { color: var(--blue); }
+.lede { max-width: 980px; font-size: 16px; }
+.grid-4, .grid-3, .grid-2, .grid-6 { display:grid; gap:16px; }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card.soft { background: var(--panel-2); }
+.stat-card { background: rgba(255,255,255,0.03); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.value { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.tag-row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 7px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.05); color: var(--text); border:1px solid var(--line); }
+.pill.blue { background: rgba(122,162,255,0.13); color:#cfdcff; }
+.pill.green { background: rgba(74,222,128,0.13); color:#bdf5d2; }
+.pill.amber { background: rgba(251,191,36,0.13); color:#ffe6ad; }
+.pill.red { background: rgba(251,113,133,0.13); color:#ffd0d6; }
+.pill.purple { background: rgba(167,139,250,0.13); color:#d4c6ff; }
+.pill.cyan { background: rgba(94,234,212,0.13); color:#bdf8ee; }
+.good { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+.section { margin-top: 22px; }
+.callout { padding: 16px 18px; border-radius: 14px; border:1px solid var(--line); background: rgba(122,162,255,0.08); color: var(--text); }
+.callout.warn { background: rgba(251,191,36,0.09); }
+.callout.red { background: rgba(251,113,133,0.09); }
+.callout.green { background: rgba(74,222,128,0.08); }
+.callout h4 { margin-top:0; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(0,0,0,0.28); border:1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 13.5px; overflow-x:auto; color: #e8eeff; white-space:pre; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 16px; margin-top: 14px; }
+table { width:100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+th, td { text-align:left; padding: 10px 13px; border-bottom:1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+th { position: sticky; top: 0; background: rgba(10,15,30,0.97); z-index: 1; color: var(--text); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.bytegrid { display:flex; gap:4px; flex-wrap:wrap; margin: 10px 0; }
+.byte { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.05); border:1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align:center; min-width: 64px; }
+.byte .addr { font-size: 10px; color: var(--soft); display:block; }
+.byte .v { font-size: 15px; font-weight:700; margin-top:3px; }
+.regbox { font-family: ui-monospace, monospace; display:flex; border:1px solid var(--line); border-radius: 10px; overflow:hidden; margin: 10px 0; }
+.regbox > div { padding: 10px 8px; text-align:center; font-size: 12px; border-right: 1px solid var(--line); }
+.regbox > div:last-child { border-right:none; }
+.qa { border-left: 3px solid var(--purple); padding: 6px 0 6px 14px; margin: 14px 0; }
+.qa .q { color: #d4c6ff; font-weight: 700; }
+.scenario { border:1px dashed rgba(122,162,255,0.4); border-radius: 14px; padding: 16px; background: rgba(122,162,255,0.05); }
+.scenario .tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--blue); font-weight:700; }
+.nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.nav a { text-decoration:none; }
+.navpill { display:inline-flex; align-items:center; gap:6px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,0.04); color: var(--muted); border:1px solid var(--line); transition: all .15s; }
+.navpill:hover { background: rgba(122,162,255,0.12); color: var(--text); }
+.navpill.active { background: rgba(122,162,255,0.18); color: var(--text); border-color: rgba(122,162,255,0.4); }
+.pagefoot { display:flex; justify-content:space-between; gap:16px; margin-top: 30px; }
+.pagefoot a { text-decoration:none; }
+.navbtn { display:block; padding:16px 20px; border-radius:16px; border:1px solid var(--line); background: var(--panel-2); flex:1; }
+.navbtn .label { margin-bottom:4px; }
+.navbtn .title { color: var(--text); font-size: 16px; font-weight:700; }
+.footer-note { margin-top: 24px; color: var(--soft); font-size: 13px; text-align:center; }
+.checklist { list-style:none; padding:0; margin: 10px 0; }
+.checklist li { padding: 8px 0 8px 30px; position:relative; border-bottom:1px solid var(--line); color: var(--muted); }
+.checklist li:last-child { border-bottom:none; }
+.checklist li::before { content:'✓'; position:absolute; left:0; top:8px; color: var(--green); font-weight:700; }
+.bitfield { display:flex; font-family:ui-monospace,monospace; font-size:12px; margin:10px 0; flex-wrap:wrap; }
+.bitfield .bit { border:1px solid var(--line); padding:8px 4px; text-align:center; min-width:34px; background: rgba(255,255,255,0.03); }
+.bitfield .bit .n { display:block; color:var(--soft); font-size:9px; }
+@media (max-width: 1100px) { .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .shell { padding: 16px; } h1 { font-size: 27px; }
+  .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr; }
+  .pagefoot { flex-direction:column; }
+}
+
+</style>
+</head>
+<body>
+<div class='shell'>
+<div class='nav'><a href='index.html'><span class='navpill'>Home</span></a><a href='01-registers.html'><span class='navpill'>Registers</span></a><a href='02-endianness.html'><span class='navpill'>Endianness</span></a><a href='03-memory.html'><span class='navpill'>Memory & Stack</span></a><a href='04-instructions.html'><span class='navpill'>Instructions & Flow</span></a><a href='05-os-bootstrap.html'><span class='navpill active'>Build an OS</span></a></div>
+
+<section class='hero'>
+  <div class='label'>Page 05 — Capstone</div>
+  <h1>From power-on to your kernel: a real boot sequence, byte by byte</h1>
+  <p class='lede'>Everything on the last four pages was preparation for this. We'll walk the exact path: BIOS hands control to 512 bytes of your code in 16-bit real mode, you build a descriptor table, flip one bit, and land in 32-bit protected mode with flat memory — the environment every "OS from scratch" tutorial assumes you already have.</p>
+  <div class='tag-row'>
+    <span class='pill amber'>real mode → protected mode</span>
+    <span class='pill blue'>GDT</span>
+    <span class='pill purple'>A20 line</span>
+    <span class='pill green'>paging, briefly</span>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Step 0: what the BIOS guarantees you</h2>
+    <p>When a legacy BIOS finishes its power-on self test, it looks for a bootable disk: one whose <strong>first sector (512 bytes)</strong> ends with the magic bytes <code>0x55 0xAA</code> at offset 510&ndash;511. If found, it loads those 512 bytes to physical address <strong>0x7C00</strong> and jumps there — in <strong>16-bit real mode</strong>, with no paging, no memory protection, and only the bottom ~1MB of address space reachable.</p>
+    <div class='formula'><span class='c'>; boot.asm — assembled with: nasm -f bin boot.asm -o boot.bin</span>
+<span class='kw'>org</span> <span class='num'>0x7C00</span>          <span class='c'>; tell the assembler where this code will live</span>
+<span class='kw'>bits</span> <span class='num'>16</span>            <span class='c'>; BIOS starts us in 16-bit real mode</span>
+
+<span class='kw'>start</span>:
+    <span class='kw'>cli</span>                  <span class='c'>; disable interrupts while we set up segments</span>
+    <span class='kw'>xor</span> <span class='reg'>ax</span>, <span class='reg'>ax</span>
+    <span class='kw'>mov</span> <span class='reg'>ds</span>, <span class='reg'>ax</span>          <span class='c'>; ds = 0</span>
+    <span class='kw'>mov</span> <span class='reg'>es</span>, <span class='reg'>ax</span>          <span class='c'>; es = 0</span>
+    <span class='kw'>mov</span> <span class='reg'>ss</span>, <span class='reg'>ax</span>          <span class='c'>; ss = 0</span>
+    <span class='kw'>mov</span> <span class='reg'>sp</span>, <span class='num'>0x7C00</span>    <span class='c'>; stack grows down from right below our code</span>
+    <span class='kw'>sti</span>                  <span class='c'>; interrupts back on</span>
+
+<span class='c'>; ... real-mode setup goes here (page 1 of 2) ...</span>
+
+<span class='kw'>times</span> <span class='num'>510</span><span class='c'>-($-$$)</span> <span class='kw'>db</span> <span class='num'>0</span>  <span class='c'>; pad to 510 bytes with zeros</span>
+<span class='kw'>dw</span> <span class='num'>0xAA55</span>              <span class='c'>; the boot signature, little-endian on disk = AA 55... wait: db order!</span></div>
+    <p>Notice the last line: we want the bytes <code>0x55, 0xAA</code> at offsets 510, 511 — and <code>dw 0xAA55</code> emits exactly that, because a 16-bit immediate written with <code>dw</code> is stored little-endian (low byte first). This is endianness from page 02 showing up in literally the first 512 bytes of every x86 OS ever booted.</p>
+  </div>
+  <div class='card soft'>
+    <h3>Why 0x7C00 specifically?</h3>
+    <p>It's a historical IBM PC convention from the original 5150 — nothing more principled than "that's where it's always been." Real mode can address 1MB total (20-bit addresses, more on this below), and conventional RAM below the BIOS data area starts low; 0x7C00 leaves enough room below it for a small stack while staying comfortably under 0xA0000 where video memory begins.</p>
+    <div class='callout warn'>
+      <h4>Why we zero the segment registers explicitly</h4>
+      <p>Real mode forms addresses as <code>segment × 16 + offset</code> — so physical address 0x7C00 could be reached as DS=0x0000,offset=0x7C00 OR as DS=0x07C0,offset=0x0000, among other combinations. The BIOS doesn't guarantee which one it used when it jumped to you. If you don't pin DS/ES/SS to a known value yourself, every <code>[label]</code> memory reference computes a different physical address than you intended — a brutal bug to chase blind.</p>
+    </div>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Step 1: talk to the BIOS while you still can (16-bit only)</h2>
+  <p>Real mode gives you one superpower you'll never have again after this page: <strong>BIOS interrupts</strong>. The instruction <code>int 0x10</code> calls BIOS video services; <code>int 0x13</code> calls disk services. Once you're in protected mode, these stop working — the BIOS's interrupt handlers were written for real-mode segment:offset addressing and 16-bit registers, so you must do everything yourself (your own video driver, your own disk driver) from that point on. This is why OS tutorials print a message and load the rest of the kernel from disk <em>before</em> switching modes.</p>
+  <div class='formula'><span class='c'>; Print "Booting..." using BIOS teletype output (int 0x10, ah=0x0E)</span>
+<span class='kw'>mov</span> <span class='reg'>si</span>, <span class='kw'>msg</span>
+<span class='kw'>print_loop</span>:
+    <span class='kw'>lodsb</span>              <span class='c'>; al = [ds:si], si++  (note: si is 16-bit here)</span>
+    <span class='kw'>cmp</span> <span class='reg'>al</span>, <span class='num'>0</span>
+    <span class='kw'>je</span> <span class='kw'>print_done</span>
+    <span class='kw'>mov</span> <span class='reg'>ah</span>, <span class='num'>0x0E</span>      <span class='c'>; BIOS teletype function</span>
+    <span class='kw'>int</span> <span class='num'>0x10</span>
+    <span class='kw'>jmp</span> <span class='kw'>print_loop</span>
+<span class='kw'>print_done</span>:
+<span class='kw'>msg</span>: <span class='kw'>db</span> <span class='str'>"Booting...", 0</span></div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Step 2: the A20 line — a 1980s bug you must fix yourself</h2>
+    <p>The original 8086 had only 20 address lines, so any address calculation that overflowed past 1MB silently wrapped around to 0 instead of erroring. When the 80286 added a 21st address line, IBM kept the wraparound behavior <em>by default</em> for backward compatibility with software that accidentally depended on it — by physically gating the 21st line (called <strong>A20</strong>) off unless explicitly enabled.</p>
+    <p>Every protected-mode OS must enable A20 before relying on memory above 1MB, or addresses silently alias back into the first megabyte. The classic method is via the keyboard controller:</p>
+    <div class='formula'><span class='kw'>enable_a20</span>:
+    <span class='kw'>in</span>  <span class='reg'>al</span>, <span class='num'>0x92</span>     <span class='c'>; read System Control Port A</span>
+    <span class='kw'>or</span>  <span class='reg'>al</span>, <span class='num'>2</span>        <span class='c'>; set bit 1 (the "fast A20" enable bit)</span>
+    <span class='kw'>out</span> <span class='num'>0x92</span>, <span class='reg'>al</span>     <span class='c'>; write it back</span></div>
+    <p>The <code>in</code>/<code>out</code> instructions read/write hardware I/O ports — a completely separate 16-bit address space from memory, accessed only via these two instructions (and implicitly via AL/AX/EAX and, for the port number, DX). This is how software talks to hardware controllers like the keyboard, disk, and PIC directly.</p>
+  </div>
+  <div class='card'>
+    <h2>Step 3: build a GDT — the table that defines "what memory even is"</h2>
+    <p>Protected mode doesn't use segment×16+offset addressing. Instead, each segment register becomes an index into a <strong>Global Descriptor Table (GDT)</strong> — an array of 8-byte entries, each describing a memory region's base address, size limit, and access permissions. For a basic "flat" OS, you define exactly two useful descriptors: one code segment and one data segment, both spanning the entire 4GB address space.</p>
+    <div class='formula'><span class='kw'>gdt_start</span>:
+    <span class='kw'>dq</span> <span class='num'>0</span>                  <span class='c'>; entry 0 must be a null descriptor</span>
+<span class='kw'>gdt_code</span>:                    <span class='c'>; entry 1: code segment, base=0, limit=4GB</span>
+    <span class='kw'>dw</span> <span class='num'>0xFFFF</span>             <span class='c'>; limit (low 16 bits)</span>
+    <span class='kw'>dw</span> <span class='num'>0x0000</span>             <span class='c'>; base  (low 16 bits)</span>
+    <span class='kw'>db</span> <span class='num'>0x00</span>               <span class='c'>; base  (next 8 bits)</span>
+    <span class='kw'>db</span> <span class='num'>10011010b</span>          <span class='c'>; access byte: present, ring 0, code, executable, readable</span>
+    <span class='kw'>db</span> <span class='num'>11001111b</span>          <span class='c'>; flags + limit (high 4 bits): 4KB granularity, 32-bit</span>
+    <span class='kw'>db</span> <span class='num'>0x00</span>               <span class='c'>; base  (high 8 bits)</span>
+<span class='kw'>gdt_data</span>:                    <span class='c'>; entry 2: data segment, same range, different access byte</span>
+    <span class='kw'>dw</span> <span class='num'>0xFFFF</span>, <span class='num'>0x0000</span>
+    <span class='kw'>db</span> <span class='num'>0x00</span>, <span class='num'>10010010b</span>, <span class='num'>11001111b</span>, <span class='num'>0x00</span>
+<span class='kw'>gdt_end</span>:
+
+<span class='kw'>gdt_descriptor</span>:
+    <span class='kw'>dw</span> <span class='kw'>gdt_end</span> <span class='c'>- gdt_start - 1</span>   <span class='c'>; size of GDT minus 1, 16-bit</span>
+    <span class='kw'>dd</span> <span class='kw'>gdt_start</span>                  <span class='c'>; linear address of GDT, 32-bit</span></div>
+    <p>The base/limit fields are deliberately scrambled across the 8 bytes for historical reasons (backward compatibility with the 80286's smaller descriptor format) — this is exactly the kind of "go compute the address by hand" exercise page 03 was building toward. The access byte's bits encode present/absent, privilege ring (0=kernel through 3=user), and segment type — full detail belongs in an Intel manual, but recognizing the shape (<code>1001 1010</code> for kernel code, <code>1001 0010</code> for kernel data) gets you through almost every tutorial's boilerplate.</p>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Step 4: the actual mode switch — flip one bit, then immediately jump</h2>
+  <p>This is the single most important sequence in the whole page. Three things have to happen <strong>in this exact order</strong>, with no instructions in between the flag flip and the jump:</p>
+  <div class='formula'><span class='kw'>lgdt</span> <span class='reg'>[gdt_descriptor]</span>   <span class='c'>; 1. load the GDT's address into the CPU's GDTR register</span>
+
+<span class='kw'>mov</span> <span class='reg'>eax</span>, <span class='reg'>cr0</span>
+<span class='kw'>or</span>  <span class='reg'>eax</span>, <span class='num'>1</span>             <span class='c'>; 2. set bit 0 of CR0 — the Protection Enable (PE) bit</span>
+<span class='kw'>mov</span> <span class='reg'>cr0</span>, <span class='reg'>eax</span>          <span class='c'>;    we are now technically "in" protected mode...</span>
+
+<span class='kw'>jmp</span> <span class='num'>0x08</span><span class='c'>:</span><span class='kw'>protected_mode_start</span>  <span class='c'>; 3. far jump — REQUIRED, see below</span>
+
+<span class='kw'>bits</span> <span class='num'>32</span>
+<span class='kw'>protected_mode_start</span>:
+    <span class='kw'>mov</span> <span class='reg'>ax</span>, <span class='num'>0x10</span>          <span class='c'>; 0x10 = offset of gdt_data = selector for data segment</span>
+    <span class='kw'>mov</span> <span class='reg'>ds</span>, <span class='reg'>ax</span>
+    <span class='kw'>mov</span> <span class='reg'>es</span>, <span class='reg'>ax</span>
+    <span class='kw'>mov</span> <span class='reg'>ss</span>, <span class='reg'>ax</span>
+    <span class='kw'>mov</span> <span class='reg'>esp</span>, <span class='num'>0x90000</span>     <span class='c'>; new, bigger 32-bit stack</span>
+    <span class='c'>; we are now genuinely running 32-bit protected-mode code</span></div>
+  <div class='grid-2' style='margin-top:14px'>
+    <div class='callout warn'>
+      <h4>Why a "far jump" and not a regular jmp?</h4>
+      <p>Setting CR0's PE bit changes how the CPU <em>interprets instructions you fetch after this point</em>, but the CPU's instruction prefetch queue may already contain bytes it fetched and decoded <em>before</em> the switch, using the old 16-bit rules. A <strong>far jump</strong> (one that explicitly reloads CS with a new selector — here, <code>0x08</code>, the offset of <code>gdt_code</code> in the GDT) flushes that stale prefetch queue and forces the CPU to fetch fresh bytes using the new mode and the new code segment. Skip this and you get bizarre, hard-to-debug crashes right after the mode switch.</p>
+    </div>
+    <div class='callout'>
+      <h4>Why selector 0x08 and 0x10, not "1" and "2"?</h4>
+      <p>A segment selector isn't just an index — it's a 16-bit value where bits 3&ndash;15 are the descriptor's index (×8, since each descriptor is 8 bytes) and the bottom 3 bits encode the requested privilege level and table type. gdt_code is the 2nd entry (index 1) → selector <code>1×8 = 0x08</code>. gdt_data is the 3rd entry (index 2) → selector <code>2×8 = 0x10</code>. This is page 03's "address = base + index×scale" idea wearing a different hat.</p>
+    </div>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Step 5 (preview): paging, the next mountain</h2>
+    <p>Protected mode with a flat GDT gives you 32-bit linear addresses that map directly to physical memory — useful, but every process shares the same physical layout. <strong>Paging</strong> adds one more layer of indirection: the CPU translates linear addresses through a <strong>page directory</strong> and <strong>page table</strong> (each a 4KB array of 4-byte entries) into physical addresses, enabling virtual memory, per-process isolation, and on-demand loading.</p>
+    <div class='formula'><span class='c'>; the conceptual shape, not full working code:</span>
+<span class='kw'>mov</span> <span class='reg'>eax</span>, <span class='kw'>page_directory</span>
+<span class='kw'>mov</span> <span class='reg'>cr3</span>, <span class='reg'>eax</span>      <span class='c'>; cr3 = physical address of the page directory</span>
+
+<span class='kw'>mov</span> <span class='reg'>eax</span>, <span class='reg'>cr0</span>
+<span class='kw'>or</span>  <span class='reg'>eax</span>, <span class='num'>0x80000000</span> <span class='c'>; bit 31 of cr0 = Paging enable (PG)</span>
+<span class='kw'>mov</span> <span class='reg'>cr0</span>, <span class='reg'>eax</span>      <span class='c'>; paging is now live for every memory access</span></div>
+    <p>Notice the pattern repeating: a control register (CR3 this time, not CR0 alone), a single bit flip, and from that instruction onward every memory access is reinterpreted. This is the same shape as the real-mode → protected-mode switch — x86 likes "set a pointer, flip a control bit" as its mechanism for changing what memory access fundamentally means.</p>
+  </div>
+  <div class='card soft'>
+    <h3>Bringing it all together: what you now have the vocabulary for</h3>
+    <ul class='checklist'>
+      <li>Why <code>al</code>/<code>ax</code>/<code>eax</code> are the same register at different widths, and the zero-extension trap between them</li>
+      <li>Why a hex dump of x86 memory looks "byte-reversed" from how you'd write the number</li>
+      <li>How <code>[ebx+esi*4+8]</code>-style addressing maps directly to array indexing and struct field access</li>
+      <li>Why the stack grows down, and how push/call/ret/iret all secretly agree on that</li>
+      <li>How cmp+conditional-jump compiles every if/while you've ever written, and why signed vs unsigned jumps must match your data</li>
+      <li>The exact real-mode → protected-mode sequence: GDT, CR0.PE, far jump, reload segments</li>
+      <li>Why A20 and the far jump exist — both are "the CPU remembering its own history" in a very literal sense</li>
+    </ul>
+    <div class='callout green' style='margin-top:10px'>
+      <h4>Where to go next</h4>
+      <p>Assemble the boot sector pieces above with NASM, write them to a disk image's first sector, and boot it in an emulator (QEMU is the standard choice: <code>qemu-system-i386 -fda boot.bin</code>). Watching your own "Booting..." message appear, in your own code, on a screen you wrote the bytes for, is genuinely the best motivation to keep going into interrupts, the PIC/APIC, and a real memory manager.</p>
+    </div>
+  </div>
+</section>
+
+<div class='pagefoot'><a href='04-instructions.html'><div class='navbtn'><div class='label'>&larr; previous</div><div class='title'>Instructions & Flow</div></div></a><div></div></div>
+<div class='footer-note'>Assembly &amp; OS-from-Scratch Refresher — built the head-first way: scenario first, jargon second.</div>
+</div>
+</body>
+</html>

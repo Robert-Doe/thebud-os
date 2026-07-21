@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The CSS Cascade Algorithm: How the Browser Picks ONE Winning Rule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.65rem .9rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.5rem .9rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green);font-weight:600} td.neg{color:var(--red);font-weight:600} td.gold{color:var(--gold);font-weight:600} td.win{color:var(--gold);font-weight:700;background:rgba(245,200,66,.12);}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn:disabled{opacity:.4;cursor:not-allowed;}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.72rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.87rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--gold);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.tier-list{list-style:none;padding:0;margin:1.8rem 0;counter-reset:tier;}
+.tier-list li{counter-increment:tier;display:flex;align-items:center;gap:1rem;padding:.7rem 1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:.5rem;background:var(--card);}
+.tier-list li::before{content:"#" counter(tier);flex-shrink:0;font-family:'Source Code Pro',monospace;font-size:.75rem;color:var(--gold);width:28px;}
+.tier-list li.win{border-color:var(--gold);background:rgba(245,200,66,.08);}
+.tier-name{font-family:'Source Code Pro',monospace;font-size:.85rem;color:#fff;}
+.tier-desc{font-size:.82rem;color:var(--muted);margin-left:auto;text-align:right;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#algorithm" title="The Algorithm"></a>
+  <a class="toc-dot" href="#origin" title="Origin & Importance"></a>
+  <a class="toc-dot" href="#specificity" title="Specificity"></a>
+  <a class="toc-dot" href="#sourceorder" title="Source Order"></a>
+  <a class="toc-dot" href="#worked" title="Worked Example"></a>
+  <a class="toc-dot" href="#demo" title="Interactive Demo"></a>
+  <a class="toc-dot" href="#inheritance" title="Inheritance"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">CSS Engine Internals · The Cascade Algorithm · Companion to B06_css_cascade</div>
+    <h1>The CSS Cascade: How the Browser Picks <span>ONE Winning Rule</span></h1>
+    <p class="hero-sub">The render-pipeline deep-dive told you CSSOM parsing has to see the whole stylesheet before it can answer anything — because "which rule wins" is a global question. This is where we answer it. Not vaguely ("more specific selectors win, usually") but exactly: an ordered sequence of tiebreakers a browser runs, in a fixed order, every single time two or more rules fight over the same property on the same element.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Tiebreaker Stages, In Order</div></div>
+      <div class="hero-stat"><div class="num">(0,0,0)</div><div class="lbl">Specificity Starts Here</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Winning Rule, Every Time</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Ties Left Unresolved</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to resolve a conflict<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 00: THE ALGORITHM -->
+<section id="algorithm">
+<div class="container">
+  <div class="section-num">00 — The Shape of the Problem</div>
+  <h2>Every Property, On Every Element, Has <span class="accent">Exactly One Winner</span></h2>
+
+  <p class="reveal">Take a single <code>&lt;button&gt;</code> on a real page. It's plausibly matched by a browser default rule, a framework's reset stylesheet, three or four of your own author rules of varying specificity, maybe a hover state, maybe a user override for accessibility. For <em>one</em> CSS property — say, <code>color</code> — every one of those matching rules might be trying to set a different value. The browser cannot average them, cannot apply "the more recent one," cannot ask you. It has to compute a single, deterministic winner, and it has to get the same answer every time, in every browser, for the exact same input. That deterministic tiebreak procedure is <strong>the cascade</strong>.</p>
+
+  <div class="formula gold reveal">
+    <span class="label">The cascade, as an ordered filter</span>
+    Start with every declaration for this property that matches this element →
+    filter by origin &amp; importance → filter by specificity → filter by source order → one survives
+    <span class="sub">Each stage only runs if the previous stage left a tie. The moment one candidate is strictly better, the rest are simply discarded — no further stage is even consulted.</span>
+  </div>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>Stage 1 — Origin &amp; Importance</strong>Where did this rule come from (browser default, user stylesheet, page author), and was it marked <code>!important</code>? This stage alone can decide the winner outright, regardless of how specific any selector is.</div></li>
+    <li><div class="step-body"><strong>Stage 2 — Specificity</strong>If Stage 1 is tied, compare each rule's selector "weight" — a three-part count of IDs, classes/attributes/pseudo-classes, and element/type selectors — compared left to right like digits, never summed.</div></li>
+    <li><div class="step-body"><strong>Stage 3 — Source Order</strong>If specificity is <em>also</em> tied exactly, the rule that appears later in the combined, document-order stylesheet wins. This is the only stage where "which came last" matters at all.</div></li>
+  </div>
+
+  <p class="reveal">Notice the order. It is not "whichever selector looks scariest wins," and it's absolutely not "last one in the file always wins" — that folk wisdom is only true once you've already survived Stages 1 and 2 without a winner. Get the order backwards in your head and you'll misdiagnose real bugs for years.</p>
+</div>
+</section>
+
+<!-- SECTION 01: ORIGIN & IMPORTANCE -->
+<section id="origin">
+<div class="container">
+  <div class="section-num">01 — Stage One</div>
+  <h2>Origin &amp; Importance: <span class="accent">The First, Most Powerful Filter</span></h2>
+
+  <p class="reveal">Before a single selector gets measured, the cascade asks a completely different question: <em>whose</em> rule is this, and did they mark it non-negotiable? Three parties can supply CSS for the same page — the browser itself (user-agent defaults like "links are blue"), the user (rare today, but real: forced high-contrast or accessibility stylesheets), and the page author (your stylesheet). Each can additionally mark any declaration <code>!important</code>, which doesn't just "boost specificity" — it moves the declaration into an entirely separate, higher-priority bracket.</p>
+
+  <ol class="tier-list reveal">
+    <li class="win"><span class="tier-name">1. Author, !important</span><span class="tier-desc">Highest normal-use priority — your own <code>!important</code> rules</span></li>
+    <li><span class="tier-name">2. User, !important</span><span class="tier-desc">A user/accessibility stylesheet marked !important beats your !important</span></li>
+    <li><span class="tier-name">3. Author, normal</span><span class="tier-desc">Your ordinary page CSS — where nearly all real-world cascading happens</span></li>
+    <li><span class="tier-name">4. User, normal</span><span class="tier-desc">Rare in practice; user stylesheets are largely a legacy feature today</span></li>
+    <li><span class="tier-name">5. User-agent, normal</span><span class="tier-desc">The browser's own built-in defaults — lowest priority of all</span></li>
+  </ol>
+
+  <p class="reveal">Yes — a <em>user's</em> <code>!important</code> rule outranks the <em>author's</em> <code>!important</code> rule. That inversion is deliberate, not a spec bug: <code>!important</code> exists precisely so a user forcing 200% font size or high-contrast colors for accessibility can win even against a page author who slapped <code>!important</code> on everything. B06_css_cascade's own design notes call this out directly — developers who assume "<code>!important</code> means nothing can override this" are wrong, and the spec is intentionally built that way.</p>
+
+  <div class="sidenote reveal">
+    <b>Where do inline styles and the real UA !important tier fit?</b> A <code>style="..."</code> attribute on the element itself behaves like an extra-high-specificity author declaration — it beats every selector-based author rule (short of <code>!important</code>). And the full W3C spec technically adds a sixth tier above even user <code>!important</code>: user-agent <code>!important</code>, reserved for a tiny number of browser-enforced rules that pages truly cannot override. We're skipping it here because — like B06_css_cascade's own <code>cascade()</code> implementation — it almost never matters in practice; the five tiers above cover essentially every real cascade decision you'll debug.
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Importance Beats Specificity — Always, No Exceptions</div>
+    A one-line, zero-specificity-effort <code>!important</code> declaration beats a monstrous <code>#id .a .b .c .d</code> selector with normal weight, every time, because Stage 1 finishes the whole cascade before Stage 2 (specificity) is ever consulted. This is exactly why <code>!important</code> is treated as a last resort in real codebases: it doesn't just win a fight, it makes the entire specificity system for that declaration irrelevant.
+  </div>
+
+  <p class="reveal">Put actual numbers on that claim so it's not just an assertion. Two rules, both author-origin, both targeting the same <code>&lt;p class="text"&gt;</code>:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Rule</th><th>Specificity</th><th>Important?</th><th>Stage 1 Bracket</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">#article .text { color: blue; }</td><td class="gold">(1, 1, 0)</td><td class="center neg">no</td><td>3 — author, normal</td><td class="neg">loses</td></tr>
+        <tr class="win"><td class="hl">.text { color: red !important; }</td><td class="gold">(0, 1, 0)</td><td class="center pos">yes</td><td>1 — author, !important</td><td class="win">WINS</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Read the specificity column in isolation and <code>#article .text</code> looks like the obvious winner — an ID beats a bare class, full stop. But specificity is Stage 2, and these two rules never make it that far: the <code>!important</code> rule sits in Stage 1's bracket 1 (author, important), while the other sits in bracket 3 (author, normal). Stage 1 alone separates them, so Stage 2's tuple comparison — the one column that would have favored the ID selector — is never even computed. This is the single most common source of "but my selector is more specific, why isn't it winning?" bug reports.</p>
+</div>
+</section>
+
+<!-- SECTION 02: SPECIFICITY -->
+<section id="specificity">
+<div class="container">
+  <div class="section-num">02 — Stage Two</div>
+  <h2>Specificity: A <span class="accent">Genuine Numeric Comparison</span></h2>
+
+  <p class="reveal">Once origin and importance tie — which, for two rules both living in your own stylesheet, they always do — the cascade needs a way to say "this selector is more specific than that one," mechanically, with no ambiguity. The spec's answer is a three-part tuple, one count per selector-component category:</p>
+
+  <div class="formula reveal">
+    <span class="label">Specificity as an ordered triple</span>
+    (IDs, classes/attributes/pseudo-classes, type-selectors/pseudo-elements)
+    <span class="sub">Written <code>(a, b, c)</code> in the spec. Compared left to right, one column at a time — the first column where the counts differ decides the winner outright.</span>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Selector Piece</th><th>Counts Toward</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">ID selector</td><td class="hl">a (ids)</td><td>#submit-btn</td></tr>
+        <tr><td class="gold">Class selector</td><td class="hl">b (classes)</td><td>.btn</td></tr>
+        <tr><td class="gold">Attribute selector</td><td class="hl">b (classes)</td><td>[type="submit"]</td></tr>
+        <tr><td class="gold">Pseudo-class</td><td class="hl">b (classes)</td><td>:hover, :nth-child(2)</td></tr>
+        <tr><td class="gold">Type / element selector</td><td class="hl">c (elements)</td><td>button, div</td></tr>
+        <tr><td class="gold">Pseudo-element</td><td class="hl">c (elements)</td><td>::before, ::after</td></tr>
+        <tr><td class="gold">Universal selector *</td><td class="hl">contributes nothing</td><td>*</td></tr>
+        <tr><td class="gold">Combinators</td><td class="hl">contribute nothing</td><td>&gt; + ~ (descendant space)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Here's the detail that trips people up and the reason B06_css_cascade's own <code>DECISIONS.md</code> spends an entire entry defending it: this tuple is <strong>never collapsed into one number</strong>. It is genuinely wrong — not just inelegant — to compute something like <code>ids*100 + classes*10 + elements</code> and compare the results as plain integers.</p>
+
+  <pre class="reveal"><span class="tag">why single-integer specificity is a real bug, not a style nitpick</span><code><span class="cm">// WRONG — collapses the triple into one weighted integer</span>
+<span class="kw">int</span> <span class="fn">bad_specificity</span>(specificity_t s) {
+    <span class="kw">return</span> s.ids * <span class="num">100</span> + s.classes * <span class="num">10</span> + s.elements;
+}
+
+<span class="cm">// A selector with 11+ class components overflows the "classes" digit</span>
+<span class="cm">// and starts polluting the "ids" digit — producing a FALSE id-level match:</span>
+<span class="cm">// .a.b.c.d.e.f.g.h.i.j.k  -->  11 classes  -->  11*10 = 110</span>
+<span class="cm">// bad_specificity() reports 110, which LOOKS bigger than a real #id (100)</span>
+<span class="cm">// even though a real ID selector must always outrank any number of classes.</span>
+
+<span class="cm">// CORRECT — compare the tuple component by component, left to right</span>
+<span class="kw">int</span> <span class="fn">spec_cmp</span>(specificity_t a, specificity_t b) {
+    <span class="kw">if</span> (a.ids != b.ids)         <span class="kw">return</span> a.ids > b.ids ? <span class="num">1</span> : -<span class="num">1</span>;
+    <span class="kw">if</span> (a.classes != b.classes) <span class="kw">return</span> a.classes > b.classes ? <span class="num">1</span> : -<span class="num">1</span>;
+    <span class="kw">if</span> (a.elements != b.elements) <span class="kw">return</span> a.elements > b.elements ? <span class="num">1</span> : -<span class="num">1</span>;
+    <span class="kw">return</span> <span class="num">0</span>;   <span class="cm">// truly tied — Stage 3 (source order) decides</span>
+}</code></pre>
+
+  <p class="reveal">Eleven chained classes is a contrived example, but the principle it protects is not: <strong>an ID selector must outrank any number of classes, and a class selector must outrank any number of bare element selectors — unconditionally.</strong> A tuple comparison guarantees that. A weighted sum only guarantees it until someone's selector gets long enough to carry a digit into the next column, at which point the browser would rank a wall of classes above a real ID — visibly wrong, and different from what every real browser actually does.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔢 Try It: Compute a Tuple by Hand</div>
+    <code>#nav ul li.active a:hover</code> → one ID (<code>#nav</code>), two classes-tier selectors (<code>.active</code>, <code>:hover</code>), three element-tier selectors (<code>ul</code>, <code>li</code>, <code>a</code>) → specificity <strong>(1, 2, 3)</strong>. Compare that against <code>.sidebar .active</code> → <strong>(0, 2, 0)</strong>. First column: 1 vs 0 — <code>#nav ul li.active a:hover</code> wins immediately. The remaining columns are never even inspected, because the comparison already resolved in column one.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 03: SOURCE ORDER -->
+<section id="sourceorder">
+<div class="container">
+  <div class="section-num">03 — Stage Three</div>
+  <h2>Source Order: <span class="accent">The Tiebreaker of Last Resort</span></h2>
+
+  <p class="reveal">If two competing declarations survive both Stage 1 (same origin, same importance) and Stage 2 (an <em>identical</em> specificity tuple — not just "close," identical in all three columns), the cascade falls back to the one rule that actually is about ordering: <strong>whichever declaration appears later, in the fully merged, document-order stylesheet, wins.</strong> "Merged" matters — every <code>&lt;link&gt;</code>, every <code>&lt;style&gt;</code> block, and every rule inside each, are treated as one continuous sequence in the order the browser encountered them.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">A genuine tie, resolved</span>
+    .notice.info { color: teal; }  /* specificity (0,2,0) */
+    .notice.warn { color: goldenrod; } /* specificity (0,2,0) — declared later */
+    <span class="sub">If an element matches both classes, <code>.notice.warn</code> wins — not because "warn" beats "info" in any selector sense, but purely because it was the last declaration parsed with an identical (0,2,0) specificity.</span>
+  </div>
+
+  <p class="reveal">This is also the stage responsible for the single most common piece of CSS folk wisdom — "just move your override to the bottom of the file" — and exactly why that trick sometimes mysteriously stops working: it only breaks the tie when the two rules already had equal specificity. Move a <code>.button</code> rule below a <code>#submit-btn</code> rule in the file and nothing changes, because Stage 2 already resolved the fight in the ID selector's favor before source order was ever consulted.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 "Later in the File" Includes Media Queries and @imports</div>
+    A rule inside a currently-inactive <code>@media</code> block still occupies a position in source order — it just isn't a <em>candidate</em> at all unless its condition matches the current viewport. Once a media query does match, its rules slot into the cascade at their actual position in the merged stylesheet, exactly as if the <code>@media</code> wrapper weren't there.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 04: WORKED EXAMPLE -->
+<section id="worked">
+<div class="container">
+  <div class="section-num">04 — Full Worked Example</div>
+  <h2>Four Rules Walk Into a <span class="accent">&lt;button&gt;</span></h2>
+
+  <p class="reveal">Here's the whole algorithm run end to end on one real element. Assume this markup and these four author rules — all normal priority, no <code>!important</code> anywhere, all living in the same author stylesheet in this exact order:</p>
+
+  <pre class="reveal"><span class="tag">markup</span><code>&lt;<span class="kw">button</span> <span class="cls">id</span>=<span class="str">"submit-btn"</span> <span class="cls">class</span>=<span class="str">"btn primary"</span>&gt;Submit&lt;/<span class="kw">button</span>&gt;</code></pre>
+
+  <pre class="reveal"><span class="tag">competing rules, in source order</span><code><span class="cm">/* Rule A — line 12 */</span>
+button          { <span class="fn">color</span>: white; }
+
+<span class="cm">/* Rule B — line 45 */</span>
+.btn            { <span class="fn">color</span>: navy; }
+
+<span class="cm">/* Rule C — line 90 */</span>
+.primary.btn    { <span class="fn">color</span>: green; }
+
+<span class="cm">/* Rule D — line 6 (earlier in the file, but shown last for effect) */</span>
+#submit-btn     { <span class="fn">color</span>: gold; }</code></pre>
+
+  <p class="reveal">All four match. All four set <code>color</code>. Origin and importance are identical for all four (author, normal), so Stage 1 produces a four-way tie and specificity has to break it. Computing each tuple:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Rule</th><th>Selector</th><th>IDs</th><th>Classes</th><th>Elements</th><th>Specificity</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td class="hl">button</td><td class="center">0</td><td class="center">0</td><td class="center">1</td><td class="gold">(0, 0, 1)</td><td class="neg">loses</td></tr>
+        <tr><td>B</td><td class="hl">.btn</td><td class="center">0</td><td class="center">1</td><td class="center">0</td><td class="gold">(0, 1, 0)</td><td class="neg">loses</td></tr>
+        <tr><td>C</td><td class="hl">.primary.btn</td><td class="center">0</td><td class="center">2</td><td class="center">0</td><td class="gold">(0, 2, 0)</td><td class="neg">loses</td></tr>
+        <tr class="win"><td>D</td><td class="hl">#submit-btn</td><td class="center">1</td><td class="center">0</td><td class="center">0</td><td class="win">(1, 0, 0)</td><td class="win">WINS</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Rule D wins with <code>color: gold</code> — despite being declared <em>first</em> in the file (line 6, before all three others), and despite Rule C having more total selector components (two classes vs. D's one ID). Neither of those facts matter, because the very first column of the comparison — <strong>IDs</strong> — already separates D (1) from everyone else (0). Rules A, B, and C never even get compared against each other; the moment D exists as a candidate with a strictly higher first-column count, the fight is over.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Two Misconceptions This Example Kills</div>
+    "The last rule in the file always wins" — false; D was first and still won. "More classes beats fewer classes" — false, or rather irrelevant here; ID beats any number of classes, unconditionally, every time, because ids is compared before classes even gets a look. Both misconceptions come from skipping straight to Stage 3 or misreading Stage 2's tuple as a simple count of "selector complexity."
+  </div>
+</div>
+</section>
+
+<!-- SECTION 05: INTERACTIVE DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">05 — Watch the Algorithm Run</div>
+  <h2>The <span class="accent">Live Cascade Resolver</span></h2>
+
+  <p class="reveal">Same four rules from the worked example above, animated exactly the way <code>spec_cmp()</code> actually runs: column by column, eliminating candidates the instant one column produces a clear winner. Watch which rules survive each pass.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="specLabel">▶ Click "Run Cascade" to resolve the four-way tie</div>
+    <canvas id="specCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" id="specRunBtn" onclick="runSpecDemo()">▶ Run Cascade</button>
+    <button class="ctrl-btn red" onclick="resetSpecDemo()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What's being skipped, visually.</b> The demo starts already past Stage 1 — all four rules are author-origin, non-important, so that filter is a no-op here and isn't animated separately. If any one of these four had carried <code>!important</code>, the animation below would never run at all; that single flag would end the cascade before specificity was ever measured.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 06: INHERITANCE -->
+<section id="inheritance">
+<div class="container">
+  <div class="section-num">06 — A Different Mechanism Entirely</div>
+  <h2><span class="accent c">Inheritance</span> Is Not the Cascade</h2>
+
+  <p class="reveal">One last, important distinction, because these two ideas get merged in people's heads constantly: <strong>the cascade decides which declared rule wins when multiple rules explicitly target the same element. Inheritance is what happens when <em>no</em> rule targets an element at all</strong> for a given property. They're separate mechanisms that happen to run back to back.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The actual order of operations, per property, per element</span>
+    1. Run the cascade — is there a winning declared value? Use it. <br>
+    2. If not, does this property inherit? Use the parent's computed value. <br>
+    3. If not, fall back to the property's own initial (spec-defined default) value.
+    <span class="sub">Inheritance is Step 2 — a fallback the browser only reaches once the cascade in Step 1 comes up completely empty for that element and property.</span>
+  </div>
+
+  <p class="reveal">Not every property inherits. The spec picks this per property, based on what tends to make visual sense flowing down a tree: text-related properties overwhelmingly do; box-model properties overwhelmingly don't. Set <code>color</code> on a <code>&lt;div&gt;</code> and every plain-text descendant inside it — with no CSS of its own — renders in that color, because <code>color</code> is an inherited property and the cascade found nothing more specific for those descendants. Set <code>border</code> on that same <code>&lt;div&gt;</code>, and its children get no border at all, because <code>border</code> does not inherit — it falls through straight to its initial value (<code>none</code>) instead.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Commonly Inherited</h4>
+      <code>color</code>, <code>font-family</code>, <code>font-size</code>, <code>line-height</code>, <code>visibility</code>, <code>text-align</code>, <code>list-style</code> — properties where "look like your parent unless told otherwise" is almost always what an author wants.
+    </div>
+    <div class="compare-card bad">
+      <h4>❌ Never Inherited by Default</h4>
+      <code>margin</code>, <code>padding</code>, <code>border</code>, <code>width</code>, <code>height</code>, <code>background</code>, <code>display</code>, <code>position</code> — box-model and layout properties, where a child silently copying its parent's spacing would almost always be wrong.
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔑 The Explicit Escape Hatch: the inherit Keyword</div>
+    Any property, inheriting or not, can be forced to inherit anyway with the literal value <code>inherit</code> — e.g. <code>border: inherit;</code>. This isn't inheritance happening automatically; it's a normal cascade winner (a declared value, just like any other) whose <em>value</em> happens to mean "go copy whatever the parent's computed value is." It still goes through Stage 1–3 like any other declaration — it just wins the cascade and then defers to the inheritance mechanism by name.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 07: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Cascade</div><div class="glossary-def">The ordered algorithm — origin/importance, then specificity, then source order — that picks exactly one winning declaration per property, per element.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Specificity</div><div class="glossary-def">A three-part tuple (IDs, classes/attrs/pseudo-classes, types/pseudo-elements) measuring a selector's precision, compared column by column, never summed into one number.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Origin</div><div class="glossary-def">Which of the three stylesheet sources a rule came from — user-agent (browser default), user, or author (the page) — checked before specificity.</div></div>
+    <div class="glossary-card"><div class="glossary-term">!important</div><div class="glossary-def">A flag that moves a declaration into a higher-priority bracket, ahead of specificity entirely; a user's !important still outranks an author's.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Source Order</div><div class="glossary-def">The final tiebreaker: when origin, importance, and specificity are all identical, the declaration parsed later in the merged stylesheet wins.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Inherited Property</div><div class="glossary-def">A property (like color or font-family) that, absent any cascade winner, takes its parent's computed value instead of its own initial value.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Computed Value</div><div class="glossary-def">The final value a property resolves to for an element after cascade, inheritance, and initial-value fallback have all been applied.</div></div>
+    <div class="glossary-card"><div class="glossary-term">User-Agent Stylesheet</div><div class="glossary-def">The browser's own built-in default CSS (e.g. "links are blue, h1 is bold") — the lowest-priority origin in the cascade.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The CSS Cascade Algorithm · A companion lesson for bob_os/browser modules <strong>B05_html_tokenizer</strong> and <strong>B06_css_cascade</strong></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Origin, then weight, then order — one winner, every time.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── SPECIFICITY CASCADE DEMO ────────────────────────────────────────────────
+const SPEC_RULES = [
+  {name:'A', sel:'button',        ids:0, classes:0, elements:1, col:C.muted},
+  {name:'B', sel:'.btn',          ids:0, classes:1, elements:0, col:C.muted},
+  {name:'C', sel:'.primary.btn',  ids:0, classes:2, elements:0, col:C.muted},
+  {name:'D', sel:'#submit-btn',   ids:1, classes:0, elements:0, col:C.gold},
+];
+
+// phases: 'idle' | 'ids' | 'classes' | 'winner'
+let specPhase = 'idle';
+let specAlive = [0,1,2,3];  // indices still alive
+let specAnimId = null;
+let specRunning = false;
+
+function drawSpecScene(t, phase, alive, eliminating){
+  const canvas=document.getElementById('specCanvas');
+  const W=gW(canvas), H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
+
+  const colX = {sel: 24, ids: W*0.45, classes: W*0.6, elements: W*0.75, result: W*0.9};
+  const headerY = 34;
+
+  ctx.font='11px "Source Code Pro",monospace'; ctx.fillStyle=C.muted; ctx.textAlign='left';
+  ctx.fillText('SELECTOR', colX.sel, headerY);
+  ctx.textAlign='center';
+  ctx.fillText('IDS', colX.ids, headerY);
+  ctx.fillText('CLASSES', colX.classes, headerY);
+  ctx.fillText('ELEMENTS', colX.elements, headerY);
+  ctx.textAlign='left';
+
+  // highlight the active comparison column
+  if(phase==='ids' || phase==='classes'){
+    const hx = phase==='ids' ? colX.ids : colX.classes;
+    ctx.fillStyle = 'rgba(245,200,66,.08)';
+    ctx.fillRect(hx-38, 18, 76, H-70);
+    ctx.strokeStyle = C.gold; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    ctx.strokeRect(hx-38, 18, 76, H-70);
+    ctx.setLineDash([]);
+  }
+
+  const rowH = 56, startY = 62;
+  SPEC_RULES.forEach((r,i)=>{
+    const y = startY + i*rowH;
+    const isAlive = alive.includes(i);
+    const isEliminatingNow = eliminating.includes(i);
+    let opacity = isAlive ? 1 : (isEliminatingNow ? 1-t : 0.18);
+
+    ctx.globalAlpha = opacity;
+
+    // row background
+    ctx.fillStyle = isAlive && phase==='winner' ? 'rgba(245,200,66,.12)' : 'var(--card)';
+    ctx.fillStyle = isAlive && phase==='winner' ? 'rgba(245,200,66,.12)' : '#141c2e';
+    ctx.fillRect(14, y-8, W-28, rowH-14);
+    ctx.strokeStyle = (isAlive && phase==='winner') ? C.gold : '#1e3a5f';
+    ctx.lineWidth = (isAlive && phase==='winner') ? 2 : 1;
+    ctx.strokeRect(14, y-8, W-28, rowH-14);
+
+    // selector text
+    ctx.fillStyle = '#fff'; ctx.font='13px "Source Code Pro",monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(`${r.name}  ${r.sel}`, colX.sel, y+10);
+
+    // pip counts
+    function pips(cx, count, color){
+      ctx.textAlign='center';
+      ctx.fillStyle = color;
+      ctx.font='bold 15px "Source Code Pro",monospace';
+      ctx.fillText(String(count), cx, y+10);
+      for(let p=0;p<Math.max(count,1);p++){
+        if(p>=count) break;
+        ctx.beginPath();
+        ctx.arc(cx - 18 + p*10, y+26, 3, 0, Math.PI*2);
+        ctx.fillStyle = color; ctx.fill();
+      }
+    }
+    pips(colX.ids, r.ids, r.ids>0?C.gold:C.muted);
+    pips(colX.classes, r.classes, r.classes>0?C.cyan:C.muted);
+    pips(colX.elements, r.elements, r.elements>0?C.green:C.muted);
+
+    if(phase==='winner' && isAlive){
+      ctx.textAlign='center'; ctx.fillStyle=C.gold; ctx.font='bold 12px "Source Code Pro",monospace';
+      ctx.fillText('★ WINS', colX.result, y+10);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  });
+
+  // caption
+  const captions = {
+    idle: 'Four rules tie on origin & importance — comparing specificity, column by column',
+    ids: 'Column 1 — IDs: rule D has 1, everyone else has 0 → D wins outright, others eliminated',
+    classes: 'Column 2 — classes (only reached on an IDs tie)',
+    winner: '#submit-btn (specificity 1,0,0) wins — comparison never even reached the classes column'
+  };
+  ctx.fillStyle=C.muted; ctx.font='12px Lato,sans-serif'; ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'', W/2, H-16);
+  ctx.textAlign='left';
+}
+
+function runSpecDemo(){
+  if(specRunning) return;
+  specRunning = true;
+  document.getElementById('specRunBtn').disabled = true;
+
+  const phases = [
+    {name:'idle',    dur:600,  alive:[0,1,2,3], eliminating:[]},
+    {name:'ids',     dur:900,  alive:[0,1,2,3], eliminating:[0,1,2]}, // A,B,C fade during this phase
+    {name:'winner',  dur:700,  alive:[3],       eliminating:[]},
+  ];
+  let idx=0, start=performance.now();
+  document.getElementById('specLabel').textContent = '▶ Running cascade resolution…';
+
+  function step(now){
+    const ph = phases[idx];
+    const t = Math.min(1, (now-start)/ph.dur);
+    const aliveNow = ph.name==='ids' ? [0,1,2,3] : ph.alive;
+    drawSpecScene(t, ph.name, aliveNow, ph.eliminating);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        specRunning=false;
+        document.getElementById('specRunBtn').disabled=false;
+        document.getElementById('specLabel').textContent='▶ Complete — rule D (#submit-btn) wins. Click Reset to run again.';
+        return;
+      }
+      start=now;
+    }
+    specAnimId = requestAnimationFrame(step);
+  }
+  specAnimId = requestAnimationFrame(step);
+}
+
+function resetSpecDemo(){
+  if(specAnimId) cancelAnimationFrame(specAnimId);
+  specRunning=false;
+  document.getElementById('specRunBtn').disabled=false;
+  document.getElementById('specLabel').textContent='▶ Click "Run Cascade" to resolve the four-way tie';
+  drawSpecScene(0,'idle',[0,1,2,3],[]);
+}
+
+// ── SCROLL REVEAL ─────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetSpecDemo(); });
+window.addEventListener('resize',()=>{ drawSpecScene(0,'idle',[0,1,2,3],[]); });
+</script>
+</body>
+</html>

@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser X-Ray — Your Browser Is Basically a Tiny Operating System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.variant-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:680px){.variant-grid{grid-template-columns:1fr}}
+.variant-card{background:var(--card);border-radius:12px;padding:1.5rem;position:relative;overflow:hidden;}
+.variant-card::before{content:'';position:absolute;inset:0;border-radius:12px;border:1.5px solid transparent;}
+.variant-card.user::before{border-color:var(--cyan)}
+.variant-card.kernel::before{border-color:var(--red)}
+.variant-badge{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;padding:.25rem .7rem;border-radius:3px;margin-bottom:.8rem;}
+.variant-card.user .variant-badge{background:rgba(56,189,248,.12);color:var(--cyan);border:1px solid rgba(56,189,248,.3);}
+.variant-card.kernel .variant-badge{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.3);}
+.variant-card h4{font-family:'Playfair Display',serif;font-size:1.1rem;color:#fff;margin-bottom:.6rem;}
+.variant-card .feat-num{font-family:'Source Code Pro',monospace;font-size:1.4rem;font-weight:700;margin:.5rem 0 .2rem;}
+.variant-card.user .feat-num{color:var(--cyan)}
+.variant-card.kernel .feat-num{color:var(--red)}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.ftag{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.78rem;padding:.1rem .45rem;border-radius:3px;margin:0 .1rem;vertical-align:middle;}
+.ftag.rend{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.brow{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.ftag.gpu{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.net{background:rgba(13,148,136,.15);color:var(--teal);border:1px solid rgba(13,148,136,.3);}
+.ftag.util{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* pipeline flow */
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="OS Recap"></a>
+  <a class="toc-dot" href="#processes" title="Browser Processes"></a>
+  <a class="toc-dot" href="#browserprocess" title="Browser Process"></a>
+  <a class="toc-dot" href="#renderer" title="Renderer Process"></a>
+  <a class="toc-dot" href="#sandbox" title="Sandboxing"></a>
+  <a class="toc-dot" href="#ipc" title="IPC / Mojo"></a>
+  <a class="toc-dot" href="#pipeline" title="Rendering Pipeline"></a>
+  <a class="toc-dot" href="#threads" title="Threads & Event Loop"></a>
+  <a class="toc-dot" href="#mapping" title="Direct OS Mapping"></a>
+  <a class="toc-dot" href="#whycare" title="Why It Matters"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Browser Internals · Kernel/User-Space Parallels · Chromium Architecture</div>
+    <h1>Your Browser Is a<br><span>Tiny Operating System</span></h1>
+    <p class="hero-sub">Open your task manager right now and you'll see it: not one "Chrome" process, but a dozen. That's not an accident — it's because Chromium's engineers looked at the exact wall between user space and kernel space you just learned, and rebuilt it <em>inside a single application</em>. Same disease (untrusted, crashy, possibly hostile code sharing one machine), same cure (a privileged core, isolated workers, and one guarded door between them).</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Privileged "Browser Process"</div></div>
+      <div class="hero-stat"><div class="num">N</div><div class="lbl">Sandboxed Renderer Processes</div></div>
+      <div class="hero-stat"><div class="num">Mojo</div><div class="lbl">The IPC "Syscall"</div></div>
+      <div class="hero-stat"><div class="num">6</div><div class="lbl">Pixel Pipeline Stages</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Quick Recap</div>
+  <h2>The Idea We're <span class="accent">Reusing</span></h2>
+
+  <p class="reveal">Last time, the whole story was: your computer has one set of dangerous shared hardware, so the OS splits the world into a tiny, all-powerful <strong>kernel</strong> and a crowd of restricted, sandboxed <strong>user-space processes</strong>, with a single guarded door — the <strong>system call</strong> — connecting them. Crash a user process, and the machine survives. Let a user process touch hardware directly, and chaos follows. So it never gets to.</p>
+
+  <p class="reveal">A web browser has the exact same underlying problem, at a smaller scale: it has to run <em>your</em> trusted code (the browser UI, bookmarks, settings) alongside <em>arbitrary strangers' code</em> (every website's HTML, CSS, and JavaScript — code you never chose to trust) on one machine, in one application, dozens of times a day. So Chromium's architects did what OS designers did decades earlier: they built their own kernel/user-space split, entirely in software, running on top of the OS's own kernel/user-space split.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🪆 A Split Inside a Split</div>
+    Your browser tab is a user-space <em>process</em> from the OS's point of view — sandboxed by Ring 3, unable to touch hardware directly, exactly like any other app. But <em>inside</em> that same OS-level sandboxing, the browser draws a second, smaller wall of its own: between its one trusted "browser process" and its many untrusted "renderer processes." It's turtles all the way down, and each turtle uses the same trick.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: PROCESS ARCHITECTURE -->
+<section id="processes">
+<div class="container">
+  <div class="section-num">01 — The X-Ray</div>
+  <h2>What Task Manager <span class="accent">Is Actually Showing You</span></h2>
+
+  <p class="reveal">Open Chrome's task manager (<code>Shift+Esc</code>) with a few tabs open and you'll see something like this: one process just labeled the browser itself, then several more for "Tab: yoursite.com," one or more for "GPU Process," one for "Utility: Network Service," maybe an extension process. Each of these is a genuinely separate OS-level process, with its own memory space, its own PID, and — critically — its own OS-enforced sandbox.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label">▶ The Browser's Multi-Process Map</div>
+    <canvas id="processMap" height="380"></canvas>
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Browser Process</span><span class="fam-count">1, privileged</span></div>
+      <div class="fam-desc">The "kernel" of the browser. Owns the address bar, bookmarks, disk cache, cookie store, and — critically — the only code allowed to talk to the real OS on the user's behalf.</div>
+      <div class="feat-list"><span class="feat-pill ftag brow">UI thread</span><span class="feat-pill ftag brow">network stack</span><span class="feat-pill ftag brow">storage</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Renderer Process</span><span class="fam-count">1 per site/tab</span></div>
+      <div class="fam-desc">The "user space" of the browser. Parses and runs a website's HTML/CSS/JS. Heavily sandboxed — cannot read files, cannot open sockets, cannot touch the GPU directly.</div>
+      <div class="feat-list"><span class="feat-pill ftag rend">Blink engine</span><span class="feat-pill ftag rend">V8 JS engine</span><span class="feat-pill ftag rend">DOM</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">GPU Process</span><span class="fam-count">usually 1</span></div>
+      <div class="fam-desc">The one process trusted to actually talk to the graphics driver. Renderers hand it draw commands; it turns those into real pixels on your screen.</div>
+      <div class="feat-list"><span class="feat-pill ftag gpu">compositing</span><span class="feat-pill ftag gpu">WebGL</span><span class="feat-pill ftag gpu">video decode</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--teal)">Network Service</span><span class="fam-count">1 utility</span></div>
+      <div class="fam-desc">A dedicated, sandboxed process that owns actual socket-level networking, DNS, and TLS — even the "trusted" browser process delegates this out for extra isolation.</div>
+      <div class="feat-list"><span class="feat-pill ftag net">HTTP/TLS</span><span class="feat-pill ftag net">DNS</span><span class="feat-pill ftag net">cache</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Utility Processes</span><span class="fam-count">many, narrow</span></div>
+      <div class="fam-desc">Small, single-purpose sandboxed helpers — audio service, storage service, print preview — each given the least privilege it needs to do one job.</div>
+      <div class="feat-list"><span class="feat-pill ftag util">audio</span><span class="feat-pill ftag util">storage</span><span class="feat-pill ftag util">print</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:#94a3b8">Extension Process</span><span class="fam-count">per extension</span></div>
+      <div class="fam-desc">Browser extensions get their own isolated renderer-like process, so a buggy or malicious extension can't directly corrupt a page's renderer or the browser process.</div>
+      <div class="feat-list"><span class="feat-pill ftag rend">content script</span><span class="feat-pill ftag rend">background page</span></div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why So Many Processes, Specifically</div>
+    Multi-process architecture buys the browser the exact same property fault isolation gave the OS: <strong>a crashed or hijacked tab shouldn't take down the whole browser</strong>, and a compromised website shouldn't be able to read another website's data. Chrome didn't always work this way — early browsers ran everything, including every tab, in one single process, which meant one bad Flash plugin could crash your entire browser. Sound familiar? That's the pre-multiprocess era making the exact mistake early single-privilege-level computers made.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: BROWSER PROCESS -->
+<section id="browserprocess">
+<div class="container">
+  <div class="section-num">02 — The Browser's Kernel</div>
+  <h2>Meet the <span class="accent r">Browser Process</span></h2>
+
+  <p class="reveal">If the renderer is where the "citizens" (websites) live, the browser process is the government. It's the one process with the browser's full set of privileges: it's the only one allowed to read and write your actual files, the only one allowed to show OS-level UI like the address bar and download prompts, the only one allowed to manage which tab is even allowed to exist.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">UI Thread</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Draws the address bar, tabs, bookmarks bar — the actual browser chrome around the web content.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Process Manager</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Decides when to spawn a new renderer process (a new tab, a cross-origin navigation) and when to kill one — the browser's own "scheduler," deciding who gets to exist.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Storage Broker</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Owns cookies, localStorage, the disk cache, and history. A renderer can never touch these files directly — it must ask.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Permission Broker</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">The thing actually showing you "example.com wants to use your camera" — because the renderer isn't trusted to just grant itself hardware access.</div>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ A Crashed Browser Process Is a "Kernel Panic"</div>
+    Just like a real OS kernel panic, if the browser process itself crashes, everything goes down — every tab, every window. There's no more-trusted layer above it to clean up the mess. This is precisely why the browser process is kept comparatively small, conservative, and heavily reviewed compared to the sprawling complexity of a rendering engine.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: RENDERER PROCESS -->
+<section id="renderer">
+<div class="container">
+  <div class="section-num">03 — The Browser's User Space</div>
+  <h2>Meet the <span class="accent">Renderer Process</span></h2>
+
+  <p class="reveal">Every tab (per site, roughly) gets its own renderer process. This is where the actual work of "being a website" happens: parsing your HTML, building the DOM, running your JavaScript through the V8 engine, computing layout, painting. And — this is the important part — <strong>it is deliberately given as little power as an OS process can have.</strong></p>
+
+  <ul class="reveal">
+    <li>No direct filesystem access — can't open, read, or write arbitrary files.</li>
+    <li>No direct socket access — can't open a raw network connection to anywhere it wants.</li>
+    <li>No direct GPU access — can't talk to the graphics driver itself.</li>
+    <li>No access to other renderer processes' memory — one site's JavaScript cannot peek into another site's data.</li>
+  </ul>
+
+  <p class="reveal">Sound familiar? This is precisely the Ring 3 story again: a renderer executes plenty of complex logic, but every dangerous action — reading a file the user picked, sending a network request, drawing to the actual screen — has to be requested from something more privileged and carried out on the renderer's behalf.</p>
+
+  <div class="sidenote reveal">
+    <b>Wait — JavaScript can fetch() a URL, though?</b> Yes, but notice it never opens the socket itself. <code>fetch()</code> is answered by asking the browser process (via the network service) to perform the actual network I/O, then the result is handed back into the renderer's sandbox. Exactly like a user-space program calling <code>read()</code> instead of talking to a disk controller directly.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: SANDBOXING -->
+<section id="sandbox">
+<div class="container">
+  <div class="section-num">04 — The Browser's Protection Rings</div>
+  <h2>Sandboxing &amp; <span class="accent p">Site Isolation</span></h2>
+
+  <p class="reveal">Recall that OS protection rings are enforced by the CPU chip itself. A browser doesn't get to add new CPU rings — so instead it leans entirely on the OS's <em>existing</em> sandboxing primitives (seccomp-bpf on Linux, Job Objects on Windows, the Sandbox framework on macOS) to strip a renderer process down to almost nothing: no filesystem syscalls allowed, no raw socket syscalls allowed, no arbitrary process-launch syscalls allowed. The OS kernel is the one actually enforcing this — the browser just configures an extremely tight leash and lets the real Ring 0/Ring 3 wall do the enforcing.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Site Isolation</h4>
+      Since 2018, Chrome puts <em>different origins</em> in <em>different renderer processes</em> even for iframes on the same page. A malicious site embedding your bank's iframe still can't read your bank's memory — they're different OS processes, with the OS's own memory protection between them.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚡ Why This Was Urgent: Spectre</h4>
+      Spectre-class CPU speculative-execution attacks showed that JavaScript running in the <em>same process</em> as sensitive data could potentially read it via timing side-channels — even without a traditional bug. Putting different origins in different <em>processes</em> makes that data physically unreachable, not just logically forbidden.
+    </div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Mapping, Explicitly</div>
+    OS protection rings stop <em>your process</em> from reading <em>another process's</em> memory. Site isolation uses that exact same OS-level guarantee to stop <em>one website's JavaScript</em> from reading <em>another website's</em> memory — by making sure they were never in the same process to begin with. The browser didn't invent a new isolation mechanism; it just found a clever new place to draw the existing OS-level line.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: IPC -->
+<section id="ipc">
+<div class="container">
+  <div class="section-num">05 — The Browser's System Call</div>
+  <h2>Crossing the Wall: <span class="accent">IPC via Mojo</span></h2>
+
+  <p class="reveal">If the renderer can't do anything dangerous itself, how does clicking "Save Image As..." on a webpage ever actually write a file to your disk? Same answer as before, one layer up: a strictly controlled message crosses a wall, gets validated by more-trusted code, and the dangerous action happens on the renderer's behalf. In Chromium this messaging system is called <strong>Mojo</strong> (previously plain <code>IPC</code> messages) — and it is, structurally, this project's version of a system call.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="ipcLabel">▶ Watch an IPC message cross the wall — click to run</div>
+    <canvas id="ipcCanvas" height="280"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runIPC('save')">▶ Run "Save Image As…"</button>
+    <button class="ctrl-btn gold" onclick="runIPC('camera')">▶ Run "Use Camera"</button>
+    <button class="ctrl-btn red" onclick="resetIPC()">Reset</button>
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">The syscall parallel, side by side</span>
+    OS: user code → syscall instruction → trap into Ring 0 → kernel validates &amp; acts → return to Ring 3<br>
+    Browser: renderer JS → Mojo IPC message → cross into browser process → browser validates &amp; acts → message returns to renderer
+    <span class="sub">Neither the "syscall instruction" nor the "Mojo message" trusts the caller — both re-validate everything on the privileged side.</span>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 IPC Is Also "Expensive" — For the Same Reason</div>
+    Just like a real syscall, crossing between renderer and browser process involves serializing a message, switching OS-level process context, and having the receiving side independently re-validate everything (never trusting the sandboxed sender). This is why chatty renderer-to-browser communication is a known performance trap, mirroring exactly why OS engineers try to batch or avoid syscalls in hot paths.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: PIPELINE -->
+<section id="pipeline">
+<div class="container">
+  <div class="section-num">06 — Inside One Renderer</div>
+  <h2>The Pixel <span class="accent">Pipeline</span></h2>
+
+  <p class="reveal">Zoom into a single renderer process and there's a whole internal assembly line — this part has no direct OS analogy, it's the actual "job" the browser's user-space worker exists to do: turn bytes of HTML into lit-up pixels.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">📄</div><div class="pipe-name">Parse HTML</div><div class="pipe-desc">Bytes → tokens → DOM tree</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🎨</div><div class="pipe-name">Parse CSS</div><div class="pipe-desc">Rules → CSSOM tree</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🌲</div><div class="pipe-name">Render Tree</div><div class="pipe-desc">DOM + CSSOM merged, hidden nodes dropped</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">📐</div><div class="pipe-name">Layout</div><div class="pipe-desc">Compute exact size/position of every box</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🖌️</div><div class="pipe-name">Paint</div><div class="pipe-desc">Record draw commands per layer</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🧩</div><div class="pipe-name">Composite</div><div class="pipe-desc">GPU process merges layers to a frame</div></div>
+  </div>
+
+  <p class="reveal">Notice the last stage: the renderer doesn't draw the final pixels itself. It hands a list of drawing instructions to the <strong>GPU process</strong> — the one process trusted to actually talk to the graphics driver — via, once again, an IPC message across the wall. Even the "final step" of showing you a webpage obeys the same privileged-vs-sandboxed pattern.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Why Scrolling Feels Instant</div>
+    Compositing lets the browser re-use already-painted layers and just shift/blend them on the GPU for scrolling or simple animations — skipping layout and paint entirely for those frames. This is analogous to how an OS scheduler tries to avoid expensive work (like a full context switch) whenever a cheaper path exists.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: THREADS -->
+<section id="threads">
+<div class="container">
+  <div class="section-num">07 — The Renderer's Own Scheduler</div>
+  <h2>Threads &amp; the <span class="accent">Event Loop</span></h2>
+
+  <p class="reveal">Recall the OS scheduler decides which process gets the CPU next, time-slicing dozens of them into an illusion of simultaneity. A renderer process runs the same trick <em>inside itself</em>, at a smaller scale, via its <strong>main thread's event loop</strong>.</p>
+
+  <p class="reveal">JavaScript execution, DOM updates, layout, and paint recording on a given page mostly all happen on one single "main thread" inside the renderer, which continuously pulls the next task off a queue — a user click, a fired timer, a resolved network promise, a scheduled re-render — runs it to completion, then pulls the next one. There's no true concurrency here (that's why one slow, blocking JavaScript loop visibly freezes an entire tab's UI) — just extremely fast, cooperative time-slicing of one thread, wearing a scheduler's hat.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🧵 Main Thread</h4>
+      Runs your JavaScript, builds the DOM, computes layout, records paint operations. One task at a time, in order, from a queue — a cooperative scheduler, not a preemptive one.
+    </div>
+    <div class="compare-card bad">
+      <h4>🧵 Compositor Thread</h4>
+      A separate thread inside the same renderer, dedicated to combining already-painted layers into frames — kept independent specifically so scrolling stays smooth even if the main thread is busy.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Where's the "involuntary interrupt" here?</b> The browser's own equivalent is the periodic <strong>frame deadline</strong> — roughly every 16ms (for 60fps), the system wants a new frame ready. Long JavaScript tasks that blow past this deadline cause the dropped-frame stutter you've definitely seen on a janky site — the browser-level version of a process that never yields the CPU.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: DIRECT MAPPING TABLE -->
+<section id="mapping">
+<div class="container">
+  <div class="section-num">08 — Side by Side</div>
+  <h2>The Direct <span class="accent">OS ↔ Browser</span> Mapping</h2>
+
+  <p class="reveal">Here's the full translation table — this is the piece worth memorizing, because once it clicks, every browser architecture diagram you ever see again will read like a dialect you already speak.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Operating System Concept</th><th>Browser Equivalent</th><th>Why They Match</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Kernel (Ring 0)</td><td class="hl">Browser Process</td><td>The one privileged core everything else must go through for anything dangerous.</td></tr>
+        <tr><td class="gold">User-space process (Ring 3)</td><td class="hl">Renderer Process</td><td>Sandboxed, no direct hardware access, isolated from its siblings.</td></tr>
+        <tr><td class="gold">System call</td><td class="hl">Mojo IPC message</td><td>The one sanctioned, validated door between untrusted and trusted code.</td></tr>
+        <tr><td class="gold">Protection rings (CPU-enforced)</td><td class="hl">OS sandbox APIs (seccomp, Job Objects)</td><td>Hardware/OS-enforced restriction the sandboxed side cannot lift itself.</td></tr>
+        <tr><td class="gold">Device driver</td><td class="hl">GPU Process</td><td>The sole process trusted to speak the low-level hardware protocol.</td></tr>
+        <tr><td class="gold">Kernel panic / BSOD</td><td class="hl">Browser process crash</td><td>No more-trusted layer above it — everything goes down together.</td></tr>
+        <tr><td class="gold">Process crash (isolated)</td><td class="hl">Renderer crash ("Aw, Snap!")</td><td>Contained — the rest of the browser and other tabs keep running.</td></tr>
+        <tr><td class="gold">Scheduler / context switch</td><td class="hl">Event loop (main thread task queue)</td><td>Cooperative time-slicing of many pending pieces of work, one CPU-like resource.</td></tr>
+        <tr><td class="gold">Virtual memory isolation</td><td class="hl">Site Isolation (per-origin processes)</td><td>Guarantees one tenant literally cannot address another tenant's memory.</td></tr>
+        <tr><td class="gold">Interrupts (timer tick)</td><td class="hl">Frame deadline (~16ms)</td><td>A recurring forced checkpoint the privileged layer uses to keep things fair/responsive.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The One Structural Difference Worth Knowing</div>
+    OS protection rings are enforced by the <strong>CPU's silicon</strong> — user code physically cannot execute a privileged instruction. The browser process/renderer split is enforced entirely in <strong>software policy</strong>, layered on top of the OS's own sandboxing tools. A browser sandbox escape bug is exactly the software-side version of what a CPU privilege-escalation bug would mean for an OS: the untrusted side finding a crack that lets it act as if it were the trusted side.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 9: WHY IT MATTERS -->
+<section id="whycare">
+<div class="container">
+  <div class="section-num">09 — Tying It All Together</div>
+  <h2>Why This X-Ray Is <span class="accent">Worth Having</span></h2>
+
+  <p class="reveal">Once you see the browser as "an operating system for websites," a whole pile of behavior stops being mysterious and starts being predictable.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🧱</div><div class="lbl">One tab crashing ≠ browser crashing</div></div>
+    <div class="stat-card"><div class="val">🔒</div><div class="lbl">One site can't read another site's memory</div></div>
+    <div class="stat-card"><div class="val">🎥</div><div class="lbl">Camera/mic always need a real permission prompt</div></div>
+    <div class="stat-card"><div class="val">🐌</div><div class="lbl">Chatty postMessage-style calls have real overhead</div></div>
+  </div>
+
+  <p class="reveal">Next time a tab shows "Aw, Snap!" and the rest of your browser keeps working — that's a sandboxed renderer dying alone, exactly like a segfaulted user process. Next time a site can't just silently turn on your webcam — that's the permission broker in the privileged browser process refusing to let a sandboxed renderer touch hardware directly. And next time you hear "Site Isolation" or "process-per-site," you now know it's the same idea as virtual memory protection between OS processes, just redrawn one abstraction layer higher.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>The browser process is a software kernel, the renderer process is its user space, Mojo IPC is its system call, and every guarantee you rely on while browsing — crash isolation, cross-site privacy, permission prompts — is the exact same trick the real OS taught it, run one level up.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 10: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Browser Process</div><div class="glossary-def">The single privileged process owning the UI, storage, permissions, and the only path to real OS resources — the browser's "kernel."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Renderer Process</div><div class="glossary-def">A sandboxed, per-site process running Blink + V8 to parse and execute a page. The browser's "user space."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mojo / IPC</div><div class="glossary-def">Chromium's message-passing system connecting processes. The browser's structural equivalent of a system call — validated, controlled, never blindly trusted.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Site Isolation</div><div class="glossary-def">Putting distinct origins in distinct renderer processes so OS-level memory protection — not just JS-level rules — keeps one site out of another's data.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sandbox (seccomp / Job Objects)</div><div class="glossary-def">OS-provided restriction mechanisms the browser configures to strip a renderer's allowed syscalls down to almost nothing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">GPU Process</div><div class="glossary-def">The one process trusted to speak to the graphics driver directly; renderers hand it draw commands instead of touching the GPU themselves.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DOM / CSSOM</div><div class="glossary-def">In-memory tree representations built by parsing HTML and CSS respectively, merged into a render tree before layout.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Layout (Reflow)</div><div class="glossary-def">Computing the exact pixel size and position of every element in the render tree.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Paint</div><div class="glossary-def">Recording the actual draw instructions (colors, text, borders) needed to render each layer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Compositing</div><div class="glossary-def">Merging painted layers into a final frame, done on the GPU process — enables cheap scrolling/animation without re-running layout or paint.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Main Thread / Event Loop</div><div class="glossary-def">The renderer's single-threaded task queue running JS, DOM updates, and paint recording — a cooperative, software-level scheduler.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Frame Deadline</div><div class="glossary-def">The recurring ~16ms budget (for 60fps) the renderer aims to hit — the browser's rough equivalent of a timer interrupt tick.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Browser X-Ray · A direct extension of the Kernel vs User Space explainer</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same wall, redrawn one layer up.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── PROCESS MAP CANVAS ─────────────────────────────────────────────────────────
+function drawProcessMap(){
+  const canvas=document.getElementById('processMap');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cx=W/2, cy=H*0.32;
+  const nodes=[
+    {label:'Renderer\n(Tab A)', x:cx-W*0.32, y:H*0.72, col:C.cyan},
+    {label:'Renderer\n(Tab B)', x:cx-W*0.11, y:H*0.82, col:C.cyan},
+    {label:'GPU\nProcess',      x:cx+W*0.12, y:H*0.82, col:C.purple},
+    {label:'Network\nService',  x:cx+W*0.32, y:H*0.72, col:C.teal},
+    {label:'Utility\n(Audio)',  x:cx+W*0.35, y:H*0.4, col:C.gold},
+  ];
+  // connections
+  ctx.strokeStyle='rgba(122,155,191,.5)';ctx.lineWidth=1.5;
+  nodes.forEach(n=>{ ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(n.x,n.y);ctx.stroke(); });
+
+  // browser process (center, big)
+  ctx.beginPath();ctx.arc(cx,cy,46,0,Math.PI*2);
+  ctx.fillStyle='rgba(248,113,113,.16)';ctx.fill();
+  ctx.strokeStyle=C.red;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('BROWSER',cx,cy-2);
+  ctx.fillText('PROCESS',cx,cy+12);
+
+  // other nodes
+  nodes.forEach(n=>{
+    ctx.beginPath();ctx.arc(n.x,n.y,34,0,Math.PI*2);
+    ctx.fillStyle=n.col+'26';ctx.fill();
+    ctx.strokeStyle=n.col;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle=n.col;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    const lines=n.label.split('\n');
+    lines.forEach((l,i)=>ctx.fillText(l,n.x,n.y+ (i - (lines.length-1)/2)*12 + 3));
+  });
+
+  ctx.fillStyle=C.muted;ctx.font='11px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Every line is an IPC (Mojo) connection — no process reaches into another\u2019s memory directly',cx,H-14);
+}
+
+// ── IPC CROSSING CANVAS ────────────────────────────────────────────────────────
+function drawIPCScene(t,phase,kind){
+  const canvas=document.getElementById('ipcCanvas');
+  const W=gW(canvas),H=280;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=0, leftW=W*0.42, wallX=leftW, wallW=W*0.16, rightX=leftW+wallW, rightW=W-rightX;
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(leftX,20,leftW,H-60);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX+2,20,leftW-4,H-60);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('RENDERER (sandboxed)',leftX+leftW/2,40);
+
+  ctx.fillStyle='rgba(122,155,191,.1)';ctx.fillRect(wallX,20,wallW,H-60);
+  ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,20,wallW-2,H-60);ctx.setLineDash([]);
+  ctx.save();ctx.translate(wallX+wallW/2,H/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('OS SANDBOX WALL',0,0);ctx.restore();
+
+  ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(rightX,20,rightW,H-60);
+  ctx.strokeStyle=C.red;ctx.lineWidth=1.5;ctx.strokeRect(rightX+2,20,rightW-4,H-60);
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('BROWSER PROCESS (privileged)',rightX+rightW/2,40);
+
+  const actionLabel=kind==='save'?'write file to disk':'grant camera access';
+  const captions={
+    idle:'Click a button to send an IPC request',
+    js_call:kind==='save'?'"Save Image As…" clicked — renderer builds a Mojo request':'getUserMedia() called — renderer builds a Mojo request',
+    trap:'Mojo message sent — crosses the OS-enforced sandbox wall',
+    kernel_work:'Browser process validates the request and shows a real permission/file dialog',
+    kernel_return:'Browser process performs the privileged action ('+actionLabel+')',
+    user_resume:'Result returned across the wall — renderer resumes with the outcome'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  let dotX=leftX+leftW*0.5, dotY=H/2, dotCol=C.cyan;
+  if(phase==='js_call'){dotX=leftX+leftW*(0.3+0.4*t);dotY=H/2;dotCol=C.cyan;}
+  else if(phase==='trap'){dotX=leftX+leftW*0.7+(wallW)*t;dotY=H/2;dotCol=C.gold;}
+  else if(phase==='kernel_work'){dotX=rightX+rightW*(0.15+0.3*t);dotY=H/2;dotCol=C.red;}
+  else if(phase==='kernel_return'){dotX=rightX+rightW*0.45+(rightW*0.15)*t;dotY=H/2;dotCol=C.purple;}
+  else if(phase==='user_resume'){dotX=rightX+rightW*0.6-(wallW+rightW*0.2)*t;dotY=H/2;dotCol=C.green;}
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function runIPC(kind){
+  const phases=['js_call','trap','kernel_work','kernel_return','user_resume'];
+  const durations=[500,350,600,500,450];
+  let idx=0,start=performance.now();
+  document.getElementById('ipcLabel').textContent='▶ Running IPC for "'+(kind==='save'?'Save Image As…':'Use Camera')+'"';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawIPCScene(t,phases[idx],kind);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('ipcLabel').textContent='▶ Complete — click a button to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetIPC(){
+  document.getElementById('ipcLabel').textContent='▶ Watch an IPC message cross the wall — click to run';
+  drawIPCScene(0,'idle','');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ drawProcessMap(); resetIPC(); });
+window.addEventListener('resize',()=>{ drawProcessMap(); resetIPC(); });
+</script>
+</body>
+</html>

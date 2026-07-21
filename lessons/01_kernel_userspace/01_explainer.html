@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kernel vs User Space — The OS Border Patrol, Explained Intuitively</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+label.ctrl-label{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--muted);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.variant-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:680px){.variant-grid{grid-template-columns:1fr}}
+.variant-card{background:var(--card);border-radius:12px;padding:1.5rem;position:relative;overflow:hidden;}
+.variant-card::before{content:'';position:absolute;inset:0;border-radius:12px;border:1.5px solid transparent;}
+.variant-card.user::before{border-color:var(--cyan)}
+.variant-card.kernel::before{border-color:var(--red)}
+.variant-badge{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;padding:.25rem .7rem;border-radius:3px;margin-bottom:.8rem;}
+.variant-card.user .variant-badge{background:rgba(56,189,248,.12);color:var(--cyan);border:1px solid rgba(56,189,248,.3);}
+.variant-card.kernel .variant-badge{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.3);}
+.variant-card h4{font-family:'Playfair Display',serif;font-size:1.1rem;color:#fff;margin-bottom:.6rem;}
+.variant-card .feat-num{font-family:'Source Code Pro',monospace;font-size:1.5rem;font-weight:700;margin:.5rem 0 .2rem;}
+.variant-card.user .feat-num{color:var(--cyan)}
+.variant-card.kernel .feat-num{color:var(--red)}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.ftag{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.78rem;padding:.1rem .45rem;border-radius:3px;margin:0 .1rem;vertical-align:middle;}
+.ftag.usr{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.ker{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.ftag.mem{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.drv{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+.ftag.sch{background:rgba(74,222,128,.1);color:var(--green);border:1px solid rgba(74,222,128,.25);}
+.ftag.io{background:rgba(251,146,60,.1);color:var(--orange);border:1px solid rgba(251,146,60,.25);}
+.ftag.net{background:rgba(13,148,136,.15);color:var(--teal);border:1px solid rgba(13,148,136,.3);}
+
+/* HeadFirst-style side note */
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#bigpicture" title="Big Picture"></a>
+  <a class="toc-dot" href="#userspace" title="User Space"></a>
+  <a class="toc-dot" href="#kernelspace" title="Kernel Space"></a>
+  <a class="toc-dot" href="#rings" title="Protection Rings"></a>
+  <a class="toc-dot" href="#boundary" title="Crossing the Wall"></a>
+  <a class="toc-dot" href="#lifecycle" title="Life of a Syscall"></a>
+  <a class="toc-dot" href="#contextswitch" title="Context Switching"></a>
+  <a class="toc-dot" href="#kerneltypes" title="Kernel Designs"></a>
+  <a class="toc-dot" href="#whycare" title="Why It Matters"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Kernel vs User Space · Intuition First</div>
+    <h1>The Wall Inside<br>Your <span>Computer</span></h1>
+    <p class="hero-sub">Every program you've ever run — your browser, your editor, that Python script — lives on one side of an invisible wall. On the other side sits a tiny, paranoid gatekeeper that owns the entire machine. This is the story of that wall: why it exists, who's allowed to cross it, and what happens in the microseconds when they do.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Worlds: User + Kernel</div></div>
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">Classic Privilege Rings</div></div>
+      <div class="hero-stat"><div class="num">~300</div><div class="lbl">Linux Syscalls</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Instruction to Cross the Wall</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 1: BIG PICTURE -->
+<section id="bigpicture">
+<div class="container">
+  <div class="section-num">01 — Zoom All The Way Out</div>
+  <h2>The <span class="accent">Restaurant</span> You Live In</h2>
+
+  <p class="reveal">Here's the problem an operating system exists to solve. Your computer has exactly <strong>one</strong> set of hardware — one memory chip, one disk, one network card — but you want to run <em>dozens</em> of programs at once, written by people who have never met each other, some of whom might be buggy, some of whom might be actively malicious. If you let every program touch the hardware directly, one crashed program corrupts memory that belongs to another, and one malicious program reads your neighbor's files. Chaos.</p>
+
+  <p class="reveal">So operating systems borrow a trick that shows up everywhere humans manage shared, dangerous resources: a restaurant kitchen. Picture it. Customers sit in the dining room. They don't walk into the kitchen, grab a knife, and cut their own steak — not because they're incapable, but because the restaurant <strong>doesn't let them</strong>. Instead, they tell a waiter what they want. The waiter carries the request to the kitchen. The kitchen — and only the kitchen — touches the stove, the walk-in freezer, the knives.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🍽️ The Analogy, Mapped</div>
+    <strong>Dining room</strong> = <em>user space</em>. This is where your applications live — the browser, the game, your terminal. <strong>Kitchen</strong> = <em>kernel space</em>. This is where the actual hardware gets touched — disks, memory, network cards, the CPU's most dangerous instructions. <strong>Waiter + order ticket</strong> = <em>the system call interface</em>. It's the only sanctioned way for a request to travel from the dining room into the kitchen.
+  </div>
+
+  <p class="reveal">That's the whole idea, and everything in this page is just that one idea, examined under a microscope. <strong>User space</strong> is a restricted, sandboxed world where your code runs with limited powers. <strong>Kernel space</strong> is a privileged world where the operating system's core runs with total power over the hardware. The boundary between them isn't a metaphorical suggestion — it's enforced by the CPU chip itself, in silicon, and it is one of the oldest and most important ideas in all of computing.</p>
+
+  <div class="sidenote reveal">
+    <b>Wait — isn't the "kernel" just a program too?</b> Yes. It's a program, sitting in memory, made of instructions, exactly like Chrome or Spotify. What makes it special isn't what it <em>is</em>, it's what it's <em>allowed to do</em>. The CPU itself checks a flag before running certain instructions and refuses to run them unless the flag says "I'm the kernel." That flag is the entire wall. We'll come back to this.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: USER SPACE -->
+<section id="userspace">
+<div class="container">
+  <div class="section-num">02 — Life in the Dining Room</div>
+  <h2>What Actually Lives in <span class="accent">User Space</span></h2>
+
+  <p class="reveal">User space is not one thing — it's a whole layered city of software, and almost everything you've ever directly interacted with lives here.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Applications</span><span class="fam-count">what you launch</span></div>
+      <div class="fam-desc">Browsers, editors, games, your own scripts. Each gets its own private address space — a sandbox it believes is the whole computer.</div>
+      <div class="feat-list"><span class="feat-pill ftag usr">firefox</span><span class="feat-pill ftag usr">vscode</span><span class="feat-pill ftag usr">python3</span><span class="feat-pill ftag usr">your_app.exe</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Daemons / Services</span><span class="fam-count">background</span></div>
+      <div class="fam-desc">Long-running background processes with no window: web servers, print spoolers, cron, systemd services. Still ordinary user-space citizens with no special powers.</div>
+      <div class="feat-list"><span class="feat-pill ftag usr">nginx</span><span class="feat-pill ftag usr">sshd</span><span class="feat-pill ftag usr">cron</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">The Shell</span><span class="fam-count">your interface</span></div>
+      <div class="fam-desc">bash, zsh, PowerShell — just another user-space program. It has zero magic hardware access; it works entirely by asking the kernel to launch other programs for you.</div>
+      <div class="feat-list"><span class="feat-pill ftag usr">bash</span><span class="feat-pill ftag usr">zsh</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">System Libraries</span><span class="fam-count">the waiter</span></div>
+      <div class="fam-desc">libc and friends. Every "waiter" that carries your request toward the kitchen. When you call <code>fopen()</code>, you're calling a library function that eventually places an order with the kernel on your behalf.</div>
+      <div class="feat-list"><span class="feat-pill ftag usr">glibc</span><span class="feat-pill ftag usr">musl</span><span class="feat-pill ftag usr">ucrt</span></div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Big Aha Moment</div>
+    Notice something: <strong>everything above runs in user mode</strong>, even the shell you type commands into, even the C library your programs link against. There is nothing structurally special about a "system program" versus "your program" — the shell has exactly as much raw hardware access as a Python script you wrote five minutes ago, which is to say: <em>none, directly</em>. The only thing that gets raw hardware access is the kernel.
+  </div>
+
+  <p class="reveal">Because user-space programs can't touch hardware directly, they also can't (accidentally or on purpose) read another process's private memory, write to arbitrary disk sectors, or reprogram the network card. If a user-space program crashes — segfaults, throws an exception, whatever — it takes down <em>itself</em>, and the operating system simply cleans up its plate and moves on. The rest of the restaurant keeps running. This single property is called <strong>fault isolation</strong>, and it's arguably the entire reason the user/kernel split exists.</p>
+</div>
+</section>
+
+<!-- SECTION 3: KERNEL SPACE -->
+<section id="kernelspace">
+<div class="container">
+  <div class="section-num">03 — Life in the Kitchen</div>
+  <h2>What Actually Lives in <span class="accent r">Kernel Space</span></h2>
+
+  <p class="reveal">The kernel is the one piece of software on your machine that's allowed to touch everything. It's loaded into memory once, at boot, and it never really "exits" until you shut down — it's always there, ready to be invoked. Here's what it's actually responsible for.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Process Scheduler</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Decides which of the dozens of runnable processes gets the CPU next, and for how long. This is why you can "run" 200 processes on 8 cores at once — the scheduler is rapidly time-slicing.</div>
+      <div class="feat-list"><span class="feat-pill ftag sch">CFS</span><span class="feat-pill ftag sch">run queue</span><span class="feat-pill ftag sch">priority</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Memory Manager</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Owns the page tables that translate every process's private "virtual" addresses into real physical RAM addresses — and enforces that process A can never see process B's pages.</div>
+      <div class="feat-list"><span class="feat-pill ftag mem">page tables</span><span class="feat-pill ftag mem">MMU</span><span class="feat-pill ftag mem">swap</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Device Drivers</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">The only code that speaks the actual electrical/register-level language of your disk, GPU, keyboard, and network card. Everyone else goes through the kernel to reach hardware.</div>
+      <div class="feat-list"><span class="feat-pill ftag drv">nvme driver</span><span class="feat-pill ftag drv">gpu driver</span><span class="feat-pill ftag drv">usb driver</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--orange)">Filesystem</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Translates "open the file called notes.txt" into raw block reads on a disk. Enforces file permissions — the reason one user's files are invisible to another.</div>
+      <div class="feat-list"><span class="feat-pill ftag io">ext4</span><span class="feat-pill ftag io">NTFS</span><span class="feat-pill ftag io">inode table</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--teal)">Network Stack</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Implements TCP/IP itself. When your browser "opens a socket," it's asking the kernel to manage an entire protocol state machine on its behalf.</div>
+      <div class="feat-list"><span class="feat-pill ftag net">TCP</span><span class="feat-pill ftag net">sockets</span><span class="feat-pill ftag net">routing</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">IPC &amp; Sync</span><span class="fam-count">core</span></div>
+      <div class="fam-desc">Pipes, signals, shared memory, mutex/semaphore primitives — the kernel is the referee whenever two processes need to safely talk to each other.</div>
+      <div class="feat-list"><span class="feat-pill ftag ker">pipes</span><span class="feat-pill ftag ker">signals</span><span class="feat-pill ftag ker">futex</span></div>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why the Kernel Being Small(ish) and Careful Matters</div>
+    Everything in kernel space runs with <strong>full trust</strong> — a bug here isn't contained to one process's dining table, it can corrupt the whole restaurant. A crash in kernel code is a <em>kernel panic</em> (or a Windows "blue screen") — the entire machine halts, because there's no more-trusted layer left to clean up the mess. This is exactly why kernel code is written far more conservatively than application code, and why device drivers (often the largest and least-audited chunk of kernel code) are historically the single biggest source of OS crashes.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: PROTECTION RINGS -->
+<section id="rings">
+<div class="container">
+  <div class="section-num">04 — How the Wall Is Actually Built</div>
+  <h2>The CPU's <span class="accent">Protection Rings</span></h2>
+
+  <p class="reveal">Here's the part people skip past too fast: the user/kernel split isn't just a polite convention that programmers agree to follow. It's wired into the CPU itself. Modern processors (x86, ARM, etc.) support multiple <strong>privilege levels</strong>, often visualized as concentric rings, borrowed from the old Multics operating system.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label">▶ The Four Classic Rings (x86)</div>
+    <canvas id="ringsCanvas" height="360"></canvas>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Ring</th><th>Name</th><th>Who Lives Here</th><th>Can It Run Privileged Instructions?</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Ring 0</td><td>Kernel mode</td><td>The OS kernel, core drivers</td><td class="pos">Yes — full hardware access</td></tr>
+        <tr><td>Ring 1</td><td>(rarely used)</td><td>Some hypervisors, historically some drivers</td><td>Partial</td></tr>
+        <tr><td>Ring 2</td><td>(rarely used)</td><td>Almost never used on modern general OSes</td><td>Partial</td></tr>
+        <tr><td class="hl">Ring 3</td><td>User mode</td><td>Every app, shell, library you run</td><td class="neg">No — trapped instructions fault instead</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">In practice, almost every general-purpose OS you've used — Linux, Windows, macOS — only actually uses <strong>two</strong> of these four rings: Ring 0 for the kernel, Ring 3 for everything else. Rings 1 and 2 exist in the hardware but sit mostly unused, like unused floors in a building. (Modern virtualization added a whole separate privilege layer <em>below</em> ring 0, sometimes called "ring -1," for the hypervisor — but that's a story for another day.)</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 What "Privileged Instruction" Actually Means</div>
+    Every CPU has a small set of instructions that are simply <em>refused</em> unless the current privilege level is 0. Examples: the instruction to change page-table mappings, the instruction to mask hardware interrupts, the instruction to read certain low-level configuration registers, the instruction to halt the CPU. Try to execute one of these from Ring 3, and the CPU doesn't run it — it immediately raises a <strong>general protection fault</strong>, which the kernel then handles (often by killing your process). This is <em>literally</em> why a random user-space program can never "just" reformat your disk directly, no matter what language it's written in.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>So what actually flips the ring bit?</b> A CPU register (on x86, part of the segment selector / CS register) records the current privilege level. It changes automatically and only in a few controlled ways: booting into ring 0, executing a special "enter the kernel" instruction (a trap/syscall instruction), or handling a hardware interrupt. There's no ordinary instruction that lets user code just set this bit itself — that would defeat the entire point.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: CROSSING THE WALL -->
+<section id="boundary">
+<div class="container">
+  <div class="section-num">05 — The Only Legal Door</div>
+  <h2>Crossing the Wall: <span class="accent">System Calls</span></h2>
+
+  <p class="reveal">So if user-space code physically cannot execute privileged instructions, how does your program ever get a file read, a network packet sent, or new memory allocated? Through exactly one sanctioned door: the <strong>system call</strong> (syscall).</p>
+
+  <p class="reveal">A syscall is a deliberate, controlled "please let me into the kitchen for a second" request. It works like this: your program executes a special CPU instruction (on x86-64 Linux, literally the instruction <code>syscall</code>) along with a number identifying which service you want (open a file? read? write? fork a new process?). That single instruction is the trap — it's one of the few things a Ring 3 program is allowed to do that flips the CPU straight into Ring 0, jumping to a fixed, kernel-controlled entry point. The kernel — now running with full privilege, on your behalf — does the dangerous work, then flips the ring bit back and hands control back to you.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="syscallLabel">▶ Watch a syscall cross the wall — click to run</div>
+    <canvas id="syscallCanvas" height="280"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runSyscall('read')">▶ Run read()</button>
+    <button class="ctrl-btn gold" onclick="runSyscall('write')">▶ Run write()</button>
+    <button class="ctrl-btn red" onclick="resetSyscall()">Reset</button>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Waiter Never Cooks</div>
+    Notice the library function you call — <code>fopen()</code>, Python's <code>open()</code>, whatever — is <em>not itself</em> privileged. It's just ordinary user-space code that, at the very last step, executes the <code>syscall</code> trap instruction for you and hands over the arguments correctly. The waiter (libc) never enters the kitchen. It just knows exactly how to place the order so the kitchen (kernel) understands it.
+  </div>
+
+  <div class="formula reveal">
+    <span class="label">The one-instruction door, on x86-64 Linux</span>
+    mov rax, 0 &nbsp;&nbsp;; syscall number for read()<br>
+    syscall &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;; trap into Ring 0 — CPU jumps to the kernel's fixed entry point
+    <span class="sub">Everything above this instruction is user-mode setup. Everything after "syscall" executes in kernel mode, with full hardware trust, until the kernel hands control back.</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: LIFE OF A SYSCALL -->
+<section id="lifecycle">
+<div class="container">
+  <div class="section-num">06 — Play By Play</div>
+  <h2>The Full Life of <span class="accent">One read() Call</span></h2>
+
+  <p class="reveal">Let's trace exactly what happens when your C program calls <code>read(fd, buf, 100)</code> to read 100 bytes from a file. This single call crosses the wall twice — once going in, once coming back.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Your code calls read()</strong>This is a normal function call in user space (Ring 3). No hardware is touched yet — you're still just in the dining room.</div></li>
+    <li><div class="step-body"><strong>libc prepares the order ticket</strong>The C library places the syscall number for <code>read</code> and your three arguments (file descriptor, buffer pointer, byte count) into specific CPU registers, exactly as the kernel's calling convention expects.</div></li>
+    <li><div class="step-body"><strong>The syscall instruction traps</strong>libc executes the <code>syscall</code> instruction. The CPU hardware — not software — immediately switches the privilege level to Ring 0 and jumps to one single, fixed kernel address: the syscall entry point. There is no way for user code to jump anywhere else in the kernel.</div></li>
+    <li><div class="step-body"><strong>The kernel validates everything</strong>Now running fully trusted, the kernel double-checks your arguments: is that file descriptor actually open and owned by you? Does that buffer pointer actually point into memory you own? It never blindly trusts anything user space handed it.</div></li>
+    <li><div class="step-body"><strong>The real work happens</strong>The kernel's filesystem layer finds the right blocks, talks to the disk driver, which talks to the actual disk hardware. This might involve waiting — if the data isn't cached, your process is marked "blocked" and the scheduler runs someone else while the disk works.</div></li>
+    <li><div class="step-body"><strong>Data is copied into your buffer</strong>The kernel copies the bytes it retrieved from its own kernel-space buffers into the buffer address you provided — this copy is itself only possible because kernel code, uniquely, is allowed to write into user memory it has validated.</div></li>
+    <li><div class="step-body"><strong>Ring 0 → Ring 3, control returns</strong>The kernel executes a "return from trap" instruction. Privilege drops back to Ring 3, and your program resumes on the very next instruction after <code>syscall</code> — as if it had just called an ordinary function, except now <code>rax</code> holds the number of bytes actually read.</div></li>
+  </ol>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why Syscalls Are "Expensive"</div>
+    You'll often hear that syscalls are slow compared to a normal function call — and they are, by orders of magnitude (tens to low-hundreds of nanoseconds vs. sub-nanosecond). The cost isn't the kernel logic itself; it's the <strong>mode switch</strong> — flushing speculative CPU state, switching page-table context, and (on modern CPUs, thanks to side-channel vulnerabilities like Meltdown) extra security barriers between user and kernel address spaces. This is exactly why high-performance software tries to batch or avoid syscalls where it can.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: CONTEXT SWITCH -->
+<section id="contextswitch">
+<div class="container">
+  <div class="section-num">07 — The Other Way In</div>
+  <h2>Interrupts &amp; the <span class="accent">Context Switch</span></h2>
+
+  <p class="reveal">Syscalls are the door your program <em>chooses</em> to walk through. But the kernel also gets pulled into Ring 0 <em>uninvited</em>, constantly, via <strong>hardware interrupts</strong>. A keystroke, a network packet arriving, a timer chip ticking 100–1000 times a second — each fires an interrupt that forces the CPU into Ring 0 regardless of what user code was doing, mid-instruction if need be.</p>
+
+  <p class="reveal">The timer interrupt is the single most important one, because it's what makes multitasking on one CPU core possible at all. Every time it fires, the kernel gets a forced, guaranteed opportunity to ask: "should someone else run now?" If yes, it performs a <strong>context switch</strong> — saves the current process's registers and program counter to memory, loads a different process's saved registers, updates the memory-management unit to point at that process's page tables, and drops back into Ring 3 as if nothing happened — except now a completely different program is running.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Voluntary entry: system call</h4>
+      Your program decides it needs something from the kernel and deliberately executes the trap instruction. Predictable, requested, synchronous.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚡ Involuntary entry: interrupt</h4>
+      Hardware forces the CPU into the kernel regardless of what user code was doing. Asynchronous, can happen at any instruction boundary.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>The illusion you're living in right now:</b> your 8-core laptop is probably juggling 250+ processes. From inside any one process, it feels like it has the CPU continuously. In reality the kernel is slicing time into millisecond-scale chunks and context-switching so fast the illusion is seamless — a trick that only works because the kernel, and only the kernel, is trusted to forcibly interrupt anyone at any time.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: KERNEL DESIGNS -->
+<section id="kerneltypes">
+<div class="container">
+  <div class="section-num">08 — Not All Kitchens Are Built the Same</div>
+  <h2>Monolithic vs <span class="accent">Microkernel</span></h2>
+
+  <p class="reveal">"The kernel" isn't one universally agreed-upon size. Different OS designs draw the wall in different places — specifically, they disagree about how much should be trusted with Ring 0 privilege at all.</p>
+
+  <div class="variant-grid reveal">
+    <div class="variant-card kernel">
+      <div class="variant-badge">monolithic</div>
+      <h4>Linux, classic Windows/macOS core</h4>
+      <div class="feat-num">Big kitchen</div>
+      <p style="font-size:.9rem;color:var(--muted);margin:0">Filesystem, network stack, and most device drivers all run inside Ring 0, as one large trusted program. Fast (everything's a direct function call inside the kernel), but a single buggy driver can crash the whole machine.</p>
+    </div>
+    <div class="variant-card user">
+      <div class="variant-badge">microkernel</div>
+      <h4>Minix, QNX, seL4</h4>
+      <div class="feat-num">Tiny kitchen</div>
+      <p style="font-size:.9rem;color:var(--muted);margin:0">Ring 0 shrinks to almost nothing — scheduling, basic memory management, and message-passing. Filesystems and drivers move <em>out</em> into user-space servers. A crashed driver is just a crashed process; the true kernel barely notices. Safer, but every operation now needs message-passing overhead.</p>
+    </div>
+  </div>
+
+  <p class="reveal">Most real-world systems today are actually <strong>hybrids</strong>. Windows NT's kernel and modern macOS (XNU) both blend ideas from both camps — some subsystems live in a big trusted core for speed, others are pushed out to user space for safety. The underlying tension never goes away: <em>every</em> line of code you put in Ring 0 is a line of code that, if buggy, can bring down the entire system. Kernel designers are constantly trading raw speed against blast radius.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ A Modern Twist: Pushing Drivers Back Out</div>
+    Frameworks like Linux's FUSE (filesystems in userspace) or user-space network drivers (DPDK) deliberately move traditionally kernel-side work back into Ring 3, trading a bit of performance for the safety of ordinary process isolation — proof the monolithic-vs-micro debate is still very much alive, feature by feature.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 9: WHY IT MATTERS -->
+<section id="whycare">
+<div class="container">
+  <div class="section-num">09 — Tying It All Together</div>
+  <h2>Why This Wall Is <span class="accent">Worth Understanding</span></h2>
+
+  <p class="reveal">If you only remember one thing from this whole page, make it this: <strong>the user/kernel boundary is the reason multi-program computers are usable at all.</strong> Every property you take for granted traces back to it.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🧱</div><div class="lbl">Fault isolation — one crash ≠ system crash</div></div>
+    <div class="stat-card"><div class="val">🔒</div><div class="lbl">Security — apps can't read each other's memory</div></div>
+    <div class="stat-card"><div class="val">⚖️</div><div class="lbl">Fair scheduling — no app can hog the CPU forever</div></div>
+    <div class="stat-card"><div class="val">🗂️</div><div class="lbl">Resource arbitration — one gatekeeper for shared hardware</div></div>
+  </div>
+
+  <p class="reveal">Next time your browser tab crashes without taking down your whole desktop, that's fault isolation, enforced by Ring 3. Next time you see a "permission denied" reading a file, that's the kernel's filesystem layer enforcing ownership on your behalf. Next time your laptop juggles a video call, a compiler, and thirty browser tabs without any of them individually knowing the others exist — that's the scheduler and context switching, invisible to everyone in the dining room, running the whole show from the kitchen.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>User space is where untrusted, isolated programs run with the CPU's blessing withheld; kernel space is where one trusted program runs with the CPU's blessing granted in full — and the system call is the only door between them, guarded by hardware, not by politeness.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 10: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">10 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">User Space</div><div class="glossary-def">The restricted CPU privilege level (Ring 3) where ordinary applications, shells, and libraries run. No direct hardware access; every dangerous action must be requested from the kernel.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Kernel Space</div><div class="glossary-def">The fully privileged CPU level (Ring 0) where the OS core runs — scheduler, memory manager, drivers, filesystem, network stack. Full, unchecked hardware access.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Protection Ring</div><div class="glossary-def">A hardware-enforced privilege level baked into the CPU. Modern general-purpose OSes mainly use Ring 0 (kernel) and Ring 3 (user); Rings 1–2 exist but are rarely used.</div></div>
+    <div class="glossary-card"><div class="glossary-term">System Call (Syscall)</div><div class="glossary-def">The single sanctioned mechanism for user-space code to request kernel services. Executed via a dedicated trap instruction that forces a controlled jump into Ring 0 at a fixed kernel entry point.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trap Instruction</div><div class="glossary-def">The specific CPU instruction (e.g. <code>syscall</code> on x86-64) that deliberately raises privilege from Ring 3 to Ring 0 in a controlled, kernel-defined way.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Privileged Instruction</div><div class="glossary-def">A CPU instruction (like changing page tables or halting the CPU) that the hardware simply refuses to execute unless the current privilege level is Ring 0.</div></div>
+    <div class="glossary-card"><div class="glossary-term">General Protection Fault</div><div class="glossary-def">The CPU exception raised when Ring 3 code attempts a privileged instruction or touches memory it doesn't own. The kernel's fault handler typically responds by killing the offending process.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Interrupt</div><div class="glossary-def">An asynchronous, hardware-triggered event (timer tick, keypress, network packet) that forces the CPU into Ring 0 regardless of what user code was doing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Context Switch</div><div class="glossary-def">The kernel operation of saving one process's CPU state and loading another's, enabling many processes to share one CPU core via rapid time-slicing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Kernel Panic / BSOD</div><div class="glossary-def">A fatal, unrecoverable error inside kernel-space code. Because the kernel is the most-trusted layer, there's no safety net above it — the whole machine halts.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Monolithic Kernel</div><div class="glossary-def">A design (Linux, classic Windows/macOS) where most drivers, filesystems, and the network stack all run inside Ring 0 as one large trusted program. Fast, larger blast radius.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Microkernel</div><div class="glossary-def">A design (Minix, QNX, seL4) that shrinks Ring 0 to scheduling, basic memory management, and IPC — pushing drivers and filesystems into user-space servers. Safer, more messaging overhead.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Kernel vs User Space · An intuition-first OS explainer</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: an X-ray of the average web browser's internals, same visual style.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── RINGS CANVAS ──────────────────────────────────────────────────────────────
+function drawRings(){
+  const canvas=document.getElementById('ringsCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  const cx=W/2, cy=H/2+6;
+  const radii=[150,112,74,36];
+  const labels=['Ring 3 — User Mode','Ring 2 (unused)','Ring 1 (unused)','Ring 0 — Kernel Mode'];
+  const cols=[C.cyan,C.muted,C.muted,C.red];
+  const fills=['rgba(56,189,248,.05)','rgba(122,155,191,.04)','rgba(122,155,191,.06)','rgba(248,113,113,.14)'];
+  for(let i=0;i<4;i++){
+    ctx.beginPath();ctx.arc(cx,cy,radii[i],0,Math.PI*2);
+    ctx.fillStyle=fills[i];ctx.fill();
+    ctx.lineWidth=i===0||i===3?2:1;
+    ctx.strokeStyle=cols[i];ctx.stroke();
+  }
+  ctx.textAlign='center';
+  ctx.fillStyle=C.red;ctx.font='bold 13px Source Code Pro,monospace';
+  ctx.fillText('RING 0',cx,cy+4);
+  ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('full trust',cx,cy+18);
+
+  ctx.font='11px Source Code Pro,monospace';
+  ctx.fillStyle=C.muted;ctx.textAlign='left';
+  ctx.fillText('Ring 1 / Ring 2 — rarely used by modern OSes',cx-radii[0]+8,cy-radii[1]-14>16?cy-radii[1]-14:16);
+
+  ctx.fillStyle=C.cyan;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('RING 3 — everything you run',cx,cy-radii[0]-14>16?cy-radii[0]-14:16);
+  ctx.font='11px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('no direct hardware access',cx,(cy-radii[0]-14>16?cy-radii[0]-14:16)+16);
+
+  // arrow annotation
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(cx+radii[0]-4,cy);ctx.lineTo(cx+radii[3]+4,cy);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('syscall trap →',cx+radii[3]+8,cy-6);
+}
+
+// ── SYSCALL CROSSING CANVAS ───────────────────────────────────────────────────
+let sysState=null;
+function drawSyscallScene(t,phase,kind){
+  const canvas=document.getElementById('syscallCanvas');
+  const W=gW(canvas),H=280;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const userX=0, userW=W*0.42, wallX=userW, wallW=W*0.16, kernelX=userW+wallW, kernelW=W-kernelX;
+  // user space box
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(userX,20,userW,H-60);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(userX+2,20,userW-4,H-60);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('USER SPACE (Ring 3)',userX+userW/2,40);
+
+  // wall
+  ctx.fillStyle='rgba(122,155,191,.1)';ctx.fillRect(wallX,20,wallW,H-60);
+  ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,20,wallW-2,H-60);ctx.setLineDash([]);
+  ctx.save();ctx.translate(wallX+wallW/2,H/2);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('THE WALL',0,0);ctx.restore();
+
+  // kernel box
+  ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(kernelX,20,kernelW,H-60);
+  ctx.strokeStyle=C.red;ctx.lineWidth=1.5;ctx.strokeRect(kernelX+2,20,kernelW-4,H-60);
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('KERNEL SPACE (Ring 0)',kernelX+kernelW/2,40);
+
+  // caption per phase
+  const captions={
+    idle:'Click a button to place a syscall',
+    user_setup:kind+'() called — libc loads registers with the syscall number + args',
+    trap:'syscall instruction executes — CPU traps into Ring 0 at a fixed entry point',
+    kernel_work:'Kernel validates args and does the privileged work ('+(kind==='read'?'reads disk block':'writes to device')+')',
+    kernel_return:'Kernel copies result back, executes return-from-trap',
+    user_resume:'Back in Ring 3 — your code resumes with the result in a register'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  // moving dot
+  let dotX=userX+userW*0.5, dotY=H/2, dotCol=C.cyan;
+  if(phase==='user_setup'){dotX=userX+userW*(0.3+0.4*t);dotY=H/2;dotCol=C.cyan;}
+  else if(phase==='trap'){dotX=userX+userW*0.7+(wallW)*t;dotY=H/2;dotCol=C.gold;}
+  else if(phase==='kernel_work'){dotX=kernelX+kernelW*(0.2+0.35*t);dotY=H/2;dotCol=C.red;}
+  else if(phase==='kernel_return'){dotX=kernelX+kernelW*0.55-(wallW+kernelW*0.15)*t;dotY=H/2;dotCol=C.gold;}
+  else if(phase==='user_resume'){dotX=userX+userW*(0.4-0.1*t);dotY=H/2;dotCol=C.green;}
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function runSyscall(kind){
+  const phases=['user_setup','trap','kernel_work','kernel_return','user_resume'];
+  const durations=[500,350,650,350,450];
+  let idx=0,start=performance.now();
+  document.getElementById('syscallLabel').textContent='▶ Running '+kind+'() — watch it cross the wall';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawSyscallScene(t,phases[idx],kind);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('syscallLabel').textContent='▶ '+kind+'() complete — click a button to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetSyscall(){
+  document.getElementById('syscallLabel').textContent='▶ Watch a syscall cross the wall — click to run';
+  drawSyscallScene(0,'idle','');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ drawRings(); resetSyscall(); });
+window.addEventListener('resize',()=>{ drawRings(); resetSyscall(); });
+</script>
+</body>
+</html>

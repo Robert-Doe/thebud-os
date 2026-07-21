@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRQ1, Scancode Sets, and Turning Bytes Into Characters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#93c5fd;}
+pre code{color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* bit toggle strip for make/break */
+.bitstrip{display:flex;justify-content:center;gap:.3rem;margin:1.2rem 0;font-family:'Source Code Pro',monospace;flex-wrap:wrap;}
+.bitcell{width:34px;height:34px;border:1.5px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.85rem;color:var(--muted);background:var(--card);}
+.bitcell.set{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.12);}
+
+/* modifier state cards */
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin:1.8rem 0;}
+.mod-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center;transition:all .25s;}
+.mod-card .mk{font-family:'Source Code Pro',monospace;font-size:.7rem;color:var(--muted);letter-spacing:.08em;}
+.mod-card .st{font-family:'Source Code Pro',monospace;font-size:1.3rem;font-weight:700;margin:.4rem 0;color:var(--muted);}
+.mod-card.active{border-color:var(--cyan);}
+.mod-card.active .st{color:var(--cyan);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#irq1" title="IRQ1"></a>
+  <a class="toc-dot" href="#isr" title="The ISR"></a>
+  <a class="toc-dot" href="#makebreak" title="Make vs Break"></a>
+  <a class="toc-dot" href="#trace" title="Full Trace"></a>
+  <a class="toc-dot" href="#lookup" title="The Lookup Table"></a>
+  <a class="toc-dot" href="#ringbuffer" title="Ring Buffer"></a>
+  <a class="toc-dot" href="#modifiers" title="Modifier State"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">bob_os · Module 09 · Keyboard Driver · Part 2</div>
+    <h1>IRQ1 and the<br><span>Scancode Pipeline</span></h1>
+    <p class="hero-sub">The previous lesson established that a keyboard sends raw scancodes, not characters. Now we go one level deeper: the exact hardware interrupt that tells your CPU a scancode is waiting, what a keyboard ISR is allowed to do inside that interrupt (hint: almost nothing), the make/break convention that tells you press from release, and the stateful modifier-key tracking that turns a stream of isolated bytes into real, shifted, controlled text.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">IRQ1</div><div class="lbl">The Keyboard's Dedicated Interrupt Line</div></div>
+      <div class="hero-stat"><div class="num">0x80</div><div class="lbl">Break-Code Bit (Set 1)</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Events Per Key: Make and Break</div></div>
+      <div class="hero-stat"><div class="num">88</div><div class="lbl">Scancodes in bob_os's Set 1 Table</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Quick <span class="accent">Recap</span></h2>
+  <p class="reveal">Lesson one established the core fact: the keyboard sends numeric <strong>scancodes</strong> identifying physical key positions, not characters — and it does so through the 8042 controller, over I/O port <code>0x60</code>. This lesson assumes you already know, generally, what an interrupt request (IRQ) and an interrupt service routine (ISR) are — how the CPU gets yanked out of whatever it's doing and into kernel code the instant a hardware line is asserted. What we haven't covered yet is <em>which</em> line the keyboard uses, what a well-behaved keyboard ISR actually does inside that handler, and how a raw byte stream becomes real text with Shift, Ctrl, and Alt behaving correctly.</p>
+</div>
+</section>
+
+<!-- IRQ1 -->
+<section id="irq1">
+<div class="container">
+  <div class="section-num">01 — The Wire</div>
+  <h2>The Keyboard Is Wired to <span class="accent">IRQ1</span></h2>
+
+  <p class="reveal">On the classic PC interrupt architecture, every hardware device that can interrupt the CPU is wired to one specific numbered line on the Programmable Interrupt Controller (PIC). The keyboard's line has been fixed since the original IBM PC: <strong>IRQ1</strong>. (IRQ0, for comparison, is reserved for the system timer — you'll meet that one when the scheduler shows up.)</p>
+
+  <p class="reveal">In bob_os, IRQ1 gets remapped during PIC initialization onto CPU interrupt vector 33 — vector 32 + 1, since <code>pic_init()</code> offsets the PIC's IRQ lines past the CPU's own reserved exception vectors (0–31). The moment the 8042 controller has a fresh scancode byte sitting in its output buffer, it asserts IRQ1, the PIC turns that into vector 33 on the CPU's interrupt bus, and the CPU — assuming interrupts are enabled — immediately stops what it's doing and jumps to whatever handler is registered for vector 33.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>IRQ Line</th><th>CPU Vector (bob_os)</th><th>Device</th></tr></thead>
+      <tbody>
+        <tr><td>IRQ0</td><td>32</td><td>System timer (PIT)</td></tr>
+        <tr><td class="hl">IRQ1</td><td class="hl">33</td><td class="hl">Keyboard (8042 controller, port 0x60)</td></tr>
+        <tr><td>IRQ2</td><td>34</td><td>Cascade line to the second PIC — not a real device</td></tr>
+        <tr><td>IRQ12</td><td>44</td><td>PS/2 mouse (auxiliary device, same 8042 controller)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">bob_os's <code>keyboard_init()</code> doesn't touch the PIC or IDT directly — it calls <code>irq_register(1, keyboard_irq_handler)</code>, handing its handler function to the generic interrupt-dispatch layer built back in the IDT/interrupts module. That layer already knows how to route vector 33 to whatever's registered for IRQ 1. This is exactly the same registration pattern every other IRQ-driven driver in bob_os uses — the keyboard isn't special at the dispatch level, only at the port-and-scancode level.</p>
+
+  <div class="sidenote reveal">
+    <b>One controller, two IRQ lines.</b> The same 8042 controller chip handles both the keyboard (IRQ1) and, historically, a PS/2 mouse on a second internal port (IRQ12). They share the chip but not the interrupt line — the controller can tell which physical device a byte came from and routes the interrupt accordingly, which is why your keyboard ISR never has to worry about accidentally reading a mouse-movement byte.
+  </div>
+</div>
+</section>
+
+<!-- ISR -->
+<section id="isr">
+<div class="container">
+  <div class="section-num">02 — Inside the Handler</div>
+  <h2>What a Keyboard <span class="accent">ISR</span> Actually Does</h2>
+
+  <p class="reveal">Here's the rule that governs every hardware ISR, keyboard included, and it's worth stating bluntly: <strong>an interrupt handler must be fast, and it must never block.</strong> While your ISR is running, that CPU core typically has interrupts of equal-or-lower priority masked — other time-sensitive work is on hold. A keyboard ISR that took even a few milliseconds to "helpfully" do more work would risk dropped or delayed keystrokes, or worse, delay something entirely unrelated, like the timer tick your scheduler depends on.</p>
+
+  <p class="reveal">So what does bob_os's handler actually do? Look at the real function from <code>keyboard.c</code>:</p>
+
+  <pre><code>static void keyboard_irq_handler(struct interrupt_frame *frame) {
+    (void)frame;
+
+    uint8_t sc = inb(KB_DATA_PORT);        /* 1. read the byte — mandatory, clears OBF */
+
+    if (sc == SC_LSHIFT_MAKE || sc == SC_RSHIFT_MAKE) { shift_held = 1; return; }
+    if (sc == SC_LSHIFT_BREAK || sc == SC_RSHIFT_BREAK) { shift_held = 0; return; }
+
+    if (sc & 0x80) return;                 /* 2. break code for a non-modifier — ignore */
+    if (sc >= 88)  return;                 /* 3. outside our table — ignore */
+
+    char c = shift_held ? sc_shift[sc] : sc_normal[sc];
+    if (c != 0) {
+        buf_push(c);                       /* 4. push into the ring buffer, done */
+    }
+}</code></pre>
+
+  <p class="reveal">Notice everything this function does <em>not</em> do. It doesn't print to the screen. It doesn't call into the shell. It doesn't wait for anything. It reads one byte, does a handful of comparisons and one array lookup, pushes at most one character into a ring buffer, and returns. That's the entire job. Whoever actually <em>wants</em> the character — the kernel's main loop, calling <code>keyboard_getchar()</code> — picks it up later, on its own schedule, completely outside interrupt context.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Aha Moment</div>
+    An ISR's job is to <strong>capture</strong> the event cheaply, not to <strong>handle</strong> it fully. The keyboard ISR's entire responsibility is: read port 0x60 (this is mandatory — it's what clears the controller's "buffer full" flag and re-arms IRQ1), do the absolute minimum translation work, and hand the result off to a buffer for someone else to consume later. This "defer the real work" pattern — sometimes called a top half/bottom half split in other kernels — is why interrupt-driven I/O can service dozens of devices without any one of them freezing the machine.
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">Don't Forget the EOI</div>
+    Reading port 0x60 clears the <em>controller's</em> output-buffer-full flag, but the <em>PIC</em> also needs to be told "I've handled this interrupt, you may deliver the next one" — that's the End-Of-Interrupt signal, sent with <code>pic_send_eoi(irq)</code>. bob_os's shared dispatcher in <code>isr.c</code> sends it for you, automatically, <em>before</em> calling your registered handler — so every IRQ handler gets EOI handling for free and never has to remember it individually, and a slow handler still can't accidentally delay the EOI itself. Look at the real dispatcher below; it's the one piece of code that runs for every single hardware interrupt in the kernel, keyboard included.
+  </div>
+
+  <pre><code>/* isr.c — the shared dispatcher every IRQ (0-15) funnels through */
+void interrupt_handler(struct interrupt_frame *frame) {
+    uint32_t vec = frame->int_no;
+
+    if (vec < 32) {
+        kernel_panic(frame);              /* CPU exception — not an IRQ */
+    } else if (vec < 48) {
+        uint8_t irq = (uint8_t)(vec - 32);
+        pic_send_eoi(irq);                /* ACK the PIC first, always   */
+        if (irq_handlers[irq] != 0) {
+            irq_handlers[irq](frame);     /* THEN run the registered ISR */
+        }
+    }
+}</code></pre>
+
+  <p class="reveal">Notice vector 33 (IRQ1, the keyboard) and vector 32 (IRQ0, the timer) both funnel through this exact same function — the dispatcher doesn't know or care that one of them is a keyboard. It just maps a vector number to an IRQ number, sends EOI, and calls whatever function was registered for that slot via <code>irq_register()</code>. That registration table (<code>irq_handlers[16]</code>) is the entire mechanism connecting "IRQ1 fired" to "<code>keyboard_irq_handler</code> runs" — no special-casing anywhere in the dispatch path.</p>
+</div>
+</section>
+
+<!-- MAKE VS BREAK -->
+<section id="makebreak">
+<div class="container">
+  <div class="section-num">03 — One Key, Two Events</div>
+  <h2><span class="accent">Make Codes</span> and <span class="accent g">Break Codes</span></h2>
+
+  <p class="reveal">Every physical key press actually generates <em>two</em> separate hardware events, not one: the moment it goes down, and the moment it comes back up. Scancode Set 1 — the classic, oldest PS/2 scancode convention, and the one bob_os and QEMU use by default — represents both with a beautifully simple trick.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The Set 1 convention</span>
+    break_code = make_code | 0x80
+    <span class="sub">The release event is exactly the press event's byte, with the top bit (bit 7) forced to 1. Nothing more complicated than that.</span>
+  </div>
+
+  <div class="bitstrip reveal">
+    <div class="bitcell">b7</div><div class="bitcell">b6</div><div class="bitcell">b5</div><div class="bitcell">b4</div><div class="bitcell">b3</div><div class="bitcell">b2</div><div class="bitcell">b1</div><div class="bitcell">b0</div>
+  </div>
+  <p class="reveal" style="text-align:center;color:var(--muted);font-size:.85rem;margin-top:-1rem;">Bit 7 is the entire signal: <span style="color:var(--red)">0 = make (press)</span>, <span style="color:var(--red)">1 = break (release)</span>. The remaining 7 bits (0–127) always identify the same physical key regardless of press or release.</p>
+
+  <p class="reveal">Because of this, testing <code>sc &amp; 0x80</code> — exactly what bob_os's ISR does — is a complete, correct test for "is this a release event?" And masking it off (<code>sc &amp; 0x7F</code>) recovers the original make code if you ever need to know which key was released, not just that a release happened.</p>
+
+  <h3>A Worked Table of Real Set 1 Scancodes</h3>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Key</th><th>Make Code</th><th>Break Code</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Esc</td><td class="hl">0x01</td><td>0x81</td><td>Lowest scancode in Set 1</td></tr>
+        <tr><td>1</td><td class="hl">0x02</td><td>0x82</td><td>Top row starts here</td></tr>
+        <tr><td>A</td><td class="hl">0x1E</td><td>0x9E</td><td>The example from lesson one</td></tr>
+        <tr><td>Left Shift</td><td class="hl">0x2A</td><td>0xAA</td><td>Modifier — bob_os tracks make/break separately, never buffers a character</td></tr>
+        <tr><td>Right Shift</td><td class="hl">0x36</td><td>0xB6</td><td>A second, distinct scancode from Left Shift</td></tr>
+        <tr><td>Space</td><td class="hl">0x39</td><td>0xB9</td><td></td></tr>
+        <tr><td>Enter</td><td class="hl">0x1C</td><td>0x9C</td><td></td></tr>
+        <tr><td>Backspace</td><td class="hl">0x0E</td><td>0x8E</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">Why bob_os Ignores Every Break Code Except Shift's</div>
+    Look back at the ISR: the very first two comparisons special-case Shift's break codes to clear <code>shift_held</code>, and only <em>after</em> that does the generic <code>if (sc &amp; 0x80) return;</code> silently discard every other release event. That's deliberate. A simple driver that only ever types characters on press doesn't need to know when an ordinary letter key is <em>released</em> — but it absolutely must know when a modifier is released, or Shift would appear to stay "stuck" forever after the first press.
+  </div>
+</div>
+</section>
+
+<!-- FULL TRACE CANVAS -->
+<section id="trace">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>The Full Trip: <span class="accent">IRQ1 → ISR → Port 0x60 → Lookup</span></h2>
+
+  <p class="reveal">Time to animate the entire pipeline from lesson one's hardware handoff through this lesson's software translation, end to end, for one real key press.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="traceLabel">▶ Trace scancode 0x1E ('A') from IRQ1 firing to a character in the ring buffer</div>
+    <canvas id="traceCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runTrace('a')">▶ Press 'A' (unshifted)</button>
+    <button class="ctrl-btn gold" onclick="runTrace('shiftA')">▶ Press Shift+A</button>
+    <button class="ctrl-btn red" onclick="resetTrace()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>IRQ1 fires.</strong>The 8042 controller has a byte ready and asserts the keyboard's dedicated interrupt line. The CPU is interrupted mid-instruction.</div></li>
+    <li><div class="step-body"><strong>The dispatcher routes to your handler.</strong>Vector 33 maps to IRQ1, which bob_os's IDT/interrupt layer routes straight to <code>keyboard_irq_handler()</code> — the function you registered with <code>irq_register(1, …)</code>.</div></li>
+    <li><div class="step-body"><strong>inb(0x60) reads the byte.</strong>Fast, mandatory, clears the controller's output-buffer-full flag so the next scancode can arrive.</div></li>
+    <li><div class="step-body"><strong>Modifier check, then table lookup.</strong>Is it a Shift make/break? Handle and return. Otherwise, mask off the break bit, index into <code>sc_shift</code> or <code>sc_normal</code> depending on current <code>shift_held</code> state.</div></li>
+    <li><div class="step-body"><strong>Push to the ring buffer, return.</strong>The ISR's job ends here. EOI gets sent by the shared dispatcher, and the interrupted code resumes as if nothing happened — except now a character is waiting for <code>keyboard_getchar()</code>.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- LOOKUP TABLE -->
+<section id="lookup">
+<div class="container">
+  <div class="section-num">05 — The Translation Step</div>
+  <h2>Scancode → ASCII Is Just an <span class="accent">Array Index</span></h2>
+
+  <p class="reveal">The actual translation from a numeric scancode to a printable character is, deliberately, the least exciting part of the whole pipeline — and that's a feature, not a shortcoming. It's a flat array where the scancode <em>is</em> the index:</p>
+
+  <pre><code>/* Index = scancode (0x00-0x57). Value = ASCII character. 0 = no printable char. */
+static const char sc_normal[88] = {
+/*00*/  0,
+/*01*/  0x1B,                                            /* ESC        */
+/*02*/  '1','2','3','4','5','6','7','8','9','0','-','=',
+/*0E*/  '\b',                                             /* Backspace  */
+/*0F*/  '\t',                                             /* Tab        */
+/*10*/  'q','w','e','r','t','y','u','i','o','p','[',']',
+/*1C*/  '\n',                                             /* Enter      */
+/*1D*/  0,                                                /* Left Ctrl  */
+/*1E*/  'a','s','d','f','g','h','j','k','l',';','\'','`',
+/*2A*/  0,                                                /* Left Shift */
+    /* ... */
+};</code></pre>
+
+  <p class="reveal">Lookup is then just <code>sc_normal[sc]</code> — no branching, no parsing, O(1) and cache-friendly, which matters because this runs inside an interrupt handler where speed is the whole point. bob_os keeps a <em>second</em>, parallel table, <code>sc_shift</code>, holding the shifted character for the same index — <code>'A'</code> instead of <code>'a'</code>, <code>'!'</code> instead of <code>'1'</code> — and the ISR simply chooses which table to read from based on whether Shift is currently held.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Why a Flat Array, Not a Switch Statement</h4>
+      A 128-entry <code>switch</code> compiles to something far larger and slower than a direct array index. The array approach is exactly the same "trade software flexibility for hardware simplicity" idea from lesson one, taken one step further: even the software side stays about as fast as it can possibly be.
+    </div>
+    <div class="compare-card bad">
+      <h4>🚫 What a Flat Array Can't Do Alone</h4>
+      Nothing about a single array knows about Shift, Ctrl, or Alt. Those require the driver to track state <em>across</em> multiple scancode events, not just decode one in isolation — which is exactly the next section's subject.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- RING BUFFER -->
+<section id="ringbuffer">
+<div class="container">
+  <div class="section-num">06 — Handing Off Safely</div>
+  <h2>The Ring Buffer: Why It's <span class="accent">Lock-Free</span> By Construction</h2>
+
+  <p class="reveal">There's one more piece of the "keep the ISR fast" discipline worth pulling apart, because it explains a few lines in <code>keyboard.c</code> that would otherwise look like unexplained ceremony: <code>volatile</code> on the buffer indices, and the specific power-of-2 size of the buffer itself.</p>
+
+  <pre><code>#define KB_BUF_SIZE  256u
+static volatile char     kb_buf[KB_BUF_SIZE];
+static volatile uint32_t kb_head = 0;   /* next write position — ISR only  */
+static volatile uint32_t kb_tail = 0;   /* next read  position — main loop */
+
+static void buf_push(char c) {
+    uint32_t next = (kb_head + 1u) & (KB_BUF_SIZE - 1u);
+    if (next != kb_tail) {          /* full? then drop silently */
+        kb_buf[kb_head] = c;
+        kb_head = next;
+    }
+}</code></pre>
+
+  <p class="reveal">Two design facts are doing real work here. First, the buffer is exactly <strong>256</strong> bytes — a power of two — specifically so that wrapping the index around is <code>(head + 1) & 255</code> instead of a genuine modulo/divide. On hardware with no divide instruction handy (or where you simply don't want to spend the cycles), a bitwise AND is effectively free, which matters because this line runs inside an interrupt handler on every single keystroke.</p>
+
+  <p class="reveal">Second, <code>kb_head</code> and <code>kb_tail</code> are marked <code>volatile</code>. The keyboard ISR is the only writer of <code>kb_head</code>; the kernel's main loop is the only writer of <code>kb_tail</code> — one producer, one consumer, each touching only their own index. That single-writer discipline is exactly what makes this buffer safe <em>without locks</em>, which matters enormously in a kernel that (at this stage of bob_os) has no mutex or spinlock primitive yet. But without <code>volatile</code>, the compiler would be free to assume <code>kb_head</code> never changes underneath the main loop's read — and could legally cache it in a register forever, never noticing the ISR updated the real variable in memory. <code>volatile</code> forces every read and write to actually touch memory, which is the only way two independent contexts (interrupt vs. normal execution) can reliably see each other's updates.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">What Happens When the Buffer Is Full</div>
+    <code>buf_push()</code> computes where the <em>next</em> write would land and compares it against <code>kb_tail</code> before committing. If they'd collide, the new character is dropped silently — the buffer is "full" whenever advancing <code>head</code> one more slot would make it equal <code>tail</code> again (one slot is deliberately sacrificed so "full" and "empty" don't look identical). For a keyboard, at human typing speed against a 256-byte buffer, this essentially never triggers — but the policy matters conceptually: an ISR must never <em>block</em> waiting for space, so overflow has to resolve instantly, one way or the other, without stalling.
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">Why Not Just kmalloc a Buffer When Needed?</div>
+    It's tempting to imagine a fancier, dynamically-sized buffer allocated on demand. The problem is <em>where</em> that allocation would have to happen: inside the ISR, at the exact moment a key arrives. bob_os's heap allocator is not written to be safely re-entered from interrupt context — if the code the ISR interrupted happened to be in the middle of its own <code>kmalloc()</code> call, walking the same free-list data structure from inside the interrupt could corrupt it. The fix used here is the standard one: allocate the buffer once, statically, at compile time (it lives in BSS, zero-initialized), so the interrupt handler only ever does fixed, fast array arithmetic — never allocation.
+  </div>
+
+  <p class="reveal">Put together, this is the same "fast and non-blocking" principle from the ISR section, just applied one layer further down: not only does the handler avoid doing slow <em>work</em>, its one piece of shared state is deliberately structured — fixed size, power-of-2, single-writer-per-index, volatile — so that handing data off to the rest of the kernel costs almost nothing and needs no synchronization primitive that doesn't exist yet.</p>
+</div>
+</section>
+
+<!-- MODIFIERS -->
+<section id="modifiers">
+<div class="container">
+  <div class="section-num">07 — The Part That Isn't Stateless</div>
+  <h2>Why Modifiers Need <span class="accent">Memory</span> Across Events</h2>
+
+  <p class="reveal">Here's the conceptual trap: it's tempting to think of scancode translation as a pure function — one input byte, one output character, no history required. That's true for ordinary letter keys. It is <em>not</em> true the instant Shift, Ctrl, or Alt enter the picture, because those keys don't produce a character themselves at all — they change how <em>every subsequent</em> scancode should be interpreted, for as long as they stay physically held down.</p>
+
+  <p class="reveal">Consider what "Shift+A" actually looks like on the wire. It isn't one event. It's a sequence of at least three, and your driver has to correctly connect them:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>#</th><th>Scancode</th><th>Meaning</th><th>bob_os's Response</th></tr></thead>
+      <tbody>
+        <tr><td class="center">1</td><td class="hl">0x2A</td><td>Left Shift — make</td><td><code>shift_held = 1;</code> — no character produced</td></tr>
+        <tr><td class="center">2</td><td class="hl">0x1E</td><td>A — make</td><td>Looks up <code>sc_shift[0x1E]</code> because <code>shift_held</code> is true → pushes <code>'A'</code></td></tr>
+        <tr><td class="center">3</td><td class="hl">0x9E</td><td>A — break</td><td>Break bit set, not a modifier → silently ignored</td></tr>
+        <tr><td class="center">4</td><td class="hl">0xAA</td><td>Left Shift — break</td><td><code>shift_held = 0;</code> — modifiers restored to normal</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">If your ISR treated scancode <code>0x1E</code> as a stateless, self-contained event — "always produce <code>'a'</code>, full stop" — Shift would never work, because nothing about the byte <code>0x1E</code> itself carries any information about what else is currently held down. The information "Shift is down right now" doesn't live in the current scancode; it lives in a variable your driver maintains <em>between</em> interrupts. That's <code>shift_held</code> in bob_os: a small piece of state that persists across many separate ISR invocations, updated by Shift's own make/break events and consulted by every other key's event.</p>
+
+  <div class="mod-grid reveal">
+    <div class="mod-card" id="modCtrl"><div class="mk">0x1D / 0x9D</div><div class="st">CTRL</div><div style="font-size:.75rem;color:var(--muted)">not tracked in bob_os's minimal driver</div></div>
+    <div class="mod-card active" id="modShift"><div class="mk">0x2A / 0xAA</div><div class="st">SHIFT</div><div style="font-size:.75rem;color:var(--muted)">tracked via shift_held</div></div>
+    <div class="mod-card" id="modAlt"><div class="mk">0x38 / 0xB8</div><div class="st">ALT</div><div style="font-size:.75rem;color:var(--muted)">not tracked in bob_os's minimal driver</div></div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">The General Pattern, Beyond Just Shift</div>
+    A production keyboard driver extends the exact same idea to Ctrl and Alt: one boolean (or small bitmask) per modifier, set on that modifier's make code, cleared on its break code, consulted whenever a non-modifier key's make code needs translating. Ctrl combinations (like Ctrl+C generating an interrupt signal) and Alt combinations (like Alt+Tab) are typically intercepted even earlier — checked before falling through to normal character translation at all — precisely because they mean something other than "type a character." The unifying idea is the same one this whole lesson has been building to: <strong>scancodes are events in a stream, and correct interpretation of any one event can depend on the events that came before it.</strong>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">Tying It Back to Lesson One</div>
+    This is the natural extension of "scancodes aren't characters." It's not just that translation requires a lookup table — it's that translation sometimes requires a lookup table <em>plus memory of recent history</em>. The hardware still only ever reports "position X changed state." Every layer of meaning on top — which letter, which case, which control combination — is software's responsibility, accumulated one event at a time.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What about non-US keys and extended scancodes?</b> Scancode Set 1 reserves a special prefix byte, <code>0xE0</code>, before certain keys — arrow keys, the right Ctrl/Alt, the Windows/Super key, and others added after the original 84-key layout. Seeing <code>0xE0</code> tells your ISR "the next byte is from the extended set, interpret it differently." bob_os's minimal driver in this module doesn't yet handle the <code>0xE0</code> prefix (it simply won't recognize those keys), which is a reasonable simplification for a first pass — and a natural place to extend the driver once the fundamentals here are solid.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">IRQ1</div><div class="glossary-def">The hardware interrupt line dedicated to the keyboard controller, mapped to CPU vector 33 in bob_os after PIC remapping.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Make Code</div><div class="glossary-def">The scancode byte sent when a key goes down. Top bit (bit 7) is 0.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Break Code</div><div class="glossary-def">The scancode byte sent when a key is released. In Set 1, it's the make code with bit 7 forced to 1 — <code>make | 0x80</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Scancode Set 1</div><div class="glossary-def">The original, oldest PS/2 scancode numbering scheme, still the default the 8042 controller presents on QEMU and real BIOS-initialized keyboards.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Extended Scancode (0xE0 prefix)</div><div class="glossary-def">A lead byte signaling that the following scancode belongs to an extended key set (arrows, right Ctrl/Alt, etc.) added after the original layout.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ISR (Interrupt Service Routine)</div><div class="glossary-def">The handler function that runs when an interrupt fires — must be fast and non-blocking, deferring real work to code outside interrupt context.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EOI (End of Interrupt)</div><div class="glossary-def">The signal sent to the PIC after handling an interrupt, telling it to deliver further interrupts on that line. Skipping it silences the IRQ permanently.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Ring Buffer</div><div class="glossary-def">The fixed-size circular buffer the ISR writes translated characters into, and the main kernel loop reads from — the hand-off point between interrupt context and normal code.</div></div>
+    <div class="glossary-card"><div class="glossary-term">volatile</div><div class="glossary-def">A C qualifier forcing every read/write of a variable to touch real memory instead of a cached register value — required whenever an ISR and normal code share state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Modifier Key</div><div class="glossary-def">Shift, Ctrl, or Alt — a key that produces no character of its own, but changes how subsequent scancodes are translated for as long as it's held.</div></div>
+    <div class="glossary-card"><div class="glossary-term">shift_held</div><div class="glossary-def">bob_os's persistent state variable tracking whether Shift is currently down, updated by Shift's own make/break events and read by every other key's translation.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>IRQ1, Scancode Sets, and Turning Bytes Into Characters · Companion lesson for bob_os module 09_keyboard</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Previous: The PS/2 Keyboard Controller — Scancodes, Not Letters ←</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── FULL TRACE CANVAS: IRQ1 -> ISR -> 0x60 -> lookup ────────────────────────
+function drawTrace(t,phase,mode){
+  const canvas=document.getElementById('traceCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const stages=[
+    {x:0.10,label:'IRQ1 fires'},
+    {x:0.30,label:'Dispatcher → ISR'},
+    {x:0.50,label:'inb(0x60)'},
+    {x:0.72,label:'Modifier + Lookup'},
+    {x:0.92,label:'Ring Buffer'}
+  ];
+  const cy=H*0.32, r=32;
+
+  ctx.strokeStyle=C.border;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(W*stages[0].x,cy);ctx.lineTo(W*stages[stages.length-1].x,cy);ctx.stroke();
+
+  stages.forEach((s)=>{
+    ctx.beginPath();ctx.arc(W*s.x,cy,r,0,Math.PI*2);
+    ctx.fillStyle=C.bg2;ctx.fill();
+    ctx.strokeStyle=C.border;ctx.lineWidth=2;ctx.stroke();
+    ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.muted;ctx.textAlign='center';
+    ctx.fillText(s.label,W*s.x,cy+r+16);
+  });
+
+  const isShift = mode==='shiftA';
+  const capt={
+    idle:'Choose "Press A" or "Press Shift+A" above',
+    fire:'⚡ IRQ1 asserted — 8042 controller has a byte ready at port 0x60',
+    dispatch:'IDT vector 33 → generic dispatcher → keyboard_irq_handler() runs',
+    read: isShift ? 'inb(0x60) reads 0x2A (Left Shift make) — sets shift_held = 1, returns immediately' : 'inb(0x60) reads 0x1E (A make code)',
+    read2: isShift ? 'Second IRQ1: inb(0x60) reads 0x1E (A make code) while shift_held == 1' : '',
+    lookup: isShift ? 'shift_held is true → sc_shift[0x1E] is consulted' : 'shift_held is false → sc_normal[0x1E] is consulted',
+    push: isShift ? "Character 'A' pushed to ring buffer" : "Character 'a' pushed to ring buffer",
+    done:'ISR returns, EOI sent by dispatcher, interrupted code resumes'
+  };
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(capt[phase]||'',W/2,H-100);
+
+  // moving marker across the pipeline
+  const order=isShift?['fire','dispatch','read','read2','lookup','push','done']:['fire','dispatch','read','lookup','push','done'];
+  const stageForPhase=isShift?{fire:0,dispatch:1,read:2,read2:2,lookup:3,push:4,done:4}:{fire:0,dispatch:1,read:2,lookup:3,push:4,done:4};
+  const idx=stageForPhase[phase]!==undefined?stageForPhase[phase]:0;
+  let x;
+  if(phase==='done'){ x=W*stages[4].x; }
+  else {
+    const nextIdx=Math.min(idx+1,stages.length-1);
+    x=W*(stages[idx].x+(stages[nextIdx].x-stages[idx].x)*t*0.85);
+  }
+  ctx.beginPath();ctx.arc(x,cy,9,0,Math.PI*2);
+  ctx.fillStyle=phase==='push'||phase==='done'?C.green:(phase==='read'||phase==='read2'?C.gold:C.cyan);
+  ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+
+  if(phase==='fire'||phase==='dispatch'){
+    ctx.fillStyle=C.orange;ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',W*stages[0].x,cy-46);
+  }
+
+  // shift_held indicator
+  const shY=H*0.62;
+  ctx.strokeStyle=(isShift && (phase==='read2'||phase==='lookup'||phase==='push'||phase==='done'))?C.cyan:C.border;
+  ctx.lineWidth=1.5;
+  const boxW=180,boxX=W/2-boxW-10,boxY=shY,boxH=48;
+  ctx.strokeRect(boxX,boxY,boxW,boxH);
+  ctx.fillStyle='rgba(56,189,248,.04)';ctx.fillRect(boxX,boxY,boxW,boxH);
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('shift_held',boxX+boxW/2,boxY+16);
+  ctx.font='bold 18px Source Code Pro,monospace';
+  const shiftOn = isShift && (phase==='read2'||phase==='lookup'||phase==='push'||phase==='done');
+  ctx.fillStyle=shiftOn?C.cyan:C.muted;
+  ctx.fillText(shiftOn?'1':'0',boxX+boxW/2,boxY+36);
+
+  // output char box
+  const outX=W/2+10,outW=180;
+  ctx.strokeStyle=(phase==='push'||phase==='done')?C.green:C.border;
+  ctx.strokeRect(outX,boxY,outW,boxH);
+  ctx.fillStyle='rgba(74,222,128,.04)';ctx.fillRect(outX,boxY,outW,boxH);
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';
+  ctx.fillText('ring_buf[head]',outX+outW/2,boxY+16);
+  ctx.font='bold 18px Source Code Pro,monospace';
+  const pushed=(phase==='push'||phase==='done');
+  ctx.fillStyle=pushed?C.green:C.muted;
+  ctx.fillText(pushed?(isShift?"'A'":"'a'"):'—',outX+outW/2,boxY+36);
+}
+
+function runTrace(mode){
+  const phasesA=['fire','dispatch','read','lookup','push','done'];
+  const phasesShift=['fire','dispatch','read','read2','lookup','push','done'];
+  const phases=mode==='shiftA'?phasesShift:phasesA;
+  const durations=mode==='shiftA'?[350,450,500,500,500,450,10]:[350,450,500,500,450,10];
+  let idx=0,start=performance.now();
+  document.getElementById('traceLabel').textContent = mode==='shiftA' ? '▶ Tracing Shift+A — two separate IRQ1 events, one persistent flag' : '▶ Tracing plain A — a single IRQ1 event';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawTrace(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('traceLabel').textContent='▶ Done — try the other button, or Reset';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetTrace(){
+  document.getElementById('traceLabel').textContent="▶ Trace scancode 0x1E ('A') from IRQ1 firing to a character in the ring buffer";
+  drawTrace(0,'idle','');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetTrace(); });
+window.addEventListener('resize',()=>{ resetTrace(); });
+</script>
+</body>
+</html>

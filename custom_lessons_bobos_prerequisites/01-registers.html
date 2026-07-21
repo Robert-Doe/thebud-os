@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Registers — Assembly &amp; OS-from-Scratch Refresher</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: rgba(18,25,47,0.88); --panel-2: rgba(25,33,60,0.9);
+  --text: #e9edf7; --muted: #aab4cf; --soft: #7f8bb0; --line: rgba(255,255,255,0.08);
+  --blue: #7aa2ff; --blue-2: #5f87f8; --green: #4ade80; --red: #fb7185; --amber: #fbbf24; --purple: #a78bfa;
+  --cyan: #5eead4; --pink: #f472b6;
+  --shadow: 0 20px 60px rgba(0,0,0,0.35); --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: radial-gradient(circle at top, #121a35 0%, #09101f 55%, #060a14 100%); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { line-height: 1.6; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 28px; }
+.hero { padding: 28px; background: linear-gradient(180deg, rgba(119,157,255,0.15), rgba(255,255,255,0.03)); border:1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content:''; position:absolute; inset:auto -10% -45% auto; width:340px; height:340px; background: radial-gradient(circle, rgba(122,162,255,0.28), transparent 65%); pointer-events:none; }
+h1,h2,h3,h4 { margin:0 0 10px; line-height:1.2; }
+h1 { font-size: 34px; letter-spacing: -0.03em; }
+h2 { font-size: 23px; margin-top: 4px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 10px 0; color: var(--muted); }
+a { color: var(--blue); }
+.lede { max-width: 980px; font-size: 16px; }
+.grid-4, .grid-3, .grid-2, .grid-6 { display:grid; gap:16px; }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card.soft { background: var(--panel-2); }
+.stat-card { background: rgba(255,255,255,0.03); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.value { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.tag-row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 7px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.05); color: var(--text); border:1px solid var(--line); }
+.pill.blue { background: rgba(122,162,255,0.13); color:#cfdcff; }
+.pill.green { background: rgba(74,222,128,0.13); color:#bdf5d2; }
+.pill.amber { background: rgba(251,191,36,0.13); color:#ffe6ad; }
+.pill.red { background: rgba(251,113,133,0.13); color:#ffd0d6; }
+.pill.purple { background: rgba(167,139,250,0.13); color:#d4c6ff; }
+.pill.cyan { background: rgba(94,234,212,0.13); color:#bdf8ee; }
+.good { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+.section { margin-top: 22px; }
+.callout { padding: 16px 18px; border-radius: 14px; border:1px solid var(--line); background: rgba(122,162,255,0.08); color: var(--text); }
+.callout.warn { background: rgba(251,191,36,0.09); }
+.callout.red { background: rgba(251,113,133,0.09); }
+.callout.green { background: rgba(74,222,128,0.08); }
+.callout h4 { margin-top:0; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(0,0,0,0.28); border:1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 13.5px; overflow-x:auto; color: #e8eeff; white-space:pre; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 16px; margin-top: 14px; }
+table { width:100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+th, td { text-align:left; padding: 10px 13px; border-bottom:1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+th { position: sticky; top: 0; background: rgba(10,15,30,0.97); z-index: 1; color: var(--text); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.bytegrid { display:flex; gap:4px; flex-wrap:wrap; margin: 10px 0; }
+.byte { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.05); border:1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align:center; min-width: 64px; }
+.byte .addr { font-size: 10px; color: var(--soft); display:block; }
+.byte .v { font-size: 15px; font-weight:700; margin-top:3px; }
+.regbox { font-family: ui-monospace, monospace; display:flex; border:1px solid var(--line); border-radius: 10px; overflow:hidden; margin: 10px 0; }
+.regbox > div { padding: 10px 8px; text-align:center; font-size: 12px; border-right: 1px solid var(--line); }
+.regbox > div:last-child { border-right:none; }
+.qa { border-left: 3px solid var(--purple); padding: 6px 0 6px 14px; margin: 14px 0; }
+.qa .q { color: #d4c6ff; font-weight: 700; }
+.scenario { border:1px dashed rgba(122,162,255,0.4); border-radius: 14px; padding: 16px; background: rgba(122,162,255,0.05); }
+.scenario .tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--blue); font-weight:700; }
+.nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.nav a { text-decoration:none; }
+.navpill { display:inline-flex; align-items:center; gap:6px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,0.04); color: var(--muted); border:1px solid var(--line); transition: all .15s; }
+.navpill:hover { background: rgba(122,162,255,0.12); color: var(--text); }
+.navpill.active { background: rgba(122,162,255,0.18); color: var(--text); border-color: rgba(122,162,255,0.4); }
+.pagefoot { display:flex; justify-content:space-between; gap:16px; margin-top: 30px; }
+.pagefoot a { text-decoration:none; }
+.navbtn { display:block; padding:16px 20px; border-radius:16px; border:1px solid var(--line); background: var(--panel-2); flex:1; }
+.navbtn .label { margin-bottom:4px; }
+.navbtn .title { color: var(--text); font-size: 16px; font-weight:700; }
+.footer-note { margin-top: 24px; color: var(--soft); font-size: 13px; text-align:center; }
+.checklist { list-style:none; padding:0; margin: 10px 0; }
+.checklist li { padding: 8px 0 8px 30px; position:relative; border-bottom:1px solid var(--line); color: var(--muted); }
+.checklist li:last-child { border-bottom:none; }
+.checklist li::before { content:'✓'; position:absolute; left:0; top:8px; color: var(--green); font-weight:700; }
+.bitfield { display:flex; font-family:ui-monospace,monospace; font-size:12px; margin:10px 0; flex-wrap:wrap; }
+.bitfield .bit { border:1px solid var(--line); padding:8px 4px; text-align:center; min-width:34px; background: rgba(255,255,255,0.03); }
+.bitfield .bit .n { display:block; color:var(--soft); font-size:9px; }
+@media (max-width: 1100px) { .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .shell { padding: 16px; } h1 { font-size: 27px; }
+  .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr; }
+  .pagefoot { flex-direction:column; }
+}
+
+</style>
+</head>
+<body>
+<div class='shell'>
+<div class='nav'><a href='index.html'><span class='navpill'>Home</span></a><a href='01-registers.html'><span class='navpill active'>Registers</span></a><a href='02-endianness.html'><span class='navpill'>Endianness</span></a><a href='03-memory.html'><span class='navpill'>Memory & Stack</span></a><a href='04-instructions.html'><span class='navpill'>Instructions & Flow</span></a><a href='05-os-bootstrap.html'><span class='navpill'>Build an OS</span></a></div>
+
+<section class='hero'>
+  <div class='label'>Page 01</div>
+  <h1>Registers: the same box, four zoom levels</h1>
+  <p class='lede'>A register is a tiny piece of storage built directly into the CPU — not memory, not cache, the actual silicon the ALU reaches into without a memory access at all. x86 has very few of them, and that scarcity explains most of the instruction set's personality.</p>
+</section>
+
+<section class='section scenario'>
+  <span class='tag'>Scenario</span>
+  <p style='margin-top:8px'>You're a clerk with exactly one desk drawer (a register). You can hold a full sheet of paper in it (32 bits), or you can fold that same sheet in half and only look at the bottom half (16 bits), or fold it in quarters and look at just the bottom quarter (8 bits). It's still <em>one physical drawer</em> — you're just choosing how much of it you read or write. That's a register's size suffix in a sentence.</p>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>The classic 8 (16-bit ancestry)</h2>
+    <p>x86 grew up from the 16-bit 8086. It originally had eight 16-bit general-purpose registers, each with a "personality" baked in by convention (even though the hardware doesn't strictly enforce most of these anymore):</p>
+    <div class='table-wrap'>
+      <table>
+        <thead><tr><th>Register</th><th>Historical name</th><th>Common role</th></tr></thead>
+        <tbody>
+          <tr><td><strong>AX</strong></td><td>Accumulator</td><td>Arithmetic results, return values</td></tr>
+          <tr><td><strong>BX</strong></td><td>Base</td><td>Base address for memory access</td></tr>
+          <tr><td><strong>CX</strong></td><td>Counter</td><td>Loop counters, shift counts</td></tr>
+          <tr><td><strong>DX</strong></td><td>Data</td><td>I/O port number, extends AX for big multiply/divide</td></tr>
+          <tr><td><strong>SI</strong></td><td>Source Index</td><td>Source pointer for string ops</td></tr>
+          <tr><td><strong>DI</strong></td><td>Destination Index</td><td>Destination pointer for string ops</td></tr>
+          <tr><td><strong>BP</strong></td><td>Base Pointer</td><td>Points at the base of the current stack frame</td></tr>
+          <tr><td><strong>SP</strong></td><td>Stack Pointer</td><td>Points at the top of the stack — never move this by accident</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class='card soft'>
+    <h3>Why these names still matter</h3>
+    <p>Modern compilers and OS code don't really respect "AX is for math" as a rule anymore — any general-purpose register can hold almost anything. But a few roles are still hard-wired into specific instructions: <strong>CX</strong> is the implicit counter for <code>loop</code>, <strong>DX</strong> is the implicit port register for <code>in</code>/<code>out</code>, and <strong>SP</strong> is touched implicitly by <code>push</code>/<code>pop</code>/<code>call</code>/<code>ret</code>. Knowing the legacy names tells you instantly why some instruction "mysteriously" only works with one specific register.</p>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Same drawer, four labels: the naming ladder</h2>
+  <p>This is the single most important diagram on this page. <strong>AL, AX, EAX, and RAX are not four different registers.</strong> They are four different <em>views</em> into the same 64-bit storage. Writing to AL changes the bottom 8 bits of RAX and leaves everything above untouched (with one trap — see the callout below).</p>
+  <div class='regbox' style='font-size:13px'>
+    <div style='flex:8; background:rgba(122,162,255,0.18)'>RAX — 64 bits (bits 63&ndash;0) <span style='color:var(--soft)'>· x86-64 only</span></div>
+  </div>
+  <div class='regbox' style='font-size:13px'>
+    <div style='flex:4; background:rgba(167,139,250,0.15)'>upper 32 (unused alone)</div>
+    <div style='flex:4; background:rgba(122,162,255,0.18)'>EAX — 32 bits (bits 31&ndash;0)</div>
+  </div>
+  <div class='regbox' style='font-size:13px'>
+    <div style='flex:4'>&nbsp;</div>
+    <div style='flex:2'>upper 16</div>
+    <div style='flex:2; background:rgba(122,162,255,0.18)'>AX — 16 bits (bits 15&ndash;0)</div>
+  </div>
+  <div class='regbox' style='font-size:13px'>
+    <div style='flex:4'>&nbsp;</div>
+    <div style='flex:2'>&nbsp;</div>
+    <div style='flex:1; background:rgba(74,222,128,0.15)'>AH — bits 15&ndash;8</div>
+    <div style='flex:1; background:rgba(122,162,255,0.18)'>AL — bits 7&ndash;0</div>
+  </div>
+  <p>So <strong>AL</strong> is the bottom byte, <strong>AH</strong> is the byte just above it, <strong>AX</strong> = AH:AL together, <strong>EAX</strong> adds another 16 bits on top of AX, and <strong>RAX</strong> adds another 32 bits on top of that. Same trick applies to B, C, D (giving AL/AH, BL/BH, CL/CH, DL/DH) — but <strong>SI, DI, BP, SP only get a high/low split down to 16 bits historically</strong>; their single-byte forms (SIL, DIL, BPL, SPL) only exist in 64-bit mode.</p>
+  <div class='callout warn'>
+    <h4>The trap: writing EAX zeroes the top of RAX, but writing AX/AL doesn't touch EAX's top</h4>
+    <p>This is one of the most-quoted x86-64 gotchas. <code>mov eax, 5</code> doesn't just set the low 32 bits — it <strong>zero-extends</strong> and clears bits 63&ndash;32 of RAX too. But <code>mov ax, 5</code> or <code>mov al, 5</code> leaves the upper bits of EAX/RAX completely untouched — whatever garbage was there stays. Mixing 32-bit and 16-bit writes to "the same register" without realizing this is a classic source of OS-dev heisenbugs.</p>
+  </div>
+</section>
+
+<section class='section grid-3'>
+  <div class='stat-card'>
+    <div class='label'>8-bit</div>
+    <div class='value'>al, bl, cl, dl…</div>
+    <div class='sub'>1 byte. Holds 0–255 unsigned or -128–127 signed.</div>
+  </div>
+  <div class='stat-card'>
+    <div class='label'>16-bit</div>
+    <div class='value'>ax, bx, cx, dx…</div>
+    <div class='sub'>2 bytes. The original 8086 width. Still used for real-mode boot code.</div>
+  </div>
+  <div class='stat-card'>
+    <div class='label'>32-bit</div>
+    <div class='value'>eax, ebx, ecx…</div>
+    <div class='sub'>4 bytes. "e" = extended. The protected-mode workhorse size.</div>
+  </div>
+  <div class='stat-card'>
+    <div class='label'>64-bit</div>
+    <div class='value'>rax, rbx, rcx…</div>
+    <div class='sub'>8 bytes. "r" = register, x86-64 only. Plus r8&ndash;r15, all-new registers with no legacy alias.</div>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Special-purpose registers you can't skip</h2>
+    <ul style='color:var(--muted); padding-left:18px'>
+      <li><strong>EIP / RIP — instruction pointer.</strong> Always holds the address of the <em>next</em> instruction to execute. You cannot <code>mov</code> into it directly; you change it via jumps, calls, and returns.</li>
+      <li><strong>EFLAGS / RFLAGS — status flags.</strong> A bag of single bits set automatically by arithmetic/comparison instructions: Zero (ZF), Carry (CF), Sign (SF), Overflow (OF), and more. Conditional jumps read these. Full detail on page 04.</li>
+      <li><strong>CS, DS, SS, ES, FS, GS — segment registers.</strong> 16-bit registers that, in real mode, get multiplied to form addresses; in protected mode, they become indexes into a descriptor table instead. CS = code segment, SS = stack segment, DS = default data segment. These are central to the OS-bootstrap page.</li>
+      <li><strong>CR0&ndash;CR4 — control registers (32/64-bit only).</strong> Global "mode switches" for the whole CPU — bit 0 of CR0 is the famous Protection Enable bit that flips the CPU from real mode into protected mode. CR3 holds the physical address of the page table root once paging is on.</li>
+    </ul>
+  </div>
+  <div class='card soft'>
+    <h3>Why so few registers?</h3>
+    <p>x86 only has 8 general-purpose registers in 32-bit mode (16 in 64-bit mode with r8&ndash;r15). Compare that to RISC architectures with 32. This scarcity is <em>why</em> the stack and memory operands matter so much in x86 — you constantly spill values to memory because you simply run out of drawers. When you write boot code, you'll feel this immediately: you're juggling segment setup, a loop counter, and a pointer with only a few registers to spare.</p>
+    <div class='qa'>
+      <div class='q'>Q: If RAX/EAX/AX/AL overlap, why does the assembler let me use AL and ECX in the same instruction without confusion?</div>
+      <p>A: Because the assembler statically knows, from the mnemonic you typed, exactly which physical register and which width you mean — there's no runtime ambiguity. The overlap only matters for <em>you</em>, tracking what value ends up where after several instructions touch the same register at different widths.</p>
+    </div>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>Try this: trace it by hand</h2>
+  <p>Assume RAX starts at all zero bits. Execute these four instructions in order and write down the full 64-bit hex value of RAX after each one. Do this on paper before checking the answer.</p>
+  <div class='formula'><span class='kw'>mov</span> <span class='reg'>eax</span>, <span class='num'>0x11223344</span>
+<span class='kw'>mov</span>  <span class='reg'>al</span>, <span class='num'>0xFF</span>
+<span class='kw'>mov</span>  <span class='reg'>ah</span>, <span class='num'>0x00</span>
+<span class='kw'>mov</span> <span class='reg'>eax</span>, <span class='num'>0x99</span></div>
+  <div class='callout green' style='margin-top:14px'>
+    <h4>Answer (no peeking until you've tried)</h4>
+    <p>After line 1: <code>0x0000000011223344</code> (eax write zero-extends to 64 bits). After line 2: <code>0x00000000112233FF</code> (only the bottom byte changes). After line 3: <code>0x0000000011220000</code>... wait — careful: AH is bits 15&ndash;8, so it overwrites the <em>second</em> byte, giving <code>0x0000000011220000</code>FF→ actually: bits 7-0 stay 0xFF from step 2, AH only touches bits 15-8, so result is <code>0x00000000112200FF</code>. After line 4: <code>0x0000000000000099</code> (32-bit write zero-extends the full upper 32 bits again, erasing everything above bit 31).</p>
+  </div>
+</section>
+
+<div class='pagefoot'><a href='index.html'><div class='navbtn'><div class='label'>&larr; previous</div><div class='title'>Home</div></div></a><a href='02-endianness.html'><div class='navbtn' style='text-align:right'><div class='label'>next &rarr;</div><div class='title'>Endianness</div></div></a></div>
+<div class='footer-note'>Assembly &amp; OS-from-Scratch Refresher — built the head-first way: scenario first, jargon second.</div>
+</div>
+</body>
+</html>

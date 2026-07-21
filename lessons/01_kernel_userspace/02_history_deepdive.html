@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why the Wall Exists — A History of Computers Without It</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--orange);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--orange);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(251,146,60,.1);border:1.5px solid var(--orange);color:var(--orange);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(251,146,60,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--orange);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.25);color:var(--orange);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+.ftag.o{background:rgba(251,146,60,.1);color:var(--orange);border:1px solid rgba(251,146,60,.25);}
+.ftag.r{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.ftag.c{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.g{background:rgba(74,222,128,.1);color:var(--green);border:1px solid rgba(74,222,128,.25);}
+.ftag.p{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.gd{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--orange);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: chronology timeline */
+.timeline{list-style:none;margin:2rem 0;padding:0;}
+.timeline-item{position:relative;padding:0 0 1.8rem 2.2rem;border-left:2px solid var(--border);}
+.timeline-item:last-child{border-left:2px solid transparent;padding-bottom:0;}
+.timeline-item::before{content:'';position:absolute;left:-9px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--code-bg);border:2.5px solid var(--orange);}
+.timeline-item.r::before{border-color:var(--red)}
+.timeline-item.c::before{border-color:var(--cyan)}
+.timeline-item.g::before{border-color:var(--green)}
+.timeline-year{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--orange);letter-spacing:.08em;font-weight:700;margin-bottom:.25rem;}
+.timeline-item.r .timeline-year{color:var(--red)}
+.timeline-item.c .timeline-year{color:var(--cyan)}
+.timeline-item.g .timeline-year{color:var(--green)}
+.timeline-title{font-family:'Playfair Display',serif;font-size:1.08rem;color:#fff;margin-bottom:.35rem;}
+.timeline-desc{font-size:.9rem;color:var(--muted);line-height:1.6;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#noprotection" title="No Protection"></a>
+  <a class="toc-dot" href="#timesharing" title="Timesharing"></a>
+  <a class="toc-dot" href="#x86evolution" title="x86 Evolution"></a>
+  <a class="toc-dot" href="#morrisworm" title="Morris Worm"></a>
+  <a class="toc-dot" href="#legacy" title="Tying It Back"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Kernel/User-Space Companion · History &amp; Origins</div>
+    <h1>Why the Wall<br><span>Exists</span></h1>
+    <p class="hero-sub">You already know the wall: Ring 0 for the kernel, Ring 3 for everything else, one guarded door between them. What you haven't seen yet is the fifty years of scars that put it there — machines where a single stray pointer could corrupt the entire room-sized computer, a timesharing system that accidentally handed every user the master password file, and one Cornell graduate student's late-night experiment that took down a tenth of the internet in a single evening. This is the history the wall is built from.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Privilege Levels on the Original 8086</div></div>
+      <div class="hero-stat"><div class="num">1961</div><div class="lbl">Year Timesharing Forced Protection to Exist</div></div>
+      <div class="hero-stat"><div class="num">1985</div><div class="lbl">Year the 80386 Built the Model Still Used Today</div></div>
+      <div class="hero-stat"><div class="num">~10%</div><div class="lbl">Of the Internet, Hit by One 1988 Worm</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Same Wall, <span class="accent">Deeper Question</span></h2>
+  <p class="reveal">In the companion piece, you learned the shape of the wall as it exists <em>today</em>: user space in Ring 3 with no direct hardware access, kernel space in Ring 0 with total trust, and the system call as the single sanctioned door between them, enforced by the CPU chip itself. That's the geography. This page is about the history — because the wall wasn't handed down from a textbook. It was built, piece by piece, over about three decades, almost entirely in response to things going wrong.</p>
+  <p class="reveal">Here's the question this page actually answers: <strong>if hardware-enforced privilege separation is so obviously necessary, why didn't the very first computers already have it?</strong> The honest answer is that it wasn't obvious at all — for the first fifteen-odd years of electronic computing, nobody needed it, because nobody had the problem it solves. Watching exactly when and why that changed is the fastest way to actually understand what the wall is <em>for</em>, instead of just what it <em>is</em>.</p>
+</div>
+</section>
+
+<!-- NO PROTECTION -->
+<section id="noprotection">
+<div class="container">
+  <div class="section-num">01 — Before Any Wall Existed</div>
+  <h2>Computers With <span class="accent r">No Wall At All</span></h2>
+
+  <p class="reveal">Picture a computer with exactly one program loaded into memory at any given moment — no other process, no background daemon, not even really an "operating system" in the modern sense, just a small resident piece of bootstrap code called a <strong>resident monitor</strong> that loaded the next job off tape or cards. That's not a simplified teaching example. That's a literal, accurate description of mainstream computing from the early 1950s into the mid-1960s.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">IBM 704 / 709</span><span class="fam-count">1954–1959</span></div>
+      <div class="fam-desc">Vacuum-tube and early transistor mainframes running strict batch jobs, one at a time, front to back. The "monitor" that sequenced jobs shared the same unprotected memory as the job itself.</div>
+      <div class="feat-list"><span class="feat-pill ftag r">no privilege bit</span><span class="feat-pill ftag r">batch only</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">IBM 7090 / 7094</span><span class="fam-count">1959</span></div>
+      <div class="fam-desc">The transistorized workhorse of the era — and, as you'll see in the next section, the very machine that got hastily retrofitted with the first crude memory-protection hardware to support timesharing.</div>
+      <div class="feat-list"><span class="feat-pill ftag r">single job in core</span><span class="feat-pill ftag r">resident monitor</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">DEC PDP-1 / PDP-5 / PDP-8</span><span class="fam-count">1960s minicomputers</span></div>
+      <div class="fam-desc">Cheaper, smaller, and radically more primitive than the mainframes — flat, unprotected memory, no privilege levels, often programmed and debugged directly via front-panel toggle switches and lights.</div>
+      <div class="feat-list"><span class="feat-pill ftag r">real mode only</span><span class="feat-pill ftag r">single user</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">IBM System/360</span><span class="fam-count">1964, transitional</span></div>
+      <div class="fam-desc">The first mainstream machine to ship with any hardware memory protection at all — 4-bit "storage protection keys" tagging 2KB memory blocks, added specifically to make multiprogramming (running several batch jobs concurrently) survivable.</div>
+      <div class="feat-list"><span class="feat-pill ftag gd">protection keys</span><span class="feat-pill ftag gd">first crack in the wall</span></div>
+    </div>
+  </div>
+
+  <p class="reveal">On the pre-360 machines, "no protection" wasn't a missing feature so much as a concept that hadn't been invented yet. There was only ever one program resident, so the very idea of one program's memory being off-limits to another didn't have anything to apply to. The danger wasn't <em>other users</em> — it was that the resident monitor itself sat in the same flat, checkable-by-nothing memory as the job it was running. A wild pointer write, an off-by-one in an array, a bug in a loop counter — any of these could just as easily land on the monitor's own instructions as on the job's private data, because the hardware had no concept of "yours" versus "mine" versus "the operating system's."</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ What "No Protection" Actually Meant, Concretely</div>
+    When a job on a 704 or 7090 went haywire — an infinite loop, a corrupted return address, a scribbled-over monitor — there was no fault handler to catch it, because there was no hardware mechanism to detect a boundary violation in the first place. The usual outcome was the machine simply stopped doing anything useful: hung, looped forever, or executed garbage as instructions. An operator physically walked up to the console, and using front-panel switches, <strong>manually reloaded the bootstrap loader</strong> and restarted the monitor from scratch. This was not a rare edge case. It was Tuesday.
+  </div>
+
+  <div class="formula orange reveal">
+    <span class="label">The entire trust model of the batch era, in one line</span>
+    Everything currently loaded into memory = fully trusted. No exceptions, no checks, no rings.
+    <span class="sub">This isn't a simplification for the reader — it's a literally accurate description of how the 704, 709, 7090, and early PDP machines worked at the hardware level.</span>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Wait — if only one program ran at a time, who was there to protect against?</b> This is exactly the right question, and the answer is: nobody, yet — which is precisely why nobody built protection hardware. The threat wasn't a rival program or a rival user; it was the running program's own bugs corrupting the very monitor that was supposed to clean up after it and load the next job. That distinction — "protect the system from bugs" versus "protect users from <em>each other</em>" — is the hinge this whole page turns on. Keep it in mind for the next section.
+  </div>
+</div>
+</section>
+
+<!-- TIMESHARING -->
+<section id="timesharing">
+<div class="container">
+  <div class="section-num">02 — The Invention That Forced the Wall</div>
+  <h2>When Sharing a Machine <span class="accent c">Became Dangerous</span></h2>
+
+  <p class="reveal">Mainframes in the early 1960s were staggeringly expensive — a 7094 cost roughly the same as a small building — and batch processing wasted most of that expense on people standing in line. You'd submit your punch-card deck, wait hours (sometimes overnight) for your turn, get a printout back, and discover your one-character typo three hours later. Someone was going to try to fix this by letting <em>multiple people</em> use the same machine <em>at the same time</em>, interactively, through teletypes. That someone was Fernando Corbató's team at MIT, and the system was the <strong>Compatible Time-Sharing System (CTSS)</strong>, running on a modified IBM 7094, first demonstrated in 1961.</p>
+
+  <p class="reveal">This single change — from "one program owns the whole machine for its whole run" to "several different people's programs are resident in memory <em>simultaneously</em>, time-sliced by the second" — is the actual moment the threat model shifts. It's no longer just "protect the monitor from this job's bugs." It's now "protect User A's memory, files, and privacy from User B" — where B might be careless, might be curious, or might simply be a stranger B has never met and has no reason to trust.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The problem CTSS had to solve</strong>With several users' programs sitting in core memory at once, the 7094 needed a way to stop User A's program from simply reading or overwriting the memory holding User B's program — something the hardware had never needed to do before.</div></li>
+    <li><div class="step-body"><strong>The primitive solution: bounds registers</strong>MIT had IBM add a pair of hardware registers marking off the start and end of the currently-running user's memory region. Before switching to a different user's timeslice, the monitor reloaded these registers to point at the <em>new</em> user's region.</div></li>
+    <li><div class="step-body"><strong>The check happens on every single memory access</strong>Any address the running program touched was compared against the bounds registers in hardware. Step outside your assigned region, and the machine trapped — refusing the access — instead of silently corrupting whatever happened to be there.</div></li>
+    <li><div class="step-body"><strong>This is the direct ancestor of everything that followed</strong>One contiguous bounds-checked region per user is crude — no fine-grained permissions, no concept of "read but don't write," nothing like a page table. But the core idea — hardware refuses an access outside an authorized boundary — is exactly the same idea a modern MMU enforces billions of times a second.</div></li>
+  </ol>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    Memory protection wasn't invented because someone drew it on a whiteboard as good engineering practice. It was invented because <strong>timesharing made the old honor system physically dangerous</strong>. The moment two mutually-untrusting users' code could occupy the same machine at the same instant, "please don't touch each other's memory" stopped being a reasonable policy and started being a hardware requirement.
+  </div>
+
+  <p class="reveal">CTSS proved timesharing worked, and its direct successor took security far more seriously. <strong>Multics</strong> (MULTiplexed Information and Computing Service) — a joint project between MIT, Bell Labs, and General Electric starting in 1965, running on the GE-645 and later the Honeywell 6180 — was designed from the ground up with security as a first-class goal, not an afterthought. It introduced a hierarchical file system with per-file access control lists, segmented virtual memory, and, critically, a formal <strong>ring-based protection architecture</strong> supporting up to eight concentric privilege rings in hardware, though most real deployments only used a handful of them. Sound familiar? It should — when Intel's engineers designed protected mode over a decade later, they borrowed the ring terminology directly from Multics.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ A Concrete Lesson From CTSS Itself</div>
+    In 1965, a CTSS operator was editing the system's message-of-the-day file at the same moment another administrator was editing the master password file, using an editor that generated temporary files by name in a shared, predictable location. A race condition in how those temp files were created caused the two files to <strong>swap contents</strong> — and for a period, every user who logged in was shown the plaintext contents of the master password file instead of the greeting message. Nobody planned this. It just fell out of a shared, timesliced, insufficiently isolated system. It's one of the earliest documented computer security incidents on record, and it's exactly the kind of accident that hardware-enforced isolation exists to make structurally impossible rather than merely unlikely.
+  </div>
+</div>
+</section>
+
+<!-- X86 EVOLUTION -->
+<section id="x86evolution">
+<div class="container">
+  <div class="section-num">03 — Watching x86 Learn the Lesson</div>
+  <h2>Watching the Wall Get <span class="accent">Built</span>, Chip by Chip</h2>
+
+  <p class="reveal">Here's the twist: the lessons above were learned on exotic, expensive mainframes and minicomputers throughout the 1960s and 70s. The processor family that ended up running most of the world's desktops and servers — Intel's x86 line — started from scratch, on cheap commodity silicon, and had to relearn every one of those lessons from zero. Watching x86 evolve across three chip generations is watching the wall get bolted on in real time, mistake by mistake.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="eraLabel">▶ Pick a chip generation to watch what happens when a program reaches somewhere it shouldn't</div>
+    <canvas id="eraCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runEra('8086')">▶ 8086 (1978) — No Rings At All</button>
+    <button class="ctrl-btn gold" onclick="runEra('80286')">▶ 80286 (1982) — Rings, But Awkward</button>
+    <button class="ctrl-btn cyan" onclick="runEra('80386')">▶ 80386 (1985) — Rings + Paging</button>
+    <button class="ctrl-btn red" onclick="resetEra()">Reset</button>
+  </div>
+
+  <h3>8086/8088 (1978/1979) — real mode, and nothing else</h3>
+  <p class="reveal">The chip that became the original IBM PC's brain in 1981 had <strong>zero privilege levels</strong>. Not "a weak version of protection" — none. Memory addressing worked via 16-bit segment:offset pairs giving a 20-bit, 1MB total address space, and every single piece of code running on the machine — the OS, a driver, your own program — had exactly the same, total access to everything. MS-DOS on the 8088 wasn't really "an operating system enforcing boundaries" so much as a flat, cooperative program launcher: any running application could reach directly into DOS's own memory, or into another resident program's memory, and there was no hardware anywhere in the chip capable of noticing, let alone stopping it.</p>
+
+  <h3>80286 (1982) — protection arrives, but it's clumsy</h3>
+  <p class="reveal">Intel's 80286 introduced <strong>protected mode</strong>: four privilege rings (0 through 3, terminology lifted straight from Multics), segment descriptors carrying access rights that the hardware checked on every access, and even primitive hardware-assisted task switching. This was real, genuine progress — a Ring 3 program executing a privileged instruction would now be refused. But it was also famously awkward to actually use: segments were still capped at 64KB each with a 16MB total physical ceiling, there was still no paging (protection was purely segment-based, not a general virtual-memory system), and — the detail every systems engineer of the era remembers — <strong>there was no clean, documented way to get back out of protected mode into real mode</strong> without resetting the entire CPU. IBM's actual shipped workaround involved pulsing the keyboard controller to trigger a CPU reset and using a spare byte of RAM to remember where to jump back to. Given all that friction, most real-world software — DOS included — mostly just ignored 80286 protected mode.</p>
+
+  <h3>80386 (1985) — the architecture we still run today</h3>
+  <p class="reveal">The 80386 is the real hinge point. It kept the same four rings as the 286, but added two things that actually made the wall usable: full <strong>32-bit flat addressing</strong> (no more juggling 64KB segments to reach more memory), and a genuine hardware <strong>paging unit</strong> — a page table rooted at a new control register, CR3, translating 4KB virtual pages to physical frames, checked and enforced by the CPU's memory management unit on every access, independent of the ring check. It also added Virtual 8086 mode, letting a protected-mode OS run old real-mode DOS software safely, sandboxed, as if it still had the whole 8086 to itself. This combination — hardware rings for privilege, hardware paging for per-process memory isolation — is, largely unchanged in its fundamentals, still exactly what Linux and Windows do today, just extended from 32 bits to 64.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Chip</th><th>Year</th><th>Privilege Levels</th><th>Addressing</th><th>Protection Mechanism</th><th>Paging</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">8086 / 8088</td><td>1978 / 1979</td><td class="neg">None</td><td>Real mode, 20-bit segment:offset, 1MB</td><td class="neg">None</td><td class="neg">No</td></tr>
+        <tr><td class="hl">80286</td><td>1982</td><td class="gold">4 (rings 0–3)</td><td>Protected mode, 24-bit, 16MB, 64KB segment cap</td><td>Segment descriptor privilege checks</td><td class="neg">No</td></tr>
+        <tr><td class="hl">80386</td><td>1985</td><td class="pos">4 (rings 0–3)</td><td>Protected mode, flat 32-bit, 4GB</td><td class="pos">Segmentation + hardware paging (CR3)</td><td class="pos">Yes — 4KB pages</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula orange reveal">
+    <span class="label">Entering protected mode — the whole difference is one bit</span>
+    mov eax, cr0<br>
+    or&nbsp;&nbsp; eax, 1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;; set the PE (Protection Enable) bit<br>
+    mov cr0, eax&nbsp;&nbsp;&nbsp;&nbsp;; the CPU is now in protected mode — rings and segment checks go live
+    <span class="sub">One flipped bit in one control register is the entire distance between the flat, trust-everyone 8086 world and the ring-checked, hardware-enforced 80286/80386 world.</span>
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Paging / MMU</span><span class="fam-count">80386</span></div>
+      <div class="fam-desc">CR3 points at a page directory; the MMU walks it on every memory access, giving each process its own private, per-process virtual address space — the mechanism your original companion piece assumed already existed.</div>
+      <div class="feat-list"><span class="feat-pill ftag p">CR3</span><span class="feat-pill ftag p">4KB pages</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Flat 32-bit Addressing</span><span class="fam-count">80386</span></div>
+      <div class="fam-desc">No more juggling 64KB segments to reach memory — a single linear address space up to 4GB, the addressing model application programmers actually want.</div>
+      <div class="feat-list"><span class="feat-pill ftag c">linear address space</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Virtual 8086 Mode</span><span class="fam-count">80386</span></div>
+      <div class="fam-desc">Lets a protected-mode OS run legacy real-mode DOS software inside a sandboxed container, safely, instead of forcing a full CPU reset every time old software needed to run.</div>
+      <div class="feat-list"><span class="feat-pill ftag g">legacy sandboxing</span></div>
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Where "Ring 0" and "Ring 3" Actually Come From</div>
+    When you read "Ring 0" and "Ring 3" in the companion piece, you're reading vocabulary that traveled a specific, traceable path: Multics designed a formal ring architecture in the mid-1960s to enforce security on a timesharing mainframe → Intel's engineers explicitly borrowed that terminology and concept when designing the 80286's protected mode in 1982 → the 80386 made it actually practical by pairing it with real paging in 1985 → x86-64 inherited it essentially unchanged. The words in today's kernel documentation are, quite literally, Multics's words.
+  </div>
+</div>
+</section>
+
+<!-- MORRIS WORM -->
+<section id="morrisworm">
+<div class="container">
+  <div class="section-num">04 — What Happens When the Lesson Isn't Learned</div>
+  <h2>The Night <span class="accent r">10% of the Internet</span> Got Infected</h2>
+
+  <p class="reveal">By 1988, Unix systems had proper user/kernel separation, multi-user protection, and file permissions — the wall, in some form, already existed. So what happened on the night of November 2, 1988 is a different kind of lesson: it shows that the wall protects processes from <em>each other</em>, but it says nothing about what happens when a program the wall correctly trusts gets tricked by input it should never have trusted.</p>
+
+  <p class="reveal">Robert Tappan Morris, a graduate student at Cornell, released a self-replicating program onto the early internet — intended, by his own later account, as a research experiment to gauge the network's size, not as an attack. It combined several separate vulnerabilities into one chain:</p>
+
+  <ol class="step-list red reveal">
+    <li><div class="step-body"><strong>A buffer overflow in fingerd</strong>The Unix "finger" daemon — a privileged network service running with elevated rights — had a fixed-size stack buffer and no bounds checking on input length. The worm sent an oversized request that overflowed the buffer, overwriting the return address and hijacking control flow to run injected code with fingerd's own privileges. This is one of the first widely-documented real-world buffer overflow exploits.</div></li>
+    <li><div class="step-body"><strong>A debug backdoor in sendmail</strong>Sendmail shipped with a DEBUG command meant purely for developer testing, which let a remote sender specify an arbitrary program to pipe mail into — unintentionally giving anyone who knew about it a way to run commands on the machine remotely.</div></li>
+    <li><div class="step-body"><strong>Weak, guessable passwords</strong>The worm carried a small built-in dictionary of common passwords and simply tried them against real accounts — a depressing number of which worked.</div></li>
+    <li><div class="step-body"><strong>Transitive .rhosts trust</strong>Unix machines of the era often trusted specific remote hosts implicitly via .rhosts files, allowing password-free logins between "trusted" machines. Once inside one machine, the worm used these trust relationships to hop to others without needing to guess anything at all.</div></li>
+  </ol>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Bug That Turned an Experiment Into a Catastrophe</div>
+    Morris didn't want the worm to be obviously detectable, so it was designed to avoid re-infecting a machine it had already infected. But to prevent someone from defending against it simply by running a fake "already infected" signal, he made it re-infect anyway on a fraction of attempts — and that fraction was tuned too aggressively. The result: machines got hit over and over, spawning more and more copies of the worm process until they buckled under the load. What was meant to be a quiet measurement became, functionally, a self-inflicted denial-of-service attack on a huge slice of the internet.
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="wormLabel">▶ Run the infection to see it spread — scaled to roughly the real ~10% infection rate</div>
+    <canvas id="wormCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runWorm()">▶ Run the Infection</button>
+    <button class="ctrl-btn" onclick="resetWorm()">Reset</button>
+  </div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🖥️</div><div class="lbl">~6,000 machines infected — about 10% of the entire internet in 1988</div></div>
+    <div class="stat-card"><div class="val">🐛</div><div class="lbl">One re-infection-avoidance bug turned a quiet experiment into a denial-of-service event</div></div>
+    <div class="stat-card"><div class="val">⚖️</div><div class="lbl">First felony conviction under the 1986 Computer Fraud and Abuse Act</div></div>
+    <div class="stat-card"><div class="val">🚨</div><div class="lbl">CERT founded at Carnegie Mellon within weeks, funded by DARPA, in direct response</div></div>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What Ring 0 / Ring 3 Would Have Stopped</h4>
+      One user-space process directly reading or corrupting another process's private memory. A Ring 3 program executing a privileged instruction to reprogram hardware directly. These are exactly the failure modes hardware-enforced rings and paging exist to make structurally impossible.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ What the Wall Never Promised to Stop</h4>
+      fingerd and sendmail were <em>privileged, correctly-trusted</em> system services doing exactly what they were designed to do. The wall doesn't protect a trusted service from being fooled by malicious input it was never taught to distrust — that's a separate discipline entirely: input validation, least privilege, and defense in depth.
+    </div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Aftermath Actually Changed the Industry</div>
+    Within weeks of the outbreak, DARPA funded the creation of the <strong>Computer Emergency Response Team (CERT)</strong> at Carnegie Mellon University — the first formal, organized incident-response body of its kind, and the direct ancestor of today's CERT/CC and the entire modern security-response industry. The Morris Worm is widely cited as the single event that moved computer security from a niche academic curiosity into a mainstream, funded engineering discipline.
+  </div>
+</div>
+</section>
+
+<!-- LEGACY -->
+<section id="legacy">
+<div class="container">
+  <div class="section-num">05 — Tying It Back to Ring 0 / Ring 3</div>
+  <h2>The Wall You Know Is <span class="accent g">Fifty Years</span> in the Making</h2>
+
+  <p class="reveal">Put the whole arc together and the modern picture stops looking like an arbitrary design choice and starts looking inevitable — the accumulated, hard-won answer to a sequence of very specific, very real failures.</p>
+
+  <ul class="timeline reveal">
+    <li class="timeline-item">
+      <div class="timeline-year">1961</div>
+      <div class="timeline-title">CTSS goes live at MIT</div>
+      <div class="timeline-desc">The first practical timesharing system. Multiple users resident in memory at once forces the first hardware memory-bounds checks into existence.</div>
+    </li>
+    <li class="timeline-item">
+      <div class="timeline-year">1964</div>
+      <div class="timeline-title">IBM System/360 ships with storage protection keys</div>
+      <div class="timeline-desc">The first mainstream hardware memory protection — aimed at surviving multiprogramming, a first crack in the "everything is trusted" wall.</div>
+    </li>
+    <li class="timeline-item c">
+      <div class="timeline-year">1965</div>
+      <div class="timeline-title">Multics begins, with security as a first-class goal</div>
+      <div class="timeline-desc">MIT, Bell Labs, and GE design a formal ring-based protection architecture and access-controlled file system — the direct ancestor of "Ring 0" and "Ring 3."</div>
+    </li>
+    <li class="timeline-item">
+      <div class="timeline-year">1978</div>
+      <div class="timeline-title">Intel 8086 ships</div>
+      <div class="timeline-desc">16-bit, real mode only, zero privilege levels — none of Multics's lessons have reached commodity silicon yet.</div>
+    </li>
+    <li class="timeline-item">
+      <div class="timeline-year">1982</div>
+      <div class="timeline-title">Intel 80286 ships</div>
+      <div class="timeline-desc">Protected mode arrives — four rings, borrowed straight from Multics's terminology — but segment-only, capped, and awkward to actually use.</div>
+    </li>
+    <li class="timeline-item">
+      <div class="timeline-year">1985</div>
+      <div class="timeline-title">Intel 80386 ships</div>
+      <div class="timeline-desc">Full 32-bit flat addressing plus hardware paging via CR3 — the architecture Windows NT and Linux still build on today.</div>
+    </li>
+    <li class="timeline-item r">
+      <div class="timeline-year">1988</div>
+      <div class="timeline-title">The Morris Worm infects ~10% of the internet</div>
+      <div class="timeline-desc">A hardware wall around the kernel says nothing about what a privileged service does with input it was never taught to distrust.</div>
+    </li>
+    <li class="timeline-item g">
+      <div class="timeline-year">1988</div>
+      <div class="timeline-title">CERT founded at Carnegie Mellon</div>
+      <div class="timeline-desc">DARPA-funded, organized incident response is born — the industry's direct answer to the previous line on this timeline.</div>
+    </li>
+  </ul>
+
+  <p class="reveal">So when you read "the system call is the only door into the kernel, guarded by hardware, not by politeness" in the companion piece, you're reading the punchline to this entire history. It's hardware-enforced specifically <em>because</em> the honor system was tried first, on real machines, with real users — and it failed, repeatedly, in ways that ranged from an operator walking up to reload a bootstrap loader by hand, to an accidental password leak on CTSS, to a tenth of the entire internet grinding to a halt in one night. Ring 0 and Ring 3 aren't a clever abstraction dreamed up in the abstract. They're a scar.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Final Aha Moment</div>
+    Try to imagine actually sitting down at a 1959 IBM 7090. There is no login prompt, because there is no concept of "users" the machine distinguishes between. There is no crash recovery, because there is no fault handler — a bad pointer write just is what happens next, silently, whatever it touches. There is no permission-denied error, because there is no permission system. Every single one of the boring, invisible guarantees you rely on today — that your browser tab crashing doesn't take down your terminal, that another logged-in user can't read your files, that a webpage's JavaScript can't reformat your disk — is the direct, hard-won descendant of the machines and incidents on this page.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Resident Monitor</div><div class="glossary-def">The small piece of software present in early batch machines that sequenced jobs — the closest thing to an "OS" before protection existed, and itself unprotected from the job it was running.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Bounds / Base-Limit Registers</div><div class="glossary-def">CTSS-era hardware registers marking off one user's memory region, checked on every access — the primordial ancestor of the modern MMU's page-table checks.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CTSS</div><div class="glossary-def">Compatible Time-Sharing System — MIT, 1961, the first practical timesharing system, running on a modified IBM 7094. Forced the first hardware memory protection into existence.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Multics</div><div class="glossary-def">MIT/Bell Labs/GE project starting 1965; designed formal ring-based protection and access-controlled files as first-class goals. Direct ancestor of x86's Ring 0/Ring 3 terminology.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Real Mode</div><div class="glossary-def">The 8086's only operating mode: flat segment:offset addressing, no privilege levels, no memory protection of any kind.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Protected Mode</div><div class="glossary-def">Introduced on the 80286: four hardware privilege rings and segment-descriptor access checks. Made genuinely practical only once the 80386 added paging.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Paging / MMU (CR3)</div><div class="glossary-def">The 80386's hardware page-table mechanism, rooted at the CR3 register, translating 4KB virtual pages to physical frames and enforcing per-process memory isolation.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Storage Protection Key</div><div class="glossary-def">IBM System/360's 1964 mechanism tagging 2KB memory blocks with a 4-bit key, checked against the running program's key — the first mainstream hardware memory protection.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Buffer Overflow</div><div class="glossary-def">Writing past the end of a fixed-size buffer, overwriting adjacent memory (often a return address) to hijack control flow. The core exploit behind the Morris Worm's fingerd attack.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CERT</div><div class="glossary-def">Computer Emergency Response Team — founded at Carnegie Mellon in late 1988, funded by DARPA, directly in response to the Morris Worm. The first organized OS/network security incident-response body.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Why the Wall Exists · A history companion to "Kernel vs User Space" · OS Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Every guarantee you take for granted today was earned the hard way.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── ERA CANVAS: 8086 vs 80286 vs 80386 ──────────────────────────────────────────
+const eraCaptions={
+  '8086':{
+    setup:'Intel 8086 (1978) — real mode only. Memory is one flat 1MB space; there is no privilege bit to check.',
+    attempt:'A running program reaches for an address holding the resident OS’s own code.',
+    check:'The CPU checks... nothing. There is no ring, no descriptor, no permission bit to consult.',
+    outcome:'The write succeeds. If it was garbage, the OS — or another resident program — is now silently corrupted.'
+  },
+  '80286':{
+    setup:'Intel 80286 (1982) — protected mode adds 4 rings, borrowed from Multics, checked via segment descriptors.',
+    attempt:'A Ring 3 program tries to execute an instruction reserved for Ring 0.',
+    check:'The CPU compares the segment descriptor’s privilege level against the current ring — and this time, it matters.',
+    outcome:'Blocked: a general protection fault. Real progress — though segments still cap at 64KB, and there’s famously no clean way back to real mode without resetting the chip.'
+  },
+  '80386':{
+    setup:'Intel 80386 (1985) — the same 4 rings, now paired with a full hardware page table (CR3 → page directory → 4KB pages).',
+    attempt:'A Ring 3 program tries to read a physical page that was never mapped into its own page table.',
+    check:'The MMU walks the page table rooted at CR3, finds no valid mapping for this process, and faults — independent of the ring check.',
+    outcome:'Blocked cleanly with a page fault. Flat 32-bit addressing plus paging: still, largely unchanged, how Linux and Windows protect memory today.'
+  }
+};
+
+function drawEraScene(t,phase,era){
+  const canvas=document.getElementById('eraCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cx=W*0.32, cy=H/2+10;
+
+  if(era==='8086'){
+    // one flat unprotected rectangle
+    ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(20,50,W*0.5,H-110);
+    ctx.strokeStyle=C.red;ctx.lineWidth=1.5;ctx.strokeRect(20,50,W*0.5,H-110);
+    ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('ONE FLAT 1MB SPACE — 0 RINGS',20+W*0.25,68);
+    // "OS area" sub box
+    ctx.strokeStyle=C.gold;ctx.setLineDash([4,3]);ctx.strokeRect(20+W*0.05,H-150,W*0.16,50);ctx.setLineDash([]);
+    ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText('resident OS code',20+W*0.05,H-158);
+
+    let dx=20+W*0.42, dy=H-125, col=C.cyan;
+    if(phase==='attempt'){dx=20+W*(0.42-0.2*t);dy=H-125;col=C.cyan;}
+    else if(phase==='check'){dx=20+W*0.22;dy=H-125;col=C.orange;}
+    else if(phase==='outcome'){dx=20+W*0.13+(6*Math.sin(t*30));dy=H-125;col=C.red;
+      ctx.fillStyle=C.red;ctx.font='bold 16px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('CORRUPTED',20+W*0.25,H-95);
+    }
+    ctx.beginPath();ctx.arc(dx,dy,8,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  } else {
+    // rings: ring3 outer, ring0 inner
+    const r0=130,r1=55;
+    ctx.beginPath();ctx.arc(cx,cy,r0,0,Math.PI*2);ctx.fillStyle='rgba(56,189,248,.05)';ctx.fill();ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(cx,cy,r1,0,Math.PI*2);ctx.fillStyle='rgba(248,113,113,.14)';ctx.fill();ctx.strokeStyle=C.red;ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('RING 0',cx,cy+4);
+    ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('RING 3',cx,cy-r0+18);
+    ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+    ctx.fillText(era==='80286'?'segment checks, 64KB cap':'ring checks + paging',cx,cy-r0+32);
+
+    // page table grid, only for 80386
+    if(era==='80386'){
+      const gx=W*0.68, gy=60, cell=20, gap=4;
+      ctx.fillStyle=C.purple;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+      ctx.fillText('CR3 → PAGE TABLE',gx,gy-10);
+      for(let row=0;row<4;row++){
+        for(let col=0;col<4;col++){
+          const px=gx+col*(cell+gap), py=gy+row*(cell+gap);
+          const mapped=(row===0&&col===0);
+          const targetUnmapped=(row===2&&col===2);
+          let fill='rgba(122,155,191,.12)', stroke=C.border;
+          if(mapped){fill='rgba(74,222,128,.25)';stroke=C.green;}
+          if(targetUnmapped && (phase==='check'||phase==='outcome')){fill='rgba(248,113,113,.3)';stroke=C.red;}
+          ctx.fillStyle=fill;ctx.fillRect(px,py,cell,cell);
+          ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.strokeRect(px,py,cell,cell);
+        }
+      }
+    }
+
+    // moving dot: from ring3 edge toward ring0 boundary
+    let dx=cx, dy=cy-r0+10, col=C.cyan;
+    if(phase==='attempt'){dy=cy-r0+10+(r0-r1-14)*t;col=C.cyan;}
+    else if(phase==='check'){dy=cy-r1-6;col=C.orange;}
+    else if(phase==='outcome'){
+      dy=cy-r1-6-14*t;col=era==='80286'?C.gold:C.red;
+      ctx.fillStyle=col;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText(era==='80286'?'GP FAULT':'PAGE FAULT',cx,cy+r1+34);
+    }
+    ctx.beginPath();ctx.arc(dx,dy,8,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  const cap=(eraCaptions[era]||{})[phase]||'Pick a chip generation above';
+  wrapText(ctx,cap,W/2,H-16,W-40,15);
+}
+
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY=y-(lines.length-1)*lh;
+  lines.forEach((ln,i)=>ctx.fillText(ln.trim(),cx,startY+i*lh));
+}
+
+function runEra(era){
+  const phases=['setup','attempt','check','outcome'];
+  const durations=[600,500,500,650];
+  let idx=0,start=performance.now();
+  const names={'8086':'8086 (1978)','80286':'80286 (1982)','80386':'80386 (1985)'};
+  document.getElementById('eraLabel').textContent='▶ Watching the '+names[era];
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawEraScene(t,phases[idx],era);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('eraLabel').textContent='▶ Done — try another chip generation';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetEra(){
+  document.getElementById('eraLabel').textContent='▶ Pick a chip generation to watch what happens when a program reaches somewhere it shouldn’t';
+  drawEraScene(0,'setup','80386');
+}
+
+// ── WORM SPREAD CANVAS ───────────────────────────────────────────────────────────
+let wormOrder=[];
+const wormCols=10, wormRows=6, wormTotal=wormCols*wormRows;
+function shuffledOrder(){
+  const arr=[...Array(wormTotal).keys()];
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  return arr;
+}
+const wormCaptions={
+  seed:'Nov 2, 1988 — the worm is released from MIT, exploiting a fingerd buffer overflow on one VAX.',
+  wave1:'It scans for reachable hosts, exploits sendmail’s DEBUG command and guessable passwords, and copies itself onward.',
+  wave2:'Each newly infected host immediately starts scanning too — the spread compounds, not adds.',
+  wave3:'~6,000 of the internet’s ~60,000 hosts are hit within a day — about 10%, shown to scale here (6 of these 60 nodes).',
+  overload:'A bug meant to limit re-infection instead re-infects hosts anyway some of the time — already-hit machines get slammed repeatedly and grind to a halt.'
+};
+const wormCounts={seed:1,wave1:3,wave2:5,wave3:6,overload:6};
+
+function drawWormScene(t,phase){
+  const canvas=document.getElementById('wormCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const marginX=40, marginTop=50, marginBottom=50;
+  const gridW=W-marginX*2, gridH=H-marginTop-marginBottom;
+  const cellW=gridW/wormCols, cellH=gridH/wormRows;
+  const rad=Math.min(cellW,cellH)*0.28;
+
+  const count=wormCounts[phase]||0;
+  const infectedSet=new Set(wormOrder.slice(0,count));
+
+  for(let i=0;i<wormTotal;i++){
+    const row=Math.floor(i/wormCols), col=i%wormCols;
+    const x=marginX+cellW*(col+0.5), y=marginTop+cellH*(row+0.5);
+    let fill=C.muted, alpha=0.35;
+    if(infectedSet.has(i)){
+      fill=C.red;alpha=1;
+      if(phase==='overload'){alpha=0.55+0.45*Math.sin(t*Math.PI*8+i);}
+    }
+    ctx.globalAlpha=alpha;
+    ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();
+    if(infectedSet.has(i)){ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();}
+    ctx.globalAlpha=1;
+  }
+
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('60 NODES ≈ SCALED SAMPLE OF THE 1988 INTERNET',marginX,28);
+  ctx.fillStyle=C.red;ctx.textAlign='right';
+  ctx.fillText(count+' / '+wormTotal+' infected',W-marginX,28);
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,wormCaptions[phase]||'Click Run the Infection to begin',W/2,H-16,W-40,15);
+}
+
+function runWorm(){
+  wormOrder=shuffledOrder();
+  const phases=['seed','wave1','wave2','wave3','overload'];
+  const durations=[500,600,600,600,1400];
+  let idx=0,start=performance.now();
+  document.getElementById('wormLabel').textContent='▶ Simulating the outbreak, November 2, 1988';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawWormScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('wormLabel').textContent='▶ Outbreak simulation complete — press Reset to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetWorm(){
+  wormOrder=[...Array(wormTotal).keys()];
+  document.getElementById('wormLabel').textContent='▶ Run the infection to see it spread — scaled to roughly the real ~10% infection rate';
+  drawWormScene(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetEra(); resetWorm(); });
+window.addEventListener('resize',()=>{ resetEra(); resetWorm(); });
+</script>
+</body>
+</html>

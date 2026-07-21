@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How a Signal Actually Gets Delivered, and Why Handlers Are Dangerous</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(251,146,60,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.3);color:var(--orange);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--orange)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--orange);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--orange);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--orange)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--orange);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.orange{border-color:var(--orange);color:var(--orange)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:var(--purple)} .ty{color:var(--cyan)} .fn{color:var(--gold)} .cm{color:var(--muted);font-style:italic} .st{color:var(--green)} .nu{color:var(--orange)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(251,146,60,.15);border:1.5px solid var(--orange);color:var(--orange);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.orange{border-color:var(--orange);color:var(--orange);background:rgba(251,146,60,.08);}
+.ctrl-btn.orange:hover{background:rgba(251,146,60,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.5rem;font-weight:700;color:var(--orange);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#synchronous" title="Delivery Is Synchronous"></a>
+  <a class="toc-dot" href="#pipeline" title="The Full Pipeline"></a>
+  <a class="toc-dot" href="#demo" title="Watch It Land"></a>
+  <a class="toc-dot" href="#mask" title="The Signal Mask"></a>
+  <a class="toc-dot" href="#danger" title="Why Handlers Are Dangerous"></a>
+  <a class="toc-dot" href="#safe" title="Async-Signal-Safe"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Signal Delivery · Async-Signal-Safety</div>
+    <h1>The Detour Nobody<br><span>Sees Coming</span></h1>
+    <p class="hero-sub">Sending a signal doesn't teleport your process into a handler mid-instruction. It marks a bit and waits. The real magic happens later, at a very specific checkpoint: the instant the kernel is about to hand the CPU back to user mode, it quietly rewrites the return trip so it goes through your handler first. That trick is elegant — and it's also exactly why handlers can wreck a program that looks completely correct on paper.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Checkpoint Where Delivery Actually Happens</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Stack Rewrites Per Delivery (in, then back out)</div></div>
+      <div class="hero-stat"><div class="num">~30</div><div class="lbl">Functions POSIX Certifies "Safe From a Handler"</div></div>
+      <div class="hero-stat"><div class="num">∞</div><div class="lbl">Points in Your Code a Handler Can Interrupt</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>You Know <span class="accent">What</span>. Now, <span class="accent c">How</span>.</h2>
+  <p class="reveal">The explainer lesson covered the what: a signal is a numbered flag, sent by the kernel or another process, and the target gets to choose default/ignore/handler for each one. What it deliberately skipped is the mechanical question that actually matters when you're writing real code: <em>the instant <code>kill()</code> is called, does the target process just... stop and jump into the handler, right then?</em></p>
+  <p class="reveal">No. And understanding exactly why not — and what really happens instead — is the difference between writing signal handlers that work and writing ones that corrupt memory once every few thousand runs in a way that's nearly impossible to reproduce.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Recall From the PCB/IDT Material</div>
+    You already know the kernel takes over a running process through traps — syscalls, faults, interrupts — and that every trap pushes a <strong>trap frame</strong> (PC, flags, a few registers) to the kernel stack, cheaply, every single time. Signal delivery <em>piggybacks</em> on this exact machinery rather than inventing a new one: it waits for a trap to happen anyway, then modifies what gets restored on the way back out.
+  </div>
+</div>
+</section>
+
+<!-- SYNCHRONOUS -->
+<section id="synchronous">
+<div class="container">
+  <div class="section-num">01 — The Key Insight</div>
+  <h2>Delivery Is <span class="accent">Synchronous</span>, Even Though Signals Are "Asynchronous"</h2>
+
+  <p class="reveal">Here's the sentence worth memorizing: <strong>a signal can <em>arrive</em> at any time, but it only ever gets <em>delivered</em> at one very specific checkpoint</strong> — the moment the kernel is about to return control to user mode. Everywhere else, "arrival" just means a bit gets set and nothing more happens yet.</p>
+
+  <div class="formula orange reveal">
+    <span class="label">The rule that resolves the apparent contradiction</span>
+    Arrival is asynchronous. Delivery is synchronous.
+    <span class="sub">"Asynchronous" describes when the pending bit can get set — literally any time, including mid-instruction. "Delivery" — actually redirecting execution into a handler — only happens at kernel-to-user return points, which the kernel fully controls.</span>
+  </div>
+
+  <p class="reveal">Where do those return points come from? Anywhere the CPU is about to leave Ring 0 and resume Ring 3 — which, from the PCB material, you already know happens constantly:</p>
+
+  <ul class="reveal">
+    <li>Right after a <strong>system call</strong> finishes servicing and is about to return its result to the caller.</li>
+    <li>Right after a <strong>hardware interrupt</strong> (most commonly the timer tick) finishes, whether or not it triggered a full context switch.</li>
+    <li>Right after the scheduler picks this exact process/thread to run next, following a <strong>context switch</strong> back into it.</li>
+  </ul>
+
+  <p class="reveal">In bob_os terms, this checkpoint is a specific function, called from exactly the place you'd guess: right after the scheduler has switched the page table back to the target process, but just before the CPU actually resumes it.</p>
+
+  <pre class="reveal"><code><span class="cm">/* process.c — bob_os, called from scheduler_tick() after paging_switch() */</span>
+<span class="kw">static</span> <span class="kw">void</span> <span class="fn">deliver_user_signals</span>(<span class="kw">void</span>) {
+    <span class="kw">struct</span> interrupt_frame *f = (<span class="kw">struct</span> interrupt_frame*)current->esp;
+
+    <span class="kw">for</span> (<span class="ty">int</span> sig = <span class="nu">1</span>; sig < NSIG; sig++) {
+        <span class="kw">if</span> (!(current->pending_signals & (<span class="nu">1u</span> << sig))) <span class="kw">continue</span>;
+        <span class="cm">/* only signals that are BOTH pending AND due for a checkpoint reach here */</span>
+        current->pending_signals &= ~(<span class="nu">1u</span> << sig);
+        <span class="cm">// ... build the redirect (next section) ...</span>
+    }
+}</code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    This is <em>why</em> a process that's blocked deep in the kernel servicing a slow syscall doesn't get yanked into a handler mid-syscall. The kernel is Ring 0 the entire time that syscall runs — there's no return-to-user checkpoint until the syscall is actually finished. The signal sits pending, patiently, until the exact moment the kernel is already about to hand control back — and rewrites that handoff instead of interrupting kernel code directly.
+  </div>
+</div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline">
+<div class="container">
+  <div class="section-num">02 — The Full Mechanism</div>
+  <h2>What "Redirecting the Return Trip" <span class="accent">Actually</span> Means</h2>
+
+  <p class="reveal">At the checkpoint, the kernel has the interrupted process's saved user-mode registers and stack pointer sitting right there in the trap frame — it hasn't restored them into the CPU yet. That's the opening. Instead of just restoring them as-is, the kernel <strong>edits them first</strong>, so that when it finally does execute the "return to user mode" instruction, the CPU lands in the handler, not in the code that was originally interrupted.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Read the saved user-mode stack pointer out of the trap frame</strong>Not the kernel stack — the trap frame records where the interrupted process's <em>own</em> stack pointer was, in user space, at the moment it was last in Ring 3.</div></li>
+    <li><div class="step-body"><strong>Carve out space on that user stack for a signal frame</strong>The kernel decrements the saved user <code>esp</code> by enough bytes to hold whatever the handler-call convention needs — at minimum, a return address and the signal number argument.</div></li>
+    <li><div class="step-body"><strong>Write a fake "call" onto that carved-out space</strong>The kernel writes the <em>original</em> interrupted program counter into that space as a return address, and the signal number as the first argument — mimicking exactly what a normal <code>call handler(signo)</code> instruction would have left on the stack.</div></li>
+    <li><div class="step-body"><strong>Overwrite the saved program counter in the trap frame with the handler's address</strong>This is the actual redirect. The trap frame's EIP/RIP field — the value that's about to get restored into the real CPU — now points at the handler function instead of wherever the process actually was.</div></li>
+    <li><div class="step-body"><strong>The trap returns normally — straight into the handler</strong>From the CPU's perspective, nothing unusual happened: it just executed a normal "return from trap" (<code>iret</code> on x86) using the values in the trap frame. It has no idea those values were doctored — it lands at the handler's first instruction as if it had been called normally.</div></li>
+    <li><div class="step-body"><strong>The handler runs, then "returns" — into a trap, not into ret</strong>When the handler function finishes and executes its own <code>ret</code>, it pops that fake return address you planted in step 3. On a real POSIX system that address doesn't point back into your code at all — it points at a tiny piece of trampoline code that executes the <code>sigreturn</code> system call, deliberately re-entering the kernel one more time.</div></li>
+    <li><div class="step-body"><strong>sigreturn restores the ORIGINAL frame, untouched</strong>The kernel had saved a complete copy of the original trap frame (all registers, the real PC, the real stack pointer, even the original signal mask) before it did any of the doctoring in steps 1–4. <code>sigreturn</code>'s entire job is to load that saved copy back in and resume it — putting the process back exactly where the signal first found it, as if the whole detour never happened.</div></li>
+  </ol>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why Not Just Have the Handler ret Directly Back?</div>
+    Because the handler's <code>ret</code> only knows how to pop a plain return address into a register — it has no way to also restore every other register, the FPU/SSE state, and the signal mask that was active before delivery. A real <code>ucontext</code> is much bigger than one address. <code>sigreturn</code> exists specifically to let the kernel do that full restoration, which is more state than any ordinary function-return mechanism can carry.
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ bob_os's Deliberate Shortcut</div>
+    bob_os's actual delivery code fakes a plain <code>cdecl</code> call frame — return address plus one argument — and relies on an ordinary <code>ret</code> to resume the original code, with no real <code>sigreturn</code> and no saved <code>ucontext</code>. That's fine for the tutorial's demo (a handler that finishes and lets execution fall back into ordinary flow), but it's explicitly documented as a simplification: a <code>SIGSEGV</code> handler that tries to just <code>ret</code> back into the faulting instruction re-executes it and faults again immediately, so bob_os's demo handler calls <code>sys_exit()</code> instead of ever attempting to resume. A production kernel needs the full <code>sigreturn</code>/<code>ucontext</code> path to recover cleanly.
+  </div>
+</div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>From <span class="accent">Pending</span> to Handler and Back</h2>
+
+  <p class="reveal">This is the full round trip: a signal sent while the process is busy elsewhere, sitting pending until the next return-to-user-mode checkpoint, the stack rewrite, the detour through the handler, and the <code>sigreturn</code> trip back to exactly where things left off.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="deliverLabel">▶ Run the full delivery pipeline</div>
+    <canvas id="deliverCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn orange" onclick="runDeliver()">▶ Deliver a pending signal</button>
+    <button class="ctrl-btn red" onclick="resetDeliver()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal"><b>What to watch for:</b> notice how long the signal can sit pending (arbitrary, unpredictable) versus how mechanically fixed the actual delivery sequence is once the checkpoint arrives (always the same six steps, every time, no exceptions).</div>
+</div>
+</section>
+
+<!-- MASK -->
+<section id="mask">
+<div class="container">
+  <div class="section-num">04 — Temporarily Saying "Not Now"</div>
+  <h2>The Signal <span class="accent">Mask</span></h2>
+
+  <p class="reveal">Disposition (default/ignore/handler) answers "what happens when this signal is eventually delivered." The <strong>signal mask</strong> answers a different question: "should this signal be allowed to reach a delivery checkpoint <em>at all</em>, right now?" Every process (technically every thread) keeps a bitmask of currently <strong>blocked</strong> signals, checked at exactly the same checkpoint as everything else in this lesson.</p>
+
+  <p class="reveal">Blocking is not the same as ignoring. A blocked signal that arrives still gets marked pending — the bit still flips — but the delivery loop skips over it at the checkpoint as long as it stays blocked. The moment the process unblocks it again, if the pending bit is still set, delivery happens on the very next checkpoint after that.</p>
+
+  <pre class="reveal"><code><span class="cm">#include &lt;signal.h&gt;</span>
+
+sigset_t block_these;
+sigemptyset(&block_these);
+sigaddset(&block_these, SIGUSR1);
+
+<span class="cm">/* critical section: don't let SIGUSR1 interrupt us here */</span>
+sigprocmask(SIG_BLOCK, &block_these, NULL);
+update_shared_linked_list();      <span class="cm">// SIGUSR1 can arrive, but delivery waits</span>
+sigprocmask(SIG_UNBLOCK, &block_these, NULL);
+<span class="cm">/* any SIGUSR1 that arrived during the critical section delivers ~now */</span></code></pre>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Handlers Get an Automatic, Temporary Mask Too</div>
+    By default, while a signal's own handler is running, that <em>same</em> signal number is automatically added to the mask — so a flood of <code>SIGINT</code>s doesn't re-enter <code>handle_sigint()</code> on top of itself and blow the stack. <code>sigaction()</code>'s <code>sa_mask</code> field lets you extend that automatic blocking to additional signal numbers for the duration of the handler, which is exactly how you prevent two <em>different</em> handlers from interleaving unsafely.
+  </div>
+
+  <p class="reveal">This is also the missing piece bob_os's own tutorial flags as a known gap: with no mask implemented, nothing stops <code>deliver_user_signals</code> from being re-entered on the very next tick while a handler is still mid-flight, which is exactly how you'd get nested signal frames stacking up on the user stack unboundedly. A signal mask is precisely the mechanism that prevents that.</p>
+</div>
+</section>
+
+<!-- DANGER -->
+<section id="danger">
+<div class="container">
+  <div class="section-num">05 — The Warning This Whole Lesson Is Building To</div>
+  <h2>Handlers Can Fire <span class="accent">Literally Anywhere</span></h2>
+
+  <p class="reveal">Go back to the pipeline in section 02. The checkpoint the kernel uses is "about to return to user mode" — and that can happen after <em>any</em> trap, at <em>any</em> instruction boundary in your program. Your handler doesn't get scheduled at a convenient moment between statements. It can interrupt your program in the absolute middle of any function it was running — including functions from the standard library that were never written to expect that.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">malloc()</div><div class="lbl">Maintains a global free-list — mid-update when interrupted</div></div>
+    <div class="stat-card"><div class="val">printf()</div><div class="lbl">Buffers output internally — mid-write when interrupted</div></div>
+    <div class="stat-card"><div class="val">strtok()</div><div class="lbl">Keeps hidden static state between calls</div></div>
+    <div class="stat-card"><div class="val">errno</div><div class="lbl">One shared variable — handler can silently overwrite it</div></div>
+  </div>
+
+  <p class="reveal">Here's the concrete failure mode. Say your main program is in the middle of <code>malloc()</code>: it has already unlinked a chunk from the internal free-list, and is halfway through updating a couple of pointers to keep that list consistent — the data structure is <em>temporarily broken on purpose</em>, for a few instructions, because that's how in-place list surgery works. If a signal is delivered <em>right then</em>, and your handler itself calls <code>malloc()</code> (even indirectly — logging with <code>printf()</code> often does), that second call walks the same free-list mid-repair. It doesn't know the list is broken. It reads corrupted pointers, and depending on your luck, either crashes immediately or — worse — silently corrupts the heap in a way that surfaces as a baffling crash somewhere completely unrelated, minutes later.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="mallocLabel">▶ Watch a handler interrupt malloc() mid-repair</div>
+    <canvas id="mallocCanvas" height="280"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runMalloc()">▶ Deliver signal mid-malloc()</button>
+    <button class="ctrl-btn red" onclick="resetMalloc()">Reset</button>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ This Is Not a Rare Edge Case</div>
+    This isn't a contrived scenario — it's the default risk of writing <em>any</em> non-trivial signal handler. The function you interrupted didn't do anything wrong. It's not reentrant because almost nothing in a general-purpose standard library is written to be reentrant by default; reentrancy has to be deliberately engineered in, and it usually isn't, because it costs performance nobody wants to pay for code that never expected to be interrupted by itself.
+  </div>
+</div>
+</section>
+
+<!-- ASYNC SIGNAL SAFE -->
+<section id="safe">
+<div class="container">
+  <div class="section-num">06 — The Narrow Safe List</div>
+  <h2>What's Actually <span class="accent">Safe</span> to Call From a Handler?</h2>
+
+  <p class="reveal">POSIX addresses this directly with the concept of <strong>async-signal-safe</strong> functions: a short, explicit list of library and system calls certified safe to call from inside a signal handler, specifically because they either don't touch any shared mutable state, or they're implemented in a way that tolerates being re-entered mid-call. Everything not on that list is guilty until proven innocent.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Function</th><th>Async-Signal-Safe?</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td class="hl"><code>write()</code></td><td class="pos">Yes</td><td>Raw syscall, no internal buffering, no shared state to corrupt</td></tr>
+        <tr><td class="hl"><code>read()</code></td><td class="pos">Yes</td><td>Same — thin syscall wrapper</td></tr>
+        <tr><td class="hl"><code>_exit()</code></td><td class="pos">Yes</td><td>Terminates immediately; nothing left to corrupt afterward</td></tr>
+        <tr><td class="hl"><code>kill()</code> / <code>raise()</code></td><td class="pos">Yes</td><td>Thin syscall wrapper, no shared library state</td></tr>
+        <tr><td class="hl">sig_atomic_t access</td><td class="pos">Yes</td><td>Guaranteed atomic read/write of this one specific integer type</td></tr>
+        <tr><td class="neg"><code>malloc()</code> / <code>free()</code></td><td class="neg">No</td><td>Maintains a shared heap free-list, not reentrant</td></tr>
+        <tr><td class="neg"><code>printf()</code> / <code>fprintf()</code></td><td class="neg">No</td><td>Buffers internally (and often calls <code>malloc()</code> itself)</td></tr>
+        <tr><td class="neg"><code>strtok()</code></td><td class="neg">No</td><td>Keeps hidden static state between calls</td></tr>
+        <tr><td class="neg">Most of <code>&lt;stdio.h&gt;</code></td><td class="neg">No</td><td>Nearly all of it buffers through shared, non-reentrant state</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🚫 What Most Handlers Are Tempted to Do</h4>
+      Log a message with <code>printf()</code>, allocate a buffer with <code>malloc()</code>, update a complex data structure directly, call some other convenience library function that "should be fine." Any of these can be running on the exact instruction the handler interrupted — and now you have two copies of the same non-reentrant function racing over the same private state, in the same thread, at the same time.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ What a Well-Behaved Handler Actually Does</h4>
+      As close to nothing as possible: set a single <code>volatile sig_atomic_t</code> flag, or write one byte to a pipe (the subject of the next lesson), and return immediately. All the real work happens later, back in ordinary, uninterrupted program flow, where every library function is safe to call again.
+    </div>
+  </div>
+
+  <div class="sidenote reveal"><b>The pragmatic rule of thumb:</b> if you're not sure whether a function is async-signal-safe, assume it isn't. The safe list is short enough to just remember directly: raw syscalls like <code>write()</code>, <code>read()</code>, <code>_exit()</code>, <code>kill()</code>, and a handful of others — roughly 30 functions total in the POSIX standard, out of the hundreds the C library offers.</div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Delivery Checkpoint</div><div class="glossary-def">The specific moment — right before returning to user mode — where the kernel checks for pending, unblocked signals and acts on them.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Signal Frame</div><div class="glossary-def">The fake call frame the kernel builds on the process's user stack, redirecting execution into the handler as if it had been called normally.</div></div>
+    <div class="glossary-card"><div class="glossary-term">sigreturn</div><div class="glossary-def">A dedicated system call, invoked automatically when a handler finishes, that restores the complete original execution context saved before delivery.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ucontext</div><div class="glossary-def">The full saved machine state (all registers, signal mask, stack) a real kernel preserves so sigreturn can restore it exactly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Signal Mask</div><div class="glossary-def">A per-thread bitmask of currently blocked signal numbers; blocked signals still get marked pending but delivery is deferred until unblocked.</div></div>
+    <div class="glossary-card"><div class="glossary-term">sigprocmask() / pthread_sigmask()</div><div class="glossary-def">The calls used to add or remove signal numbers from the calling thread's signal mask.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reentrancy</div><div class="glossary-def">A function's ability to be safely called again before a previous, still-in-progress call on the same thread has finished.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Async-Signal-Safe</div><div class="glossary-def">POSIX's certified list of functions safe to call from inside a signal handler — mostly thin syscall wrappers with no shared internal state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">sig_atomic_t</div><div class="glossary-def">A special integer type whose reads and writes are guaranteed atomic with respect to signal delivery — the one safe way to share a flag with a handler.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>How a Signal Actually Gets Delivered, and Why Handlers Are Dangerous · Companion lesson for bob_os module <code>18_signals</code></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: the self-pipe trick, reentrancy in practice, and signalfd().</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── FULL DELIVERY PIPELINE CANVAS ───────────────────────────────────────────
+function drawDeliver(t,phase){
+  const canvas=document.getElementById('deliverCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const userY=H*0.22, kernelY=H*0.55, stackY=H*0.82;
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;
+  ctx.strokeRect(10,userY-22,W-20,44);
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('USER MODE — original code running',18,userY-28);
+
+  ctx.strokeStyle=C.red;
+  ctx.strokeRect(10,kernelY-22,W-20,44);
+  ctx.fillStyle=C.red;
+  ctx.fillText('KERNEL — checkpoint logic',18,kernelY-28);
+
+  ctx.strokeStyle=C.gold;
+  ctx.strokeRect(10,stackY-18,W-20,36);
+  ctx.fillStyle=C.gold;
+  ctx.fillText('USER STACK — where the signal frame gets built',18,stackY-24);
+
+  const captions={
+    idle:'Click the button to run the pipeline',
+    running:'Process is running ordinary code in user mode — signal not yet sent',
+    sent:'Another process (or a fault) causes the pending bit to be set — kernel is entered on the NEXT trap regardless',
+    trap:'A trap occurs anyway (timer tick, syscall return) — trap frame pushed to kernel stack',
+    check:'Kernel checkpoint: pending_signals is non-zero, signal is unblocked — proceed to delivery',
+    frame:'Kernel writes a fake call frame onto the USER stack: [return addr = original EIP][arg = signo]',
+    redirect:'Kernel overwrites the trap frame’s saved EIP with the handler’s address',
+    iret:'Trap returns normally (iret) — CPU has no idea anything was rewritten',
+    handler:'Handler executes in user mode, believing it was called normally',
+    sigreturn:'Handler finishes, pops the fake return address — which is actually a trampoline calling sigreturn()',
+    restore:'sigreturn (kernel) restores the ORIGINAL saved trap frame — every register, real EIP, real stack pointer',
+    resumed:'Process resumes EXACTLY where it was interrupted — as if the whole detour never happened'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+
+  let dotX=W*0.2,dotY=userY,dotCol=C.cyan;
+  if(phase==='running'){dotX=W*(0.15+0.1*t);dotY=userY;dotCol=C.cyan;}
+  else if(phase==='sent'){dotX=W*0.3;dotY=userY;dotCol=C.orange;
+     ctx.fillStyle=C.orange;ctx.font='bold 16px sans-serif';ctx.textAlign='center';ctx.fillText('⚡ pending',W*0.3,userY-30);}
+  else if(phase==='trap'){dotX=W*0.3+(W*0.15)*t;dotY=userY+(kernelY-userY)*t;dotCol=C.orange;}
+  else if(phase==='check'){dotX=W*0.45;dotY=kernelY;dotCol=C.red;}
+  else if(phase==='frame'){dotX=W*0.45+(W*0.1)*t;dotY=kernelY+(stackY-kernelY)*t;dotCol=C.gold;}
+  else if(phase==='redirect'){dotX=W*0.55;dotY=kernelY;dotCol=C.purple;}
+  else if(phase==='iret'){dotX=W*0.55+(W*0.15)*t;dotY=kernelY-(kernelY-userY)*t;dotCol=C.green;}
+  else if(phase==='handler'){dotX=W*0.7+(W*0.08)*t;dotY=userY;dotCol=C.green;}
+  else if(phase==='sigreturn'){dotX=W*0.78+(W*0.07)*t;dotY=userY+(kernelY-userY)*t;dotCol=C.purple;}
+  else if(phase==='restore'){dotX=W*0.85;dotY=kernelY;dotCol=C.cyan;}
+  else if(phase==='resumed'){dotX=W*0.85-(W*0.65)*t;dotY=kernelY-(kernelY-userY)*t;dotCol=C.cyan;}
+
+  ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function runDeliver(){
+  const phases=['running','sent','trap','check','frame','redirect','iret','handler','sigreturn','restore','resumed'];
+  const durations=[500,600,500,450,550,450,450,550,550,450,550];
+  let idx=0,start=performance.now();
+  document.getElementById('deliverLabel').textContent='▶ Delivering...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDeliver(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('deliverLabel').textContent='▶ Done — process resumed exactly where it left off. Run again?';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDeliver(){
+  document.getElementById('deliverLabel').textContent='▶ Run the full delivery pipeline';
+  drawDeliver(0,'idle');
+}
+
+// ── MALLOC CORRUPTION CANVAS ────────────────────────────────────────────────
+function drawMalloc(t,phase){
+  const canvas=document.getElementById('mallocCanvas');
+  const W=gW(canvas),H=280;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // free-list nodes
+  const nodes=5, nodeW=70, gap=(W-40-nodes*nodeW)/(nodes-1);
+  const ny=H*0.35;
+  for(let i=0;i<nodes;i++){
+    const x=20+i*(nodeW+gap);
+    let broken = (phase==='unlink'||phase==='interrupt'||phase==='corrupt') && i===2;
+    ctx.strokeStyle= broken? C.red : C.cyan;
+    ctx.lineWidth = broken?2:1;
+    ctx.strokeRect(x,ny,nodeW,40);
+    ctx.fillStyle= broken? C.red:C.cyan;
+    ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('chunk '+i,x+nodeW/2,ny+24);
+    if(i<nodes-1){
+      ctx.strokeStyle = broken? C.red : C.muted;
+      ctx.beginPath();ctx.moveTo(x+nodeW,ny+20);ctx.lineTo(x+nodeW+gap,ny+20);ctx.stroke();
+    }
+  }
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('malloc() free-list (main program, mid-unlink of chunk 2)',20,ny-8);
+
+  const captions={
+    idle:'Click to run the corruption scenario',
+    unlink:'Main program’s malloc() begins unlinking chunk 2 — pointers are temporarily inconsistent mid-repair',
+    interrupt:'⚡ Signal delivered RIGHT NOW — handler runs, interrupting malloc() mid-repair',
+    handlercall:'Handler calls printf() internally, which calls malloc() AGAIN — same broken free-list, same thread',
+    corrupt:'Second malloc() call reads the half-updated pointers as if they were valid — heap corruption',
+    resumed:'Handler returns, original malloc() resumes — now finishing an unlink on data it can no longer trust'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  if(phase==='interrupt'||phase==='handlercall'||phase==='corrupt'){
+    ctx.fillStyle=C.orange;ctx.font='bold 22px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',W*0.5,ny-30);
+  }
+  if(phase==='handlercall'||phase==='corrupt'){
+    const hy=H*0.68;
+    ctx.strokeStyle=C.gold;ctx.strokeRect(W*0.3,hy,W*0.4,36);
+    ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('handler() → printf() → malloc()',W*0.5,hy+22);
+  }
+}
+
+function runMalloc(){
+  const phases=['unlink','interrupt','handlercall','corrupt','resumed'];
+  const durations=[600,500,600,600,600];
+  let idx=0,start=performance.now();
+  document.getElementById('mallocLabel').textContent='▶ Running...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawMalloc(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('mallocLabel').textContent='▶ Heap corrupted. This is why malloc() is not async-signal-safe. Run again?';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetMalloc(){
+  document.getElementById('mallocLabel').textContent='▶ Watch a handler interrupt malloc() mid-repair';
+  drawMalloc(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDeliver(); resetMalloc(); });
+window.addEventListener('resize',()=>{ resetDeliver(); resetMalloc(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site Isolation — How Spectre Forced Chrome to Rebuild Its Own Walls</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.variant-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:680px){.variant-grid{grid-template-columns:1fr}}
+.variant-card{background:var(--card);border-radius:12px;padding:1.5rem;position:relative;overflow:hidden;}
+.variant-card::before{content:'';position:absolute;inset:0;border-radius:12px;border:1.5px solid transparent;}
+.variant-card.user::before{border-color:var(--cyan)}
+.variant-card.kernel::before{border-color:var(--red)}
+.variant-badge{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;padding:.25rem .7rem;border-radius:3px;margin-bottom:.8rem;}
+.variant-card.user .variant-badge{background:rgba(56,189,248,.12);color:var(--cyan);border:1px solid rgba(56,189,248,.3);}
+.variant-card.kernel .variant-badge{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.3);}
+.variant-card h4{font-family:'Playfair Display',serif;font-size:1.1rem;color:#fff;margin-bottom:.6rem;}
+.variant-card .feat-num{font-family:'Source Code Pro',monospace;font-size:1.4rem;font-weight:700;margin:.5rem 0 .2rem;}
+.variant-card.user .feat-num{color:var(--cyan)}
+.variant-card.kernel .feat-num{color:var(--red)}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--red);text-decoration:none;}
+
+.ftag{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.78rem;padding:.1rem .45rem;border-radius:3px;margin:0 .1rem;vertical-align:middle;}
+.ftag.rend{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.brow{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.ftag.gpu{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.net{background:rgba(13,148,136,.15);color:var(--teal);border:1px solid rgba(13,148,136,.3);}
+.ftag.util{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* pipeline flow */
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* bespoke: threat-shift card — a "before assumption / after reality" ledger entry */
+.shift-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:center;margin:1.8rem 0;}
+@media(max-width:700px){.shift-grid{grid-template-columns:1fr}}
+.shift-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.4rem;}
+.shift-card .shift-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.5rem;}
+.shift-card.was .shift-label{color:var(--muted)}
+.shift-card.now .shift-label{color:var(--red)}
+.shift-arrow{font-size:1.6rem;color:var(--red);text-align:center;}
+@media(max-width:700px){.shift-arrow{transform:rotate(90deg);padding:.3rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#sharedprocess" title="One Process, Two Strangers"></a>
+  <a class="toc-dot" href="#spectre" title="What Spectre Broke"></a>
+  <a class="toc-dot" href="#mitigations" title="Band-Aids First"></a>
+  <a class="toc-dot" href="#demo" title="Interactive Demo"></a>
+  <a class="toc-dot" href="#isolation" title="Site Isolation"></a>
+  <a class="toc-dot" href="#coop" title="COOP / COEP"></a>
+  <a class="toc-dot" href="#theme" title="The Running Theme"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Site Isolation · Speculative Execution · Chromium Security Architecture</div>
+    <h1>How <span>Spectre</span> Forced Chrome<br>to Rebuild Its Own Walls</h1>
+    <p class="hero-sub">You already know Chrome splits itself into a privileged browser process and sandboxed renderer processes — the browser's own kernel/user-space wall. This is the story of the one time that wall turned out to have a hole nobody could patch from inside a single process, and the CPU-level attack, disclosed in January 2018, that made Chrome redraw the line between "tab" and "process" almost overnight.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2018</div><div class="lbl">Spectre Goes Public</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Renderer Bugs Required</div></div>
+      <div class="hero-stat"><div class="num">1:1</div><div class="lbl">Site-to-Process Ratio</div></div>
+      <div class="hero-stat"><div class="num">COOP+COEP</div><div class="lbl">The Opt-In Unlock</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Quick Recap</div>
+  <h2>The Wall You Already <span class="accent">Know About</span></h2>
+
+  <p class="reveal">From Browser X-Ray, you already know the shape of it: Chrome's browser process is the trusted "kernel," renderer processes are the sandboxed "user space," and Mojo IPC is the guarded door between them. What that story glossed over is that before 2018, the renderer side of that wall was drawn more loosely than you'd think — Chrome would often let <strong>multiple unrelated websites share a single renderer process</strong> for efficiency, most commonly when a page embedded a cross-origin iframe (think an ad network's frame, or a "Log in with…" widget, sitting inside someone else's page). Same process, same address space, two strangers who never agreed to room together.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🪆 Where This Picks Up</div>
+    This isn't a new wall — it's a crack found in the old one. Everything below assumes you already know <em>why</em> renderer processes are sandboxed from the OS's point of view. The question this page answers is narrower and sharper: why wasn't "different origins, same process" good enough, and what specific 2018 event made Chrome's architects decide it never could be again?
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: SHARED PROCESS / OLD THREAT MODEL -->
+<section id="sharedprocess">
+<div class="container">
+  <div class="section-num">01 — The Old Assumption</div>
+  <h2>One Process, <span class="accent">Two Strangers</span></h2>
+
+  <p class="reveal">Here's why sharing a renderer process across origins seemed perfectly safe for years: JavaScript, as a language, simply <strong>has no instruction for reading arbitrary memory</strong>. There's no pointer arithmetic, no <code>*(address)</code>, no way to say "give me the bytes sitting 400KB to the left of this object." Every JS object is accessed through a reference the V8 engine hands you — never a raw address. If origin A's JavaScript and origin B's JavaScript both happened to be running inside the same OS process, A's code still had no <em>language-level</em> way to reach across and read B's variables, B's cookies-in-memory, or B's decrypted response bodies, even though they were, physically, bytes sitting in the same address space a few thousand cells apart.</p>
+
+  <p class="reveal">That's the crucial detail: the isolation between origins A and B was <strong>entirely a software-level guarantee</strong>, enforced by V8's own rules about what JavaScript is allowed to express — not a hardware-level guarantee enforced by the OS's page tables. The OS process boundary (the one that stops your Chrome tab from reading your Spotify app's memory) simply wasn't being used <em>between origins inside one renderer</em>, because nobody thought it needed to be. The language sandbox was assumed to be sandbox enough.</p>
+
+  <div class="shift-grid reveal">
+    <div class="shift-card was">
+      <div class="shift-label">The pre-2018 assumption</div>
+      "As long as JS can't <em>address</em> another origin's memory directly, it doesn't matter if that memory is technically reachable in the same process. The language itself is the wall."
+    </div>
+    <div class="shift-arrow">→</div>
+    <div class="shift-card now">
+      <div class="shift-label">Why that assumption failed</div>
+      Reading memory doesn't require an instruction that says "read." It just requires a way to <em>infer</em> a byte's value from something observable — like how long an operation takes.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>This is the same trust boundary as file permissions.</b> Two OS-level processes owned by the same user can technically both read a world-readable file — the OS lets them, on purpose. Pre-2018 Chrome's stance on cross-origin sharing was similar: "the platform's own rules make this fine," right up until someone finds a way to read data the platform's rules were never designed to protect against in the first place.
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧠 Software Isolation vs. Hardware Isolation, Precisely</div>
+    <strong>Software-level isolation:</strong> a set of rules enforced by a program (here, V8's JS semantics) that a well-behaved caller can't violate no matter what it writes. <strong>Hardware-level isolation:</strong> a physical boundary enforced by the CPU and OS (page tables, process address spaces) that a caller can't violate <em>even if it tries something the software layer never anticipated</em>. Pre-2018 cross-origin sharing rented only the first kind. Spectre is exactly the "tries something the software layer never anticipated" case.
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">The pre-2018 isolation formula</span>
+    origin A cannot read origin B's memory  ⇐  V8's language rules forbid JS from expressing a raw memory read
+    <span class="sub">Holds exactly as long as "read memory" only means "execute an instruction the language rules cover." Spectre reads memory without ever executing one.</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: SPECTRE -->
+<section id="spectre">
+<div class="container">
+  <div class="section-num">02 — The Attack</div>
+  <h2>What <span class="accent r">Spectre</span> Actually Broke</h2>
+
+  <p class="reveal">In January 2018, Google's Project Zero and academic researchers jointly disclosed <strong>Spectre</strong> (alongside a related attack, Meltdown) — a class of attacks against a performance feature almost every modern CPU relies on: <strong>speculative execution</strong>. To go fast, your processor doesn't wait around to find out whether a branch (an <code>if</code>) will actually be taken — it guesses, and starts executing down the predicted path <em>before</em> it knows the guess is right. If the guess was wrong, the CPU throws away the speculative results and rewinds... architecturally. But it turns out the rewind isn't perfectly clean.</p>
+
+  <p class="reveal">Specifically: while speculatively executing down a mispredicted path, the CPU can end up touching memory it never should have accessed — and that memory access leaves a side effect in the CPU's cache, even after the speculative instructions themselves are discarded. An attacker who can't read that memory directly can still ask, indirectly: <em>"is this particular address now sitting in the fast cache, or not?"</em> Timing how long it takes to re-access various addresses (a technique like Flush+Reload) turns "in cache or not" into a single leaked bit. Repeat that across a byte's worth of possible values, and you've reconstructed a byte you were never supposed to see — one bit of hidden information smuggled out per timing measurement, entirely through a side channel with no data-read instruction anywhere in sight.</p>
+
+  <pre class="reveal"><span class="tag">conceptual gadget</span><code><span class="cm">// simplified illustration of the shape of a Spectre-style gadget —</span>
+<span class="cm">// not exploit code, just the pattern that makes the leak possible</span>
+<span class="kw">function</span> <span class="fn">maybeRead</span>(index) {
+  <span class="kw">if</span> (index < array1.<span class="var">length</span>) {          <span class="cm">// (1) branch the CPU will *speculate* past</span>
+    <span class="kw">let</span> secretByte = array1[index];      <span class="cm">// (2) speculatively read OOB memory</span>
+    <span class="kw">let</span> touch = array2[secretByte * <span class="num">4096</span>]; <span class="cm">// (3) leak it into the cache as an index</span>
+  }
+}
+<span class="cm">// after misprediction is discovered, (2) and (3) are architecturally undone —</span>
+<span class="cm">// but array2's cache-line state is NOT undone. Timing which offset of</span>
+<span class="cm">// array2 is now fast to access reveals secretByte, one guess at a time.</span></code></pre>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Point That Matters Most</div>
+    Spectre did not find a bug in V8's sandbox. It did not find a way for JavaScript to violate the language's own rules. <strong>Ordinary, rule-following, spec-compliant JavaScript</strong> — just written in a particular shape, and given a sufficiently precise timer — could use the CPU's own speculative-execution behavior to read bytes that JavaScript's language semantics say it should never be able to see. The attack lives one full layer below the sandbox: it broke a promise the <em>hardware</em> made, not a promise the <em>language</em> made. No amount of auditing V8's source code fixes a hardware promise that isn't kept.
+  </div>
+
+  <p class="reveal">And that's precisely why "different origins sharing one renderer process" stopped being safe overnight. It was never protected by an OS-level wall to begin with — only by V8's language rules. Spectre is an attack that specifically operates <em>underneath</em> language rules. So if origin B's secret data was sitting anywhere in the same process's address space as origin A's malicious JavaScript, Spectre gave A a route to it that had nothing to do with what the JS sandbox permitted.</p>
+</div>
+</section>
+
+<!-- SECTION 2b: MITIGATIONS TRIED FIRST -->
+<section id="mitigations">
+<div class="container">
+  <div class="section-num">03 — The First Response</div>
+  <h2>Band-Aids <span class="accent">Before</span> the Structural Fix</h2>
+
+  <p class="reveal">Site Isolation wasn't the very first thing Chrome shipped after the January 2018 disclosure — it was the thing that took longest to finish, because reassigning process boundaries across the entire browser is a large, invasive change. In the meantime, engineers reached for faster, narrower mitigations that could ship within days, aimed directly at the mechanics of the attack rather than at the architecture around it. Two mattered most.</p>
+
+  <p class="reveal">First: <strong>value poisoning</strong> inside V8 itself. The idea is to make the JIT-compiled code for a bounds check speculation-safe — inserting logic so that even if the CPU speculatively executes past an array bounds check, the value it reads gets masked into something harmless (often just zero) before it can be used as an index into a second array, which is the step that actually leaks a bit into the cache. It doesn't stop speculation from happening; it tries to make speculation's result useless to an attacker. Second: <strong>timer degradation</strong> — deliberately making <code>performance.now()</code> (and similar high-resolution timers) coarser and jittered, since every version of this attack fundamentally depends on measuring a timing difference small enough to distinguish a cache hit from a cache miss. Chrome dropped <code>performance.now()</code>'s resolution from roughly 5 microseconds down to 100 microseconds, with added jitter, specifically to make that measurement noisier.</p>
+
+  <div class="variant-grid reveal">
+    <div class="variant-card user">
+      <span class="variant-badge">Software Mitigation</span>
+      <h4>Value Poisoning &amp; Timer Jitter</h4>
+      <div class="feat-num">100µs</div>
+      <div class="fam-desc" style="color:var(--muted);font-size:.88rem;">Shippable in days. Targets the mechanics of one specific gadget shape and one specific measurement technique. Raises the difficulty of a leak, but doesn't remove the underlying shared address space — new gadget shapes and finer-grained timing tricks (a second thread as a makeshift clock, for instance) kept the cat-and-mouse game alive.</div>
+    </div>
+    <div class="variant-card kernel">
+      <span class="variant-badge">Structural Fix</span>
+      <h4>Site Isolation</h4>
+      <div class="feat-num">1 / site</div>
+      <div class="fam-desc" style="color:var(--muted);font-size:.88rem;">Took longer to ship (full rollout in Chrome 67, mid-2018). Doesn't care what shape the gadget takes or how the timer is built, because it removes the thing every variant of the attack needs: another origin's secret sitting anywhere inside the same address space.</div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why Ship Both, Not Just the Real Fix</div>
+    Value poisoning and timer jitter are <strong>defense in depth</strong>, not a substitute for Site Isolation — they buy time and narrow the attack surface for the many cases Site Isolation can't fully cover on its own (data still shared <em>within</em> one origin's own process, for instance, isn't helped by putting other origins elsewhere). This is the same layered-defenses instinct as an OS shipping both stack canaries <em>and</em> non-executable memory pages: neither one alone is the whole answer, and a hardware-level attack rarely has a single clean patch.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: INTERACTIVE DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">04 — See It Happen</div>
+  <h2>Shared Process vs. <span class="accent">Isolated Process</span></h2>
+
+  <p class="reveal">Below are the same two origins, side by side, under each model. Run the "shared renderer" case first — watch a Spectre-style timing probe reach across the shared address space to origin B's data. Then run the "Site Isolation" case and watch the exact same probe hit a wall it cannot cross, because there's no longer anything on the other side of that wall to reach — B's data was never loaded into A's process at all.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="demoLabel">▶ Choose a model, then run the probe</div>
+    <canvas id="demoCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runDemo('shared')">▶ Run: Pre-2018 Shared Renderer</button>
+    <button class="ctrl-btn" onclick="runDemo('isolated')">▶ Run: Post-Site-Isolation</button>
+    <button class="ctrl-btn gold" onclick="resetDemo()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What actually changed between the two runs?</b> Nothing about the JavaScript changed — the same timing-probe technique runs in both. What changed is <em>what's reachable</em>. In the shared case, both origins' data live in one address space, so a hardware-level side channel has something to find. In the isolated case, the OS's own page tables mean origin A's process doesn't have origin B's bytes mapped in at all — there's nothing there to leak, timing probe or not.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: SITE ISOLATION -->
+<section id="isolation">
+<div class="container">
+  <div class="section-num">05 — Chrome's Response</div>
+  <h2>Moving the Wall from <span class="accent p">Software to Hardware</span></h2>
+
+  <p class="reveal">Chrome's actual fix was not a cleverer JavaScript sandbox — there isn't a purely software patch for a hardware side channel that runs underneath the language. Instead, Chrome shipped <strong>Site Isolation</strong> as a default-on feature (Chrome 67, mid-2018, after early testing the previous year): it became much stricter about which pages are allowed to share a renderer process, generally enforcing <strong>one renderer process per site</strong> — not per tab, per <em>site</em> (roughly, scheme plus registrable domain), so that even a cross-origin iframe embedded inside another page gets pulled out into its own process, communicating back to the parent frame only via IPC. These pulled-out iframes even got their own name: <strong>out-of-process iframes</strong>, or OOPIFs.</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>1. A navigation or embed requests a new site.</strong> Whether it's a top-level navigation or an iframe, Chrome checks which "site" the content belongs to.</div></li>
+    <li><div class="step-body"><strong>2. Chrome compares that site against the current process's site.</strong> If they match, the content can stay. If they don't, isolation kicks in.</div></li>
+    <li><div class="step-body"><strong>3. A separate renderer process is spawned (or reused) for the foreign site.</strong> That process gets its own OS-level address space, enforced by the OS's real page tables — the same mechanism keeping your Chrome tab out of your Spotify app's memory.</div></li>
+    <li><div class="step-body"><strong>4. Cross-origin iframes become OOPIFs.</strong> The parent page still visually contains the iframe, but under the hood it's compositor magic stitching together output from a genuinely separate process.</div></li>
+    <li><div class="step-body"><strong>5. The result: nothing to leak.</strong> A Spectre-style probe running in origin A's process can still read "everything in this address space" — it's just that origin B's data was never mapped into that address space to begin with.</div></li>
+  </div>
+
+  <p class="reveal">Notice what this move actually is, structurally: Chrome took the exact hardware-enforced guarantee it already relies on for the browser-process/renderer-process split — the OS's page-table wall between processes — and applied that <em>same</em> guarantee one layer deeper, between origins that used to cheerfully share a process. It didn't invent new isolation technology. It just stopped trusting a software-only boundary for a job that, post-Spectre, only a hardware-enforced boundary can actually do.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>❌ Before Site Isolation</h4>
+      Renderer processes were assigned roughly per tab. A page and its cross-origin iframes (ad frames, embedded widgets, third-party login forms) could easily share one process. Isolation between them existed only at the JavaScript-language level.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ After Site Isolation</h4>
+      Renderer processes are assigned per site. Cross-origin iframes become OOPIFs in their own process. Isolation between origins is now enforced by the OS's page tables — the same hardware-backed wall that separates unrelated applications on your machine.
+    </div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">🔑 The One-Sentence Version</div>
+    Site Isolation doesn't make Spectre impossible inside a process — it makes Spectre <em>irrelevant</em> across origins, by guaranteeing there's no longer any other origin's data sitting inside the process a Spectre probe could reach.
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">The pattern, reused one more layer down</span>
+    Ring 0 / Ring 3: hardware wall between OS kernel and user processes<br>
+    Browser process / renderer process: OS-process wall reused for browser "kernel" vs. "user space"<br>
+    Origin A / Origin B (post Site Isolation): the <em>same</em> OS-process wall, reused again, between websites
+    <span class="sub">Three different diagrams. One mechanism, borrowed twice.</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: COOP/COEP -->
+<section id="coop">
+<div class="container">
+  <div class="section-num">06 — The Opt-In Layer</div>
+  <h2>COOP, COEP, and the <span class="accent">SharedArrayBuffer</span> Story</h2>
+
+  <p class="reveal">Site Isolation solved the "different sites, different processes" half of the problem. But Spectre also had an immediate, uncomfortable side effect on a specific web API: <strong>SharedArrayBuffer</strong>, which lets JavaScript share a raw block of memory between the main thread and a Web Worker for high-performance code (WebAssembly threading, for instance). A SharedArrayBuffer, by design, is exactly the kind of shared memory a Spectre-style timing probe loves — and worse, JS running against it could build extremely precise custom timers out of nothing but a second thread incrementing a shared counter, sidestepping any timer-precision defenses the browser tried to add elsewhere. So in January 2018, browser vendors — Chrome included — <strong>disabled SharedArrayBuffer across the board</strong>, in every renderer, as an emergency stopgap, while the real fix (Site Isolation) was finished and rolled out.</p>
+
+  <p class="reveal">SharedArrayBuffer eventually came back — but not unconditionally. It's now gated behind a pair of HTTP response headers a site must opt into: <strong>Cross-Origin-Opener-Policy (COOP)</strong> and <strong>Cross-Origin-Embedder-Policy (COEP)</strong>. Set both correctly and your page becomes what the platform calls <em>cross-origin isolated</em> (you can check this yourself with <code>self.crossOriginIsolated</code>) — which is really a site formally promising the browser "I am not casually sharing my process with unrelated cross-origin content," in exchange for which the browser trusts it with SharedArrayBuffer, high-resolution timers, and other APIs that are only safe once process-level isolation is guaranteed rather than assumed.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Header</th><th>What It Promises</th><th>Why It Matters Post-Spectre</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Cross-Origin-Opener-Policy</td><td class="hl">This page won't share a browsing-context group with cross-origin windows that open it</td><td>Prevents another origin's window from ending up in a position to be reachable/related in the same process group.</td></tr>
+        <tr><td class="gold">Cross-Origin-Embedder-Policy</td><td class="hl">This page will only embed cross-origin resources that explicitly opt in</td><td>Stops the page from pulling in foreign content that hasn't agreed to be isolated alongside it.</td></tr>
+        <tr><td class="gold">Both set, verified</td><td class="hl">self.crossOriginIsolated === true</td><td>Unlocks SharedArrayBuffer and higher-precision timing APIs — powerful, but only once the isolation guarantee is real.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <pre class="reveal"><span class="tag">http response headers</span><code><span class="cm">// what a server sends to opt a page into cross-origin isolation</span>
+<span class="cls">Cross-Origin-Opener-Policy</span>: <span class="str">same-origin</span>
+<span class="cls">Cross-Origin-Embedder-Policy</span>: <span class="str">require-corp</span>
+
+<span class="cm">// the page can now verify it actually got what it asked for:</span>
+<span class="kw">if</span> (self.<span class="var">crossOriginIsolated</span>) {
+  <span class="kw">const</span> buf = <span class="kw">new</span> <span class="fn">SharedArrayBuffer</span>(<span class="num">1024</span>); <span class="cm">// only reachable when isolated</span>
+}</code></pre>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why an Opt-In, Not a Default</div>
+    The browser can't unilaterally guarantee your page is cross-origin isolated — that depends on what <em>other</em> sites choose to do when embedding or opening it. COOP/COEP exist because "isolated enough for dangerous APIs" isn't a property the browser alone can promise; it's a property the whole surrounding web of pages has to agree to. The header pair is the web platform's way of making that agreement explicit and checkable, instead of assumed.
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🖼️ A Concrete Case: The Ad-Network Iframe</div>
+    Picture a news site embedding a third-party ad iframe, pre-2018. Nothing malicious required — the ad network's script and the news site's own script could easily have ended up in the very same renderer process, sharing an address space, purely because Chrome's old process-assignment heuristics didn't see a reason to split them. Post-Site-Isolation, that ad iframe is now, by default, an OOPIF running in its own process — so even a fully compromised ad-network script has no shared address space left to run a timing probe against.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Notice the shape of this fix, too.</b> It's the COOP/COEP pattern that WebAssembly threading libraries and browser-based video/audio codecs now routinely require just to function — if you've ever seen a library README say "requires cross-origin isolation," now you know exactly which January 2018 chain of events put that requirement there.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: RUNNING THEME -->
+<section id="theme">
+<div class="container">
+  <div class="section-num">07 — Zooming Out</div>
+  <h2>Every Layer Asks the <span class="accent r">Same Question</span></h2>
+
+  <p class="reveal">Step back across everything this series has covered and a single question keeps reappearing at every layer, just rephrased: <strong>who is allowed to share a room with whom?</strong> CPU rings answered it by drawing a hardware line between privileged and unprivileged instructions. The OS answered it by drawing a hardware-backed line between kernel and user-space processes. Chrome's original architecture answered it by drawing that same line again, in software, between the browser process and renderer processes. And for years, "which website's JavaScript gets to share a room" was answered by a much weaker, purely linguistic promise — until Spectre proved that promise didn't hold once the question moved from "can your code address that memory" to "can your code learn that memory's contents by any means at all."</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">⚡</div><div class="lbl">CPU rings: hardware wall, instruction-level</div></div>
+    <div class="stat-card"><div class="val">🖥️</div><div class="lbl">OS processes: hardware wall, page-table-level</div></div>
+    <div class="stat-card"><div class="val">🌐</div><div class="lbl">Browser/renderer: software wall, reusing OS processes</div></div>
+    <div class="stat-card"><div class="val">🔓</div><div class="lbl">Pre-2018 origins: software wall, language-level only</div></div>
+  </div>
+
+  <p class="reveal">Site Isolation is the sharpest example yet of that boundary needing to be redrawn — not because anyone found a bug, but because an assumption about what "sharing an address space safely" even means quietly stopped being true, for every process on every machine with a speculating CPU, all at once. The fix, tellingly, wasn't a new idea. It was the oldest idea in this entire series — <em>put untrusted things in genuinely separate processes, and let the hardware, not a promise, keep them apart</em> — applied one layer further than anyone had previously bothered to draw it.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Layer</th><th>Who Shares a Room, Pre-Fix</th><th>What Redrew the Line</th><th>Enforced By</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">CPU</td><td>Any instruction stream that reaches Ring 0 privilege</td><td>Protection rings</td><td class="hl">Silicon</td></tr>
+        <tr><td class="gold">Operating System</td><td>Any code running without its own process</td><td>Kernel / user-space process split</td><td class="hl">OS + CPU page tables</td></tr>
+        <tr><td class="gold">Browser (2008–2018)</td><td>Any web content Chrome chose to place in one renderer</td><td>Browser process / renderer process split</td><td class="hl">OS process boundary, reused in software</td></tr>
+        <tr><td class="gold">Origins (pre-2018)</td><td>Any two origins sharing a renderer, e.g. cross-origin iframes</td><td>— relied on V8's language rules only —</td><td class="hl">Software (JS semantics)</td></tr>
+        <tr><td class="gold">Origins (post-2018)</td><td>Nothing — each site gets its own renderer process</td><td class="hl">Site Isolation</td><td class="hl">OS process boundary, reused again</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>Spectre didn't break the rules of the JavaScript sandbox — it broke the CPU's unspoken promise that speculative work leaves no trace, and because pre-2018 Chrome relied on the language sandbox alone to keep origins apart inside a shared process, Chrome's only real fix was to stop sharing processes at all, moving the origin-vs-origin wall from software policy to the same OS-enforced, hardware-backed boundary that has separated processes all along.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Speculative Execution</div><div class="glossary-def">A CPU performance technique: guessing the outcome of a branch and executing ahead of that guess before it's confirmed, rewinding architecturally if wrong.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Spectre</div><div class="glossary-def">A 2018-disclosed class of attacks that uses speculative execution plus a cache-timing side channel to read memory a program's own language rules say it shouldn't be able to see.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Side Channel</div><div class="glossary-def">A way to infer secret information from an observable side effect (like timing) rather than from a direct, sanctioned data read.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cache Timing Attack</div><div class="glossary-def">Measuring how long it takes to access memory to infer whether that memory is already sitting in the fast CPU cache — and from that, infer secret data indirectly.</div></div>
+    <div class="glossary-card"><div class="glossary-term">V8</div><div class="glossary-def">Chrome's JavaScript engine. Enforces the language-level rules (no raw pointers, no arbitrary memory reads) that used to be considered sufficient isolation between origins sharing a process.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Site Isolation</div><div class="glossary-def">Chrome's post-Spectre architecture change: one renderer process per site by default, so cross-origin content is never loaded into the same address space, closing off what a same-process side channel could reach.</div></div>
+    <div class="glossary-card"><div class="glossary-term">OOPIF</div><div class="glossary-def">Out-of-process iframe — a cross-origin iframe rendered in its own separate renderer process, then visually composited back into the embedding page.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SharedArrayBuffer</div><div class="glossary-def">A JS API for raw memory shared between threads. Briefly disabled browser-wide after Spectre's disclosure because it made high-precision timing attacks trivially easy.</div></div>
+    <div class="glossary-card"><div class="glossary-term">COOP</div><div class="glossary-def">Cross-Origin-Opener-Policy — an HTTP header a page uses to promise it won't share a browsing-context group with unrelated cross-origin windows.</div></div>
+    <div class="glossary-card"><div class="glossary-term">COEP</div><div class="glossary-def">Cross-Origin-Embedder-Policy — an HTTP header requiring embedded cross-origin resources to explicitly opt into being loaded, enabling stronger isolation guarantees.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Site Isolation: How Spectre Forced Chrome to Rebuild Its Own Walls · A companion deep-dive to <strong>Browser X-Ray</strong> in the Operating System Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same question, redrawn one more time: who gets to share a room with whom.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── DEMO CANVAS: shared vs isolated ────────────────────────────────────────────
+let demoState={mode:null,phase:'idle',t:0};
+
+function drawDemoScene(mode,phase,t){
+  const canvas=document.getElementById('demoCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  if(!mode){
+    ctx.fillStyle=C.muted;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText('Choose a model above to run the probe',W/2,H/2);
+    return;
+  }
+
+  if(mode==='shared'){
+    // one big process box containing both origins
+    const boxX=W*0.12, boxY=40, boxW=W*0.76, boxH=H-100;
+    ctx.fillStyle='rgba(248,113,113,.07)';ctx.fillRect(boxX,boxY,boxW,boxH);
+    ctx.strokeStyle=C.red;ctx.lineWidth=2;ctx.strokeRect(boxX,boxY,boxW,boxH);
+    ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('ONE RENDERER PROCESS (shared address space)',boxX+boxW/2,boxY-14);
+
+    const aX=boxX+boxW*0.22, aY=boxY+boxH*0.5;
+    const bX=boxX+boxW*0.78, bY=boxY+boxH*0.5;
+    drawOrigin(ctx,aX,aY,'A','malicious.example',C.cyan,false);
+    drawOrigin(ctx,bX,bY,'B','yourbank.example',C.gold,true);
+
+    const captions={
+      idle:'Click "Run" to launch a Spectre-style timing probe from origin A',
+      probe:'Origin A runs an ordinary, spec-compliant JS timing loop',
+      leak:'The CPU speculatively touches origin B’s data — cache timing leaks it back to A',
+      done:'LEAKED: origin A inferred bytes of origin B’s in-memory secret'
+    };
+    ctx.fillStyle=phase==='done'?C.red:C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText(captions[phase]||'',W/2,H-16);
+
+    if(phase==='probe'||phase==='leak'||phase==='done'){
+      let px=aX, py=aY, prog=(phase==='probe')?t:1;
+      px=aX+(bX-aX)*Math.min(1,prog);
+      ctx.beginPath();ctx.arc(px,py-46,7,0,Math.PI*2);ctx.fillStyle=C.orange;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+      ctx.strokeStyle='rgba(251,146,60,.55)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+      ctx.beginPath();ctx.moveTo(aX,aY-46);ctx.lineTo(px,py-46);ctx.stroke();ctx.setLineDash([]);
+    }
+    if(phase==='leak'||phase==='done'){
+      const lp=(phase==='leak')?t:1;
+      const lx=bX-(bX-aX)*lp, ly=bY+46;
+      ctx.beginPath();ctx.arc(lx,ly,7,0,Math.PI*2);ctx.fillStyle=C.red;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+      ctx.strokeStyle='rgba(248,113,113,.7)';ctx.lineWidth=2;ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.moveTo(bX,bY+46);ctx.lineTo(lx,ly);ctx.stroke();ctx.setLineDash([]);
+    }
+  } else {
+    // isolated: two separate process boxes with a wall between
+    const boxW=W*0.36, boxH=H-100, boxY=40;
+    const aBoxX=W*0.06, bBoxX=W*0.58;
+    ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(aBoxX,boxY,boxW,boxH);
+    ctx.strokeStyle=C.cyan;ctx.lineWidth=2;ctx.strokeRect(aBoxX,boxY,boxW,boxH);
+    ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('RENDERER PROCESS (site A)',aBoxX+boxW/2,boxY-14);
+
+    ctx.fillStyle='rgba(245,200,66,.06)';ctx.fillRect(bBoxX,boxY,boxW,boxH);
+    ctx.strokeStyle=C.gold;ctx.lineWidth=2;ctx.strokeRect(bBoxX,boxY,boxW,boxH);
+    ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('RENDERER PROCESS (site B)',bBoxX+boxW/2,boxY-14);
+
+    // OS wall between them
+    const wallX=aBoxX+boxW, wallW=bBoxX-(aBoxX+boxW);
+    ctx.save();ctx.translate(wallX+wallW/2,boxY+boxH/2);ctx.rotate(-Math.PI/2);
+    ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('OS PAGE-TABLE WALL',0,0);ctx.restore();
+    ctx.strokeStyle=C.muted;ctx.setLineDash([4,4]);ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(wallX+wallW/2,boxY);ctx.lineTo(wallX+wallW/2,boxY+boxH);ctx.stroke();ctx.setLineDash([]);
+
+    const aX=aBoxX+boxW*0.5, aY=boxY+boxH*0.5;
+    const bX=bBoxX+boxW*0.5, bY=boxY+boxH*0.5;
+    drawOrigin(ctx,aX,aY,'A','malicious.example',C.cyan,false);
+    drawOrigin(ctx,bX,bY,'B','yourbank.example',C.gold,true);
+
+    const captions={
+      idle:'Click "Run" to launch the same timing probe from origin A',
+      probe:'Origin A runs the identical Spectre-style JS timing loop',
+      leak:'The probe hits the OS process wall — B’s data was never mapped into A’s address space',
+      done:'BLOCKED: nothing of origin B’s exists in A’s process to leak'
+    };
+    ctx.fillStyle=phase==='done'?C.green:C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText(captions[phase]||'',W/2,H-16);
+
+    if(phase==='probe'||phase==='leak'||phase==='done'){
+      const targetX=wallX+wallW*0.5;
+      let prog=(phase==='probe')?t:1;
+      const px=aX+(targetX-aX)*Math.min(1,prog);
+      ctx.beginPath();ctx.arc(px,aY-46,7,0,Math.PI*2);ctx.fillStyle=C.orange;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+      ctx.strokeStyle='rgba(251,146,60,.55)';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+      ctx.beginPath();ctx.moveTo(aX,aY-46);ctx.lineTo(px,aY-46);ctx.stroke();ctx.setLineDash([]);
+    }
+    if(phase==='leak'||phase==='done'){
+      const targetX=wallX+wallW*0.5;
+      // draw a blocked "X" at the wall
+      const bx=targetX, by=aY-46;
+      ctx.strokeStyle=C.red;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(bx-8,by-8);ctx.lineTo(bx+8,by+8);ctx.moveTo(bx+8,by-8);ctx.lineTo(bx-8,by+8);ctx.stroke();
+    }
+  }
+}
+
+function drawOrigin(ctx,x,y,letter,label,col,isSecret){
+  ctx.beginPath();ctx.arc(x,y,34,0,Math.PI*2);
+  ctx.fillStyle=col+'22';ctx.fill();
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=col;ctx.font='bold 16px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(letter,x,y+6);
+  ctx.fillStyle=C.text;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(label,x,y+54);
+  if(isSecret){
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('[secret bytes in memory]',x,y+68);
+  }
+}
+
+function runDemo(mode){
+  const phases=['probe','leak','done'];
+  const durations=[700,700,10];
+  let idx=0,start=performance.now();
+  document.getElementById('demoLabel').textContent = mode==='shared'
+    ? '▶ Running: pre-2018 shared renderer'
+    : '▶ Running: post-Site-Isolation, separate renderers';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDemoScene(mode,phases[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('demoLabel').textContent = mode==='shared'
+          ? '▶ Complete — origin A read across the shared process. Try "Site Isolation" next.'
+          : '▶ Complete — the OS process wall stopped the leak. Try the shared-renderer case to compare.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDemo(){
+  document.getElementById('demoLabel').textContent='▶ Choose a model, then run the probe';
+  drawDemoScene(null,'idle',0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDemo(); });
+window.addEventListener('resize',()=>{ drawDemoScene(demoState.mode,demoState.phase,demoState.t); });
+</script>
+</body>
+</html>

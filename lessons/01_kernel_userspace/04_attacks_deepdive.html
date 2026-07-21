@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attacking the Wall — Privilege Escalation, Speculative Execution &amp; Sandbox Escapes, X-Rayed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.g{color:var(--green)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.bug{color:var(--red);font-weight:700}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:var(--red);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;background:rgba(122,155,191,.12);color:var(--muted);border:1px solid rgba(122,155,191,.25);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--red);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: severity-tagged attack-vector strip, matches existing card language */
+.vector-strip{display:flex;flex-wrap:wrap;gap:.7rem;margin:1.6rem 0;}
+.vector-chip{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.08em;padding:.45rem 1rem;border-radius:20px;border:1px solid var(--border);color:var(--muted);background:var(--card);}
+.vector-chip.on{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#privesc" title="Privilege Escalation"></a>
+  <a class="toc-dot" href="#namedcves" title="Named Vulnerabilities"></a>
+  <a class="toc-dot" href="#speculative" title="Meltdown & Spectre"></a>
+  <a class="toc-dot" href="#containervm" title="Container vs VM Escape"></a>
+  <a class="toc-dot" href="#restaurant" title="Back to the Restaurant"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Companion Deep-Dive · Privilege Escalation · Speculative Execution · Sandbox Escapes</div>
+    <h1>Attacking<br>the <span>Wall</span></h1>
+    <p class="hero-sub">You already know the wall exists: Ring 3 is powerless, Ring 0 is all-powerful, and the syscall is the one guarded door between them. This page is about every way that wall has actually been broken in real life — a kernel tricked into acting on a lie, a CPU's own performance optimizations leaking secrets through timing instead of theft, and the modern question of what "isolation" even means when the fence is made of software instead of silicon.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1988</div><div class="lbl">Year "Confused Deputy" Was Named</div></div>
+      <div class="hero-stat"><div class="num">-1</div><div class="lbl">Extra Ring Added by Hardware Virtualization</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Privileged Instructions Needed to Leak via Cache Timing</div></div>
+      <div class="hero-stat"><div class="num">2018</div><div class="lbl">Meltdown &amp; Spectre Went Public</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Wall Was Never <span class="accent">Optional</span> — So How Does It Break?</h2>
+  <p class="reveal">In the last module, the wall looked absolute: a CPU register tracks your privilege level, privileged instructions are simply refused below Ring 0, and the only sanctioned crossing is a syscall trap into a fixed kernel entry point. All true. And yet — every year, security researchers and attackers find real, working ways past it. Not by breaking the rule that Ring 3 code can't execute privileged instructions. That rule genuinely never bends. Instead, they find ways to make <strong>Ring 0 itself</strong> do something it shouldn't, on the attacker's behalf, or they find a channel the ring model never accounted for in the first place.</p>
+  <p class="reveal">This page is a tour of three real categories of wall-breaking, each fundamentally different from the others: <strong>tricking the kernel</strong> (privilege escalation via software bugs), <strong>eavesdropping on the kernel without ever asking it anything</strong> (Meltdown and Spectre), and <strong>attacking a fence that was never made of hardware to begin with</strong> (container and VM escapes). By the end, "the wall" will feel a lot less like a single line and a lot more like a whole perimeter with different kinds of gates, cameras, and blind spots.</p>
+</div>
+</section>
+
+<!-- PRIVILEGE ESCALATION -->
+<section id="privesc">
+<div class="container">
+  <div class="section-num">01 — Tricking the Waiter Into Robbing the Kitchen</div>
+  <h2>What <span class="accent">Privilege Escalation</span> Actually Means</h2>
+
+  <p class="reveal">Strip away the jargon and privilege escalation means exactly this: <strong>Ring 3 code finds a bug that makes Ring 0 code execute instructions, or touch memory, that the Ring 3 caller was never authorized to cause.</strong> The attacker never flips their own privilege bit — they can't, the hardware forbids it. Instead they get the already-privileged kernel to do the dirty work for them, by exploiting a mistake in the kernel's own logic.</p>
+
+  <p class="reveal">This is a categorically different problem than anything in the last module. There, every syscall step assumed the kernel does its job correctly — validates arguments, copies data safely, checks permissions. Privilege escalation lives entirely in the gap between "the kernel is supposed to validate" and "the kernel's validation code has a bug." Security researchers gave this gap a name back in <strong>1988</strong>: Norm Hardy called it the <strong>confused deputy problem</strong> — a more-privileged program (the "deputy," here the kernel) that gets tricked by a less-privileged party into misusing its own authority.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Confused Deputy, Stated Precisely</div>
+    A deputy is confused when it has two things mixed up: <em>which code is running</em> versus <em>whose authority that code should be acting under</em>. The kernel always runs with full Ring 0 authority — that part never changes. The bug is when the kernel fails to check that the specific <em>action</em> it's about to take, on behalf of <em>this specific caller</em>, is something that caller was actually allowed to ask for. The waiter didn't stop being a waiter; the waiter just got tricked into handing a customer the keys to the walk-in freezer because nobody checked the customer's ID against the order.
+  </div>
+
+  <p class="reveal">In real kernels, the confused-deputy gap opens up through a small number of recurring bug classes. Let's walk through the single most common one, honestly, in simplified but technically accurate pseudo-C.</p>
+
+  <pre class="reveal"><span class="tag">simplified linux-style syscall handler</span><code><span class="cm">// A syscall that copies a user-supplied preferences blob</span>
+<span class="cm">// into a fixed-size kernel buffer. Somewhere, this pattern</span>
+<span class="cm">// is the root cause behind an enormous fraction of real CVEs.</span>
+<span class="kw">long</span> <span class="fn">sys_update_prefs</span>(<span class="kw">char</span> <span class="kw">__user</span> *ptr, <span class="cls">size_t</span> len) {
+    <span class="kw">char</span> kbuf[<span class="numc">128</span>];              <span class="cm">// lives on the KERNEL stack</span>
+
+    <span class="bug">// BUG: len came straight from Ring 3. Nothing here checks</span>
+    <span class="bug">// that len &lt;= sizeof(kbuf) before trusting it.</span>
+    <span class="fn">copy_from_user</span>(kbuf, ptr, len);
+
+    <span class="fn">apply_prefs</span>(kbuf);
+    <span class="kw">return</span> <span class="numc">0</span>;
+}</code></pre>
+
+  <p class="reveal">Walk through what happens if an attacker calls this syscall with <code>len = 4096</code> instead of the expected ≤128. <code>copy_from_user</code> — a real, ubiquitous kernel helper whose entire job is safely moving bytes across the wall — will happily copy 4096 attacker-controlled bytes into a 128-byte kernel stack buffer, because nothing told it not to. That overflow doesn't stay politely inside <code>kbuf</code>. It marches straight over adjacent kernel stack memory: saved registers, other local variables, and — depending on the exact stack layout — a saved return address. Overwrite that return address with an address the attacker chose, and when this function returns, the CPU doesn't go back to the caller. It jumps to wherever the attacker pointed it — <strong>still running in Ring 0</strong>, because privilege level was never touched, only the instruction pointer was hijacked.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="privescLabel">▶ Watch the overflow become Ring-0 code execution</div>
+    <canvas id="privescCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runPrivesc()">▶ Trigger the overflow</button>
+    <button class="ctrl-btn" onclick="resetPrivesc()">Reset</button>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ This Is Not a Hypothetical Bug Class</div>
+    The pattern above — an unchecked, user-controlled length or pointer flowing into a fixed-size kernel buffer — maps directly onto real CWE categories that show up in kernel CVE databases every single month: <strong>CWE-787</strong> (out-of-bounds write), <strong>CWE-190</strong> (integer overflow that later causes an undersized allocation), and <strong>CWE-416</strong> (use-after-free, where a kernel object is freed but a stale pointer to it is used again later — often from a completely different, attacker-triggered code path). Every one of these is the same underlying failure: the kernel trusted something from Ring 3 that it should have re-verified.
+  </div>
+
+  <p class="reveal">Use-after-free deserves its own beat, because it doesn't even require an oversized buffer. The kernel allocates an object, some code path frees it (the memory is returned to the allocator, available for reuse), but a stale pointer to that same memory survives somewhere else in the kernel. If an attacker can force the kernel to reallocate that freed memory for something they control — say, by rapidly opening and closing file descriptors in a specific pattern — the stale pointer now points at attacker-controlled data. The next time the kernel dereferences that "trusted" internal pointer, it's actually reading (or worse, calling through) memory the attacker wrote. No overflow required at all — just a race between freeing and reusing.</p>
+
+  <div class="sidenote reveal">
+    <b>Why the kernel stack, specifically?</b> Every thread that enters Ring 0 gets its own small, fixed-size kernel stack (commonly 8–16 KB on Linux) — much smaller than a typical user-space stack. That tight size is exactly why a modest, attacker-controlled overflow can reach something valuable (a saved return address, a function pointer) so quickly. It's also why kernel code is written far more defensively around buffer sizes than the average user-space application.
+  </div>
+
+  <h3>Why this doesn't just work anymore, unmodified</h3>
+  <p class="reveal">The naive "overwrite return address, jump to a chosen address" recipe above described exploitation as it worked in the 1990s and early 2000s. Modern CPUs and kernels layer real hardware-and-software defenses directly on top of the ring model to make each step harder, without touching the ring boundary itself:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Defense</th><th>Layer</th><th>What It Actually Blocks</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">SMEP</td><td>CPU hardware</td><td>Supervisor Mode Execution Prevention — the CPU refuses to execute code that lives on a user-space page while running in Ring 0, even if a kernel bug redirects execution there.</td></tr>
+        <tr><td class="hl">SMAP</td><td>CPU hardware</td><td>Supervisor Mode Access Prevention — the CPU refuses ordinary Ring-0 reads/writes to user-space memory unless the kernel explicitly opts in for that access (as <code>copy_from_user</code> legitimately does).</td></tr>
+        <tr><td class="hl">KASLR</td><td>Kernel + boot loader</td><td>Kernel Address Space Layout Randomization — randomizes where kernel code and data actually sit in memory each boot, so an attacker's hijacked return address can't just be a fixed, known constant.</td></tr>
+        <tr><td class="hl">Stack canaries</td><td>Compiler</td><td>A random guard value placed just before a saved return address; the function checks it's unchanged before returning, catching many linear stack-buffer overflows before the corrupted return address is ever used.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">None of these defenses fix the underlying bug — the missing bounds check in <code>sys_update_prefs</code> is still there. What they do is make each downstream step of turning that bug into working Ring-0 code execution dramatically harder, which is exactly why modern kernel exploits are usually chains of several bugs (one to leak a KASLR-defeating address, one to corrupt memory, sometimes a third to bypass SMEP/SMAP) rather than the single clean overflow shown above.</p>
+</div>
+</section>
+
+<!-- NAMED CVEs -->
+<section id="namedcves">
+<div class="container">
+  <div class="section-num">02 — This Actually Happened, Repeatedly</div>
+  <h2>Named Vulnerabilities, <span class="accent">Real Years, Real CVEs</span></h2>
+
+  <p class="reveal">"Confused deputy" isn't an abstract diagram — it's the root cause note on some of the most famous vulnerability disclosures in OS history. Here are four, each a slightly different flavor of the same underlying idea: the kernel trusted a caller it shouldn't have.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Dirty COW</span><span class="fam-count">CVE-2016-5195</span></div>
+      <div class="fam-desc">A race condition in the Linux kernel's copy-on-write memory handling. By racing a write to a read-only, memory-mapped file against the kernel's own COW logic, an unprivileged local user could win the race and obtain write access to files they should only be able to read — including files owned by root. Public for roughly nine years before it was found and fixed.</div>
+      <div class="feat-list"><span class="feat-pill">race condition</span><span class="feat-pill">TOCTOU</span><span class="feat-pill">2016</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Dirty Pipe</span><span class="fam-count">CVE-2022-0847</span></div>
+      <div class="fam-desc">An uninitialized flag in the Linux pipe buffer implementation let an unprivileged process overwrite data in read-only files cached in the page cache — including <code>/etc/passwd</code>-class files — without needing any special permission. Widely described as "Dirty COW's simpler, meaner sequel."</div>
+      <div class="feat-list"><span class="feat-pill">uninitialized state</span><span class="feat-pill">2022</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">PwnKit</span><span class="fam-count">CVE-2021-4034</span></div>
+      <div class="fam-desc">A memory-corruption bug in Polkit's <code>pkexec</code> helper (a setuid-root binary present on nearly every major Linux distribution) let a local, completely unprivileged user go straight to a root shell, by manipulating environment variables passed into the vulnerable code. Sat unnoticed for over a decade.</div>
+      <div class="feat-list"><span class="feat-pill">setuid binary</span><span class="feat-pill">memory corruption</span><span class="feat-pill">2021</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">runc Escape</span><span class="fam-count">CVE-2019-5736</span></div>
+      <div class="fam-desc">A flaw in the <code>runc</code> container runtime (used by Docker and Kubernetes) let a malicious container overwrite the host's own <code>runc</code> binary via <code>/proc/self/exe</code>, achieving root code execution on the <em>host</em> — not just inside the container. A preview of the container-escape territory two sections from now.</div>
+      <div class="feat-list"><span class="feat-pill">container escape</span><span class="feat-pill">2019</span></div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Pattern Behind the Pattern</div>
+    Notice none of these four needed a hardware flaw. Every one is a <strong>software</strong> bug in code that was, in principle, supposed to check something and didn't (or checked it correctly, but at the wrong moment — Dirty COW's race window is exactly a gap in <em>timing</em> of a correct-looking check). This is why privilege escalation bugs keep getting found: the kernel is millions of lines of C, handling input from every untrusted program on the machine, and every single syscall handler is a new opportunity for a confused deputy.
+  </div>
+</div>
+</section>
+
+<!-- MELTDOWN & SPECTRE -->
+<section id="speculative">
+<div class="container">
+  <div class="section-num">03 — When the Hardware Itself Is the Leak</div>
+  <h2><span class="accent">Meltdown</span> &amp; <span class="accent">Spectre</span>: A Wall With No Bug In It</h2>
+
+  <p class="reveal">Everything so far has been a software mistake — fixable, in principle, by writing more careful kernel code. In January 2018, researchers disclosed something categorically different: <strong>Meltdown</strong> (CVE-2017-5754) and <strong>Spectre</strong> (CVE-2017-5753, CVE-2017-5715). These weren't bugs in any operating system's code at all. They were consequences of a performance trick built into the CPU silicon itself — a trick nearly every modern processor uses, and had used for over a decade before anyone realized it leaked data across the ring boundary.</p>
+
+  <h3>Why CPUs guess the future</h3>
+  <p class="reveal">Modern CPUs don't execute your instructions strictly one at a time, in order, waiting for each to fully finish. That would waste enormous amounts of time — a conditional branch might depend on a value that's still being fetched from memory, and memory is thousands of times slower than the CPU core. So instead, the CPU does <strong>speculative execution</strong>: when it hits a branch whose outcome isn't known yet, it guesses (using a branch predictor trained on the program's recent history), and starts executing instructions down the guessed path <em>before</em> it knows if the guess is right — all "out of order," ahead of where the program has officially gotten to.</p>
+
+  <p class="reveal">Most of the time the guess is correct, and the CPU just saved a huge amount of time. When the guess is wrong, the CPU throws away the speculative work: it discards the results, restores registers to their pre-guess values, and resumes down the correct path instead. From the program's point of view — its <strong>architectural state</strong>, meaning registers and memory as the program is allowed to observe them — it's as if the wrong-guess instructions never ran at all.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🎯 The Sentence That Explains Both Attacks</div>
+    <strong>Rolling back a speculative instruction's architectural effects does not roll back its microarchitectural side effects — and the CPU cache is a microarchitectural side effect.</strong> If a speculatively-executed instruction touched a piece of memory, that memory's cache line stays loaded in the cache even after the CPU decides the instruction "never happened." That residue is measurable, from Ring 3, using nothing but a stopwatch.
+  </div>
+
+  <h3>The actual leak mechanism: Flush+Reload</h3>
+  <p class="reveal">Here's the concrete recipe, simplified but technically honest, for how Meltdown reads Ring-0 memory from Ring 3. It relies on one basic hardware fact: reading data that's already in the CPU cache takes a few nanoseconds; reading data that isn't cached takes closer to a hundred nanoseconds — a difference easily measurable in software.</p>
+
+  <ol class="step-list red reveal">
+    <li><div class="step-body"><strong>Prepare a 256-entry probe array</strong>The attacker allocates an array with 256 distinct pages (one per possible byte value, 0–255), and makes sure none of them are currently in the CPU cache (a "flush" step).</div></li>
+    <li><div class="step-body"><strong>Speculatively read a forbidden byte</strong>The attacker sets up code so a branch misprediction causes the CPU to speculatively execute a load from kernel memory it has no permission to read — the secret byte. On pre-patch Intel CPUs, the permission check for this load happened, but too late: the speculative execution had already raced ahead using the value before the fault was raised.</div></li>
+    <li><div class="step-body"><strong>Use the secret to index the probe array</strong>Still purely speculatively, the code computes <code>probe_array[secret_byte * 4096]</code> and touches it — a completely ordinary-looking array access, except <code>secret_byte</code> is data the attacker was never allowed to see. This touch pulls exactly one of the 256 pages into cache.</div></li>
+    <li><div class="step-body"><strong>Architectural rollback (the part everyone thought was safe)</strong>The CPU eventually notices the permission fault / branch misprediction and rolls back: the register holding <code>secret_byte</code> is wiped, no exception-visible value ever reaches the program, nothing observable in the "official" execution changed.</div></li>
+    <li><div class="step-body"><strong>Reload — measure, don't ask</strong>The attacker now times an access to each of the 256 probe-array pages. 255 of them are slow (not cached). Exactly one is fast — the one speculatively touched in step 3. Its index <em>is</em> the secret byte, recovered one bit-pattern at a time, entirely through timing, with zero privileged instructions and zero data that ever "officially" crossed the wall.</div></li>
+  </ol>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="specLabel">▶ Trace one byte leaking through the cache-timing side channel</div>
+    <canvas id="specCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runSpec()">▶ Run Meltdown-style probe</button>
+    <button class="ctrl-btn" onclick="resetSpec()">Reset</button>
+  </div>
+
+  <div class="formula red reveal">
+    <span class="label">Why this is fundamentally not a software bug</span>
+    architectural rollback ≠ microarchitectural rollback
+    <span class="sub">Every optimization the CPU makes to go faster — caching, branch prediction, out-of-order execution — leaves traces outside the part of the machine the ring model was designed to protect. The ring boundary governs which instructions may run and which memory may be architecturally read. It says nothing about cache state, and nobody designed it to.</span>
+  </div>
+
+  <p class="reveal">Spectre (two variants: <strong>v1</strong>, bounds-check bypass, and <strong>v2</strong>, branch target injection) generalizes this even further. Rather than exploiting a permission-check race like Meltdown, Spectre tricks the branch predictor itself into speculatively executing code that was never supposed to run at all — for example, training the predictor with many in-bounds array accesses so it "expects" the next access to be in-bounds too, then supplying an out-of-bounds index right when a security check should have blocked it. Because the branch predictor is shared hardware, Spectre can leak data <em>across process boundaries entirely</em> — famously demonstrated reading one browser tab's memory from JavaScript running in another tab's sandboxed process, no kernel bug and no syscall involved anywhere.</p>
+
+  <div class="sidenote reveal">
+    <b>So how was this fixed, if it's not a bug?</b> It wasn't "fixed" so much as mitigated, at real cost. <strong>KPTI</strong> (Kernel Page Table Isolation) makes kernel memory mappings mostly invisible to user-space page tables entirely, so there's nothing sensitive left to speculatively read (this is part of why syscalls got measurably slower after early 2018 patches). Retpolines and other compiler mitigations reshape branches so the predictor has nothing useful to hijack. New CPU generations added hardware fixes. None of this touches the ring model itself — it's all patching around a hardware side channel the ring model was never built to see.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Meltdown and Spectre aren't the only hardware side channel.</b> <strong>Rowhammer</strong> (first documented in 2014) is a related but distinct hardware failure mode: rapidly, repeatedly reading the same row of DRAM can cause electrical interference that flips bits in a <em>physically adjacent</em> row you never touched or had permission to write. Combined with careful memory-layout tricks, Rowhammer has been used to flip bits inside page-table entries themselves — turning a memory-timing quirk into full privilege escalation, no software bug required at all. Same family of lesson: physics doesn't know what a ring is.
+  </div>
+</div>
+</section>
+
+<!-- CONTAINER VS VM ESCAPE -->
+<section id="containervm">
+<div class="container">
+  <div class="section-num">04 — Modern Isolation, Modern Failure Modes</div>
+  <h2>Container Escapes vs <span class="accent">VM Escapes</span></h2>
+
+  <p class="reveal">Everything up to now assumed two worlds: Ring 3 and Ring 0. Modern cloud infrastructure adds two more isolation boundaries on top of that — <strong>containers</strong> and <strong>virtual machines</strong> — and it matters enormously, from a security standpoint, that these are built completely differently from each other.</p>
+
+  <h3>A container is not a hardware boundary</h3>
+  <p class="reveal">A "container" (Docker, a Kubernetes pod, an LXC instance) is not a new privilege ring. There is no CPU hardware that knows what a container is. A container is a <strong>software-level fence</strong> constructed entirely out of ordinary Linux kernel features: <strong>namespaces</strong> (which give a process group its own private view of process IDs, network interfaces, mount points, and hostnames) and <strong>cgroups</strong> (which cap how much CPU, memory, and I/O a group of processes may consume). Every container on a given host is, from the CPU's point of view, just an ordinary Ring 3 process — tagged with different namespace IDs, but scheduled by the exact same kernel, sharing the exact same Ring 0.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 The Consequence, Stated Plainly</div>
+    Because every container on a host shares one literal kernel, <strong>a single kernel bug — the same confused-deputy privilege-escalation category from Section 01 — can let code in one container affect the host, or another container entirely.</strong> That's exactly what CVE-2019-5736 (the runc escape from Section 02) did: a container process overwrote the host's own container-runtime binary. There was never a hardware wall between "container A" and "the host" — only a software fence maintained by the one kernel both of them depend on.
+  </div>
+
+  <h3>A VM adds a genuinely new hardware ring</h3>
+  <p class="reveal">A virtual machine is built differently, using CPU features specifically designed for this: Intel's <strong>VT-x</strong> and AMD's <strong>AMD-V</strong>. These extensions introduce a new hardware-enforced mode, formally called <strong>VMX operation</strong>, split into <strong>VMX root</strong> (where the hypervisor runs) and <strong>VMX non-root</strong> (where every guest VM runs — including the guest's own "Ring 0" kernel). Because the hypervisor in VMX root can trap and intercept privileged operations attempted by a guest's Ring 0, informally this extra layer gets called <strong>"Ring -1."</strong> A guest kernel genuinely believes it's running at full Ring 0 privilege — and for most purposes it is — but sensitive hardware operations still get intercepted and mediated one level further out, by the hypervisor.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Layer</th><th>Boundary Made Of</th><th>Enforced By</th><th>Escaping Requires</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Ring 3 → Ring 0</td><td>CPU privilege-level bit</td><td>Hardware, in silicon</td><td>A kernel bug that hijacks Ring-0 execution (Section 01)</td></tr>
+        <tr><td class="hl">Container → Host</td><td>Namespaces + cgroups (software)</td><td>The one shared Linux kernel</td><td>A kernel bug reachable from inside the container's Ring-3 sandbox</td></tr>
+        <tr><td class="gold">VM → Hypervisor ("Ring -1")</td><td>VT-x / AMD-V, VMX root vs non-root</td><td>Hardware virtualization extensions</td><td>A bug in the hypervisor's own device emulation or VMX handling — not just the guest kernel</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐳 Container Escape</h4>
+      Attack surface: the entire host kernel's syscall table, since containers make real syscalls into the real shared kernel. Any confused-deputy bug anywhere in that huge, shared attack surface is a potential escape route. This is why container security leans so heavily on <em>additional</em> software layers — seccomp syscall filtering, AppArmor/SELinux mandatory access control — stacked on top of namespaces, because namespaces alone were never a hardware guarantee.
+    </div>
+    <div class="compare-card good">
+      <h4>🖥️ VM Escape</h4>
+      Attack surface: a much smaller, purpose-built hypervisor plus whatever hardware devices it emulates for the guest (virtual disk controllers, virtual network cards). A real historical example: <strong>VENOM</strong> (CVE-2015-3456), a buffer overflow in QEMU's emulated virtual floppy disk controller, that let a guest VM execute code on the host. Rarer than container escapes, and considered architecturally more serious, because it requires defeating hardware-assisted isolation, not just a shared-kernel software fence.
+    </div>
+  </div>
+
+  <p class="reveal">This is the honest, precise answer to "why is a VM escape a bigger deal than a container escape": a container escape needs one bug in a kernel every tenant already shares direct syscall access to. A VM escape needs a bug in the comparatively small slice of code — the hypervisor and its device emulation — that hardware virtualization extensions specifically wall off as "Ring -1," behind an entire additional layer the CPU itself enforces. More layers, smaller surface, rarer breaks — but never impossible, as VENOM and its relatives prove.</p>
+
+  <h3>The industry's answer: microVMs, splitting the difference</h3>
+  <p class="reveal">Once cloud providers internalized that "container isolation = shared-kernel isolation," a whole category of hybrid sandboxes emerged specifically to close that gap without paying the full weight of a traditional VM. <strong>gVisor</strong> (used inside Google Cloud) intercepts a container's syscalls in user space and re-implements a large chunk of the Linux kernel interface itself, in a sandboxed process, so most syscalls never actually reach the real host kernel at all — shrinking the confused-deputy attack surface back down without spinning up real hardware virtualization. <strong>Kata Containers</strong> and AWS's <strong>Firecracker</strong> take the opposite approach: give every container its own real, lightweight VM — complete with VT-x/AMD-V's "Ring -1" boundary — but strip the virtual hardware down to almost nothing, so boot times stay near-container speed while escape now requires defeating an actual hypervisor, not just a shared kernel. AWS Lambda runs on Firecracker microVMs for exactly this reason: container-like density, VM-like isolation.</p>
+</div>
+</section>
+
+<!-- BACK TO THE RESTAURANT -->
+<section id="restaurant">
+<div class="container">
+  <div class="section-num">05 — Tying It Back</div>
+  <h2>Every Attack, In <span class="accent p">Restaurant</span> Terms</h2>
+
+  <p class="reveal">The original module's analogy holds up remarkably well under attack — because every category above is just a different way of abusing the same waiter-and-kitchen relationship, not a reason to throw the analogy out.</p>
+
+  <div class="vector-strip reveal">
+    <span class="vector-chip on">Confused deputy → bribing the waiter</span>
+    <span class="vector-chip on">Meltdown/Spectre → reading the order tickets through the wall</span>
+    <span class="vector-chip on">Container escape → a fake wall between two dining rooms, same kitchen</span>
+    <span class="vector-chip on">VM escape → sneaking past the building's actual front security desk</span>
+  </div>
+
+  <p class="reveal"><strong>Privilege escalation</strong> is convincing the waiter to walk an oversized, malformed order straight into the kitchen without checking it against what the customer was actually allowed to request — the waiter still only goes where waiters go, but they've been tricked into personally handing the customer a set of kitchen keys along the way. <strong>Meltdown and Spectre</strong> are not bribing anyone at all — they're standing just outside the kitchen door, and noticing that you can tell what's cooking by listening to how long the pans take to heat up, without the kitchen staff ever handing you anything or even knowing you're listening.</p>
+
+  <p class="reveal"><strong>Container escapes</strong> are what happens when a franchise puts two "separate" restaurants in the same physical building, dividing the dining rooms with a curtain instead of a wall, while both kitchens are actually the same one kitchen underneath. A confused deputy in that one shared kitchen doesn't just affect one dining room — it can reach both. <strong>VM escapes</strong> are the harder case: each "restaurant" here has its own real building, its own real kitchen, its own real locked door — but they all sit inside one larger complex with one property manager (the hypervisor) who holds a master key to every building. Escaping your own restaurant isn't enough; you'd need to defeat the property manager's own security too.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The One Idea That Survives All Four Attacks</div>
+    Every wall in this whole series — Ring 3/Ring 0, namespaces, VMX root/non-root — is a <strong>trust boundary that has to be actively enforced by something, every single time.</strong> Hardware rings are enforced by silicon and almost never fail outright, but the software built on top of them (kernel syscall handlers) can still be tricked. Software-only boundaries (namespaces) inherit every bug in the one kernel underneath them. And even flawless enforcement of "what may run" (rings) says nothing about "what can be measured" (cache timing) — which is exactly the gap Meltdown and Spectre live in. Security here isn't one wall; it's a stack of walls, and each layer has to be evaluated on its own terms.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Privilege Escalation</div><div class="glossary-def">Getting code to execute with more authority than it was granted — typically by exploiting a bug that makes an already-privileged component (like the kernel) act on an attacker's behalf without proper checks.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Confused Deputy</div><div class="glossary-def">A 1988 term (Norm Hardy) for a more-privileged program tricked by a less-privileged caller into misusing its own authority — the root-cause pattern behind most kernel privilege-escalation bugs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Use-After-Free (CWE-416)</div><div class="glossary-def">A bug where freed memory is reused while a stale pointer to it still exists elsewhere — letting an attacker who controls the reallocated memory hijack the stale pointer's next use.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Speculative Execution</div><div class="glossary-def">A CPU performance technique: executing instructions ahead of a not-yet-resolved branch, guessing the outcome, and discarding the results if the guess was wrong — while cache state from the discarded work is not rolled back.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Architectural vs Microarchitectural State</div><div class="glossary-def">Architectural state (registers, memory as the program officially sees it) is what gets rolled back after a misprediction. Microarchitectural state (cache contents, branch predictor history) is not — and that gap is the entire Meltdown/Spectre attack surface.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Flush+Reload</div><div class="glossary-def">The core cache-timing side-channel technique: evict data from cache, let a victim (or speculative execution) touch it conditionally on a secret, then measure access time to infer whether that data is now cached.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Meltdown (CVE-2017-5754)</div><div class="glossary-def">A speculative-execution attack exploiting a race between a speculative load of privileged memory and its permission check, on affected pre-2018-patch CPUs — leaked via cache timing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Spectre (CVE-2017-5753 / -5715)</div><div class="glossary-def">A family of attacks that mistrain the CPU's branch predictor into speculatively executing attacker-chosen code paths, leaking data across process and sandbox boundaries via the same cache-timing channel as Meltdown.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Namespaces &amp; cgroups</div><div class="glossary-def">The Linux kernel features containers are built from: namespaces give a process group its own private view of PIDs/network/mounts; cgroups cap its resource usage. Both are software fences inside one shared kernel — not a hardware ring.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VT-x / AMD-V</div><div class="glossary-def">Hardware virtualization extensions that add VMX root (hypervisor) and VMX non-root (guest) operation modes — a genuine, hardware-enforced privilege layer beyond the classic four rings, informally "Ring -1."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Container Escape</div><div class="glossary-def">Code inside a container affecting the host or another container, typically via a bug in the one kernel every container on the host shares — e.g. CVE-2019-5736 in runc.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VM Escape</div><div class="glossary-def">Guest code breaking out to execute on the host, requiring a bug in the hypervisor or its emulated devices rather than just the guest's own kernel — e.g. VENOM, CVE-2015-3456.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Attacking the Wall · A companion deep-dive to "Kernel vs User Space," OS Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Every wall is only as strong as the code enforcing it.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── PRIVILEGE ESCALATION CANVAS ─────────────────────────────────────────────
+function drawPrivescScene(t,phase){
+  const canvas=document.getElementById('privescCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // kernel stack visualization: a vertical strip of "slots"
+  const stackX=W*0.55, stackW=Math.min(220,W*0.34), slotH=32, slotCount=6, stackTop=30;
+  const slotLabels=['saved return addr','saved rbp','local var','local var','kbuf[64..127]','kbuf[0..63]'];
+
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('KERNEL STACK (Ring 0)',stackX,20);
+
+  for(let i=0;i<slotCount;i++){
+    const y=stackTop+i*slotH;
+    let fill='rgba(56,189,248,.06)', stroke=C.border, tcol=C.muted;
+    const overflowing = phase==='overflow' && t*slotCount>=slotCount-i-2;
+    const overflowed = (phase==='overwrite'||phase==='hijack'||phase==='pwned');
+    if(i<=1 && (overflowing||overflowed)){ fill='rgba(248,113,113,.22)'; stroke=C.red; tcol=C.red; }
+    else if(i>=2 && i<=3 && (overflowing||overflowed)){ fill='rgba(251,146,60,.18)'; stroke=C.orange; tcol=C.orange; }
+    ctx.fillStyle=fill;ctx.fillRect(stackX,y,stackW,slotH-4);
+    ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.strokeRect(stackX,y,stackW,slotH-4);
+    ctx.fillStyle=tcol;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText(slotLabels[i],stackX+8,y+slotH/2);
+  }
+
+  // attacker box (ring 3)
+  const atkX=W*0.06, atkY=stackTop, atkW=Math.min(180,W*0.3);
+  ctx.fillStyle='rgba(122,155,191,.08)';ctx.fillRect(atkX,atkY,atkW,90);
+  ctx.strokeStyle=C.muted;ctx.strokeRect(atkX,atkY,atkW,90);
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Ring 3 — attacker',atkX+atkW/2,atkY+18);
+  ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('sys_update_prefs(ptr, len=4096)',atkX+atkW/2,atkY+40);
+
+  const captions={
+    idle:'Click to send an oversized, unchecked-length syscall',
+    call:'Attacker calls sys_update_prefs() with len far larger than kbuf[128]',
+    overflow:'copy_from_user() copies len bytes with no bounds check — kbuf overflows',
+    overwrite:'Overflow reaches the saved return address on the kernel stack',
+    hijack:'Function returns — CPU jumps to the attacker-chosen address instead',
+    pwned:'⚠ Attacker-controlled code is now executing — in Ring 0'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+
+  if(phase==='call'||phase==='overflow'){
+    ctx.strokeStyle=C.gold;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(atkX+atkW,atkY+45);ctx.lineTo(stackX,atkY+45+((stackTop+5*slotH)-atkY-45)*t*0.3);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if(phase==='hijack'||phase==='pwned'){
+    ctx.fillStyle=phase==='pwned'?C.red:C.orange;
+    ctx.font='bold 20px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',stackX+stackW/2,stackTop-6);
+  }
+}
+function runPrivesc(){
+  const phases=['call','overflow','overwrite','hijack','pwned'];
+  const durations=[450,700,450,450,600];
+  let idx=0,start=performance.now();
+  document.getElementById('privescLabel').textContent='▶ Running the overflow — watch the kernel stack';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawPrivescScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('privescLabel').textContent='▶ Ring 0 compromised — click Reset to try again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetPrivesc(){
+  document.getElementById('privescLabel').textContent='▶ Watch the overflow become Ring-0 code execution';
+  drawPrivescScene(0,'idle');
+}
+
+// ── SPECULATIVE EXECUTION / CACHE-TIMING CANVAS ─────────────────────────────
+function drawSpecScene(t,phase){
+  const canvas=document.getElementById('specCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('256-ENTRY PROBE ARRAY (one page per possible byte value)',12,22);
+
+  const gridY=34, cellW=Math.max(6,(W-24)/256), cellH=26, secretIdx=163;
+  const litIdx = (phase==='reveal'||phase==='probe') ? secretIdx : -1;
+
+  for(let i=0;i<256;i++){
+    let col='rgba(122,155,191,.15)';
+    if(phase==='index' && i===secretIdx && t>0.4) col='rgba(248,113,113,.6)';
+    if((phase==='rollback') && i===secretIdx) col='rgba(248,113,113,.35)';
+    if((phase==='probe') && i===secretIdx) col='rgba(245,200,66,.5)';
+    if((phase==='reveal') && i===secretIdx) col='rgba(74,222,128,.85)';
+    ctx.fillStyle=col;
+    ctx.fillRect(12+i*cellW,gridY,Math.max(1,cellW-0.5),cellH);
+  }
+  ctx.strokeStyle=C.border;ctx.strokeRect(12,gridY,256*cellW,cellH);
+
+  if(phase==='reveal'){
+    ctx.strokeStyle=C.green;ctx.lineWidth=2;
+    ctx.strokeRect(12+secretIdx*cellW-2,gridY-2,Math.max(3,cellW+4),cellH+4);
+  }
+
+  // secret byte flow diagram
+  const boxY=100;
+  ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(12,boxY,W*0.30,70);
+  ctx.strokeStyle=C.red;ctx.strokeRect(12,boxY,W*0.30,70);
+  ctx.fillStyle=C.red;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Ring-0-only memory',12+W*0.15,boxY+22);
+  ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('secret_byte = 163',12+W*0.15,boxY+42);
+  ctx.fillStyle=C.muted;ctx.font='9px Lato,sans-serif';
+  ctx.fillText('(speculatively read — no permission check yet resolved)',12+W*0.15,boxY+58);
+
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(W*0.62,boxY,W*0.30,70);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(W*0.62,boxY,W*0.30,70);
+  ctx.fillStyle=C.cyan;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('attacker, timing',W*0.62+W*0.15,boxY+22);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillText('measures all 256 pages',W*0.62+W*0.15,boxY+42);
+  ctx.fillStyle=C.muted;ctx.font='9px Lato,sans-serif';
+  ctx.fillText('one access will be fast = cached',W*0.62+W*0.15,boxY+58);
+
+  if(phase==='index'||phase==='rollback'){
+    ctx.strokeStyle=C.gold;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(12+W*0.30,boxY+35);ctx.lineTo(12+secretIdx*cellW,gridY+cellH+4);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if(phase==='probe'||phase==='reveal'){
+    ctx.strokeStyle=phase==='reveal'?C.green:C.orange;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(W*0.62,boxY+35);ctx.lineTo(12+secretIdx*cellW,gridY+cellH+4);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const captions={
+    idle:'Click to trace one byte leaking through cache timing',
+    spec_load:'CPU mispredicts a branch, speculatively loads a forbidden Ring-0 byte',
+    index:'Speculatively computes probe_array[secret_byte × 4096] — touches ONE cache line',
+    rollback:'Branch resolves as mispredicted — register wiped, "nothing happened" architecturally… but that cache line is still loaded',
+    probe:'Attacker times access to all 256 probe pages, one by one',
+    reveal:'One access is fast (cached) — its index IS the secret byte: 163'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  if(phase==='rollback'){
+    ctx.fillStyle=C.orange;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('register: [ROLLED BACK]     cache line 163: [STILL LOADED]',W/2,boxY+90);
+  }
+}
+function runSpec(){
+  const phases=['spec_load','index','rollback','probe','reveal'];
+  const durations=[500,650,600,650,500];
+  let idx=0,start=performance.now();
+  document.getElementById('specLabel').textContent='▶ Running the side channel — watch the cache, not the register';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawSpecScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('specLabel').textContent='▶ Byte recovered without a single privileged instruction — click Reset to retry';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetSpec(){
+  document.getElementById('specLabel').textContent='▶ Trace one byte leaking through the cache-timing side channel';
+  drawSpecScene(0,'idle');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetPrivesc(); resetSpec(); });
+window.addEventListener('resize',()=>{ resetPrivesc(); resetSpec(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B03 — Same-Origin Policy | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(167,139,250,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--purple);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--purple);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--purple);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--purple);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(167,139,250,0.08),rgba(56,189,248,0.08));border:1px solid rgba(167,139,250,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .origin-table{width:100%;border-collapse:collapse;margin:20px 0;font-family:'Source Code Pro',monospace;font-size:13px;}
+  .origin-table th{background:var(--bg3);color:var(--muted);padding:8px 12px;text-align:left;font-size:12px;}
+  .origin-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
+  .origin-table tr:last-child td{border-bottom:none;}
+  .same{color:var(--green);} .diff{color:var(--red);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B03 — SAME-ORIGIN POLICY</div>
+  <h1>The <span>Origin</span> Boundary</h1>
+  <p class="tagline">JavaScript from evil.com must not read your inbox at mail.google.com. The Same-Origin Policy enforces this: scripts can only access data from the exact same scheme + host + port triple they were loaded from.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">3-tuple</div><div class="label">scheme + host + port = origin</div></div>
+    <div class="hero-stat"><div class="num">strict</div><div class="label">all 3 parts must match exactly</div></div>
+    <div class="hero-stat"><div class="num">XHR/fetch</div><div class="label">checked by browser, not server</div></div>
+    <div class="hero-stat"><div class="num">CORS</div><div class="label">opt-in relaxation (B14)</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-numbers">Number Systems</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine every website is a gated community. You can walk around freely inside your own community (same origin). But if you're a visitor from another community (different origin), the gate guard (browser SOP check) won't let you peek into residents' mailboxes (read their DOM/cookies/localStorage). You can knock on the door and wait to be let in (CORS), but you can't just reach through the fence.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — Parsing an Origin</h2>
+    <pre><code>/* sop.h */
+typedef struct {
+    char scheme[16];  /* "https" */
+    char host[256];   /* "mail.google.com" */
+    int  port;        /* 443 */
+} origin_t;
+
+int origin_parse(const char *url, origin_t *out) {
+    /* url = "https://mail.google.com:443/inbox" */
+    char *colon = strstr(url, "://");
+    if (!colon) return -1;
+    int slen = colon - url;
+    strncpy(out->scheme, url, slen);
+    out->scheme[slen] = '\0';
+
+    char *host_start = colon + 3;
+    char *slash = strchr(host_start, '/');
+    char *port_colon = strchr(host_start, ':');
+    if (port_colon && (!slash || port_colon < slash)) {
+        int hlen = port_colon - host_start;
+        strncpy(out->host, host_start, hlen);
+        out->host[hlen] = '\0';
+        out->port = atoi(port_colon + 1);
+    } else {
+        int hlen = slash ? slash - host_start : strlen(host_start);
+        strncpy(out->host, host_start, hlen);
+        out->host[hlen] = '\0';
+        /* default ports */
+        out->port = strcmp(out->scheme,"https")==0 ? 443 : 80;
+    }
+    return 0;
+}
+
+int origin_same(const origin_t *a, const origin_t *b) {
+    return strcmp(a->scheme, b->scheme) == 0
+        && strcmp(a->host,   b->host)   == 0
+        && a->port == b->port;
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — Same Origin? Let's Check</h2>
+    <table class="origin-table">
+      <tr><th>Document origin</th><th>Request URL</th><th>Same origin?</th><th>Reason</th></tr>
+      <tr><td>https://example.com</td><td>https://example.com/api</td><td class="same">✓ same</td><td>identical triple</td></tr>
+      <tr><td>https://example.com</td><td>http://example.com</td><td class="diff">✗ different</td><td>scheme differs</td></tr>
+      <tr><td>https://example.com</td><td>https://api.example.com</td><td class="diff">✗ different</td><td>host differs (subdomain)</td></tr>
+      <tr><td>https://example.com</td><td>https://example.com:8443</td><td class="diff">✗ different</td><td>port differs</td></tr>
+      <tr><td>https://example.com:443</td><td>https://example.com</td><td class="same">✓ same</td><td>443 is implied for https</td></tr>
+    </table>
+
+    <div class="callout orange">
+      <div class="label">Subdomains Are Different Origins</div>
+      <p><code>api.example.com</code> and <code>example.com</code> are different origins even though one is a subdomain of the other. This surprises many developers. The relaxation mechanism is <code>document.domain</code> (deprecated) or CORS headers. Never assume subdomains can freely read each other — they can't by default.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Enforcing SOP on XHR</h2>
+    <pre><code>/* xhr.c — simplified XHR with SOP check */
+int xhr_send(const char *document_url, const char *request_url,
+             char *response_buf, int buf_size) {
+    origin_t doc_origin, req_origin;
+    origin_parse(document_url, &doc_origin);
+    origin_parse(request_url,  &req_origin);
+
+    if (!origin_same(&doc_origin, &req_origin)) {
+        /* cross-origin request: check CORS headers (B14) */
+        /* for now: block it */
+        fprintf(stderr, "SOP: blocked cross-origin request\n"
+                "  document: %s://%s:%d\n"
+                "  request:  %s://%s:%d\n",
+                doc_origin.scheme, doc_origin.host, doc_origin.port,
+                req_origin.scheme, req_origin.host, req_origin.port);
+        return -1;  /* BLOCKED */
+    }
+    /* same origin: proceed with request */
+    return http_fetch(request_url, response_buf, buf_size);
+}</code></pre>
+
+    <div class="callout cyan">
+      <div class="label">SOP Is Enforced by the Browser, Not the Server</div>
+      <p>The server never sees a blocked SOP request. The browser checks the origin <em>before</em> sending (for simple requests) or after a preflight (for complex ones). A server cannot opt <em>out</em> of SOP — only opt <em>in</em> to cross-origin sharing via CORS headers. This is why SOP works even for servers that don't know about CORS.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B03 — Same-Origin Policy</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B03_same_origin_policy && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>Test 1: same origin
+  doc=https://example.com  req=https://example.com/api
+  Result: ALLOWED ✓
+
+Test 2: different scheme
+  doc=https://example.com  req=http://example.com
+  Result: BLOCKED (SOP violation) ✓
+
+Test 3: different subdomain
+  doc=https://example.com  req=https://api.example.com
+  Result: BLOCKED (SOP violation) ✓
+
+SOP enforcement: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>SOP blocks JavaScript from <em>reading</em> cross-origin responses. But it doesn't stop a page from <em>sending</em> cross-origin requests — a form POST to bank.com goes through even from evil.com. The browser sends the request; it just won't give evil.com the response.</p>
+      <p style="margin-top:14px;color:var(--muted);">This means SOP alone doesn't stop CSRF (Cross-Site Request Forgery). If you're logged in to bank.com, and evil.com tricks your browser into POSTing to bank.com/transfer — that POST succeeds. What mechanism does bank.com need to add to detect that the request came from evil.com? (Hint: B17 covers this.)</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: What about &lt;img src="https://other.com/image.png"&gt;? That's cross-origin loading.</div>
+      <div class="a">SOP allows cross-origin <em>embedding</em> for images, scripts, CSS, and iframes — that's how CDNs work. What it blocks is cross-origin <em>reading</em> from JavaScript. You can load an image from another origin; you cannot call canvas.getImageData() on it or read its pixels (that would be "tainted canvas"). The distinction is embedding vs. programmatic reading.</div>
+      <div class="q">Q: What is "origin" for a file:// URL?</div>
+      <div class="a">Each file:// URL is its own unique origin in most browsers — file:///a.html and file:///b.html cannot access each other. Some browsers (Firefox, older Chrome) used to allow it but it's a security risk (a local HTML file with XSS could read all your local files). The null origin ("null") is also special and appears for sandboxed iframes and data: URLs.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B04 — Site Isolation</div>
+      <p>SOP is enforced in software by the JS engine — but what about hardware-level attacks like Spectre that can read across process boundaries using timing? Site Isolation puts different origins into different OS processes, so a Spectre attack in a compromised renderer can only read that site's own data.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>sop.c</code> · <code>xhr.c</code> · <code>origin.h</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B03 of 18 &nbsp;|&nbsp; <a href="../B02_renderer_sandbox/tutorial.html">← B02</a> &nbsp;·&nbsp; <a href="../B04_site_isolation/tutorial.html">B04 →</a></footer>
+</body>
+</html>

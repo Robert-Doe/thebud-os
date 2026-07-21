@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Syscall ABI Stability Problem POSIX Solves</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.gd{color:var(--gold)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#apivsabi" title="API vs ABI"></a>
+  <a class="toc-dot" href="#promise" title="Never Break Userspace"></a>
+  <a class="toc-dot" href="#demo" title="Old Binary, New Kernel"></a>
+  <a class="toc-dot" href="#mechanism" title="How It's Kept"></a>
+  <a class="toc-dot" href="#defense" title="How It's Defended"></a>
+  <a class="toc-dot" href="#posixscope" title="What POSIX Doesn't Cover"></a>
+  <a class="toc-dot" href="#bobos" title="Back to bob_os"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · ABI · Syscalls · Compatibility</div>
+    <h1>Never Break<br><span>Userspace</span></h1>
+    <p class="hero-sub">POSIX guarantees your <em>source code</em> behaves the same across kernels — but says nothing about whether a binary you compiled a decade ago still runs. That's a separate, harder promise, made not by a standards document but by individual kernels themselves. Linux keeps it obsessively. Here's exactly what the promise is, why it's brutal to maintain, and why it's not the same contract as POSIX at all.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">450+</div><div class="lbl">Syscalls in the Linux Syscall Table</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Stable Syscall Numbers Ever Reassigned</div></div>
+      <div class="hero-stat"><div class="num">30+ yrs</div><div class="lbl">Old Binaries Still Running Unmodified</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Contracts: Source-Level API vs Binary-Level ABI</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- API VS ABI -->
+<section id="apivsabi">
+<div class="container">
+  <div class="section-num">00 — The Distinction Everything Else Depends On</div>
+  <h2>API vs <span class="accent">ABI</span></h2>
+
+  <p class="reveal">You already know POSIX standardizes an <strong>API</strong> — an Application Programming Interface, a <em>source-level</em> contract. "Source-level" is the key phrase: an API is a promise about what happens when you <em>compile</em> against it. Call <code>open()</code> with the right arguments, get the documented behavior back — but you find that out by feeding your <code>.c</code> file through a compiler and linker targeting a specific system, every time, for every target.</p>
+
+  <p class="reveal">An <strong>ABI</strong> — Application Binary Interface — is a completely different, much stricter promise: a contract about what happens when you run an <em>already-compiled binary</em>, with zero recompilation, on a given system. It covers things a C source file never even mentions: the exact numeric syscall number the CPU's <code>syscall</code>/<code>int 0x80</code> instruction is given, which registers arguments go in, how the return value comes back, the binary file format (ELF, Mach-O, PE) the loader expects, structure layouts and alignment, calling conventions for function calls. None of that is visible in your C source — the compiler fills all of it in, silently, according to whatever ABI it's targeting.</p>
+
+  <div class="formula reveal">
+    <span class="label">The one-line distinction</span>
+    API: recompile against it. ABI: run the same binary against it, unmodified, forever.
+    <span class="sub">POSIX standardizes only the first. Each kernel is on its own for the second.</span>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Aspect</th><th>API (source-level)</th><th>ABI (binary-level)</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">What it governs</td><td>Function names, argument shapes, documented behavior</td><td>Syscall numbers, register/stack calling convention, binary format, struct layout</td></tr>
+        <tr><td class="hl">Consumed by</td><td>The compiler, at build time</td><td>The CPU and kernel loader, at run time</td></tr>
+        <tr><td class="hl">Break it and…</td><td>Your code fails to compile — caught immediately</td><td>A working binary silently misbehaves or crashes — caught in production, maybe years later</td></tr>
+        <tr><td class="hl">Who standardizes it</td><td class="pos">POSIX (source-level behavior only)</td><td class="neg">Nobody, centrally — each OS defines and maintains its own</td></tr>
+        <tr><td class="hl">bob_os example</td><td><code>open(path, flags)</code> as declared in <code>posix.h</code></td><td>Which register <code>path</code> arrives in when <code>int 0x80</code> fires, per <code>syscall.c</code>'s dispatch table</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Why the Distinction Matters So Much</div>
+    Every time you rebuild your project, you're re-negotiating the API contract fresh — the compiler checks it for you, and mismatches are loud, immediate, and cheap. The ABI contract is negotiated <em>once</em>, silently, at compile time, and then has to keep holding <strong>forever</strong>, for a binary nobody may ever recompile again. That asymmetry — cheap-to-fix-if-broken vs impossible-to-fix-once-shipped — is exactly why ABI stability is the harder, scarier promise of the two.
+  </div>
+
+  <h3>Why the compiler can't rescue you from an ABI break</h3>
+  <p class="reveal">It's worth being precise about why recompiling doesn't help an <em>already-shipped</em> binary. The compiler only ever sees your source code at the moment you build. It has no way to reach back in time and fix binaries that were compiled and handed out years earlier — those bytes are frozen, and whatever assumptions about syscall numbers and calling conventions were baked into them at build time are the assumptions they'll carry for as long as they exist. An ABI promise is fundamentally a promise made <em>to the past</em>, not just to the present:</p>
+
+  <pre class="reveal"><span class="tag">what's actually frozen inside a compiled binary</span><code><span class="cm">; x86-64 Linux — this is roughly what open() compiles down to</span>
+<span class="kw">mov</span> rax, <span class="numc">2</span>          <span class="cm">; syscall number for open() — frozen, forever, in THIS binary's bytes</span>
+<span class="kw">mov</span> rdi, path_ptr   <span class="cm">; 1st arg register — frozen by the calling convention at compile time</span>
+<span class="kw">mov</span> rsi, flags      <span class="cm">; 2nd arg register — same</span>
+<span class="kw">syscall</span>              <span class="cm">; trap into the kernel — whatever kernel happens to be running</span></code></pre>
+
+  <p class="reveal">That <code>mov rax, 2</code> is not a reference to a symbol the linker resolves later — it's a literal number, burned into the machine code the day the binary was compiled. There is no version of "the kernel changed, so let this old binary's baked-in <code>2</code> mean something different now" that doesn't require either recompiling the binary (impossible if you've lost the source, or the vendor vanished) or the kernel keeping slot <code>2</code> meaning exactly what it always meant. Real kernels choose the second option, permanently.</p>
+</div>
+</section>
+
+<!-- NEVER BREAK USERSPACE -->
+<section id="promise">
+<div class="container">
+  <div class="section-num">01 — The Promise, Concretely</div>
+  <h2>Linux's <span class="accent">"We Do Not Break Userspace"</span> Rule</h2>
+
+  <p class="reveal">Linux's kernel maintainers, and Linus Torvalds most famously and repeatedly, have enforced a rule that goes beyond anything POSIX requires: <strong>a change to the kernel that causes an existing user-space program to stop working correctly is a kernel bug — full stop — regardless of whether the program was relying on "undocumented" or "technically unspecified" behavior.</strong> If real programs depended on it and it used to work, and a kernel change makes it stop working, the kernel change is reverted or fixed, not the program.</p>
+
+  <p class="reveal">This is a much stronger commitment than POSIX conformance. POSIX only promises that documented, specified behavior stays correct. "Never break userspace" promises that <em>whatever a real program actually observed and came to depend on</em> — documented or not — keeps working. It's an engineering culture decision layered on top of, and going beyond, what any specification requires.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 What This Buys You, Concretely</div>
+    A statically-linked Linux binary compiled in the early 1990s can, in principle, still be executed correctly by a Linux kernel built this year. Not "recompiled and it happens to work" — the <em>exact same bytes</em>, unmodified, still produce correct behavior, because the syscall numbers it calls and the calling convention it uses have not moved, even though nearly every line of the kernel's internal implementation has been rewritten multiple times over since.
+  </div>
+
+  <h3>Why this is a genuinely huge, ongoing engineering commitment</h3>
+  <p class="reveal">It's easy to state the rule in one sentence and easy to underestimate how much work it costs to keep. Every one of the 450+ entries in Linux's syscall table is a permanent, unretractable promise the moment it ships to a stable kernel release — the kernel can add new syscalls freely, but essentially never remove or renumber an old one, because <em>some</em> binary out there, possibly one nobody working on the kernel has ever seen, might still be calling it by that exact number.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>😬 What Breaking the Promise Looks Like</h4>
+      A kernel update ships. An old game, an old scientific tool, an old statically-linked binary someone's business still depends on, suddenly segfaults or misbehaves — not because it was doing anything wrong, but because a syscall's structure layout shifted, or a return-value edge case changed. Users can't fix their binary; they can only distrust future kernel updates.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ What Keeping It Looks Like</h4>
+      When a syscall's behavior genuinely needs to evolve — say, a data structure needs new fields — the kernel adds a <strong>new</strong> syscall number (e.g. <code>stat()</code> → <code>stat64()</code> → <code>statx()</code>) rather than repurposing the old one, and keeps the old syscall number working exactly as it always did, indefinitely, for anyone still calling it.
+    </div>
+  </div>
+
+  <h3>Who this promise is actually for</h3>
+  <p class="reveal">"Never break userspace" can sound like an abstract point of engineering pride until you list out who's actually depending on it in practice:</p>
+  <ul class="reveal">
+    <li><strong>Commercial software with no available source</strong> — old games, old CAD tools, old scientific instruments' control software, shipped as a binary only, whose original vendor may no longer exist to recompile anything.</li>
+    <li><strong>Large enterprises running unmaintained internal tools</strong> — a payroll or inventory system built decades ago that nobody currently on staff knows how to safely rebuild, but that still needs to run correctly on servers patched for security every month.</li>
+    <li><strong>Container images with pinned, ancient base layers</strong> — a container built once, years ago, still deployed unchanged today, executing on a host kernel that's been upgraded dozens of times since.</li>
+    <li><strong>Embedded and appliance firmware</strong> — devices in the field that will never receive a userspace software update again, but whose host kernel (if it's Linux-based) may still receive security patches for years.</li>
+  </ul>
+</div>
+</section>
+
+<!-- DEMO -->
+<section id="demo">
+<div class="container">
+  <div class="section-num">02 — See It Happen</div>
+  <h2>An Old Binary Meets a <span class="accent">New Kernel</span></h2>
+
+  <p class="reveal">Below, two binaries — one compiled decades ago, one compiled this morning — both make the same raw <code>open()</code> syscall against a modern kernel. Watch what stays frozen (the syscall table entry both binaries rely on) versus what's changed completely underneath it (literally everything else in the kernel).</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="abiLabel">▶ Pick a binary to run against today's kernel</div>
+    <canvas id="abiCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runAbi('old')">▶ Run a binary compiled in 1996</button>
+    <button class="ctrl-btn cyan" onclick="runAbi('new')">▶ Run a binary compiled this morning</button>
+    <button class="ctrl-btn red" onclick="resetAbi()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What You Just Watched</div>
+    Both binaries issue <code>syscall</code> with the exact same number in the exact same register for <code>open()</code> — <strong>syscall number 2</strong> on x86-64 Linux, unchanged since the 64-bit syscall table was frozen. The kernel's actual internal open-file logic, VFS layer, and filesystem drivers underneath that table entry have been rewritten many times since either binary was built. Neither binary knows or cares — the syscall-table entry is the frozen seam they both depend on.
+  </div>
+</div>
+</section>
+
+<!-- MECHANISM -->
+<section id="mechanism">
+<div class="container">
+  <div class="section-num">03 — How the Promise Is Actually Kept</div>
+  <h2>The <span class="accent">Mechanics</span> of ABI Stability</h2>
+
+  <p class="reveal">"Never change a syscall number" is the headline rule, but real kernel evolution needs more tools than just freezing numbers forever. Here's the actual toolkit real kernels use to keep the promise while still moving forward.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Additive-only syscall table</strong>New functionality gets a new syscall number appended to the table. The old number, if it still exists, keeps its old behavior forever. The table only ever grows, never shrinks — a permanent, monotonically-increasing record of every promise the kernel has ever made.</div></li>
+    <li><div class="step-body"><strong>Compat syscalls for changed structures</strong>When a data structure genuinely needs to change shape (say, a 32-bit field needs to become 64-bit to survive past the year 2038), the kernel adds a parallel syscall — like <code>stat()</code> alongside <code>stat64()</code> alongside <code>statx()</code> — rather than silently changing what the original returns. Old callers keep calling the old entry and keep getting the old, correctly-shaped answer.</div></li>
+    <li><div class="step-body"><strong>Symbol versioning in the C library</strong>Even one layer up, glibc uses versioned symbols so that a binary linked against an older library version keeps calling the older (ABI-compatible) implementation of a function, while newly-compiled code gets the newer one — both coexisting in the same library file, resolved at load time based on which version the binary was actually linked against.</div></li>
+    <li><div class="step-body"><strong>Regression is treated as a release blocker</strong>If a kernel change is found to break a real userspace program during testing, the default response is to revert or fix the kernel change — not to tell the program to adapt — regardless of whether the program was relying on strictly-documented behavior. "It was never guaranteed" is explicitly not an accepted excuse if real software broke.</div></li>
+  </ol>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 This Is Also Why the Kernel's Internal APIs Are Allowed to Churn Wildly</div>
+    Linux famously does <em>not</em> promise a stable internal kernel API for things like driver interfaces between kernel modules — those change release to release, sometimes drastically, and out-of-tree drivers frequently break. The stability promise is drawn at exactly one boundary: the syscall interface facing user space. Everything on the kernel-internal side of that line is free to be rewritten at will, precisely because the boundary itself never moves.
+  </div>
+
+  <h3>One ABI per architecture, each stable on its own terms</h3>
+  <p class="reveal">There's a wrinkle worth being precise about: "the syscall ABI" isn't one single global numbering — it's one numbering <em>per CPU architecture</em>, each frozen independently. <code>open()</code>'s syscall number is not a universal constant; it's whatever number that architecture's ABI assigned it, kept stable forever <em>within</em> that architecture.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Architecture</th><th>open() Syscall Number</th><th>Why It Differs</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">x86 (32-bit, i386)</td><td class="gold">5</td><td>The original Linux syscall table ordering, dating to the early 1990s</td></tr>
+        <tr><td class="hl">x86-64</td><td class="gold">2</td><td>Renumbered from scratch when the 64-bit syscall table was designed, deliberately decoupled from the 32-bit numbering</td></tr>
+        <tr><td class="hl">ARM64 (AArch64)</td><td class="gold">no direct open() — openat() only</td><td>Newer architectures were given a cleaned-up, smaller "generic" syscall table that dropped several legacy variants entirely</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">None of this is a contradiction of "never break userspace" — it's the same promise, scoped correctly. A given x86-64 binary's <code>mov rax, 2</code> only ever needs to keep meaning <code>open()</code> on x86-64 kernels; it was never going to run on an ARM64 kernel unmodified anyway, because CPU instruction sets themselves aren't compatible across architectures in the first place. The ABI promise is "stable within an architecture, forever," not "identical across every architecture that has ever existed."</p>
+
+  <h3>Even the trap mechanism itself has changed — and old binaries still work</h3>
+  <p class="reveal">Here's a detail that makes the stability promise even more impressive: the actual CPU instruction used to enter the kernel on x86 has changed more than once, and old 32-bit Linux binaries still run correctly today anyway.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Era</th><th>Trap Mechanism</th><th>What Happened to Old Binaries</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Original 32-bit Linux</td><td><code>int 0x80</code> software interrupt</td><td>Still works today — the kernel still honors it</td></tr>
+        <tr><td class="hl">Faster 32-bit path (Pentium II era)</td><td><code>sysenter</code> instruction, exposed via the vDSO</td><td>Binaries recompiled to use it got a speed boost; old <code>int 0x80</code> binaries kept working unmodified</td></tr>
+        <tr><td class="hl">64-bit Linux</td><td><code>syscall</code> instruction</td><td>New syscall table and numbering for 64-bit binaries; the kernel <em>also</em> kept a full 32-bit compatibility mode for old binaries</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">The trick making this possible is the <strong>vDSO</strong> (virtual dynamic shared object) — a small piece of code the kernel maps into every process's address space that picks the fastest available trap mechanism for the current CPU, so most binaries never hard-code a specific instruction at all. For the ones that do (old, statically-linked, hand-written-in-assembly binaries using raw <code>int 0x80</code>), the kernel simply keeps that path alive as a slower but fully correct fallback, indefinitely.</p>
+
+  <h3>The compat-syscall pattern, with real names</h3>
+  <p class="reveal">"Add a new syscall instead of changing the old one" sounds abstract until you see the actual lineage. Linux's <code>stat()</code> family is the textbook example — three generations of the same conceptual operation, all still present in a modern kernel, none of them removed:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Syscall</th><th>Introduced Because</th><th>Still Callable Today?</th></tr></thead>
+      <tbody>
+        <tr><td class="hl"><code>stat()</code></td><td>Original file-metadata call, 32-bit fields throughout</td><td class="pos">Yes</td></tr>
+        <tr><td class="hl"><code>stat64()</code></td><td>32-bit systems needed file sizes larger than 2GB — the original struct couldn't hold it</td><td class="pos">Yes</td></tr>
+        <tr><td class="hl"><code>statx()</code></td><td>Modern replacement — extensible struct, nanosecond timestamps, avoids the 2038 32-bit time overflow entirely</td><td class="pos">Yes</td></tr>
+        <tr><td class="hl"><code>mmap()</code> / <code>mmap2()</code></td><td>Original took a byte offset; 32-bit architectures needed a page-shifted offset variant to address larger files</td><td class="pos">Yes</td></tr>
+        <tr><td class="hl"><code>open()</code> / <code>openat()</code></td><td><code>openat()</code> added a directory-relative variant needed for safe, race-free path resolution — <code>open()</code> was kept exactly as-is</td><td class="pos">Yes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Notice What Never Happens in That Table</div>
+    Nowhere does the kernel go back and change what <code>stat()</code> itself returns, or repurpose syscall number 4 (its slot on x86-64) to mean something new. The table only ever grows sideways. A binary from any era keeps calling whichever generation of the family it was compiled against, and keeps getting exactly the behavior it always got.
+  </div>
+</div>
+</section>
+
+<!-- DEFENSE -->
+<section id="defense">
+<div class="container">
+  <div class="section-num">04 — The Process Behind the Promise</div>
+  <h2>How the Kernel Community Actually <span class="accent">Defends</span> This</h2>
+
+  <p class="reveal">A rule is only as real as the process that enforces it. "Never break userspace" isn't kept alive by good intentions alone — it's backed by a set of concrete engineering practices baked into how kernel patches get merged, tested, and reviewed before they ever reach a stable release.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Extensive automated fuzzing of the syscall surface</strong>Tools like syzkaller continuously throw huge volumes of malformed and edge-case syscall arguments at development kernels, hunting for crashes or behavioral changes long before a change reaches ordinary users.</div></li>
+    <li><div class="step-body"><strong>A staging area before anything is considered stable</strong>Patches flow through maintainer trees and a integration branch (linux-next) for real-world testing across a huge range of hardware and workloads before merging into a release that distributions will actually ship.</div></li>
+    <li><div class="step-body"><strong>Regressions are release-blocking, by policy</strong>If a change is reported to break a previously-working userspace program during any point in this process, the default, expected response is to revert the offending change — the burden of proof is on the change, not on the program it broke.</div></li>
+    <li><div class="step-body"><strong>Torvalds himself has personally enforced this, repeatedly, in public</strong>There's a well-known pattern of blunt, public kernel-mailing-list pushback whenever a patch is found to have broken a real userspace program, regardless of how "technically correct" or how small the change seemed — reinforcing the rule as a cultural norm, not just a written policy.</div></li>
+  </ol>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Uncomfortable Part of This Promise</div>
+    This process only catches breaks in software the testing process actually exercises. The much scarier failure mode is a change that breaks some obscure, low-traffic corner of the ABI that nobody tests, silently, until years later someone's ancient but critical binary hits it in production. That risk is exactly why the bias is so strongly toward <em>never touching existing behavior at all</em>, rather than trusting testing to catch every possible regression before release.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>A useful mental model:</b> think of the syscall ABI as a public API with a userbase the maintainers can never fully enumerate, let alone contact. Ordinary software teams get to say "we're deprecating this, please migrate by such-and-such date." The Linux kernel, in practice, cannot say that credibly for any already-shipped syscall — it has no reliable way to reach everyone who might be relying on it, so the only safe default is to assume someone, somewhere, still is.
+  </div>
+</div>
+</section>
+
+<!-- POSIX SCOPE -->
+<section id="posixscope">
+<div class="container">
+  <div class="section-num">05 — Where POSIX Fits (and Doesn't)</div>
+  <h2>What POSIX <span class="accent">Doesn't</span> Cover Here</h2>
+
+  <p class="reveal">It's tempting to assume POSIX is "the thing that makes old binaries keep running," since it's the most famous Unix standard. It isn't — and understanding exactly where its scope ends is the whole point of this lesson.</p>
+
+  <p class="reveal">POSIX standardizes <code>open()</code>'s <em>source-level</em> behavior: what arguments it takes, what it must return, what <code>errno</code> values are legal. It says absolutely nothing about which raw syscall number an <code>open()</code> call compiles down to, which register the path pointer goes in, or how the return value is passed back to the caller. Those are pure implementation details — POSIX leaves them entirely to each operating system to decide, and explicitly does not require any two POSIX-conformant systems to agree on them at all.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>📜 What POSIX Promises</h4>
+      Your C source code, recompiled fresh for each target, calling <code>open()</code>, behaves identically on any conformant system. This is an API-level, source-level, recompile-required guarantee.
+    </div>
+    <div class="compare-card bad">
+      <h4>🧬 What POSIX Never Promised</h4>
+      That a binary compiled on Linux runs on FreeBSD without recompiling — their raw syscall numbers and calling conventions are completely different and always have been, despite both exposing the identical POSIX <code>open()</code> source-level contract.
+    </div>
+  </div>
+
+  <p class="reveal">So the two promises stack, but they're independent, made by different parties, at different layers: POSIX (a standards committee) guarantees your <em>source</em> means the same thing everywhere it's conformant. Each individual kernel (Linux's maintainers, FreeBSD's, XNU's) separately, voluntarily, and at real ongoing cost, guarantees that binaries already compiled against <em>its own</em> ABI keep working on its own future versions. One is a portability promise across systems; the other is a durability promise across time, made by a single system to itself.</p>
+
+  <div class="sidenote reveal">
+    <b>Worth noting:</b> this is exactly why "POSIX-compliant" was never a synonym for "binary compatible." A Linux binary and a FreeBSD binary can both call the POSIX-standardized <code>open()</code> in their source form and both be fully conformant — while remaining completely unable to run on each other's kernel unmodified, because the ABI underneath was never part of the deal.
+  </div>
+
+  <p class="reveal">This split explains a fact that otherwise looks contradictory: compatibility layers like Linux's own <code>binfmt_misc</code> mechanism, or FreeBSD's historical Linux-binary-compatibility mode, exist specifically to bridge exactly this ABI gap between otherwise-POSIX-equivalent systems. They work by having one kernel learn to recognize and correctly translate <em>another</em> kernel's syscall numbers and calling convention into its own — extra engineering effort spent precisely because POSIX conformance on both sides never automatically bought binary compatibility between them.</p>
+</div>
+</section>
+
+<!-- TIE TO BOB_OS -->
+<section id="bobos">
+<div class="container">
+  <div class="section-num">06 — Tying It Back</div>
+  <h2>ABI Stability, <span class="accent">bob_os</span>-Sized</h2>
+
+  <p class="reveal">Look at <code>syscall.h</code> and <code>syscall.c</code> in module 28: every syscall bob_os exposes has a fixed numeric ID that <code>user_entry.asm</code> loads into a register before trapping into the kernel, and <code>syscall.c</code>'s dispatch table maps that number straight to a handler function. That numeric ID, and the register convention around it, <em>is</em> bob_os's own tiny syscall ABI — informal and unversioned, but structurally the same idea as Linux's syscall table.</p>
+
+  <p class="reveal">If a future version of bob_os renumbered <code>SYS_OPEN</code> from, say, 2 to 7 without updating every already-compiled user program, every existing bob_os binary calling <code>open()</code> would silently start invoking whatever handler now lives at slot 2 instead — with no compiler error to catch it, because the mismatch lives entirely at the binary level, invisible to source code. That's the exact failure mode real kernels spend enormous engineering effort avoiding.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Practical Takeaway</div>
+    Even a small teaching kernel accumulates the same obligation a production kernel has, the moment more than one compiled user-space binary exists: syscall numbers, once assigned and shipped, become a promise to keep, not a detail to casually renumber. POSIX conformance (module 28's <code>posix.c</code> layer) and ABI stability (module 28's fixed syscall numbers in <code>syscall.h</code>) are two separate disciplines bob_os practices side by side — exactly as real operating systems do.
+  </div>
+
+  <p class="reveal">bob_os gets to sidestep the hardest part of the real-world problem, and it's worth being explicit about why: there is exactly one bob_os kernel version in existence at a time, and no independent third party has ever shipped a compiled bob_os binary that this project doesn't control. Real kernels carry this promise for an unknown, unbounded population of binaries compiled by people the kernel maintainers will never meet, running purposes the maintainers can't anticipate, which is precisely why "never break userspace" has to be treated as an inviolable rule rather than a best-effort guideline — there's no way to know in advance which old syscall number some critical, unmaintained binary out in the world still depends on.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">1</div><div class="lbl">bob_os kernel version in existence at a time — no legacy binary population</div></div>
+    <div class="stat-card"><div class="val">∞</div><div class="lbl">Unknown binaries a real kernel like Linux must never break</div></div>
+    <div class="stat-card"><div class="val">27</div><div class="lbl">Total syscalls bob_os's own ABI currently commits to</div></div>
+    <div class="stat-card"><div class="val">2</div><div class="lbl">Layers bob_os keeps separate: posix.c (API) and syscall.h (ABI)</div></div>
+  </div>
+
+  <p class="reveal">Module 28's own final additions — <code>select()</code>, <code>stat()</code>, and <code>lseek()</code> — are a small live example of the additive-only discipline in miniature: each got a brand-new syscall number appended to bob_os's existing table rather than reusing or reshuffling any number already claimed by an earlier module's syscalls. Small as this project is, the habit is worth building now, because it's exactly the habit that scales up into "never break userspace" the moment a kernel has real users depending on it.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">API</div><div class="glossary-def">Application Programming Interface — a source-level contract, checked and enforced at compile time. What POSIX standardizes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ABI</div><div class="glossary-def">Application Binary Interface — a binary-level contract: syscall numbers, calling conventions, struct layouts, and file formats an already-compiled program depends on at run time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Syscall Number</div><div class="glossary-def">The fixed integer identifying which kernel operation a trap instruction is requesting — the load-bearing constant of any syscall ABI.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Calling Convention</div><div class="glossary-def">The agreed-upon rule for which registers or stack slots hold arguments and return values across a function or syscall boundary.</div></div>
+    <div class="glossary-card"><div class="glossary-term">"Never Break Userspace"</div><div class="glossary-def">Linux's engineering culture rule: a kernel change that stops an existing user-space binary from working is a kernel bug, regardless of whether the binary relied on documented behavior.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Compat Syscall</div><div class="glossary-def">A new syscall added alongside an old one (e.g. <code>statx()</code> beside <code>stat()</code>) so a changed data shape doesn't require breaking existing callers of the original.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Symbol Versioning</div><div class="glossary-def">A C library technique letting multiple ABI-compatible versions of the same function name coexist in one shared library, so old binaries keep resolving to the version they were built against.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Statically Linked Binary</div><div class="glossary-def">A binary with all its library code baked in at compile time — it depends only on the kernel's syscall ABI, not on any particular version of a shared library, making it an especially strong test of long-term ABI stability.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Regression</div><div class="glossary-def">A change that breaks previously-working behavior. In Linux kernel development, any regression affecting real userspace is treated as a bug to be fixed, not a spec technicality to argue about.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trap Frame / syscall Instruction</div><div class="glossary-def">The CPU mechanism (e.g. x86-64's <code>syscall</code> instruction) that transitions from user mode into the kernel's syscall dispatcher, carrying the syscall number and arguments in registers per the ABI's calling convention.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Dispatch Table</div><div class="glossary-def">The kernel's array mapping each syscall number to its handler function — the concrete data structure that makes the syscall-number promise real, in bob_os's <code>syscall.c</code> and in every production kernel alike.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Fuzzing (syzkaller)</div><div class="glossary-def">Automated testing that generates huge volumes of malformed or edge-case syscall input to catch crashes and behavioral regressions before a kernel change reaches a stable release.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Binary Compatibility Layer</div><div class="glossary-def">A mechanism (like Linux's <code>binfmt_misc</code> or FreeBSD's Linux-compat mode) that lets one kernel recognize and translate another kernel's syscall ABI, bridging a gap POSIX conformance alone never closes.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The Syscall ABI Stability Problem POSIX Solves · Companion lesson for bob_os module 28_posix</p>
+  <p style="margin-top:.5rem;font-size:.78rem">The promise underneath the promise.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── OLD BINARY / NEW BINARY vs MODERN KERNEL CANVAS ────────────────────────
+const binInfo={
+  old:{name:'a.out — compiled 1996',color:C.gold,detail:'Statically linked · targets syscall #2 directly'},
+  new:{name:'a.out — compiled this morning',color:C.cyan,detail:'Dynamically linked via glibc · also resolves to syscall #2'}
+};
+
+function drawAbiScene(t,phase,target){
+  const canvas=document.getElementById('abiCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const info=binInfo[target]||binInfo.old;
+
+  // binary box
+  const binY=20, binH=54;
+  ctx.fillStyle='rgba(255,255,255,.04)';ctx.fillRect(W*0.28,binY,W*0.44,binH);
+  ctx.strokeStyle=info.color;ctx.lineWidth=1.5;ctx.strokeRect(W*0.28,binY,W*0.44,binH);
+  ctx.fillStyle=info.color;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(info.name,W*0.5,binY+22);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText(info.detail,W*0.5,binY+40);
+
+  // syscall table — the frozen seam
+  const tblY=H*0.42, tblH=54;
+  ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(W*0.15,tblY,W*0.7,tblH);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=2;ctx.strokeRect(W*0.15,tblY,W*0.7,tblH);
+  ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SYSCALL TABLE — entry #2 = open()  (frozen since the 64-bit ABI shipped)',W*0.5,tblY+22);
+  ctx.font='9px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+  ctx.fillText('same register, same number, every kernel release since',W*0.5,tblY+38);
+
+  // kernel internals box (churning, changed)
+  const kY=H*0.7, kH=70;
+  ctx.fillStyle='rgba(56,189,248,.05)';ctx.fillRect(W*0.1,kY,W*0.8,kH);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;ctx.strokeRect(W*0.1,kY,W*0.8,kH);
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('today’s kernel internals — VFS, filesystem drivers, memory manager',W*0.5,kY+18);
+  const parts=['rewritten','rewritten','rewritten','rewritten'];
+  parts.forEach((p,i)=>{
+    const px=W*0.16+i*(W*0.68/parts.length), pw=W*0.68/parts.length-8;
+    ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(px,kY+28,pw,30);
+    ctx.strokeStyle='rgba(56,189,248,.3)';ctx.strokeRect(px,kY+28,pw,30);
+    ctx.fillStyle=C.muted;ctx.font='8px Source Code Pro,monospace';
+    ctx.fillText(p,px+pw/2,kY+47);
+  });
+
+  const captions={
+    idle:'Pick a binary above',
+    trap:info.name+' issues syscall #2 in the same register, no matter how old it is',
+    table:'Hits the frozen syscall table entry — unchanged since it shipped',
+    internal:'Dispatches into today’s (completely rewritten) internal handler',
+    result:'✅ Correct result returned — the binary neither knows nor cares what changed underneath'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+
+  let dotX=W*0.5,dotY=binY+binH,dotCol=info.color;
+  if(phase==='trap'){dotX=W*0.5;dotY=binY+binH+(tblY-binY-binH)*t;dotCol=info.color;}
+  else if(phase==='table'){dotX=W*0.5;dotY=tblY+27;dotCol=C.gold;}
+  else if(phase==='internal'){dotX=W*0.5;dotY=tblY+tblH+(kY-tblY-tblH)*t;dotCol=C.cyan;}
+  else if(phase==='result'){dotX=W*0.5;dotY=kY+kH+16;dotCol=C.green;}
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+  if(phase==='result'){
+    ctx.fillStyle=C.green;ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+    ctx.fillText('✓',W*0.5,kY+kH+13);
+  }
+}
+
+function runAbi(target){
+  const phases=['trap','table','internal','result'];
+  const durations=[450,450,550,500];
+  let idx=0,start=performance.now();
+  const info=binInfo[target]||binInfo.old;
+  document.getElementById('abiLabel').textContent='▶ Running '+info.name+' against today’s kernel';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawAbiScene(t,phases[idx],target);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('abiLabel').textContent='▶ Done — same syscall #2, either era of binary. Try the other one.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetAbi(){
+  document.getElementById('abiLabel').textContent='▶ Pick a binary to run against today’s kernel';
+  drawAbiScene(0,'idle','old');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetAbi(); });
+window.addEventListener('resize',()=>{ resetAbi(); });
+</script>
+</body>
+</html>

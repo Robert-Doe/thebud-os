@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOP Bypass History — postMessage, document.domain, and Why They Were Dangerous</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.13) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.timeline{display:flex;flex-direction:column;gap:0;margin:2rem 0;border-left:2px solid var(--border);padding-left:1.6rem;}
+.tl-item{position:relative;padding-bottom:1.8rem;}
+.tl-item::before{content:'';position:absolute;left:-1.68rem;top:.3rem;width:11px;height:11px;border-radius:50%;background:var(--purple);border:2px solid var(--bg2);}
+.tl-year{font-family:'Source Code Pro',monospace;color:var(--purple);font-size:.85rem;font-weight:700;margin-bottom:.2rem;}
+.tl-text{color:var(--muted);font-size:.92rem;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#docdomain" title="document.domain"></a>
+  <a class="toc-dot" href="#docdomainsim" title="Relaxation Simulation"></a>
+  <a class="toc-dot" href="#whydangerous" title="Why It Was Dangerous"></a>
+  <a class="toc-dot" href="#postmessage" title="postMessage"></a>
+  <a class="toc-dot" href="#originbug" title="The Common Bug"></a>
+  <a class="toc-dot" href="#compare" title="Old vs New"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Web Platform Security · SOP Relaxation History · bob_os Lesson 18.3</div>
+    <h1>SOP Bypass History:<br><span>postMessage &amp; document.domain</span></h1>
+    <p class="hero-sub">The Same-Origin Policy is strict by design — but the web has always needed <em>some</em> deliberate way for two different origins to talk to each other on purpose. The first mechanism, <code>document.domain</code>, turned out to be a loaded gun with a hair trigger. What replaced it, <code>window.postMessage()</code>, is safer by construction — but only if the developer remembers to check one field. Most don't, at first. Here's the whole story, and the bug that still ships today.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1996</div><div class="lbl">document.domain Introduced</div></div>
+      <div class="hero-stat"><div class="num">Mutual</div><div class="lbl">Both Sides Must Opt In</div></div>
+      <div class="hero-stat"><div class="num">2009</div><div class="lbl">postMessage Standardized</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Field Everyone Forgets To Check</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 1: DOCUMENT.DOMAIN -->
+<section id="docdomain">
+<div class="container">
+  <div class="section-num">01 — The Old Way</div>
+  <h2>Relaxing SOP With <span class="accent">document.domain</span></h2>
+
+  <p class="reveal">Picture the exact scenario Lesson 18.1 flagged as a common surprise: <code>a.example.com</code> and <code>b.example.com</code> are different origins by the strict scheme+host+port rule, even though a human looking at them would call them "obviously related — same company, same parent domain." Sometimes that relationship is real: both subdomains are legitimately run by the same team, and a page on one genuinely needs to read the DOM of an iframe pointing at the other.</p>
+
+  <p class="reveal"><code>document.domain</code> was the original browser-provided answer, dating back to Netscape in the mid-1990s. The trick: a script can set <code>document.domain</code> to a <em>suffix</em> of its own current hostname — never a completely unrelated domain, only a shorter parent slice of the one it's already on. If two pages, from different subdomains of the same parent, both perform this same trick and land on the <em>identical</em> resulting value, the browser then treats them as same-origin for DOM access purposes (though notably, port is dropped from the comparison entirely once this is done).</p>
+
+  <div class="header-block reveal" style="background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.5rem 1.8rem;">
+    <pre style="margin:0;border:none;padding:0"><span class="tag">on a.example.com</span><code><span class="cm">// Page loaded from https://a.example.com</span>
+<span class="var">document</span>.domain = <span class="str">"example.com"</span>;
+<span class="cm">// a.example.com has now voluntarily widened its own origin</span></code></pre>
+    <pre style="margin:1rem 0 0;border:none;padding:0"><span class="tag">on b.example.com (in an iframe)</span><code><span class="cm">// Page loaded from https://b.example.com</span>
+<span class="var">document</span>.domain = <span class="str">"example.com"</span>;
+<span class="cm">// b.example.com does the same thing, independently</span>
+<span class="cm">// NOW: both pages can freely read each other's DOM,</span>
+<span class="cm">// as if they were same-origin</span></code></pre>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Both Sides Must Explicitly Opt In</div>
+    This was mutual and deliberate by design: a.example.com's script setting <code>document.domain</code> only widens a.example.com's own effective origin. Nothing happens unless b.example.com's script performs the identical operation independently. Neither page can force this on the other — but crucially, once <em>either</em> page has done it, its own protections are down for <em>everything</em> at that new, wider effective origin, not just the one relationship it meant to enable.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: SIMULATION -->
+<section id="docdomainsim">
+<div class="container">
+  <div class="section-num">02 — Watch The Relaxation Happen</div>
+  <h2>Before and After the <span class="accent">Handshake</span></h2>
+
+  <p class="reveal">Run the simulation to see the exact moment the wall between two subdomains comes down — and notice how symmetric-looking it is right up until the third act.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="ddLabel">▶ Click to simulate document.domain relaxation</div>
+    <canvas id="ddCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn purple" onclick="runDD()">▶ Run the Relaxation</button>
+    <button class="ctrl-btn" onclick="resetDD()">Reset</button>
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">The Comparison That Changes</span>
+    Before: origin(a.example.com) ≠ origin(b.example.com) → DOM access BLOCKED
+    <br>After both set document.domain="example.com": treated as same-origin → DOM access ALLOWED
+    <span class="sub">Note what's absent from the "after" state: no per-relationship scoping. It's not "a and b may talk" — it's "anything currently at example.com's widened origin may talk to anything else that's also widened."</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: WHY DANGEROUS -->
+<section id="whydangerous">
+<div class="container">
+  <div class="section-num">03 — Why This Got Phased Out</div>
+  <h2>The Blast Radius Was <span class="accent r">Too Big</span></h2>
+
+  <p class="reveal">On paper, <code>document.domain</code> looks reasonable: it only ever widens toward a shared parent, both parties must agree, and the parent domain itself has to have deliberately delegated subdomains to teams that opted in. In practice, it aged badly, for a few compounding reasons.</p>
+
+  <div class="step-list reveal">
+    <li>
+      <div class="step-body">
+        <strong>It's an all-or-nothing switch, not a scoped permission</strong>
+        Once a.example.com widens its origin, <em>every</em> other subdomain of example.com that also widens gets full DOM access to it — not just the one page it meant to talk to. If <code>legacy-marketing.example.com</code> from 2011, running unmaintained code with an old XSS bug, also happens to opt in, it now has a path into anything else that opted in too.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>It quietly drops the port from the origin check</strong>
+        Two pages on the same host but different ports become mutually accessible once both set <code>document.domain</code> — a narrowing of the security boundary that's easy to forget is happening, since nothing about the API visibly mentions ports at all.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>A single vulnerable subdomain becomes a skeleton key for the whole family</strong>
+        Large organizations often have dozens of subdomains, not all equally maintained. document.domain effectively means the security of your most-hardened subdomain is only as strong as the least-hardened subdomain that also opted in to the same relaxation.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>It conflicts with Site Isolation and process-per-origin architecture</strong>
+        Modern browsers increasingly want to make hard guarantees like "different origins never share a process." A feature that lets pages retroactively decide they're the same origin at runtime works against that guarantee, forcing browsers to special-case it. This is a big part of why it's being actively deprecated: Chrome has disabled document.domain-based relaxation by default in recent versions, requiring an explicit opt-in via an HTTP header for the rare legitimate use cases that still need it.
+      </div>
+    </li>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Core Lesson</div>
+    <strong>A security boundary that can be widened at runtime, by mutual but unscoped agreement, tends to end up as wide as its weakest willing participant — not as narrow as its strongest one.</strong> This exact pattern shows up again and again in security history: any "trust me" mechanism without fine-grained scoping eventually gets exploited through whichever participant was least careful.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: POSTMESSAGE -->
+<section id="postmessage">
+<div class="container">
+  <div class="section-num">04 — The Modern Replacement</div>
+  <h2><span class="accent c">window.postMessage()</span> — Built To Be Safer</h2>
+
+  <p class="reveal">Standardized as part of HTML5 (roughly 2009 onward for solid cross-browser support), <code>postMessage()</code> takes a completely different design philosophy: instead of widening origins to make two pages <em>indistinguishable</em>, it lets two pages of <em>any</em> origins — related or not — exchange explicit, structured messages while remaining fully separate the entire time. No DOM access is ever granted. No cookies, no storage, no origin-widening. Just a deliberate postal system between windows.</p>
+
+  <div class="header-block reveal" style="background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.5rem 1.8rem;">
+    <pre style="margin:0;border:none;padding:0"><span class="tag">sender — parent page on app.example.com</span><code><span class="kw">const</span> <span class="var">iframe</span> = <span class="var">document</span>.querySelector(<span class="str">'iframe'</span>);
+<span class="var">iframe</span>.contentWindow.<span class="fn">postMessage</span>(
+  { <span class="var">type</span>: <span class="str">'auth-token'</span>, <span class="var">token</span>: <span class="str">'abc123'</span> },
+  <span class="str">'https://widget.thirdparty.com'</span>  <span class="cm">// target origin — REQUIRED, not optional</span>
+);</code></pre>
+    <pre style="margin:1rem 0 0;border:none;padding:0"><span class="tag">receiver — iframe on widget.thirdparty.com</span><code><span class="var">window</span>.<span class="fn">addEventListener</span>(<span class="str">'message'</span>, (<span class="var">event</span>) => {
+  <span class="cm">// THE CHECK THAT MATTERS — MUST BE FIRST, MUST NOT BE SKIPPED</span>
+  <span class="kw">if</span> (<span class="var">event</span>.origin !== <span class="str">'https://app.example.com'</span>) {
+    <span class="kw">return</span>; <span class="cm">// reject anything not from the expected sender</span>
+  }
+  <span class="fn">handleMessage</span>(<span class="var">event</span>.data);
+});</code></pre>
+  </div>
+
+  <p class="reveal">Two deliberate design choices here, both aimed directly at document.domain's failure mode. First, the sender must specify a <strong>target origin</strong> — the message is only delivered if the receiving window's actual origin matches what was specified (or the sender explicitly opts out of that check with <code>"*"</code>, which itself deserves suspicion). Second, and far more important: every message arrives on the receiving side tagged with <code>event.origin</code>, the real origin of whoever actually sent it — and the receiving code is expected to check that field before trusting the payload at all.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Why This Design Is Fundamentally Safer</div>
+    Nothing is granted automatically. There's no ambient widened trust zone that other, unrelated pages can quietly join later. Every single message is a one-off, explicit exchange that the receiving code must actively decide whether to trust — which sounds like more work, and is, but it means the failure mode is "a developer forgot one check" rather than "the platform itself created a shared blast radius."
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: THE COMMON BUG -->
+<section id="originbug">
+<div class="container">
+  <div class="section-num">05 — Where It Still Goes Wrong</div>
+  <h2>The Bug Everyone Writes <span class="accent">At Least Once</span></h2>
+
+  <p class="reveal">postMessage's safety depends entirely on the receiving code actually checking <code>event.origin</code>. Skip that one line, and you've rebuilt exactly the "accept messages from anyone" world SOP was designed to prevent — except now it's a bug in application code instead of a browser default.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="bugLabel">▶ Compare a checked vs. unchecked receiver — click to run</div>
+    <canvas id="bugCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn green" onclick="runBug('checked')">▶ Receiver DOES Check event.origin</button>
+    <button class="ctrl-btn red" onclick="runBug('unchecked')">▶ Receiver Skips The Check</button>
+    <button class="ctrl-btn" onclick="resetBug()">Reset</button>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🚫 The Common Mistake</h4>
+      <pre style="margin:0;background:none;border:none;padding:0"><code><span class="var">window</span>.<span class="fn">addEventListener</span>(<span class="str">'message'</span>, (<span class="var">e</span>) => {
+  <span class="cm">// no origin check at all!</span>
+  <span class="fn">applySettings</span>(<span class="var">e</span>.data);
+});</code></pre>
+      Any page on the internet can embed this page in a hidden iframe and postMessage() it a crafted payload — the code has no way to know it didn't come from the trusted sender.
+    </div>
+    <div class="compare-card good">
+      <h4>✅ The Fix</h4>
+      <pre style="margin:0;background:none;border:none;padding:0"><code><span class="var">window</span>.<span class="fn">addEventListener</span>(<span class="str">'message'</span>, (<span class="var">e</span>) => {
+  <span class="kw">if</span> (<span class="var">e</span>.origin !== <span class="var">TRUSTED_ORIGIN</span>) <span class="kw">return</span>;
+  <span class="fn">applySettings</span>(<span class="var">e</span>.data);
+});</code></pre>
+      One comparison, evaluated first, against an exact expected origin string — never a substring match, never a regex that could accidentally match an attacker-controlled domain.
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Two More Ways This Check Gets Botched In Practice</div>
+    Even developers who remember <em>a</em> check sometimes get it wrong: using <code>event.origin.includes('example.com')</code> (matches <code>evil-example.com.attacker.net</code>), or checking <code>event.origin</code> but then also accepting messages with target origin <code>"*"</code> on the sending side to "make it work everywhere," which defeats the entire purpose of specifying a target origin in the first place.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: COMPARISON -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">06 — Side by Side</div>
+  <h2>Two Eras Of Cross-Origin <span class="accent">Cooperation</span></h2>
+
+  <div class="timeline reveal">
+    <div class="tl-item"><div class="tl-year">~1996</div><div class="tl-text"><code>document.domain</code> introduced by Netscape — the first sanctioned way to relax SOP between subdomains.</div></div>
+    <div class="tl-item"><div class="tl-year">2000s</div><div class="tl-text">Widely used across large organizations to let subdomain-split products share DOM access — and widely misunderstood as scoped to just the two pages involved.</div></div>
+    <div class="tl-item"><div class="tl-year">2009</div><div class="tl-text"><code>postMessage()</code> lands in the HTML5 spec, offering structured cross-origin messaging without any origin-widening.</div></div>
+    <div class="tl-item"><div class="tl-year">2010s</div><div class="tl-text">Security research repeatedly demonstrates the blast-radius problem in document.domain, and highlights the missing-origin-check bug class in early postMessage adopters.</div></div>
+    <div class="tl-item"><div class="tl-year">2020s</div><div class="tl-text">Chrome and other browsers begin disabling document.domain-based relaxation by default, requiring an explicit opt-in header (<code>Origin-Agent-Cluster</code> interplay) for the narrowing set of legitimate legacy use cases.</div></div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>document.domain</th><th>postMessage()</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">What's granted</td><td>Full mutual DOM access — becomes fully same-origin</td><td>Nothing automatic — one explicit message at a time</td></tr>
+        <tr><td class="gold">Scope of trust</td><td>Whole widened origin, shared by anyone who opts in</td><td>Per-message, checked individually by receiving code</td></tr>
+        <tr><td class="gold">Works across unrelated domains?</td><td>No — only same parent domain, shared suffix</td><td>Yes — any two origins, related or not</td></tr>
+        <tr><td class="gold">Failure mode when misused</td><td>Platform-level blast radius across all opted-in subdomains</td><td>Single-application bug: one missing origin check</td></tr>
+        <tr><td class="gold">Current status</td><td>Disabled by default in modern Chrome; being phased out</td><td>Actively recommended, the standard modern approach</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The One-Sentence Summary</div>
+    <strong>document.domain tried to solve cross-origin cooperation by making two origins pretend to be one, and that pretense couldn't be contained; postMessage solves the same problem by keeping origins fully separate and forcing every exchange to carry — and every receiver to check — exactly who it's really from.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">document.domain</div><div class="glossary-def">Legacy property allowing a page to widen its own origin to a parent-domain suffix, mutually relaxing SOP with any other page on the same parent that does the same.</div></div>
+    <div class="glossary-card"><div class="glossary-term">window.postMessage()</div><div class="glossary-def">The modern API for structured cross-origin messaging between windows/iframes, with no shared trust zone — each message is independently addressed and independently checked.</div></div>
+    <div class="glossary-card"><div class="glossary-term">event.origin</div><div class="glossary-def">The property on a received "message" event identifying the real origin of the sender — the field a receiver must check before trusting the payload.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Target Origin</div><div class="glossary-def">The second argument to postMessage() — restricts delivery to a window whose current origin matches, unless the sender passes the dangerous wildcard "*".</div></div>
+    <div class="glossary-card"><div class="glossary-term">Blast Radius</div><div class="glossary-def">The scope of damage a single compromised or careless participant can cause — document.domain's blast radius was the whole opted-in origin family, not just one relationship.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Origin-Agent-Cluster</div><div class="glossary-def">A modern HTTP response header letting a site request stronger origin isolation from the browser, effectively at odds with — and part of why browsers restrict — document.domain relaxation.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sandboxed Iframe</div><div class="glossary-def">An iframe with restricted capabilities via the sandbox attribute; often assigned the special "null" origin, relevant to both CORS misconfigurations and postMessage origin checks.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Same-Origin (Widened)</div><div class="glossary-def">The runtime-computed state two pages enter after both successfully call document.domain with a matching value — distinct from the browser's normal, static origin comparison.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>bob_os · Lesson 18.3 — SOP Bypass History: postMessage, document.domain, and Why They Were Dangerous</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Companion lesson for bob_os/browser modules <a href="../../browser/B03_same_origin_policy/tutorial.html">B03_same_origin_policy</a> and <a href="../../browser/B14_cors/tutorial.html">B14_cors</a>.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── DOCUMENT.DOMAIN RELAXATION CANVAS ───────────────────────────────────────
+function drawDDScene(t,phase){
+  const canvas=document.getElementById('ddCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=W*0.06, leftW=W*0.4, rightX=W*0.54, rightW=W*0.4;
+  const wallActive = (phase==='idle'||phase==='seta');
+
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(leftX,30,leftW,H-90);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX,30,leftW,H-90);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('a.example.com',leftX+leftW/2,50);
+
+  ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(rightX,30,rightW,H-90);
+  ctx.strokeStyle=C.purple;ctx.lineWidth=1.5;ctx.strokeRect(rightX,30,rightW,H-90);
+  ctx.fillStyle=C.purple;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('b.example.com (iframe)',rightX+rightW/2,50);
+
+  // wall between them, fades out once both have set domain
+  const wallX=leftX+leftW, wallW=rightX-wallX;
+  let wallAlpha = 1;
+  if(phase==='seta') wallAlpha = 1;
+  if(phase==='setb') wallAlpha = 1 - t;
+  if(phase==='merged') wallAlpha = 0;
+  if(wallAlpha>0){
+    ctx.fillStyle='rgba(122,155,191,'+(0.15*wallAlpha)+')';ctx.fillRect(wallX,30,wallW,H-90);
+    ctx.strokeStyle='rgba(122,155,191,'+wallAlpha+')';ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,30,wallW-2,H-90);ctx.setLineDash([]);
+  }
+
+  const captions={
+    idle:'Two subdomains, fully isolated — click to run the relaxation',
+    seta:'a.example.com runs: document.domain = "example.com"',
+    setb:'b.example.com independently runs the same: document.domain = "example.com"',
+    merged:'Both now share the widened origin "example.com" — full mutual DOM access granted'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-24);
+
+  if(phase==='seta'){
+    ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.globalAlpha=t;
+    ctx.fillText('domain = "example.com"',leftX+leftW/2,H/2+10);
+    ctx.globalAlpha=1;
+  }
+  if(phase==='setb'||phase==='merged'){
+    ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('domain = "example.com"',leftX+leftW/2,H/2+10);
+    ctx.globalAlpha= phase==='setb'? t : 1;
+    ctx.fillText('domain = "example.com"',rightX+rightW/2,H/2+10);
+    ctx.globalAlpha=1;
+  }
+  if(phase==='merged'){
+    ctx.strokeStyle=C.green;ctx.lineWidth=2;
+    ctx.globalAlpha=Math.min(t*2,1);
+    ctx.beginPath();
+    ctx.moveTo(leftX+leftW*0.7,H/2-30);
+    ctx.lineTo(rightX+rightW*0.3,H/2-30);
+    ctx.stroke();
+    // arrowheads
+    ctx.beginPath();ctx.moveTo(rightX+rightW*0.3-8,H/2-36);ctx.lineTo(rightX+rightW*0.3,H/2-30);ctx.lineTo(rightX+rightW*0.3-8,H/2-24);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(leftX+leftW*0.7+8,H/2-36);ctx.lineTo(leftX+leftW*0.7,H/2-30);ctx.lineTo(leftX+leftW*0.7+8,H/2-24);ctx.stroke();
+    ctx.fillStyle=C.green;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('free DOM access, both directions',W/2,H/2-42);
+    ctx.globalAlpha=1;
+  }
+}
+function runDD(){
+  const phases=['seta','setb','merged'];
+  const durations=[700,700,1000];
+  let idx=0,start=performance.now();
+  document.getElementById('ddLabel').textContent='▶ Running relaxation sequence...';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawDDScene(t,phases[idx]);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('ddLabel').textContent='▶ Complete — the two subdomains are now mutually accessible. Run again?';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetDD(){
+  document.getElementById('ddLabel').textContent='▶ Click to simulate document.domain relaxation';
+  drawDDScene(0,'idle');
+}
+
+// ── POSTMESSAGE ORIGIN-CHECK BUG CANVAS ─────────────────────────────────────
+function drawBugScene(t,phase,mode){
+  const canvas=document.getElementById('bugCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=W*0.06, leftW=W*0.4, rightX=W*0.54, rightW=W*0.4;
+  ctx.fillStyle='rgba(248,113,113,.08)';ctx.fillRect(leftX,30,leftW,H-90);
+  ctx.strokeStyle=C.red;ctx.lineWidth=1.5;ctx.strokeRect(leftX,30,leftW,H-90);
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('evil.attacker.net (hidden iframe)',leftX+leftW/2,50);
+
+  ctx.fillStyle= mode==='checked' ? 'rgba(74,222,128,.08)' : 'rgba(251,146,60,.08)';
+  ctx.fillRect(rightX,30,rightW,H-90);
+  ctx.strokeStyle= mode==='checked' ? C.green : C.orange;
+  ctx.lineWidth=1.5;ctx.strokeRect(rightX,30,rightW,H-90);
+  ctx.fillStyle= mode==='checked' ? C.green : C.orange;
+  ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(mode==='checked' ? 'trusted-app.com (checks origin)' : 'trusted-app.com (NO check)',rightX+rightW/2,50);
+
+  const captionsChecked={
+    send:'evil.attacker.net sends postMessage({type:"admin", cmd:"deleteAll"})',
+    check:'Receiver checks: event.origin === "https://app.example.com" ? → FALSE',
+    result:'Message REJECTED — payload never processed. Attack fails.'
+  };
+  const captionsUnchecked={
+    send:'evil.attacker.net sends postMessage({type:"admin", cmd:"deleteAll"})',
+    check:'Receiver has no origin check at all — skips straight to handling',
+    result:'Message PROCESSED as if trusted. Attacker payload executes.'
+  };
+  const captions = mode==='checked' ? captionsChecked : captionsUnchecked;
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-24);
+
+  let dotX=leftX+leftW*0.5, dotY=H/2, dotCol=C.red;
+  if(phase==='send'){
+    dotX=leftX+leftW*0.3+(rightX-(leftX+leftW*0.3))*t; dotCol=C.red;
+  } else if(phase==='check'){
+    dotX=rightX+rightW*0.3; dotCol= mode==='checked' ? C.gold : C.orange;
+  } else if(phase==='result'){
+    if(mode==='checked'){
+      dotX=rightX+rightW*0.3; dotCol=C.green;
+      ctx.save();ctx.translate(dotX,dotY);ctx.strokeStyle=C.green;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(-16,0);ctx.lineTo(-4,12);ctx.lineTo(16,-12);ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle=C.green;ctx.font='bold 16px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('BLOCKED — SAFE',rightX+rightW/2,H/2+50);
+      return;
+    } else {
+      dotX=rightX+rightW*0.5; dotCol=C.red;
+      ctx.beginPath();ctx.arc(dotX,dotY,18+8*Math.sin(t*Math.PI*3),0,Math.PI*2);
+      ctx.strokeStyle='rgba(248,113,113,'+(0.7*(1-t*0.3))+')';ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle=C.red;ctx.font='bold 16px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('COMPROMISED',rightX+rightW/2,H/2+50);
+    }
+  }
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+let bugRun=0;
+function runBug(mode){
+  const myRun=++bugRun;
+  const phases=['send','check','result'];
+  const durations=[600,600,1000];
+  let idx=0,start=performance.now();
+  document.getElementById('bugLabel').textContent='▶ Simulating: '+(mode==='checked'?'receiver checks event.origin':'receiver skips the check');
+  function step(now){
+    if(myRun!==bugRun) return;
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawBugScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('bugLabel').textContent='▶ Complete — try the other scenario for contrast';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetBug(){
+  bugRun++;
+  document.getElementById('bugLabel').textContent='▶ Compare a checked vs. unchecked receiver — click to run';
+  const canvas=document.getElementById('bugCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=C.muted;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Click a button below to simulate a postMessage scenario',W/2,H/2);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetDD(); resetBug(); });
+window.addEventListener('resize',()=>{ resetDD(); resetBug(); });
+</script>
+</body>
+</html>

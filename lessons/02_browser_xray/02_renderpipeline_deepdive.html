@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>From &lt;div&gt; to Photon: The Real Rendering Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.g{color:var(--green)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green);font-weight:600} td.neg{color:var(--red);font-weight:600} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.ftag{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.78rem;padding:.1rem .45rem;border-radius:3px;margin:0 .1rem;vertical-align:middle;}
+.ftag.rend{background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25);}
+.ftag.brow{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25);}
+.ftag.gpu{background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25);}
+.ftag.net{background:rgba(13,148,136,.15);color:var(--teal);border:1px solid rgba(13,148,136,.3);}
+.ftag.util{background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.25);}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* pipeline flow */
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage.active{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#intro" title="The Map"></a>
+  <a class="toc-dot" href="#html" title="Parsing HTML"></a>
+  <a class="toc-dot" href="#css" title="Parsing CSS"></a>
+  <a class="toc-dot" href="#style" title="Style / Render Tree"></a>
+  <a class="toc-dot" href="#layout" title="Layout"></a>
+  <a class="toc-dot" href="#paint" title="Paint"></a>
+  <a class="toc-dot" href="#composite" title="Compositing"></a>
+  <a class="toc-dot" href="#raster" title="Rasterization"></a>
+  <a class="toc-dot" href="#threads" title="Threads Behind Each Stage"></a>
+  <a class="toc-dot" href="#jank" title="Jank"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Rendering Engine Internals · Blink/Chromium · A Browser X-Ray Deep-Dive</div>
+    <h1>From <span>&lt;div&gt;</span> to Photon</h1>
+    <p class="hero-sub">You already know a renderer process turns HTML into pixels through some pipeline — Parse, Style, Layout, Paint, Composite, done. That was the postcard. This is the engine schematic. We're taking the same six-stop map from Browser X-Ray and blowing each stop up to full size: what a tokenizer actually does byte by byte, why <code>visibility:hidden</code> and <code>display:none</code> take completely different paths through the pipeline, why animating <code>transform</code> is free and animating <code>width</code> isn't, and exactly which stage jank comes from when a page stutters.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">7</div><div class="lbl">Stages, Bytes to Pixels</div></div>
+      <div class="hero-stat"><div class="num">16.7ms</div><div class="lbl">Frame Budget at 60fps</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Threads: Main + Compositor</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Shared-Memory Command Buffer</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to go deep<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 00: THE MAP -->
+<section id="intro">
+<div class="container">
+  <div class="section-num">00 — Reorientation</div>
+  <h2>The Map You <span class="accent">Already Have</span></h2>
+
+  <p class="reveal">In Browser X-Ray we zoomed into a single renderer process and found a little assembly line living inside it: HTML and CSS go in one end, lit-up pixels come out the other. Six labeled boxes, six arrows, done in about ninety seconds of reading. That overview was correct — it just wasn't the whole story. It was a subway map, not a track schematic. It tells you the stops exist and the order they run in; it doesn't tell you what's actually happening at each stop, or why a competent engineer spends an entire career specializing in just one or two of these boxes.</p>
+
+  <p class="reveal">This page is that schematic. Same seven stops (we're splitting "Compositing" into two — compositing and rasterization are genuinely different jobs done by different threads) — but this time we open each box up and look at the machinery.</p>
+
+  <div class="pipeline reveal" id="overviewPipeline">
+    <div class="pipe-stage" data-stage="0"><div class="pipe-icon">📄</div><div class="pipe-name">Parse HTML</div><div class="pipe-desc">Bytes → tokens → DOM</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" data-stage="1"><div class="pipe-icon">🎨</div><div class="pipe-name">Parse CSS</div><div class="pipe-desc">Rules → CSSOM</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" data-stage="2"><div class="pipe-icon">🌲</div><div class="pipe-name">Style</div><div class="pipe-desc">DOM+CSSOM → render tree</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" data-stage="3"><div class="pipe-icon">📐</div><div class="pipe-name">Layout</div><div class="pipe-desc">Exact geometry per box</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" data-stage="4"><div class="pipe-icon">🖌️</div><div class="pipe-name">Paint</div><div class="pipe-desc">Vector draw records</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" data-stage="5"><div class="pipe-icon">🧩</div><div class="pipe-name">Composite</div><div class="pipe-desc">Layers merged on GPU</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" data-stage="6"><div class="pipe-icon">🟦</div><div class="pipe-name">Rasterize</div><div class="pipe-desc">Vectors → pixel tiles</div></div>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="flowLabel">▶ Watch one &lt;div&gt; travel the entire pipeline — click Run</div>
+    <canvas id="flowCanvas" height="220"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runFlow()">▶ Run the Pipeline</button>
+    <button class="ctrl-btn red" onclick="resetFlow()">Reset</button>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Not Actually a Straight Line</div>
+    Real browsers don't run these seven stages once per page and stop. HTML parsing is streaming and incremental. Layout, Paint, and Composite can each re-run <em>independently</em>, on their own, for a single frame, without redoing the stages before them — that's the entire point of splitting them apart. Treat the pipeline below as "the full path a brand-new element takes," and treat each section as also explaining "and here's when this one stage alone gets re-triggered."
+  </div>
+</div>
+</section>
+
+<!-- SECTION 01: PARSE HTML -->
+<section id="html">
+<div class="container">
+  <div class="section-num">01 — Stage One</div>
+  <h2>Parsing HTML: <span class="accent">Bytes → Tokens → DOM</span></h2>
+
+  <p class="reveal">Somewhere a response body is arriving as a raw byte stream. Before anything resembling a "tag" exists, the browser has to decide a character encoding (from the <code>Content-Type</code> header, a <code>&lt;meta charset&gt;</code>, or a BOM), decode those bytes into a stream of Unicode characters, and only then start looking for structure. HTML parsing happens in two tightly coupled phases: <strong>tokenization</strong> and <strong>tree construction</strong>, and — unlike almost everything else in this pipeline — it happens incrementally, as bytes arrive off the network, not after the whole document is downloaded.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Tokenizer</strong>A state machine (literally specified as a state machine with states like "Tag open state," "Attribute name state," "Comment start state") consumes the character stream one character at a time and emits a stream of tokens: <code>StartTag</code>, <code>EndTag</code>, <code>Character</code>, <code>Comment</code>, <code>DOCTYPE</code>. It doesn't know or care about document structure yet — it's just recognizing lexical shapes.</div></li>
+    <li><div class="step-body"><strong>Tree Construction</strong>A second state machine consumes that token stream and builds the actual DOM tree, maintaining a "stack of open elements" and switching between insertion modes ("in head," "in body," "in table," "in select"...) that determine where each new token's node gets attached, and when a tag needs to be auto-closed or ignored.</div></li>
+    <li><div class="step-body"><strong>DOM Tree</strong>The result: a live, structured, in-memory tree of node objects — the thing <code>document.querySelector</code> actually walks, and the input the Style stage needs.</div></li>
+  </ol>
+
+  <p class="reveal">Here's the part that makes HTML parsing genuinely weird compared to almost any other parser you've written: <strong>real-world HTML is catastrophically malformed</strong>, constantly, and the browser is contractually required to render it anyway. Unclosed <code>&lt;p&gt;</code> tags, a <code>&lt;table&gt;</code> with stray text before the first <code>&lt;tr&gt;</code>, mis-nested tags like <code>&lt;b&gt;&lt;i&gt;text&lt;/b&gt;&lt;/i&gt;</code> — a strict parser would just throw an error and stop. A browser can't. Nobody would ever see the New York Times homepage if "one malformed tag halts the page" were the rule.</p>
+
+  <pre class="reveal"><span class="tag">malformed but ubiquitous</span><code><span class="cm">&lt;!-- every real browser renders this identically --&gt;</span>
+<span class="kw">&lt;p&gt;</span>First paragraph<span class="cm"><!-- no closing &lt;/p&gt; --></span>
+<span class="kw">&lt;p&gt;</span>Second paragraph auto-closes the first<span class="kw">&lt;/p&gt;</span>
+<span class="kw">&lt;b&gt;&lt;i&gt;</span>mis-nested<span class="kw">&lt;/b&gt;&lt;/i&gt;</span> <span class="cm">-- gets silently repaired</span></code></pre>
+
+  <p class="reveal">This is exactly why the <strong>WHATWG HTML5 parsing specification</strong> exists, and why it's unusually, almost obsessively precise: it doesn't just define valid HTML, it defines a byte-for-byte-identical <em>error-recovery algorithm</em> that every conformant browser must implement — precisely what to do when a start tag shows up in an insertion mode that doesn't expect it, precisely when an open <code>&lt;p&gt;</code> gets implicitly closed, precisely how misnested formatting elements get reconstructed. Before this spec (pre-2008-ish), every browser guessed differently, and "works in one browser, breaks in another" was routine. Standardizing the <em>recovery</em> behavior, not just the happy path, is what let broken-but-common markup render the same way everywhere.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧵 Why This Stage Can Be Incremental</div>
+    Tree construction can attach a node to the DOM the instant tokenization produces it, because a DOM node's identity and position in the tree don't depend on tags that haven't arrived yet. That's what lets the browser start building structure — and even kick off a Style/Layout/Paint pass on the parts it already has — before the full response has finished downloading. CSS, as you're about to see, cannot get away with this trick.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What about &lt;script&gt;?</b> A parser-blocking <code>&lt;script&gt;</code> tag (no <code>async</code>/<code>defer</code>) pauses tree construction entirely — the browser must run it before continuing, since that script might call <code>document.write()</code> and change what comes next. To hide the cost, Chromium runs a <strong>preload scanner</strong> alongside the paused main parser: a lightweight scan ahead in the raw bytes that spots upcoming <code>&lt;img&gt;</code>, <code>&lt;link&gt;</code>, and <code>&lt;script src&gt;</code> references and kicks off their network requests early, even though tree construction itself is stalled.
+  </div>
+
+  <p class="reveal">One more piece of error recovery worth naming, because it quietly reaches all the way into the Layout stage later: a missing or malformed <code>&lt;!DOCTYPE html&gt;</code> doesn't just fail to validate — it drops the whole document into <strong>quirks mode</strong>. Tree construction still succeeds (that's the point of the recovery algorithm), but a flag gets set on the document that later changes how the box model itself is computed: quirks-mode table cells and form controls size percentage heights differently, and historically even folded border/padding into declared width the way <code>box-sizing:border-box</code> does today, before that was ever a real property. A single missing line at the top of the file is technically an HTML-parsing decision, but its consequences don't show up until Layout, three stages later.</p>
+</div>
+</section>
+
+<!-- SECTION 02: PARSE CSS -->
+<section id="css">
+<div class="container">
+  <div class="section-num">02 — Stage Two</div>
+  <h2>Parsing CSS: <span class="accent">Rules → CSSOM</span></h2>
+
+  <p class="reveal">CSS gets tokenized and parsed too — into the <strong>CSSOM</strong> (CSS Object Model), a tree of stylesheet objects, each holding rules, each rule holding a selector and a list of declarations. Structurally it looks like a cousin of the DOM parse you just read about. Behaviorally, it's almost the opposite.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The one-sentence reason</span>
+    HTML parsing can emit structure the instant it sees a tag. CSS parsing can't emit a <em>final</em> answer for any single rule until it has seen every rule that could possibly compete with it.
+    <span class="sub">Cascading and specificity are global questions — "which of these seventeen rules wins for this element" requires the whole stylesheet to already be sitting in memory.</span>
+  </div>
+
+  <p class="reveal">Think about what "resolving the cascade" actually requires. Two selectors of equal specificity: the one that appears <em>later</em> in the stylesheet wins — you can't know which is later until you've parsed the whole file. An <code>!important</code> declaration three rules down can override something you already parsed. A <code>@media</code> block might not even apply until the viewport changes. Multiple <code>&lt;link&gt;</code> stylesheets and inline <code>&lt;style&gt;</code> blocks all get merged into one cascade, in document order. None of that can be decided rule-by-rule as bytes stream in — it's fundamentally a "read everything, then compute" problem, unlike tree construction, which is fundamentally a "react to each token as it arrives" problem.</p>
+
+  <p class="reveal">"Specificity" itself is just a tie-breaker the CSSOM has to be able to compute for <em>any</em> two competing rules, and it's mechanical, not fuzzy: count inline styles, then ID selectors, then class/attribute/pseudo-class selectors, then type/element selectors, and compare those counts left to right like digits in a number.</p>
+
+  <div class="formula gold reveal">
+    <span class="label">Specificity as a 4-digit tuple</span>
+    (inline, #ids, .classes/[attrs]/:pseudo-classes, elements)
+    <span class="sub">e.g. <code>#nav .item.active</code> → (0, 1, 2, 0) beats <code>.item</code> → (0, 0, 1, 0), regardless of source order — but two rules with an <em>identical</em> tuple fall back to "whichever was parsed later wins," which is exactly the rule that requires the whole stylesheet to be in memory first.</span>
+  </div>
+
+  <p class="reveal">The practical consequence: CSS is <strong>render-blocking</strong>. The browser deliberately withholds first paint until the CSSOM for the page's stylesheets is complete, specifically to avoid a "flash of unstyled content" — briefly showing your black-on-white unstyled markup before the real design snaps in a moment later. It's a deliberate correctness trade-off: better to delay the first frame slightly than show the user a wrong one.</p>
+
+  <div class="sidenote reveal">
+    <b>CSS can even block JavaScript.</b> If a parser-blocking <code>&lt;script&gt;</code> appears after a pending <code>&lt;link rel="stylesheet"&gt;</code>, the browser holds that script until the CSSOM is ready too — because the script might synchronously call <code>getComputedStyle()</code>, and handing back stale or partial style data would be a correctness bug, not just a performance one. This is sometimes called the "CSSOM blocks JS" rule, and it's why a page with a slow stylesheet can visibly delay script execution that has nothing to do with styling at all.
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚡ Same Shape, Different Physics</div>
+    Both parsers turn text into a tree. But HTML's tree-construction algorithm is built around "never stop, always recover, emit structure as you go," while CSS's cascade algorithm is built around "never finalize an answer until you've seen everything." Same pipeline slot, opposite constraints — which is exactly why they're two separate stages instead of one shared "parse everything" pass.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 03: STYLE / RENDER TREE -->
+<section id="style">
+<div class="container">
+  <div class="section-num">03 — Stage Three</div>
+  <h2>Style: Where <span class="accent">DOM Meets CSSOM</span></h2>
+
+  <p class="reveal">Now the browser walks the DOM tree, and for every single node, asks the CSSOM: "given every rule that could apply to you, plus whatever you inherit from your parent, what is your actual computed style?" — final resolved values for <code>color</code>, <code>font-size</code>, <code>display</code>, <code>margin</code>, all of it, no more cascading left to do. The output is the <strong>render tree</strong> (Chromium's Blink engine calls its version the "layout tree," but the concept is the same): a tree of the boxes that will actually need geometry and pixels.</p>
+
+  <p class="reveal">And "the boxes that will actually need geometry and pixels" is a deliberately narrower set than "the DOM." Three kinds of nodes never make it into the render tree at all, or make it in a strange half-state — and the exact rules here are one of those classic distinctions that sound like trivia but are actually 100% mechanistic.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🚫 display:none</h4>
+      The node and its <em>entire subtree</em> are excluded from the render tree. Not measured. Not painted. Takes up zero space — as if it doesn't exist for layout purposes at all. Toggling it back on is expensive: the browser has to build render-tree entries for it from scratch and run Layout again.
+    </div>
+    <div class="compare-card good">
+      <h4>👻 visibility:hidden</h4>
+      The node <em>is</em> in the render tree. It gets full, real geometry computed during Layout — an actual x, y, width, and height, reserving space exactly like a visible box. It's simply skipped during the Paint stage: the box is real, the ink just never hits it.
+    </div>
+  </div>
+
+  <p class="reveal">That's the whole distinction, stated mechanistically instead of as a memorized fact: <code>display:none</code> is a Style-stage decision (never enters the tree that Layout even looks at). <code>visibility:hidden</code> is a Paint-stage decision (fully present through Layout, invisible only once Paint runs). Toggle <code>visibility</code> and you can skip Layout entirely and go straight to a cheap Paint-only update; toggle <code>display</code> and you're paying for Layout every time, because the shape of the tree itself just changed.</p>
+
+  <p class="reveal">Two more housekeeping notes on this stage: non-visual DOM nodes (<code>&lt;head&gt;</code>, <code>&lt;script&gt;</code>, <code>&lt;meta&gt;</code>, <code>&lt;title&gt;</code>) simply never get render-tree entries — there's nothing to draw. And generated content from <code>::before</code>/<code>::after</code> pseudo-elements gets synthesized into the render tree right here, even though it never existed as a DOM node at all.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🎯 The Interview Question, Answered Properly</div>
+    "What's the difference between <code>display:none</code> and <code>visibility:hidden</code>?" isn't really asking you to memorize two CSS properties — it's asking whether you understand that the render tree is a <em>filtered, computed</em> structure sitting between the DOM and Layout, and that different kinds of invisibility get filtered at different points in that pipeline.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 04: LAYOUT -->
+<section id="layout">
+<div class="container">
+  <div class="section-num">04 — Stage Four</div>
+  <h2>Layout: <span class="accent">Computing Exact Geometry</span></h2>
+
+  <p class="reveal">The render tree now knows <em>what</em> exists and roughly how it's styled. It still doesn't know <em>where</em> anything is or how big it is in actual pixels. That's Layout's entire job (also called <strong>Reflow</strong>): walk the render tree and compute a concrete box — an x, a y, a width, a height — for every single node, on every axis, recursively.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The Box Model, Refresher</span>
+    border-box width = content width + padding(L+R) + border(L+R)
+    <span class="sub">margin sits <em>outside</em> the box's own size — it doesn't count toward the element's width, but it absolutely counts toward how much space it reserves next to its siblings. <code>box-sizing:border-box</code> folds padding and border <em>into</em> your declared width instead of adding on top of it — same property name, two different arithmetic paths through this exact stage.</span>
+  </div>
+
+  <p class="reveal">Why is this expensive enough to get its own dedicated, heavily optimized engine subsystem (Blink's is called LayoutNG)? Because Layout is very rarely "visit each box once, write down its size, move on." Boxes depend on each other.</p>
+
+  <ul class="reveal">
+    <li>A percentage width (<code>width:50%</code>) can't be resolved until the <em>parent's</em> width is known — which might itself depend on <em>its</em> parent, chaining upward.</li>
+    <li>Flexbox has to first measure every flex item's natural ("hypothetical") size, then run a second pass distributing free space or negative space across the group according to <code>flex-grow</code>/<code>flex-shrink</code> — genuinely two-plus passes over the same items before a final size is settled.</li>
+    <li>CSS Grid is worse: track sizes can mix fixed lengths, percentages, <code>auto</code>, and <code>fr</code> units, and resolving <code>auto</code>/intrinsic tracks may require measuring the content of cells that live in <em>other</em>, not-yet-sized tracks — the spec's own track-sizing algorithm runs in explicit, ordered passes for exactly this reason.</li>
+    <li>Text is the classic ripple case: widen a container by ten pixels, a line of text that used to wrap at word 8 now wraps at word 9, the box gets one line shorter, its height shrinks, and every sibling positioned below it in normal flow now needs to move up.</li>
+  </ul>
+
+  <p class="reveal">That ripple is the real reason Layout is feared. Changing one box's size isn't a local edit — it can force recomputing the position of dozens of unrelated-looking boxes below and around it. In the worst case (a change near the root, or a change to something everything else depends on, like the page's base font size loading in late), the browser has no choice but to lay out the <em>entire tree again</em>. And unlike Paint or Composite, which can farm work out to other threads, Layout in Chromium is a synchronous, essentially single-threaded operation running on the renderer's main thread — the same thread your JavaScript runs on.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ This Is the Stage JS Can Accidentally Force, On Demand</div>
+    Layout doesn't only run on the browser's own schedule. If your JavaScript <em>reads</em> a geometry property — <code>offsetHeight</code>, <code>offsetWidth</code>, <code>getBoundingClientRect()</code>, <code>getComputedStyle()</code> — right after it just <em>wrote</em> a style change, the browser cannot answer with stale numbers. It has to run Layout synchronously, immediately, right there in your script, before your next line executes. Hang onto that fact — it's the entire mechanism behind "layout thrashing" in the Jank section below.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 05: PAINT -->
+<section id="paint">
+<div class="container">
+  <div class="section-num">05 — Stage Five</div>
+  <h2>Paint: <span class="accent">Geometry Becomes Draw Commands</span></h2>
+
+  <p class="reveal">Every box now has an exact size and position. Paint's job is to figure out <em>what ink goes where</em> — but critically, Paint does not produce pixels. It produces a list of drawing instructions: "fill this rectangle with this color," "draw these text glyphs at these coordinates in this font," "draw this image here," "draw a blurred shadow along this edge." Chromium builds this as a <strong>display list</strong> (backed by its graphics library, Skia, as a <code>PaintRecord</code>) — a vector-ish, resolution-independent recipe for pixels, not pixels themselves.</p>
+
+  <p class="reveal">Order matters enormously here, and it's not arbitrary — it follows the stacking-context painting order originally defined back in CSS2.1's Appendix E: background and borders first, then block-level children, then floats, then inline content, then positioned/z-indexed elements on top. Get this order wrong and semi-transparent, overlapping, or z-indexed elements render incorrectly — so Paint effectively re-walks the tree in a carefully specified visual order, not simply the DOM's document order.</p>
+
+  <pre class="reveal"><span class="tag">display list, conceptually</span><code><span class="fn">drawRect</span>(x: <span class="num">0</span>, y: <span class="num">0</span>, w: <span class="num">320</span>, h: <span class="num">80</span>, fill: <span class="str">"#141c2e"</span>)
+<span class="fn">drawRRect</span>(x: <span class="num">12</span>, y: <span class="num">12</span>, w: <span class="num">296</span>, h: <span class="num">56</span>, radius: <span class="num">8</span>, fill: <span class="str">"#1a2235"</span>)
+<span class="fn">drawShadow</span>(blur: <span class="num">14</span>, color: <span class="str">"rgba(0,0,0,.4)"</span>)
+<span class="fn">drawGlyphRun</span>(text: <span class="str">"Add to cart"</span>, font: <span class="str">"14px Lato"</span>, x: <span class="num">28</span>, y: <span class="num">44</span>)
+<span class="cm">// still vectors — not one pixel exists yet</span></code></pre>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Paint-Only Changes Are Already Cheap</div>
+    Anything that changes <em>ink</em> without changing <em>geometry</em> — <code>color</code>, <code>background-color</code>, <code>box-shadow</code>, <code>border-radius</code>, toggling <code>visibility</code> — skips Layout entirely and only needs to re-run from Paint onward. That's meaningfully cheaper than a Layout-triggering change, even before Compositing enters the picture at all.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 06: COMPOSITE -->
+<section id="composite">
+<div class="container">
+  <div class="section-num">06 — Stage Six</div>
+  <h2>Compositing: <span class="accent">Skipping Layout and Paint on Purpose</span></h2>
+
+  <p class="reveal">Certain elements get pulled out of the normal paint flow and promoted onto their <strong>own layer</strong> — a separate texture the GPU can manipulate independently. Once an element has its own layer, it gets painted into its own texture once — and then, for every subsequent animation frame, the compositor can transform or fade <em>that already-painted texture</em> using nothing but GPU matrix math.</p>
+
+  <ul class="reveal">
+    <li>A CSS <code>transform</code> (2D or 3D) applied to the element.</li>
+    <li>An <code>opacity</code> value that's actively being animated or transitioned.</li>
+    <li><code>will-change: transform</code> or <code>will-change: opacity</code> — an explicit author hint asking the engine to promote <em>ahead of time</em>, before the animation even starts, so the first frame isn't the one paying the promotion cost.</li>
+    <li>Native video (<code>&lt;video&gt;</code>) and <code>&lt;canvas&gt;</code> elements, which already need their own composited surface for decoding/drawing reasons.</li>
+    <li><code>position:fixed</code> elements in some engines, so they can stay pinned during scroll without repainting.</li>
+  </ul>
+
+  <p class="reveal">This also ties directly back to the paint-order rules from the last section: elements that create a new <strong>stacking context</strong> (non-static <code>position</code> with a <code>z-index</code>, an <code>opacity</code> below 1, a <code>transform</code>, <code>filter</code>, or <code>will-change</code>) were already being painted as a self-contained visual unit by Paint's stacking-context algorithm. Compositing takes that same self-contained unit and, for the promotion triggers above, gives it its own literal GPU texture instead of just its own slot in paint order.</p>
+
+  <p class="reveal">This is the actual mechanism behind the single most-repeated piece of web performance advice on the internet: <strong>animate <code>transform</code> and <code>opacity</code>, never <code>top</code>/<code>left</code>/<code>width</code>/<code>height</code>.</strong> Not a style guideline — a pipeline consequence.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ transform / opacity (promoted layer)</h4>
+      Paint happens once, up front. Every animation frame after that: Layout — skipped. Paint — skipped. The compositor thread just re-positions or re-blends an existing GPU texture. Pure GPU math, every frame, off the main thread.
+    </div>
+    <div class="compare-card bad">
+      <h4>❌ top / left / width / height</h4>
+      Each of these is a geometry property. Changing it on <em>any</em> frame forces the full climb back to the top: Layout re-runs (geometry actually changed) → Paint re-runs (new draw commands needed for the new geometry) → Composite re-runs. Every single frame, on the main thread, competing with your JavaScript for the same 16.7ms.
+    </div>
+  </div>
+
+  <p class="reveal">And this is exactly why the renderer keeps a <strong>compositor thread</strong> that's architecturally separate from the main JS thread. Once a frame's layers are painted and handed off, the compositor thread owns purely GPU-side work — scrolling, transform/opacity animation, pinch-zoom — and none of that requires asking the main thread for anything. So if your JavaScript is stuck running a long synchronous task, scrolling and transform-based animations can often keep gliding at 60fps anyway, because the compositor never had to wait in the main thread's task queue to begin with. It's the browser-internals version of "don't put your slow work on the thread other things depend on."</p>
+
+  <div class="sidenote reveal">
+    <b>Layers aren't free, though.</b> Every promoted layer needs its own GPU texture memory. Slap <code>will-change: transform</code> on hundreds of elements "just in case" and you can trigger "layer explosion" — enough GPU memory pressure that you actually make things slower, not faster. Promotion is a scalpel, not a global setting.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 07: RASTERIZATION -->
+<section id="raster">
+<div class="container">
+  <div class="section-num">07 — Stage Seven</div>
+  <h2>Rasterization: <span class="accent">Vectors Finally Become Pixels</span></h2>
+
+  <p class="reveal">Everything up to this point — the display list, the layer textures the compositor arranges — has still been resolution-independent vector instructions. Somewhere, something has to actually walk those draw commands and fill in real pixel values in a real bitmap. That's <strong>rasterization</strong>, and it's deliberately treated as its own separate stage, done on its own threads, because it's the most raw-computation-heavy part of the whole pipeline.</p>
+
+  <p class="reveal">Two things make rasterization efficient enough to happen dozens of times a second. First, <strong>tiling</strong>: instead of rasterizing an entire layer as one giant bitmap, Chromium chops it into small tiles (roughly 256×256px), rasterizes only the tiles that actually changed or that are near the viewport, and prioritizes tiles the user is about to scroll into view. Second, this work increasingly happens directly on the <strong>GPU</strong> (Skia's GPU-backed rasterizer) rather than the CPU, and even when it's CPU-side, it runs on dedicated raster worker threads — not the main thread, not even strictly the compositor thread — so it can proceed in parallel with everything else.</p>
+
+  <p class="reveal">Once tiles are rasterized into real GPU textures, they still need to physically reach the GPU process to be composited into the final on-screen frame. And here's where this page reconnects directly with the multi-process wall from Browser X-Ray: the renderer process is sandboxed and cannot touch the graphics driver itself, so how does it hand over potentially thousands of draw operations per frame without drowning in per-call IPC overhead?</p>
+
+  <div class="formula purple reveal">
+    <span class="label">Not one IPC message per draw call</span>
+    Renderer writes a stream of GPU commands into a <strong>shared-memory command buffer</strong> → GPU process reads directly from that same shared memory, no per-command Mojo round trip
+    <span class="sub">This is the identical shared-memory trick Browser X-Ray flagged in the pixel pipeline overview — at 16.7ms per frame, paying full IPC serialization/validation cost for every individual rectangle and glyph would blow the budget before a single pixel landed on screen. A shared ring buffer turns "thousands of tiny messages" into "one memory region both sides already trust the shape of."</span>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧩 The Full Trust Boundary, End to End</div>
+    The renderer paints and rasterizes as much as it safely can inside its own sandbox, but the literal final act of putting pixels on your physical screen is still gated behind the one process trusted to speak to the graphics driver — the GPU process. Even rasterized tiles cross that same privileged/unprivileged wall Browser X-Ray described; they just cross it via a shared command buffer instead of a one-off message, because this particular door gets used thousands of times a second.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 08: THREADS BEHIND EACH STAGE -->
+<section id="threads">
+<div class="container">
+  <div class="section-num">08 — Zooming Out</div>
+  <h2>Which <span class="accent">Thread</span> Actually Runs Each Stage</h2>
+
+  <p class="reveal">Browser X-Ray already told you a renderer keeps a single-threaded, cooperative main thread plus a separate compositor thread. Now that you've seen all seven stages individually, it's worth laying every one of them back down onto that thread model — because "which thread is this running on" is exactly what determines whether a given change can stay smooth under load or not.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Main Thread</span><span class="fam-count">single, cooperative</span></div>
+      <div class="fam-desc">Runs your JavaScript, Parse HTML, Parse CSS, Style, Layout, and Paint <em>recording</em> (building the display list) — all of it, one task at a time, from the same queue your event handlers and timers share.</div>
+      <div class="feat-list"><span class="feat-pill ftag rend">Parse</span><span class="feat-pill ftag rend">Style</span><span class="feat-pill ftag rend">Layout</span><span class="feat-pill ftag rend">Paint record</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Compositor Thread</span><span class="fam-count">1 per renderer</span></div>
+      <div class="fam-desc">Owns Compositing: arranging already-painted layers, running transform/opacity animations, and handling scroll input — all without asking the main thread for anything, which is exactly why it stays smooth during a long JS task.</div>
+      <div class="feat-list"><span class="feat-pill ftag gpu">Composite</span><span class="feat-pill ftag gpu">scroll</span><span class="feat-pill ftag gpu">transform anim</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Raster Threads</span><span class="fam-count">a small pool</span></div>
+      <div class="fam-desc">Dedicated worker threads (or the GPU directly) that turn tiled display-list records into actual pixel bitmaps, running in parallel with both the main thread and the compositor thread.</div>
+      <div class="feat-list"><span class="feat-pill ftag util">tile raster</span><span class="feat-pill ftag util">GPU rasterizer</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">GPU Process</span><span class="fam-count">separate process</span></div>
+      <div class="fam-desc">Reads the shared-memory command buffer and is the only process actually trusted to hand the finished frame to the display driver — the same GPU process Browser X-Ray introduced back in the multi-process map.</div>
+      <div class="feat-list"><span class="feat-pill ftag gpu">command buffer</span><span class="feat-pill ftag gpu">display driver</span></div>
+    </div>
+  </div>
+
+  <p class="reveal">Read down that grid and a pattern jumps out: the first four pipeline stages (Parse HTML, Parse CSS, Style, Layout) and half of the fifth (Paint recording) are all stuck on the same single main thread as your JavaScript. Only once you cross into Compositing does work escape onto threads — and eventually a whole separate process — that your JavaScript can't block. That's not an accident of implementation; it's the entire architectural reason "promote it to a layer and only animate transform/opacity" is the escape hatch power users reach for.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Real Reason the Advice Works</div>
+    "Animate transform/opacity" isn't a style-guide superstition — it's a request to move your work off the one thread that's also running your JavaScript, DOM updates, and Layout, and onto the two things downstream of it (compositor thread, GPU process) that keep going even when the main thread doesn't.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 09: JANK -->
+<section id="jank">
+<div class="container">
+  <div class="section-num">09 — When It All Goes Wrong</div>
+  <h2>Jank: <span class="accent r">Missing the 16.7ms Deadline</span></h2>
+
+  <p class="reveal">60fps means a new frame is expected roughly every <strong>16.7 milliseconds</strong> (1000ms ÷ 60). Inside that budget the renderer has to handle input, run any due JavaScript, recompute Style, run Layout if geometry changed, record Paint if pixels changed, composite, rasterize, and submit the frame — realistically closer to 10ms of actual headroom once OS and browser overhead are accounted for. Miss the deadline and the compositor has nothing new to show, so it re-shows the previous frame. That's a <strong>dropped frame</strong>. String enough of them together and you get <strong>jank</strong> — the stutter you can feel even if you can't name which stage caused it.</p>
+
+  <p class="reveal">Two causes account for the overwhelming majority of real-world jank, and each one points at a specific stage you now understand in detail.</p>
+
+  <h3>Cause 1 — Long JS Tasks Blocking the Main Thread</h3>
+  <p class="reveal">Remember the renderer's main thread is single-threaded and cooperative — it runs one task from its queue to completion before picking up the next, no preemption. Style, Layout, and Paint-recording all live on that same thread. A JavaScript task that runs for 40ms straight — a big <code>.sort()</code>, an unoptimized loop, a synchronous JSON parse of a huge payload — doesn't just delay other JavaScript. It delays Style, Layout, and Paint from even starting, because the thread they need is still busy. The frame deadline doesn't pause and wait; it just gets missed.</p>
+
+  <h3>Cause 2 — Forced Synchronous Layout ("Layout Thrashing")</h3>
+  <p class="reveal">You already saw the mechanism in the Layout section: reading a geometry property forces Layout to run synchronously, right then, if a style write happened first. The genuinely damaging version of this is a loop that alternates writes and reads:</p>
+
+  <pre class="reveal"><span class="tag">the classic mistake</span><code><span class="kw">for</span> (<span class="kw">const</span> box <span class="kw">of</span> boxes) {
+  box.style.width = box.style.width + <span class="num">1</span> + <span class="str">'px'</span>;  <span class="cm">// WRITE — invalidates layout</span>
+  <span class="kw">const</span> h = box.offsetHeight;                    <span class="cm">// READ — forces sync Layout, right now</span>
+}
+<span class="cm">// N boxes → N full synchronous Layout passes, one per iteration</span></code></pre>
+
+  <p class="reveal">Every iteration writes a style, then immediately reads a geometry property — and because the browser refuses to hand back a stale number, it has no choice but to run a full, synchronous Layout pass on <em>every single loop iteration</em>, instead of once for the whole batch. This is exactly what "layout thrashing" means: turning an O(1) Layout cost into an O(n) one, entirely by interleaving reads and writes in the wrong order. Batch it the other way — read everything first, then write everything — and the browser only needs one Layout pass at the end, because nothing invalidated geometry until every read was already done.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="thrashLabel">▶ Naive loop vs. batched loop — same 6 boxes, watch the frame-budget cost</div>
+    <canvas id="thrashCanvas" height="260"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runThrash('naive')">▶ Run Naive Loop (Thrashing)</button>
+    <button class="ctrl-btn green" onclick="runThrash('batched')">▶ Run Batched Loop (Fast)</button>
+    <button class="ctrl-btn" onclick="resetThrash()">Reset</button>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🛠️ The Fix Is Always the Same Shape</div>
+    Never interleave a geometry read right after a style write inside a loop. Read every value you need first (<code>getBoundingClientRect()</code> for everyone), <em>then</em> write every style change. Libraries like FastDOM exist purely to enforce this batching automatically, and <code>requestAnimationFrame</code> callbacks give you a natural checkpoint to do reads at the start of a frame and writes at the end.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 09: COSTS TABLE -->
+<section id="costs">
+<div class="container">
+  <div class="section-num">10 — Reference</div>
+  <h2>What Changing a Property <span class="accent">Actually Costs</span></h2>
+
+  <p class="reveal">Same question asked seven different ways: when this value changes, how far back up the pipeline does the browser have to re-run?</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property Changes</th><th>Re-runs Layout?</th><th>Re-runs Paint?</th><th>Composite-only?</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">width / height</td><td class="center neg">Yes</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">top / left / right / bottom</td><td class="center neg">Yes</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">margin / padding</td><td class="center neg">Yes</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">font-size</td><td class="center neg">Yes</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">color / background-color</td><td class="center pos">No</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">box-shadow / border-radius</td><td class="center pos">No</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">visibility</td><td class="center pos">No</td><td class="center neg">Yes</td><td class="center">—</td></tr>
+        <tr><td class="gold">opacity (promoted layer)</td><td class="center pos">No</td><td class="center pos">No</td><td class="center pos">Yes</td></tr>
+        <tr><td class="gold">transform</td><td class="center pos">No</td><td class="center pos">No</td><td class="center pos">Yes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Cheap to Animate</h4>
+      <code>transform</code> (translate/scale/rotate) and <code>opacity</code> — both can be handled entirely on a promoted compositor layer, main thread untouched per frame.
+    </div>
+    <div class="compare-card bad">
+      <h4>❌ Expensive to Animate</h4>
+      <code>top</code>/<code>left</code>, <code>width</code>/<code>height</code>, <code>margin</code> — all of these are geometry properties, so every frame re-climbs Layout → Paint → Composite on the main thread.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 10: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">11 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Tokenizer</div><div class="glossary-def">The HTML parser's first-stage state machine, turning a decoded character stream into a stream of tags, attributes, and text tokens — no tree structure yet.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DOM</div><div class="glossary-def">The tree of live node objects built by tree construction from the HTML token stream; the structural half of what Style needs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CSSOM</div><div class="glossary-def">The tree of parsed stylesheet rules; can't be finalized incrementally because cascade/specificity resolution needs the entire stylesheet.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Render Tree</div><div class="glossary-def">DOM + CSSOM merged into the set of boxes that will actually need geometry and pixels; excludes display:none subtrees entirely.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Box Model</div><div class="glossary-def">Content, padding, border, and margin — the four concentric regions Layout uses to compute an element's footprint and reserved space.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Layout (Reflow)</div><div class="glossary-def">Computing the exact x, y, width, and height of every render-tree box; expensive because one box's size can ripple into many others'.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Display List</div><div class="glossary-def">The ordered list of vector draw commands (rects, glyphs, shadows) Paint records per layer — still resolution-independent, not yet pixels.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Compositor Layer</div><div class="glossary-def">A separate GPU-backed texture given to elements with transform/opacity animation or will-change, so they can be re-positioned without re-running Layout or Paint.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Rasterization</div><div class="glossary-def">Converting vector paint records into actual pixel bitmaps, done tile-by-tile, often on dedicated raster threads or the GPU.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Command Buffer</div><div class="glossary-def">A shared-memory region the renderer writes GPU commands into so the GPU process can read them directly, avoiding one IPC message per draw call.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Layout Thrashing</div><div class="glossary-def">Forcing repeated synchronous Layout passes by interleaving style writes and geometry reads inside a loop instead of batching them.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Jank</div><div class="glossary-def">Visible stutter from a dropped frame — the pipeline missed the ~16.7ms budget, usually from a long main-thread JS task or layout thrashing.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>From &lt;div&gt; to Photon · A companion deep-dive to <strong>Browser X-Ray</strong> in the Operating System Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same six stops on the map. This time we opened every box.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── PIPELINE FLOW CANVAS ────────────────────────────────────────────────────────
+const STAGES=[
+  {name:'PARSE HTML',   col:C.cyan,   caption:'Bytes are tokenized and tree-constructed into the DOM'},
+  {name:'PARSE CSS',    col:C.teal,   caption:'Stylesheets are fully parsed into the CSSOM'},
+  {name:'STYLE',        col:C.purple, caption:'DOM + CSSOM merge into the render tree; display:none dropped'},
+  {name:'LAYOUT',       col:C.gold,   caption:'Exact x, y, width, height computed for every box'},
+  {name:'PAINT',        col:C.orange, caption:'Geometry becomes a vector display list — not pixels yet'},
+  {name:'COMPOSITE',    col:C.green, caption:'Promoted layers merged on the GPU, main thread untouched'},
+  {name:'RASTERIZE',    col:C.red,   caption:'Vector draw records become real pixel tiles'}
+];
+
+function drawFlowScene(stageIdx,t){
+  const canvas=document.getElementById('flowCanvas');
+  const W=gW(canvas),H=220;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const n=STAGES.length;
+  const pad=14, zoneW=(W-pad*2)/n;
+  for(let i=0;i<n;i++){
+    const zx=pad+i*zoneW;
+    const active=(i===stageIdx);
+    ctx.fillStyle= active ? STAGES[i].col+'22' : 'rgba(20,28,46,.6)';
+    ctx.fillRect(zx+3,50,zoneW-6,90);
+    ctx.strokeStyle= active ? STAGES[i].col : C.border;
+    ctx.lineWidth= active ? 2 : 1;
+    ctx.strokeRect(zx+3,50,zoneW-6,90);
+    ctx.fillStyle= active ? STAGES[i].col : C.muted;
+    ctx.font=(active?'bold ':'')+'9px Source Code Pro,monospace';
+    ctx.textAlign='center';
+    const words=STAGES[i].name.split(' ');
+    words.forEach((w,wi)=>ctx.fillText(w,zx+zoneW/2,72+wi*12));
+  }
+
+  // moving token
+  if(stageIdx>=0){
+    const zx=pad+stageIdx*zoneW;
+    const tokX=zx+6+(zoneW-12)*t;
+    ctx.beginPath();ctx.arc(tokX,95,9,0,Math.PI*2);
+    ctx.fillStyle=STAGES[stageIdx].col;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.fillStyle=C.text;ctx.font='11px Source Code Pro,monospace';ctx.fillText('<div>',tokX,95-16);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  const cap = stageIdx>=0 ? STAGES[stageIdx].caption : 'Click Run to send a fresh <div> through all seven stages';
+  ctx.fillText(cap,W/2,175);
+
+  const label=document.getElementById('flowLabel');
+  if(label) label.textContent = stageIdx>=0 ? ('▶ Stage '+(stageIdx+1)+'/'+n+' — '+STAGES[stageIdx].name) : '▶ Watch one <div> travel the entire pipeline — click Run';
+}
+
+function runFlow(){
+  const overviewStages=document.querySelectorAll('#overviewPipeline .pipe-stage');
+  let idx=0,start=performance.now();
+  const dur=650;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur);
+    drawFlowScene(idx,t);
+    overviewStages.forEach(s=>s.classList.toggle('active', Number(s.dataset.stage)===idx));
+    if(t>=1){
+      idx++;
+      if(idx>=STAGES.length){
+        drawFlowScene(STAGES.length-1,1);
+        document.getElementById('flowLabel').textContent='▶ Frame complete — pixels submitted. Click Run to send another.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetFlow(){
+  document.querySelectorAll('#overviewPipeline .pipe-stage').forEach(s=>s.classList.remove('active'));
+  drawFlowScene(-1,0);
+}
+
+// ── LAYOUT THRASHING CANVAS ─────────────────────────────────────────────────────
+const BUDGET_MS=16.7;
+const BOXES=6;
+function drawThrashScene(mode,iter,cost,phaseLabel){
+  const canvas=document.getElementById('thrashCanvas');
+  const W=gW(canvas),H=260;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.text;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(mode==='batched' ? 'BATCHED LOOP (read-all, then write-all)' : 'NAIVE LOOP (write, read, write, read…)', 16, 26);
+
+  // frame budget bar
+  const barX=16, barY=46, barW=W-32, barH=26;
+  ctx.strokeStyle=C.border;ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
+  const pxPerMs = barW / (BUDGET_MS*2.4);
+  const fillW = Math.min(barW, cost*pxPerMs);
+  ctx.fillStyle = cost>BUDGET_MS ? 'rgba(248,113,113,.5)' : 'rgba(74,222,128,.5)';
+  ctx.fillRect(barX,barY,fillW,barH);
+  const budgetX = barX + BUDGET_MS*pxPerMs;
+  ctx.strokeStyle=C.gold;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(budgetX,barY-4);ctx.lineTo(budgetX,barY+barH+4);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=C.gold;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';ctx.fillText('16.7ms BUDGET',budgetX,barY-8);
+
+  ctx.fillStyle= cost>BUDGET_MS ? C.red : C.green;
+  ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText(cost.toFixed(1)+'ms so far', barX, barY+barH+22);
+
+  // boxes row, flashing per iteration
+  const rowY=140, boxW=(W-32-(BOXES-1)*10)/BOXES;
+  for(let i=0;i<BOXES;i++){
+    const bx=16+i*(boxW+10);
+    const touched = i < iter;
+    const isCurrent = i === (iter-1);
+    ctx.fillStyle = touched ? (mode==='batched'?'rgba(74,222,128,.18)':'rgba(248,113,113,.18)') : 'rgba(20,28,46,.6)';
+    ctx.fillRect(bx,rowY,boxW,50);
+    ctx.strokeStyle = isCurrent ? (mode==='batched'?C.green:C.red) : C.border;
+    ctx.lineWidth = isCurrent ? 2 : 1;
+    ctx.strokeRect(bx,rowY,boxW,50);
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('box '+(i+1),bx+boxW/2,rowY+28);
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(phaseLabel,W/2,H-18);
+}
+
+function runThrash(mode){
+  let iter=0,cost=0;
+  const perStepCostNaive=2.6;   // ms: a full synchronous Layout pass, every iteration
+  const perStepCostBatched=0.35; // ms: one shared read, no layout invalidation yet
+  let start=performance.now();
+  const stepDur=380;
+  document.getElementById('thrashLabel').textContent = mode==='batched'
+    ? '▶ Running batched loop — reading all offsetHeights first, writing after'
+    : '▶ Running naive loop — write then read, every single iteration';
+
+  function frame(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/stepDur);
+    const displayIter = Math.min(BOXES, iter + (t>0?1:0));
+    let phaseLabel;
+    let displayCost;
+    if(mode==='naive'){
+      phaseLabel = t<0.5 ? ('write box '+(iter+1)+'.style.width') : ('read box '+(iter+1)+'.offsetHeight → forces sync Layout');
+      displayCost = cost + (t>=0.5 ? perStepCostNaive : 0);
+    } else {
+      phaseLabel = 'reading offsetHeight for box '+(iter+1)+' — geometry not yet invalidated';
+      displayCost = cost + perStepCostBatched*t;
+    }
+    drawThrashScene(mode, displayIter, displayCost, phaseLabel);
+
+    if(t>=1){
+      iter++;
+      cost += (mode==='naive') ? perStepCostNaive : perStepCostBatched;
+      if(iter>=BOXES){
+        if(mode==='batched'){
+          cost += perStepCostNaive*0.6; // one final batched write+layout pass
+        }
+        drawThrashScene(mode, BOXES, cost, mode==='batched'
+          ? 'Done — ONE Layout pass at the end, after every read was already collected'
+          : 'Done — '+BOXES+' separate synchronous Layout passes, one per iteration');
+        document.getElementById('thrashLabel').textContent = '▶ Complete — total layout cost: '+cost.toFixed(1)+'ms. Click a button to run again.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+function resetThrash(){
+  document.getElementById('thrashLabel').textContent='▶ Naive loop vs. batched loop — same 6 boxes, watch the frame-budget cost';
+  drawThrashScene('naive',0,0,'Click a button below to run either version');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetFlow(); resetThrash(); });
+window.addEventListener('resize',()=>{ resetFlow(); resetThrash(); });
+</script>
+</body>
+</html>

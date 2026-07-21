@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Writing a Minimal HTML Tokenizer State Machine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.85rem;}
+th{background:var(--bg3);color:var(--gold);padding:.65rem .9rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.5rem .9rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green);font-weight:600} td.neg{color:var(--red);font-weight:600} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn:disabled{opacity:.4;cursor:not-allowed;}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.72rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.87rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.state-chip{display:inline-block;font-family:'Source Code Pro',monospace;font-size:.78rem;padding:.15rem .6rem;border-radius:4px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#why" title="Why a State Machine"></a>
+  <a class="toc-dot" href="#states" title="The Core States"></a>
+  <a class="toc-dot" href="#trace" title="Character Trace"></a>
+  <a class="toc-dot" href="#stepper" title="Interactive Stepper"></a>
+  <a class="toc-dot" href="#code" title="Transition Function"></a>
+  <a class="toc-dot" href="#attrs" title="Attributes"></a>
+  <a class="toc-dot" href="#malformed" title="Malformed Input"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">HTML Engine Internals · WHATWG Tokenization · Companion to B05_html_tokenizer</div>
+    <h1>Writing a Minimal HTML <span>Tokenizer State Machine</span></h1>
+    <p class="hero-sub">Every browser architecture diagram draws "Parse HTML" as one friendly little box: bytes go in, a DOM comes out. Crack that box open and the very first thing inside it isn't a parser in the sense you're used to — it's a <strong>finite state machine</strong>, specified so precisely by WHATWG that it names over eighty individual states, each with its own exact character-by-character behavior. Today we build a working subset of it by hand: the states, the transitions, and the tokens each one emits.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Character Consumed Per Step</div></div>
+      <div class="hero-stat"><div class="num">80+</div><div class="lbl">States in the Real Spec</div></div>
+      <div class="hero-stat"><div class="num">5</div><div class="lbl">Token Types We'll Emit</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Regular Expressions Used</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to build one<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 00: WHY A STATE MACHINE -->
+<section id="why">
+<div class="container">
+  <div class="section-num">00 — First Principles</div>
+  <h2>Why This Is Genuinely a <span class="accent">State Machine</span>, Not "A Parser"</h2>
+
+  <p class="reveal">The render-pipeline deep-dive already told you tokenization exists and roughly what it does: turn a character stream into tokens, feed those tokens to tree construction. That was the map. This page is the one stop on that map we're going to actually build — not "explain," <em>build</em>: a real, working, character-by-character state machine you can trace by hand.</p>
+
+  <p class="reveal">Here's the claim worth taking literally: the <a href="#" style="color:var(--cyan);text-decoration:none;border-bottom:1px dashed var(--cyan);" onclick="return false;">WHATWG HTML Standard</a> does not describe the tokenizer in prose that some engineer then translates into code. It <em>is</em> the code, written as a state machine specification: a numbered list of named states — <strong>"Data state," "Tag open state," "Tag name state," "Attribute name state,"</strong> and dozens more — where each state's definition says exactly one thing: given the next input character, what do you do, and which state do you go to next. Every conformant browser engine (Blink, Gecko, WebKit) implements this same state graph, because two browsers disagreeing about which state to be in after seeing <code>&lt;div class=foo'bar&gt;</code> is exactly how you get pages that render differently per browser.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧭 Why Not Just Use Regular Expressions?</div>
+    A regex has no memory of <em>context</em> — it can't ask "was I already inside a quoted attribute value when I saw this <code>&gt;</code>?" A state machine's entire reason to exist is exactly that: the current <strong>state</strong> <em>is</em> the memory. The character <code>&gt;</code> means "end this tag" in <em>Tag name state</em>, but means "just another character" inside <em>Attribute value (double-quoted) state</em> — same byte, completely different meaning, decided purely by which named state you're currently sitting in. B05_html_tokenizer's own design notes put it bluntly: <em>"HTML is not a regular language."</em>
+  </div>
+
+  <p class="reveal">This also explains a structural fact that surprises people the first time they see it: the tokenizer <strong>does not know what a DOM is</strong>. It has never heard of nesting, of a "parent element," of whether a <code>&lt;p&gt;</code> is still open. It just recognizes lexical shapes — "that looked like a start tag," "that looked like plain text" — and hands a flat stream of tokens downstream to a second machine (tree construction) that actually understands structure. Splitting these two concerns is what lets tokenization stay this small and mechanical.</p>
+</div>
+</section>
+
+<!-- SECTION 01: THE CORE STATES -->
+<section id="states">
+<div class="container">
+  <div class="section-num">01 — The Cast of States</div>
+  <h2>The States We're <span class="accent">Actually Going to Need</span></h2>
+
+  <p class="reveal">The full spec's 80+ states cover comments, CDATA, DOCTYPE, character references, RAWTEXT for <code>&lt;script&gt;</code>/<code>&lt;style&gt;</code>, and a long tail of error-recovery branches. We're building the subset that gets you from nothing to a working start tag, end tag, and text node — the same subset B05_html_tokenizer implements. Ten states, wired together, is already enough to tokenize real markup correctly.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Data state</span><span class="fam-count">start state</span></div>
+      <div class="fam-desc">The default. Consumes ordinary text characters into a pending <code>Character</code> token. Seeing <code>&lt;</code> is the only thing that knocks it out of this state.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Tag open state</span><span class="fam-count">after &lt;</span></div>
+      <div class="fam-desc">Just consumed <code>&lt;</code>. A letter means "start tag begins here"; a <code>/</code> means "this is actually an end tag" and reroutes to End tag open state.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">End tag open state</span><span class="fam-count">after &lt;/</span></div>
+      <div class="fam-desc">Just consumed <code>&lt;/</code>. Starts a fresh <code>EndTag</code> token and immediately falls into Tag name state to read the name.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Tag name state</span><span class="fam-count">reading a name</span></div>
+      <div class="fam-desc">Appends lowercase letters into the current tag token's name buffer. Whitespace → attributes may follow. <code>&gt;</code> → the tag is complete, emit it now.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Before attribute name state</span><span class="fam-count">between attrs</span></div>
+      <div class="fam-desc">Skips whitespace, waiting for the next attribute to begin, a self-closing <code>/</code>, or the tag-ending <code>&gt;</code>.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Attribute name state</span><span class="fam-count">reading a key</span></div>
+      <div class="fam-desc">Appends characters into the current attribute's name buffer until whitespace, <code>=</code>, or <code>&gt;</code> ends it.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Before attribute value state</span><span class="fam-count">after =</span></div>
+      <div class="fam-desc">Decides which of three value states comes next, based on whether the very next character is <code>"</code>, <code>'</code>, or neither.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Attribute value (quoted) state</span><span class="fam-count">×2 variants</span></div>
+      <div class="fam-desc">Appends every character verbatim into the value buffer — including <code>&gt;</code> and whitespace — until the matching quote character reappears.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">After attribute value (quoted) state</span><span class="fam-count">closing</span></div>
+      <div class="fam-desc">Finalizes the just-closed attribute, then expects whitespace (→ next attribute) or <code>&gt;</code> (→ tag complete, emit).</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">Self-closing start tag state</span><span class="fam-count">after /</span></div>
+      <div class="fam-desc">Reached after a bare <code>/</code> inside a tag. Sets the token's self-closing flag, then expects <code>&gt;</code> to actually emit it.</div>
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>"Reconsume" — the spec's favorite trick.</b> Several real states don't consume the current character at all — they inspect it, decide it doesn't belong here, switch state, and hand that <em>same</em> character to the new state on the very next step. This is why the algorithm is usually phrased as "switch to the X state" rather than "consume the next character and switch." Our simplified version below sidesteps most reconsume cases by peeking before it commits, but keep the concept in your pocket — it's essential once comments and character references enter the picture.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 02: CHARACTER TRACE -->
+<section id="trace">
+<div class="container">
+  <div class="section-num">02 — Trace It By Hand</div>
+  <h2>Tokenizing <code style="font-size:.8em;">&lt;div class="x"&gt;hi&lt;/div&gt;</code> <span class="accent">One Character at a Time</span></h2>
+
+  <p class="reveal">Theory is cheap. Here's the entire input, 23 characters, walked through the machine one character per row — exactly the discipline a real implementation follows, just slowed down to human speed. Watch the <strong>State</strong> column: it never skips a step, and every transition is triggered by exactly one character.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>#</th><th>Char</th><th>State Before</th><th>Action</th><th>State After</th><th>Token Emitted</th></tr></thead>
+      <tbody>
+        <tr><td class="center">0</td><td class="hl">&lt;</td><td>Data</td><td>flush pending text (none yet); saw <code>&lt;</code></td><td>Tag open</td><td>—</td></tr>
+        <tr><td class="center">1</td><td class="hl">d</td><td>Tag open</td><td>letter → start new tag token, buffer="d"</td><td>Tag name</td><td>—</td></tr>
+        <tr><td class="center">2–3</td><td class="hl">iv</td><td>Tag name</td><td>append → buffer="div"</td><td>Tag name</td><td>—</td></tr>
+        <tr><td class="center">4</td><td class="hl">␣</td><td>Tag name</td><td>whitespace ends the name</td><td>Before attr name</td><td>—</td></tr>
+        <tr><td class="center">5</td><td class="hl">c</td><td>Before attr name</td><td>start new attribute, buffer="c"</td><td>Attribute name</td><td>—</td></tr>
+        <tr><td class="center">6–9</td><td class="hl">lass</td><td>Attribute name</td><td>append → buffer="class"</td><td>Attribute name</td><td>—</td></tr>
+        <tr><td class="center">10</td><td class="hl">=</td><td>Attribute name</td><td>name is complete; <code>=</code> means a value follows</td><td>Before attr value</td><td>—</td></tr>
+        <tr><td class="center">11</td><td class="hl">"</td><td>Before attr value</td><td>quote character selects the quoted branch</td><td>Attr value (dq)</td><td>—</td></tr>
+        <tr><td class="center">12</td><td class="hl">x</td><td>Attr value (dq)</td><td>append → value buffer="x"</td><td>Attr value (dq)</td><td>—</td></tr>
+        <tr><td class="center">13</td><td class="hl">"</td><td>Attr value (dq)</td><td>matching quote closes it; commit attr <code>class="x"</code></td><td>After attr value</td><td>—</td></tr>
+        <tr><td class="center">14</td><td class="hl">&gt;</td><td>After attr value</td><td>tag is complete — emit it</td><td>Data</td><td class="pos">StartTag div [class="x"]</td></tr>
+        <tr><td class="center">15–16</td><td class="hl">hi</td><td>Data</td><td>append into pending text buffer="hi"</td><td>Data</td><td>—</td></tr>
+        <tr><td class="center">17</td><td class="hl">&lt;</td><td>Data</td><td>text run ends here — emit it, then saw <code>&lt;</code></td><td>Tag open</td><td class="pos">Characters "hi"</td></tr>
+        <tr><td class="center">18</td><td class="hl">/</td><td>Tag open</td><td><code>/</code> → this is an end tag</td><td>End tag open</td><td>—</td></tr>
+        <tr><td class="center">19</td><td class="hl">d</td><td>End tag open</td><td>start end-tag token, buffer="d"</td><td>Tag name</td><td>—</td></tr>
+        <tr><td class="center">20–21</td><td class="hl">iv</td><td>Tag name</td><td>append → buffer="div"</td><td>Tag name</td><td>—</td></tr>
+        <tr><td class="center">22</td><td class="hl">&gt;</td><td>Tag name</td><td>tag is complete — emit it</td><td>Data</td><td class="neg">EndTag div</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Twenty-three characters in, four tokens out: <code>StartTag div</code> (carrying one attribute), <code>Characters "hi"</code>, and <code>EndTag div</code>. Nowhere in that trace did the machine "look ahead" to check whether the tag would eventually close properly, or backtrack because something later turned out to be wrong. Every decision used only the current character and the current state — that locality is exactly what makes a state machine tractable to specify precisely and cheap to run at network speed.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Attributes Are Tokens Too</div>
+    Notice the trace never emits a standalone "attribute token" mid-tag — the name and value get assembled into buffers first, and the whole <code>class="x"</code> pair rides along attached to the eventual <code>StartTag</code>. B05_html_tokenizer's real implementation goes one step further and gives attributes their own token type, <code>TOK_ATTR</code>, queued up and emitted one at a time <em>right after</em> the <code>TOK_START_TAG</code> that owns them — a small design choice that keeps every emitted token a fixed, simple shape instead of one type having a variable-length attribute list bolted on.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 03: INTERACTIVE STEPPER -->
+<section id="stepper">
+<div class="container">
+  <div class="section-num">03 — Run It Yourself</div>
+  <h2>The <span class="accent">Live Stepper</span></h2>
+
+  <p class="reveal">Same input, same eighteen steps from the table above — except now you drive it. Watch the highlighted character, the current state box, and the token stream growing at the bottom. Step through one character at a time, or let it run.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="tokLabel">▶ Click "Step" or "Run All" to start tokenizing</div>
+    <canvas id="tokenizerCanvas" height="340"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" id="stepBtn" onclick="tokStep()">▶ Step</button>
+    <button class="ctrl-btn gold" id="runBtn" onclick="tokRunAll()">▶▶ Run All</button>
+    <button class="ctrl-btn red" onclick="tokReset()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>What you're watching, mapped to real code:</b> the caret sliding across the source string is <code>tokenizer_next()</code>'s internal cursor (<code>t-&gt;pos</code> in B05's <code>tokenizer.c</code>). The state box is the "current mode" the character-reading logic is implicitly in. And every chip that lands in the token stream is one return from <code>tokenizer_next()</code> — the exact same function tree construction calls in a loop, one token at a time, until it sees <code>TOK_EOF</code>.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 04: TRANSITION FUNCTION CODE -->
+<section id="code">
+<div class="container">
+  <div class="section-num">04 — From Trace to Code</div>
+  <h2>A Simplified <span class="accent">State-Transition Function</span></h2>
+
+  <p class="reveal">Here's the shape a genuinely explicit-state tokenizer takes: one enum of states, one loop, one <code>switch</code> deciding what the current character means <em>given</em> the current state. This is deliberately closer to the WHATWG spec's own structure than B05's actual <code>tokenizer.c</code> — that file takes a shortcut (small dedicated helper functions like <code>read_ident()</code> that internally loop) because its scope is narrower. But the explicit-<code>switch</code> version below is what you'd reach for the moment you needed to add comments, CDATA, or character references without the whole thing turning into spaghetti.</p>
+
+  <pre class="reveal"><span class="tag">state-transition skeleton, C-style pseudocode</span><code><span class="kw">typedef</span> <span class="kw">enum</span> {
+  STATE_DATA,
+  STATE_TAG_OPEN,
+  STATE_END_TAG_OPEN,
+  STATE_TAG_NAME,
+  STATE_BEFORE_ATTR_NAME,
+  STATE_ATTR_NAME,
+  STATE_BEFORE_ATTR_VALUE,
+  STATE_ATTR_VALUE_QUOTED,
+  STATE_AFTER_ATTR_VALUE
+} <span class="cls">state_t</span>;
+
+<span class="kw">void</span> <span class="fn">run_tokenizer</span>(<span class="kw">const</span> <span class="kw">char</span> *input, <span class="kw">int</span> len) {
+  state_t state = STATE_DATA;
+  <span class="kw">char</span> buf[<span class="num">64</span>] = {<span class="num">0</span>}; <span class="kw">int</span> buf_len = <span class="num">0</span>;
+  <span class="kw">char</span> quote = <span class="num">0</span>;
+
+  <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; len; i++) {
+    <span class="kw">char</span> c = input[i];
+
+    <span class="kw">switch</span> (state) {
+
+      <span class="kw">case</span> STATE_DATA:
+        <span class="kw">if</span> (c == <span class="str">'&lt;'</span>) { <span class="fn">emit_text_if_any</span>(buf, &amp;buf_len); state = STATE_TAG_OPEN; }
+        <span class="kw">else</span>                { buf[buf_len++] = c; }               <span class="cm">// accumulate text</span>
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_TAG_OPEN:
+        <span class="kw">if</span> (c == <span class="str">'/'</span>)              state = STATE_END_TAG_OPEN;
+        <span class="kw">else</span> <span class="kw">if</span> (<span class="fn">is_letter</span>(c)) { buf_len = <span class="num">0</span>; buf[buf_len++] = <span class="fn">lower</span>(c); state = STATE_TAG_NAME; }
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_TAG_NAME:
+        <span class="kw">if</span> (<span class="fn">is_space</span>(c))       state = STATE_BEFORE_ATTR_NAME;
+        <span class="kw">else</span> <span class="kw">if</span> (c == <span class="str">'&gt;'</span>)     { <span class="fn">emit_tag_token</span>(buf); state = STATE_DATA; }
+        <span class="kw">else</span>                    { buf[buf_len++] = <span class="fn">lower</span>(c); }        <span class="cm">// append to tag name</span>
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_BEFORE_ATTR_NAME:
+        <span class="kw">if</span> (c == <span class="str">'&gt;'</span>)          { <span class="fn">emit_tag_token</span>(buf); state = STATE_DATA; }
+        <span class="kw">else</span> <span class="kw">if</span> (!<span class="fn">is_space</span>(c)) { buf_len = <span class="num">0</span>; buf[buf_len++] = c; state = STATE_ATTR_NAME; }
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_ATTR_NAME:
+        <span class="kw">if</span> (c == <span class="str">'='</span>)          state = STATE_BEFORE_ATTR_VALUE;
+        <span class="kw">else</span>                    { buf[buf_len++] = c; }        <span class="cm">// append to attr name</span>
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_BEFORE_ATTR_VALUE:
+        <span class="kw">if</span> (c == <span class="str">'"'</span> || c == <span class="str">'\''</span>) { quote = c; state = STATE_ATTR_VALUE_QUOTED; }
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_ATTR_VALUE_QUOTED:
+        <span class="kw">if</span> (c == quote)          { <span class="fn">commit_attribute</span>(); state = STATE_AFTER_ATTR_VALUE; }
+        <span class="kw">else</span>                    { <span class="fn">append_attr_value</span>(c); }   <span class="cm">// even '&gt;' and spaces are literal here</span>
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> STATE_AFTER_ATTR_VALUE:
+        <span class="kw">if</span> (c == <span class="str">'&gt;'</span>)          { <span class="fn">emit_tag_token</span>(buf); state = STATE_DATA; }
+        <span class="kw">else</span> <span class="kw">if</span> (<span class="fn">is_space</span>(c)) state = STATE_BEFORE_ATTR_NAME;
+        <span class="kw">break</span>;
+    }
+  }
+}</code></pre>
+
+  <p class="reveal">Nine cases, one loop, one character consumed per iteration. Notice what's <em>absent</em>: no recursion, no backtracking, no "try this pattern, fail, try another." Every branch either appends to a buffer or fires a state transition — sometimes both. That mechanical simplicity per-state is exactly why the full spec can afford to have 80+ of them: each individual state stays this small, even though the graph they form together is large.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔍 Where B05's Real Code Diverges — and Why That's Fine</div>
+    <code>tokenizer.c</code>'s <code>tokenizer_next()</code> doesn't carry an explicit <code>state_t</code> variable at all — it uses nested <code>while</code> loops inside helper functions like <code>read_ident()</code> and <code>read_attr_value()</code> that implicitly encode "which state am I in" through which function is currently on the call stack. For the narrow grammar it supports (start tags, end tags, text, attributes — no comments, no character references), that's a completely reasonable simplification: fewer states means the implicit version and the explicit-<code>switch</code> version behave identically. The moment you need dozens of interacting states with shared reconsume logic, the explicit table above is what stops the code from becoming unmaintainable — which is exactly why the real spec is written that way.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 05: ATTRIBUTES AS A NESTED MACHINE -->
+<section id="attrs">
+<div class="container">
+  <div class="section-num">05 — A Machine Inside the Machine</div>
+  <h2>Attributes Are Their Own <span class="accent">Little State Machine</span></h2>
+
+  <p class="reveal">Look back at the state list: five of the ten states we needed — <em>Before attribute name</em>, <em>Attribute name</em>, <em>Before attribute value</em>, <em>Attribute value (quoted)</em>, <em>After attribute value</em> — exist purely to parse the stuff between a tag's name and its closing <code>&gt;</code>. That's not incidental; attribute parsing genuinely is a sub-machine nested inside Tag name state, entered and exited on well-defined boundaries.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Quoted Value: <code>class="a b"</code></h4>
+      Inside <em>Attribute value (quoted) state</em>, <strong>everything</strong> is literal until the matching quote — including spaces, <code>&gt;</code>, even another quote character of the <em>other</em> kind. This is exactly why <code>href="?a=1&amp;b=2"</code> parses as one attribute value instead of three: the quote is the only character with special meaning in this state.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Unquoted Value: <code>class=x</code></h4>
+      Drop the quotes and the spec routes you into a stricter <em>Attribute value (unquoted) state</em> instead, where whitespace <em>and</em> <code>&gt;</code> both end the value immediately. <code>&lt;div class=foo bar&gt;</code> means "class is foo, then a new boolean attribute bar starts" — not "class is 'foo bar'." Same tag, wildly different meaning, decided entirely by which value-state the tokenizer entered.
+    </div>
+  </div>
+
+  <p class="reveal">B05's <code>tokenizer.c</code> models the "queue of attribute tokens" idea directly: while scanning a start tag it collects <code>{name, value}</code> pairs into a small fixed-size array (<code>pending_attrs[]</code>, capped at <code>MAX_ATTRS</code>), and only once the enclosing <code>TOK_START_TAG</code> has been returned does the very next calls to <code>tokenizer_next()</code> drain that queue, one <code>TOK_ATTR</code> token per call. It's a clean way to keep the token shape uniform — every token the caller receives is one flat struct — without ever needing a token that itself contains a variable-length list.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ The Bug Class This Precision Prevents</div>
+    A parser that guesses at attribute-value boundaries instead of following the spec's exact quoted/unquoted state split is exactly the kind of divergence that creates <strong>parser differentials</strong> — the same bytes producing two different token streams depending on which implementation reads them. B05's own design notes flag this as security-relevant: an HTML sanitizer with a slightly-wrong tokenizer can approve a string as "safe," only for the real browser's spec-correct tokenizer to read the same bytes completely differently and produce a dangerous DOM. Precision here isn't pedantry — it's the whole defense.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 06: MALFORMED INPUT -->
+<section id="malformed">
+<div class="container">
+  <div class="section-num">06 — The Payoff</div>
+  <h2>Why This Buys You <span class="accent">Correctness Under Chaos</span></h2>
+
+  <p class="reveal">The character-by-character trace you just ran only works because <em>every</em> character has a defined meaning in <em>every</em> state — there's no "undefined behavior" branch. That completeness is what lets a tokenizer swallow real-world garbage without crashing or guessing. A few cases worth seeing explicitly:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Input</th><th>What Happens</th><th>Which State Handles It</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">&lt;div class=foo'bar&gt;</td><td>Unquoted value stops at whitespace or <code>&gt;</code>; the stray <code>'</code> is just another literal character in the value</td><td>Attribute value (unquoted)</td></tr>
+        <tr><td class="hl">&lt;DIV CLASS="X"&gt;</td><td>Tag and attribute names are lowercased on the way into the buffer — HTML tag/attr names are case-insensitive by construction</td><td>Tag name / Attribute name</td></tr>
+        <tr><td class="hl">&lt;br/&gt;</td><td>The bare <code>/</code> before <code>&gt;</code> is recognized and consumed without disturbing the tag name or starting a bogus attribute</td><td>Self-closing start tag</td></tr>
+        <tr><td class="hl">&lt;div &gt;</td><td>Whitespace before <code>&gt;</code> with no attribute following is simply absorbed — Before attribute name state tolerates it and moves on</td><td>Before attribute name</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">None of these needed a special case bolted onto a happy-path parser after the fact — every single one is just the ordinary state graph doing what it always does. That's the real argument for building the tokenizer this way: correctness on the ugly 5% of real-world HTML isn't an add-on, it falls straight out of the same machine that handles the clean 95%.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What This Stage Explicitly Does Not Decide</div>
+    Everything above happens without the tokenizer ever asking "is this tag allowed here?" or "does an open <code>&lt;p&gt;</code> need to auto-close?" Those are tree-construction questions, answered by the second state machine downstream — the one that turns this exact token stream into a DOM, and the one already covered at the pipeline level. Tokenization's whole job stops at "here is a clean, unambiguous list of tokens." Keeping that boundary sharp is what lets each machine stay small enough to actually specify precisely.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 07: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Tokenizer</div><div class="glossary-def">The stage that turns a raw character stream into a flat sequence of tokens (StartTag, EndTag, Characters, ...), with no awareness of tree structure.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Finite State Machine</div><div class="glossary-def">A model with a fixed set of named states and defined transitions between them, where the next action depends only on the current state and the current input — no memory beyond "which state am I in."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Token</div><div class="glossary-def">One discrete unit of lexical output — e.g. <code>StartTag div</code> or <code>Characters "hi"</code> — handed from the tokenizer to tree construction.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Data State</div><div class="glossary-def">The tokenizer's default/start state, where ordinary text is accumulated until a <code>&lt;</code> signals the possible start of a tag.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Tag Open State</div><div class="glossary-def">Entered right after consuming <code>&lt;</code>; decides whether a start tag, end tag, comment, or DOCTYPE is beginning.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Attribute Name/Value States</div><div class="glossary-def">The nested sub-machine that reads an attribute's key and value, with distinct behavior for quoted vs. unquoted values.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Self-Closing Flag</div><div class="glossary-def">A bit set on a start-tag token when a bare <code>/</code> appears before <code>&gt;</code>, e.g. <code>&lt;br/&gt;</code> — interpreted differently depending on the element.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reconsume</div><div class="glossary-def">The spec's mechanism for a state to decline the current character, switch state, and let the new state see that same character again on the next step.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Writing a Minimal HTML Tokenizer State Machine · A companion lesson for bob_os/browser modules <strong>B05_html_tokenizer</strong> and <strong>B06_css_cascade</strong></p>
+  <p style="margin-top:.5rem;font-size:.78rem">One character, one state, one decision at a time.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── TOKENIZER STEPPER ────────────────────────────────────────────────────────
+const TOK_SRC = '<div class="x">hi</div>';
+const TOK_STEPS = [
+  {r:[0,1],   state:'Data state',                       action:'saw "<" — possible tag begins',        emit:null},
+  {r:[1,2],   state:'Tag open state',                    action:'letter → start tag token "d"',          emit:null},
+  {r:[2,4],   state:'Tag name state',                    action:'append → tag name "div"',                emit:null},
+  {r:[4,5],   state:'Before attribute name state',       action:'whitespace ends the tag name',           emit:null},
+  {r:[5,6],   state:'Attribute name state',               action:'start attribute name "c"',               emit:null},
+  {r:[6,10],  state:'Attribute name state',               action:'append → attribute name "class"',        emit:null},
+  {r:[10,11], state:'Before attribute value state',       action:'"=" → a value follows',                  emit:null},
+  {r:[11,12], state:'Attribute value (double-quoted)',    action:'quote selects the quoted branch',        emit:null},
+  {r:[12,13], state:'Attribute value (double-quoted)',    action:'append → value "x"',                     emit:null},
+  {r:[13,14], state:'After attribute value (quoted)',     action:'matching quote — commit class="x"',      emit:null},
+  {r:[14,15], state:'Data state',                         action:'">" — tag complete, emit it',            emit:{type:'StartTag',label:'StartTag div [class="x"]',col:C.cyan}},
+  {r:[15,17], state:'Data state',                         action:'append text buffer "hi"',                emit:null},
+  {r:[17,18], state:'Tag open state',                     action:'text run ends — emit it, saw "<"',       emit:{type:'Characters',label:'Characters "hi"',col:C.green}},
+  {r:[18,19], state:'End tag open state',                 action:'"/" — this is an end tag',               emit:null},
+  {r:[19,20], state:'Tag name state',                     action:'start end-tag name "d"',                 emit:null},
+  {r:[20,22], state:'Tag name state',                     action:'append → end-tag name "div"',            emit:null},
+  {r:[22,23], state:'Data state',                         action:'">" — tag complete, emit it',            emit:{type:'EndTag',label:'EndTag div',col:C.red}},
+];
+
+let tokIdx = -1;          // last completed step index
+let tokTokens = [];       // emitted token chips so far
+let tokAnimId = null;
+let tokRunning = false;
+
+function charX(i, cw, x0){ return x0 + i*cw; }
+
+function tokLayout(W){
+  const x0 = 24;
+  const avail = W - x0*2;
+  const cw = Math.min(22, avail / TOK_SRC.length);
+  return {x0, cw};
+}
+
+function drawTokenizerScene(stepArrowT, highlightIdx){
+  const canvas=document.getElementById('tokenizerCanvas');
+  const W=gW(canvas), H=340;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
+
+  const {x0,cw} = tokLayout(W);
+  const rowY = 44;
+
+  // source string background rail
+  ctx.strokeStyle='rgba(122,155,191,.25)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x0-4, rowY+18); ctx.lineTo(x0+cw*TOK_SRC.length+4, rowY+18); ctx.stroke();
+
+  // highlight ranges of completed steps faintly, current step strongly
+  for(let i=0;i<=highlightIdx && i<TOK_STEPS.length;i++){
+    const st = TOK_STEPS[i];
+    const isCurrent = (i===highlightIdx);
+    const rx = charX(st.r[0],cw,x0), rw = (st.r[1]-st.r[0])*cw;
+    ctx.fillStyle = isCurrent ? 'rgba(56,189,248,.35)' : 'rgba(56,189,248,.08)';
+    ctx.fillRect(rx-2, rowY-4, rw+4, 30);
+  }
+
+  // draw characters
+  ctx.font='16px "Source Code Pro",monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<TOK_SRC.length;i++){
+    const ch = TOK_SRC[i]===' ' ? '␣' : TOK_SRC[i];
+    ctx.fillStyle = (i <= (highlightIdx>=0?TOK_STEPS[highlightIdx].r[1]-1:-1)) ? '#fff' : C.muted;
+    ctx.fillText(ch, charX(i,cw,x0)+cw/2, rowY+10);
+  }
+
+  // moving caret between previous position and current position
+  if(highlightIdx>=0){
+    const cur = TOK_STEPS[highlightIdx];
+    const prevEnd = highlightIdx>0 ? TOK_STEPS[highlightIdx-1].r[1] : 0;
+    const fromX = charX(prevEnd,cw,x0);
+    const toX = charX(cur.r[1],cw,x0);
+    const caretX = fromX + (toX-fromX)*stepArrowT;
+    ctx.fillStyle = C.gold;
+    ctx.beginPath();
+    ctx.moveTo(caretX, rowY+28); ctx.lineTo(caretX-6, rowY+40); ctx.lineTo(caretX+6, rowY+40);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // state box
+  const stateY = 110;
+  ctx.textAlign='left';
+  ctx.fillStyle=C.muted; ctx.font='10px "Source Code Pro",monospace';
+  ctx.fillText('CURRENT STATE', x0, stateY-14);
+  const stateLabel = highlightIdx>=0 ? TOK_STEPS[highlightIdx].state : '(not started)';
+  const boxW = Math.min(W - x0*2, ctx.measureText(stateLabel).width*1.6 + 220);
+  ctx.strokeStyle=C.cyan; ctx.lineWidth=1.5;
+  ctx.fillStyle='rgba(56,189,248,.1)';
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, stateY, Math.max(260,boxW), 34, 6) : ctx.rect(x0, stateY, Math.max(260,boxW), 34);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle=C.cyan; ctx.font='bold 14px "Source Code Pro",monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(stateLabel, x0+14, stateY+17);
+
+  // action description
+  ctx.fillStyle=C.text; ctx.font='13px Lato,sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  const actionText = highlightIdx>=0 ? TOK_STEPS[highlightIdx].action : 'Click "Step" to consume the first character';
+  ctx.fillText(actionText, x0, stateY+58);
+
+  // token stream label
+  const streamY = 190;
+  ctx.fillStyle=C.muted; ctx.font='10px "Source Code Pro",monospace';
+  ctx.fillText('TOKEN STREAM →', x0, streamY);
+
+  // token chips
+  let cx = x0, cy = streamY+20;
+  ctx.font='12px "Source Code Pro",monospace';
+  tokTokens.forEach(tok=>{
+    const w = ctx.measureText(tok.label).width + 24;
+    if(cx + w > W - x0){ cx = x0; cy += 34; }
+    ctx.fillStyle = tok.col + '26';
+    ctx.strokeStyle = tok.col;
+    ctx.lineWidth=1.3;
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(cx, cy, w, 26, 13); else ctx.rect(cx,cy,w,26);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = tok.col; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(tok.label, cx+w/2, cy+14);
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    cx += w + 10;
+  });
+
+  // footer caption
+  ctx.fillStyle=C.muted; ctx.font='11px Lato,sans-serif'; ctx.textAlign='center';
+  const done = highlightIdx>=TOK_STEPS.length-1;
+  ctx.fillText(done ? 'Tokenization complete — 4 tokens emitted from 23 characters' : `Step ${Math.max(highlightIdx+1,0)} of ${TOK_STEPS.length}`, W/2, H-14);
+  ctx.textAlign='left';
+}
+
+function tokAnimateTo(targetIdx, onDone){
+  const duration = 420;
+  const start = performance.now();
+  function frame(now){
+    const t = Math.min(1, (now-start)/duration);
+    drawTokenizerScene(t, targetIdx);
+    if(t<1){ tokAnimId = requestAnimationFrame(frame); }
+    else {
+      const st = TOK_STEPS[targetIdx];
+      if(st.emit) tokTokens.push(st.emit);
+      tokIdx = targetIdx;
+      drawTokenizerScene(1, targetIdx);
+      document.getElementById('tokLabel').textContent = tokIdx>=TOK_STEPS.length-1
+        ? '▶ Done — click Reset to run again'
+        : `▶ State: ${st.state} — click Step or Run All to continue`;
+      if(onDone) onDone();
+    }
+  }
+  tokAnimId = requestAnimationFrame(frame);
+}
+
+function tokStep(){
+  if(tokRunning) return;
+  if(tokIdx >= TOK_STEPS.length-1) return;
+  document.getElementById('stepBtn').disabled = true;
+  tokAnimateTo(tokIdx+1, ()=>{ document.getElementById('stepBtn').disabled=false; });
+}
+
+function tokRunAll(){
+  if(tokRunning) return;
+  tokRunning = true;
+  document.getElementById('stepBtn').disabled = true;
+  document.getElementById('runBtn').disabled = true;
+  function next(){
+    if(tokIdx >= TOK_STEPS.length-1){
+      tokRunning=false;
+      document.getElementById('stepBtn').disabled=false;
+      document.getElementById('runBtn').disabled=false;
+      return;
+    }
+    tokAnimateTo(tokIdx+1, next);
+  }
+  next();
+}
+
+function tokReset(){
+  if(tokAnimId) cancelAnimationFrame(tokAnimId);
+  tokRunning=false;
+  tokIdx=-1; tokTokens=[];
+  document.getElementById('stepBtn').disabled=false;
+  document.getElementById('runBtn').disabled=false;
+  document.getElementById('tokLabel').textContent = '▶ Click "Step" or "Run All" to start tokenizing';
+  drawTokenizerScene(0,-1);
+}
+
+// ── SCROLL REVEAL ─────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ tokReset(); });
+window.addEventListener('resize',()=>{ drawTokenizerScene(tokIdx>=0?1:0, tokIdx); });
+</script>
+</body>
+</html>

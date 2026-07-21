@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Built-ins vs External Commands, and the Basics of Job Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:190px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.g{color:var(--green)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.bug{color:var(--red);font-weight:700}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* PCB-style job table */
+.dossier{background:var(--code-bg);border:1.5px solid var(--purple);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(167,139,250,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--purple);display:flex;justify-content:space-between;align-items:center;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--purple);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#cdproblem" title="Why cd Can't Fork"></a>
+  <a class="toc-dot" href="#builtins" title="Built-in Commands"></a>
+  <a class="toc-dot" href="#dispatch" title="Dispatch Logic"></a>
+  <a class="toc-dot" href="#jobcontrol" title="Job Control Basics"></a>
+  <a class="toc-dot" href="#signals" title="Ctrl+C, Ctrl+Z & Signals"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Shells · Built-ins · Job Control</div>
+    <h1>Some Commands<br><span>Can't Leave Home</span></h1>
+    <p class="hero-sub">You now know how a shell forks and execs external programs, and how it turns a typed line into argv. But <code>cd</code> is different — no amount of forking and exec'ing can make it work as a separate program. This lesson is about why, what that forces every shell to do about it, and how a shell tracks the handful of jobs it launches well enough to support backgrounding, foregrounding, and Ctrl+C.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Ways a child process can change its parent's directory</div></div>
+      <div class="hero-stat"><div class="num">4+</div><div class="lbl">Commands that must be shell built-ins: cd, exit, export, and friends</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Character (&) that turns foreground into background</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Signals behind Ctrl+C and Ctrl+Z: SIGINT, SIGTSTP</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Two Pieces Are Now In Place — <span class="accent">One Gap</span> Remains</h2>
+  <p class="reveal">You've got the loop (Lesson 1) and you've got the parser that turns a line into a clean <code>argv</code> (Lesson 2). Combine those with the fork/exec mechanics from earlier in the series, and you can already explain how a shell runs <code>ls -l</code>: parse the line into argv, fork, and have the child exec <code>/bin/ls</code> with that argv. That covers the overwhelming majority of what you type into a shell. It does <em>not</em> cover a small, important handful of commands that flatly cannot work that way — and it doesn't cover what happens after you launch several things and want to control which one has your attention. Both are this lesson's subject.</p>
+</div>
+</section>
+
+<!-- WHY CD CAN'T FORK -->
+<section id="cdproblem">
+<div class="container">
+  <div class="section-num">01 — A Command That Breaks The Pattern</div>
+  <h2>Why <span class="accent">cd</span> Cannot Be A Separate Program</h2>
+
+  <p class="reveal">Try to implement <code>cd</code> the same way you'd implement <code>ls</code>: write a small standalone program, <code>/bin/cd</code>, that calls <code>chdir()</code> on the path you give it. Wire it into the shell exactly like any external command — fork, then exec <code>/bin/cd some/path</code>. Run it. It compiles, it runs, it even calls <code>chdir()</code> successfully. And then your shell's prompt is still sitting in the exact same directory it started in. What went wrong?</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Root Cause: Working Directory Is Per-Process State</div>
+    A process's current working directory lives in <em>that process's own PCB</em> — it is exactly as private to that process as its open file table or its page table. When <code>/bin/cd</code> runs as a forked child, it gets its own PCB, calls <code>chdir()</code>, and successfully updates <strong>its own</strong> working directory. Then it exits. The child's entire PCB — including that freshly changed working directory — is torn down and discarded. The parent shell's PCB was never touched. It has no idea the child even called <code>chdir()</code> at all.
+  </div>
+
+  <p class="reveal">This is the exact same wall you met studying fork(): a child process gets its own copy of the parent's state at the moment of the fork, and from then on the two are completely independent. That independence is normally a feature — it's what makes processes safe to run concurrently without stepping on each other. Here, for exactly one narrow purpose, it's the obstacle: you specifically <em>want</em> the change to reach back into the parent, and fork()/exec() offers no mechanism for a child to reach back and modify its parent's PCB. It structurally cannot be done that way.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="cdLabel">▶ Watch cd fail as a forked child, then succeed as a built-in</div>
+    <canvas id="cdCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runCdDemo('fork')">▶ cd as a forked external program (fails)</button>
+    <button class="ctrl-btn" onclick="runCdDemo('builtin')">▶ cd as a shell built-in (works)</button>
+    <button class="ctrl-btn cyan" onclick="resetCdDemo()">Reset</button>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    The fix isn't a cleverer syscall or a special flag — it's architectural. If the change has to land in the shell's <em>own</em> PCB, then the code making the change has to <em>run inside the shell's own process</em>, not inside a disposable child. There is no fork() involved at all: <code>cd</code> is implemented as an ordinary C function inside the shell's source code, called directly from the dispatch step, which calls <code>chdir()</code> right there in the shell's own execution context. No new process, no new PCB, no wall to cross.
+  </div>
+</div>
+</section>
+
+<!-- BUILTINS -->
+<section id="builtins">
+<div class="container">
+  <div class="section-num">02 — The Category, Generalized</div>
+  <h2>What Else Has To Live <span class="accent">Inside</span> The Shell?</h2>
+
+  <p class="reveal"><code>cd</code> isn't a special exception — it's the clearest example of a whole category: <strong>any command whose entire purpose is to modify the shell's own process state must be a built-in</strong>, because that state disappears the instant a forked child (which would hold a copy of it) exits. Once you see the pattern, the rest of the list is predictable.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">cd</span><span class="fam-count">builtin</span></div>
+      <div class="fam-desc">Changes the process's own working directory (chdir()). A child's change dies with the child.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">exit</span><span class="fam-count">builtin</span></div>
+      <div class="fam-desc">Terminates the shell process itself. If this were a forked child, exiting would kill the child — the shell would calmly keep running, having accomplished nothing.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">export / set</span><span class="fam-count">builtin</span></div>
+      <div class="fam-desc">Modifies the shell's own environment variables, which are (like working directory) per-process state that a child cannot push back upward.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">jobs / fg / bg</span><span class="fam-count">builtin</span></div>
+      <div class="fam-desc">Read and manipulate the shell's own internal job table (covered below) — data that only exists inside the shell process, nowhere else.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">alias / unalias</span><span class="fam-count">builtin</span></div>
+      <div class="fam-desc">Edits the shell's own in-memory alias table — again, private per-process state a separate program could never reach.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">source / .</span><span class="fam-count">builtin</span></div>
+      <div class="fam-desc">Runs a script's commands directly in the current shell (not a child), specifically so any cd/export/variable changes it makes stick.</div>
+    </div>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Command</th><th>What it needs to change</th><th>Why fork()+exec() can't do it</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">cd</td><td>The shell's own current working directory</td><td class="neg">Lives in the shell's PCB — a child's copy is discarded on exit</td></tr>
+        <tr><td class="hl">exit</td><td>The shell process's own existence</td><td class="neg">A child exiting only ends the child, not the parent shell</td></tr>
+        <tr><td class="hl">export FOO=bar</td><td>The shell's own environment variable table</td><td class="neg">Environment is copied to children, never merged back up</td></tr>
+        <tr><td class="hl">ls, cat, grep, ...</td><td>Nothing about the shell itself — just does its own job and prints output</td><td class="pos">No conflict — this is exactly what fork()+exec() is for</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">That last row is the important contrast: the overwhelming majority of commands you run — <code>ls</code>, <code>cat</code>, <code>grep</code>, <code>python</code>, your own compiled programs — have no need to modify the shell's private state at all. They read input, do work, produce output, and exit. For those, fork()+exec() is not just adequate, it's the <em>better</em> design: it isolates a buggy or crashing external program from ever being able to corrupt the shell that launched it. Built-ins are the deliberate, narrow exception, reserved for the small set of operations where isolation is precisely the thing standing in the way.</p>
+</div>
+</section>
+
+<!-- DISPATCH -->
+<section id="dispatch">
+<div class="container">
+  <div class="section-num">03 — Putting It In Code</div>
+  <h2>One <span class="accent">dispatch()</span>, Two Very Different Paths</h2>
+
+  <p class="reveal">Once you know the split exists, the dispatch step from Lesson 1 gets one more branch. Instead of "match the command name, call its handler," it becomes "match the command name — if it's a built-in, call its handler directly in this process; otherwise, go find and fork+exec an external program by that name":</p>
+
+  <pre class="reveal"><span class="tag">C — dispatch with a builtin/external split</span><code><span class="kw">void</span> <span class="fn">dispatch</span>(<span class="kw">char</span> **argv, <span class="kw">int</span> argc) {
+    <span class="kw">if</span> (argc == <span class="numc">0</span>) <span class="kw">return</span>;
+
+    <span class="cm">/* Built-ins run directly, in THIS process — no fork at all. */</span>
+    <span class="kw">if</span> (<span class="fn">streq</span>(argv[<span class="numc">0</span>], <span class="str">"cd"</span>)) {
+        <span class="fn">builtin_cd</span>(argv[<span class="numc">1</span>]);           <span class="cm">// calls chdir() right here</span>
+        <span class="kw">return</span>;
+    }
+    <span class="kw">if</span> (<span class="fn">streq</span>(argv[<span class="numc">0</span>], <span class="str">"exit"</span>)) {
+        <span class="fn">builtin_exit</span>(argv[<span class="numc">1</span>]);         <span class="cm">// calls exit() right here</span>
+        <span class="kw">return</span>;                       <span class="cm">// (never actually reached)</span>
+    }
+
+    <span class="cm">/* Everything else: fork + exec, the pattern from the deep-dive. */</span>
+    <span class="cls">pid_t</span> pid = <span class="fn">fork</span>();
+    <span class="kw">if</span> (pid == <span class="numc">0</span>) {
+        <span class="fn">execvp</span>(argv[<span class="numc">0</span>], argv);      <span class="cm">// child becomes the external program</span>
+        <span class="fn">perror</span>(<span class="str">"exec failed"</span>);
+        <span class="fn">_exit</span>(<span class="numc">1</span>);
+    } <span class="kw">else</span> {
+        <span class="fn">waitpid</span>(pid, &amp;status, <span class="numc">0</span>); <span class="cm">// parent waits — the shell's own state, untouched</span>
+    }
+}</code></pre>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Rule, Stated As A Question</div>
+    Before wiring up any new shell command, ask: <em>does this need to change something about the shell process itself</em> — its directory, its variables, its own lifetime, its own internal tables? If yes, it must be a built-in, called directly, no fork. If no — if it just wants to read input and produce output — fork()+exec() is not only sufficient, it's the safer, more isolated choice.
+  </div>
+</div>
+</section>
+
+<!-- JOB CONTROL -->
+<section id="jobcontrol">
+<div class="container">
+  <div class="section-num">04 — Beyond One Command At A Time</div>
+  <h2>Foreground, Background, and the <span class="accent">Job Table</span></h2>
+
+  <p class="reveal">Every example so far assumed the shell forks a child and immediately blocks in <code>waitpid()</code> until that child finishes — a <strong>foreground</strong> command. Type a trailing <code>&amp;</code>, as in <code>sleep 30 &amp;</code>, and the shell does something different: it still forks the child exactly as before, but it does <em>not</em> block waiting for it. It prints a new prompt immediately, while the child keeps running independently in the <strong>background</strong>.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>▶️ Foreground (no &)</h4>
+      Shell forks, then calls <code>waitpid()</code> and blocks. You get your prompt back only once the child exits. Only one thing has your terminal's attention at a time.
+    </div>
+    <div class="compare-card bad">
+      <h4>⏩ Background (trailing &)</h4>
+      Shell forks, does <em>not</em> block — prints a new prompt right away. The child keeps running "behind" the prompt, and the shell must remember it exists to report on it later.
+    </div>
+  </div>
+
+  <p class="reveal">That last sentence is the crux of job control: once the shell stops blocking on every child, it can have <em>several</em> children alive simultaneously, and it needs some way to keep track of them. The mechanism is unglamorous and exactly what you'd guess — a small in-memory table, private to the shell process (which is itself a small callback to the built-ins section: <code>jobs</code>, <code>fg</code>, and <code>bg</code> only work because this table exists inside the shell).</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Shell's Internal Job Table — 3 entries</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Job [1]</div><div class="f-val">PID 2201 — sleep 30 &amp;</div><div class="f-desc">State: Running (background)</div></div>
+      <div class="dossier-field"><div class="f-label">Job [2]</div><div class="f-val">PID 2214 — make -j4</div><div class="f-desc">State: Running (foreground — has terminal control)</div></div>
+      <div class="dossier-field"><div class="f-label">Job [3]</div><div class="f-val">PID 2199 — vim notes.txt</div><div class="f-desc">State: Stopped (suspended via Ctrl+Z)</div></div>
+      <div class="dossier-field"><div class="f-label">Why This Table Exists</div><div class="f-val">Enables jobs / fg / bg</div><div class="f-desc">Without it, the shell would have no memory of any child once it stopped blocking on it.</div></div>
+    </div>
+  </div>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="jobLabel">▶ Launch foreground vs background jobs and watch the table</div>
+    <canvas id="jobCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runJobDemo('fg')">▶ Run "make" in the foreground</button>
+    <button class="ctrl-btn cyan" onclick="runJobDemo('bg')">▶ Run "sleep 30 &amp;" in the background</button>
+    <button class="ctrl-btn red" onclick="resetJobDemo()">Reset</button>
+  </div>
+
+  <p class="reveal">With that table in place, the rest of job control is mostly bookkeeping wired to a few more built-ins: <code>jobs</code> prints the table, <code>fg %1</code> brings a background or stopped job back to the foreground (giving it terminal control and blocking on it again), and <code>bg %1</code> resumes a stopped job but leaves it running in the background. None of these are external programs, for the exact same reason <code>cd</code> isn't — they exist only to read and mutate data that lives inside the shell process itself.</p>
+</div>
+</section>
+
+<!-- SIGNALS -->
+<section id="signals">
+<div class="container">
+  <div class="section-num">05 — Ctrl+C, Ctrl+Z, and a Forward Pointer</div>
+  <h2>Keystrokes That Become <span class="accent">Signals</span></h2>
+
+  <p class="reveal">Two keystrokes deserve a mention here at the conceptual level, because they interact directly with the job table you just met: <strong>Ctrl+C</strong> and <strong>Ctrl+Z</strong>. Neither one is "sent" to a program the way ordinary typed characters are. Both are intercepted by the terminal driver and translated into a <strong>signal</strong> — a small, asynchronous notification delivered by the kernel to a process — aimed specifically at whichever process currently has <strong>foreground</strong> status.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Keystroke</th><th>Signal Sent</th><th>Default Effect On The Foreground Process</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Ctrl+C</td><td class="gold">SIGINT</td><td>Interrupt — terminates the process (unless it specifically installed a handler to catch/ignore this)</td></tr>
+        <tr><td class="hl">Ctrl+Z</td><td class="gold">SIGTSTP</td><td>Terminal stop — suspends the process, freezing it in place without killing it (this is exactly how a job ends up "Stopped" in the table above)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice the phrase "aimed specifically at whichever process currently has foreground status" — this is precisely why the job table matters here too. When you press Ctrl+C, it doesn't go to the shell (which is, in a sense, always running); it goes to whatever the shell most recently marked as the <strong>foreground process group</strong> — the job that's currently blocking the shell's <code>waitpid()</code>. A background job, humming along without terminal control, is unaffected by Ctrl+C entirely; that's part of the whole point of backgrounding it.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why This Stays Conceptual, For Now</div>
+    Signals are a genuinely deep mechanism on their own — how they're delivered, how a process installs a handler, which ones can be blocked or ignored and which (like <code>SIGKILL</code>) categorically cannot, what "process group" precisely means, and how a shell sets one up for a whole pipeline at once. This lesson only needs you to walk away with the shape: <em>keystroke → terminal driver → signal → kernel delivers it to the right process</em>. The full mechanics get their own dedicated treatment in the signals lesson later in this series — treat this section as the preview trailer, not the feature.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>One more piece worth knowing exists.</b> A "stopped" job (post Ctrl+Z) isn't running at all — it's parked by the kernel, consuming no CPU, until something resumes it. That's exactly what <code>fg</code> and <code>bg</code> do: both send a different signal, <code>SIGCONT</code>, to wake the stopped process back up — <code>fg</code> additionally reclaims foreground/terminal status for it, <code>bg</code> lets it keep running without that status. Same job table, same signal-delivery mechanism, just a different target state.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">06 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Built-in Command</div><div class="glossary-def">A command implemented as a function called directly inside the shell's own process — no fork, no exec — because it must modify the shell's own private state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">External Command</div><div class="glossary-def">A command implemented as a separate executable, launched via fork()+exec() and waited on (or not) by the shell.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Working Directory</div><div class="glossary-def">Per-process state (part of the PCB) recording where relative paths are resolved from — exactly why cd cannot be a forked child.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Job</div><div class="glossary-def">A shell's bookkeeping unit for one launched command (and its PID), tracked so jobs/fg/bg can refer back to it later.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Job Table</div><div class="glossary-def">The shell's private in-memory list of jobs it has launched, along with each one's PID and current state (running, stopped, background, foreground).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Foreground / Background</div><div class="glossary-def">Whether the shell is currently blocked waiting on a job (foreground) or has returned to the prompt while the job keeps running independently (background, via trailing &).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Foreground Process Group</div><div class="glossary-def">The job currently considered "in front" from the terminal's point of view — the target that keystroke-generated signals like Ctrl+C are delivered to.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Signal</div><div class="glossary-def">A small, asynchronous kernel-delivered notification to a process, such as SIGINT or SIGTSTP — the mechanism behind Ctrl+C and Ctrl+Z. Covered in depth in a later lesson.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SIGINT / SIGTSTP / SIGCONT</div><div class="glossary-def">Ctrl+C's interrupt signal, Ctrl+Z's stop signal, and the continue signal fg/bg use to resume a stopped job, respectively.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Built-ins vs External Commands, and the Basics of Job Control</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion lesson for bob_os module 13_shell.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CD DEMO CANVAS ──────────────────────────────────────────────────────
+let cdCancel=null;
+
+function drawCdScene(mode,phase,t,dir){
+  const canvas=document.getElementById('cdCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const shellX=W*0.1, shellW=W*0.32, boxY=40, boxH=110;
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.fillStyle='rgba(56,189,248,.06)';
+  ctx.fillRect(shellX,boxY,shellW,boxH);ctx.strokeRect(shellX,boxY,shellW,boxH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Shell process (PID 900)',shellX+10,boxY+20);
+  ctx.fillStyle=C.gold;ctx.font='12px Source Code Pro,monospace';
+  ctx.fillText('cwd = "'+dir+'"',shellX+10,boxY+46);
+
+  const showChild = (mode==='fork') && (phase==='fork'||phase==='childcd'||phase==='exit'||phase==='result');
+  if(showChild){
+    const childX=W*0.58, childW=W*0.32;
+    const op = phase==='fork' ? t : 1;
+    ctx.globalAlpha = phase==='exit'||phase==='result' ? Math.max(0.25,1-((phase==='exit')?t:1)) : op;
+    ctx.strokeStyle=C.purple;ctx.fillStyle='rgba(167,139,250,.06)';
+    ctx.fillRect(childX,boxY,childW,boxH);ctx.strokeRect(childX,boxY,childW,boxH);
+    ctx.fillStyle=C.purple;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText('Child process (PID 901)',childX+10,boxY+20);
+    let childCwd = (phase==='childcd'||phase==='exit'||phase==='result') ? '/home/bob/docs' : dir;
+    ctx.fillStyle = childCwd!==dir ? C.green : C.gold;
+    ctx.font='12px Source Code Pro,monospace';
+    ctx.fillText('cwd = "'+childCwd+'"',childX+10,boxY+46);
+    if(phase==='exit'||phase==='result'){
+      ctx.fillStyle=C.red;ctx.font='10px Source Code Pro,monospace';
+      ctx.fillText('exit() — PCB discarded',childX+10,boxY+70);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  if(mode==='builtin' && (phase==='call'||phase==='result')){
+    ctx.fillStyle=C.green;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText('builtin_cd() runs HERE — no fork, no new PCB',shellX+10,boxY+70);
+  }
+
+  // arrow / action indicator
+  if(phase==='fork'){
+    ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(shellX+shellW,boxY+boxH/2);ctx.lineTo(shellX+shellW+(W*0.16)*t,boxY+boxH/2);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const captions={
+    idle:'Pick a scenario above to begin.',
+    fork:'fork() — kernel clones PID 900 into new child PID 901.',
+    childcd:'Child calls chdir("/home/bob/docs") — succeeds, but only in ITS OWN PCB.',
+    exit:'Child exits — its entire PCB, changed cwd included, is discarded.',
+    result:'Parent\'s cwd never changed. cd as an external program is a no-op from the shell\'s point of view.',
+    call:'builtin_cd() calls chdir() directly, in the SHELL\'S OWN process — no PCB boundary crossed.',
+    resultgood:'Shell\'s own cwd is now genuinely updated. This is the only way it can work.'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+}
+
+function animatePhases(phases,durations,drawFn,onDone){
+  let idx=0,start=performance.now(),rafId;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawFn(phases[idx],t,idx);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){ if(onDone) onDone(); return; }
+      start=now;
+    }
+    rafId=requestAnimationFrame(step);
+  }
+  rafId=requestAnimationFrame(step);
+  return function(){ cancelAnimationFrame(rafId); };
+}
+
+function runCdDemo(mode){
+  if(cdCancel) cdCancel();
+  if(mode==='fork'){
+    document.getElementById('cdLabel').textContent='▶ Trying cd as a forked external program...';
+    const phases=['fork','childcd','exit','result'];
+    const durations=[500,500,500,600];
+    cdCancel=animatePhases(phases,durations,(phase,t)=>{
+      drawCdScene('fork',phase,t,'/home/bob');
+    },()=>{
+      document.getElementById('cdLabel').textContent='▶ Failed — try the builtin version';
+    });
+  } else {
+    document.getElementById('cdLabel').textContent='▶ Running cd as a shell built-in...';
+    const phases=['call','resultgood'];
+    const durations=[500,700];
+    cdCancel=animatePhases(phases,durations,(phase,t)=>{
+      drawCdScene('builtin',phase,t,phase==='resultgood'?'/home/bob/docs':'/home/bob');
+    },()=>{
+      document.getElementById('cdLabel').textContent='▶ Success — the shell\'s own cwd genuinely changed';
+    });
+  }
+}
+function resetCdDemo(){
+  if(cdCancel) cdCancel();
+  document.getElementById('cdLabel').textContent='▶ Watch cd fail as a forked child, then succeed as a built-in';
+  drawCdScene('none','idle',0,'/home/bob');
+}
+
+// ── JOB TABLE CANVAS ──────────────────────────────────────────────────────
+let jobCancel=null;
+let jobTable=[];
+
+function drawJobScene(note,promptBack){
+  const canvas=document.getElementById('jobCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('SHELL — waitpid() status: '+(promptBack?'not blocked, prompt shown':'blocked, waiting on foreground job'),20,26);
+
+  // job table rows
+  const rowY=46, rowH=44;
+  ctx.strokeStyle=C.border;ctx.strokeRect(20,rowY,W-40,rowH*3+10);
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';
+  ctx.fillText('JOB TABLE',26,rowY+14);
+
+  for(let i=0;i<3;i++){
+    const y=rowY+22+i*rowH;
+    const job=jobTable[i];
+    ctx.strokeStyle=C.border;ctx.beginPath();ctx.moveTo(20,y+rowH-6);ctx.lineTo(W-20,y+rowH-6);ctx.stroke();
+    if(job){
+      ctx.fillStyle = job.state==='fg'?C.gold:C.cyan;
+      ctx.font='11px Source Code Pro,monospace';
+      ctx.fillText('[' + (i+1) + '] PID ' + job.pid + '  ' + job.cmd,30,y+12);
+      ctx.fillStyle=job.state==='fg'?C.gold:C.green;
+      ctx.font='9px Source Code Pro,monospace';
+      ctx.fillText(job.state==='fg'?'foreground — shell is blocked on this one':'background — running independently',30,y+26);
+    }
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(note||'',W/2,H-14);
+}
+
+function runJobDemo(kind){
+  if(jobCancel) jobCancel();
+  if(kind==='fg'){
+    jobTable=[{pid:2214,cmd:'make -j4',state:'fg'}];
+    document.getElementById('jobLabel').textContent='▶ Foreground: shell forks, then blocks in waitpid()';
+    const phases=['forking','blocked'];
+    const durations=[800,900];
+    jobCancel=animatePhases(phases,durations,(phase)=>{
+      const note = phase==='forking'
+        ? 'fork() — child PID 2214 created for "make -j4"...'
+        : 'Shell calls waitpid(2214) and BLOCKS — no new prompt until it finishes.';
+      drawJobScene(note,false);
+    });
+  } else {
+    jobTable=[{pid:2201,cmd:'sleep 30 &',state:'bg'}];
+    document.getElementById('jobLabel').textContent='▶ Background: shell forks, but does NOT block';
+    const phases=['forking','done'];
+    const durations=[800,900];
+    jobCancel=animatePhases(phases,durations,(phase)=>{
+      const note = phase==='forking'
+        ? 'fork() — child PID 2201 created for "sleep 30 &"...'
+        : 'Shell records it in the job table and returns to the prompt immediately.';
+      drawJobScene(note,phase==='done');
+    });
+  }
+}
+function resetJobDemo(){
+  if(jobCancel) jobCancel();
+  jobTable=[];
+  document.getElementById('jobLabel').textContent='▶ Launch foreground vs background jobs and watch the table';
+  drawJobScene('Pick a scenario above to begin.',true);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetCdDemo(); resetJobDemo(); });
+window.addEventListener('resize',()=>{ resetCdDemo(); resetJobDemo(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mark-and-Sweep From Scratch — Garbage Collection's Core Algorithm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:var(--green);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--green);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--green);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--green)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--green);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--green);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.green{border-color:var(--green);color:var(--green)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--green)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--green);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(74,222,128,.15);border:1.5px solid var(--green);color:var(--green);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(74,222,128,.1);border:1.5px solid var(--green);color:var(--green);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(74,222,128,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--green);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:var(--green);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--green);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;align-items:center;padding:.8rem 1rem;font-family:'Source Code Pro',monospace;font-size:.72rem;color:var(--muted);border-top:1px solid var(--border);}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:.4rem;vertical-align:middle;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Why GC At All"></a>
+  <a class="toc-dot" href="#definition" title="What Garbage Really Means"></a>
+  <a class="toc-dot" href="#roots" title="Roots"></a>
+  <a class="toc-dot" href="#graph" title="Worked Example"></a>
+  <a class="toc-dot" href="#mark" title="Mark Phase"></a>
+  <a class="toc-dot" href="#sweep" title="Sweep Phase"></a>
+  <a class="toc-dot" href="#live" title="See It Run"></a>
+  <a class="toc-dot" href="#cost" title="The Cost"></a>
+  <a class="toc-dot" href="#compare" title="Manual vs Automatic"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Garbage Collection Theory · Engine-Agnostic Foundations · bob_os Lesson 20</div>
+    <h1>Mark-and-Sweep,<br><span>From Scratch</span></h1>
+    <p class="hero-sub">Every managed language eventually has to answer one question honestly: when is an object actually garbage? Not "when does the programmer stop caring" — computers can't read minds. The answer engineers landed on decades ago is a purely mechanical one, called <em>reachability</em>, and the algorithm that acts on it is the oldest, simplest tracing collector there is: mark-and-sweep. Before you can understand V8's generational heap, Python's refcounting, or any other GC scheme, you need this one, cold, from first principles.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Phases: Mark, Then Sweep</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Question: Reachable From a Root?</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Manual free() Calls Required</div></div>
+      <div class="hero-stat"><div class="num">1959</div><div class="lbl">Year McCarthy Invented It, for Lisp</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP / WHY GC -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Setting the Stage</div>
+  <h2>Why Anyone Needed <span class="accent">an Algorithm</span> At All</h2>
+
+  <p class="reveal">In a language like C, you allocate memory with <code>malloc()</code> and it is <em>your</em> job, forever, to call <code>free()</code> on it exactly once — not zero times (a <strong>memory leak</strong>), not twice (a <strong>double-free</strong>, usually a crash or worse), and never while some other part of the program still holds a pointer to it (a <strong>use-after-free</strong>, one of the most exploited bug classes in software history — you've already seen this exact failure mode up close in the B09 tutorial in the browser module). All three of these bugs share a root cause: the programmer, not the machine, is tracking whether an object is still needed, and programmers get it wrong constantly, even careful ones, in large codebases with many owners of the same data.</p>
+
+  <p class="reveal">Garbage collection is the industry's answer to that whole problem category: instead of trusting a human to know when an object is done being used, have the <em>runtime itself</em> figure it out, automatically, using a rule precise enough to run as code. That rule is what this lesson is actually about. The mechanism that implements the rule — mark-and-sweep — is almost secondary. Get the rule right first, and the algorithm becomes obvious.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">📦 What This Lesson Deliberately Skips</div>
+    This is the general, engine-agnostic theory — the stuff that's true whether you're looking at a 1959 Lisp interpreter or a browser shipping today. It is <em>not</em> about V8 specifically. If you want V8's actual generational Scavenger + mark-sweep-compact heap, that's covered in the sibling lesson <code>02_browser_xray/03_v8_deepdive.html</code>. Read this one first — it's the foundation everything else in that lesson is quietly built on.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: DEFINITION OF GARBAGE -->
+<section id="definition">
+<div class="container">
+  <div class="section-num">01 — The Precise Definition</div>
+  <h2>What "Garbage" <span class="accent">Actually</span> Means</h2>
+
+  <p class="reveal">Here's a tempting but wrong definition: "an object is garbage once the programmer is done using it." Tempting, because that's what we mean colloquially. Wrong, because "done using it" is a fact about the programmer's intent, and intent isn't a bit stored anywhere in memory the runtime can check. The runtime needs a definition it can actually compute — something structural, mechanical, checkable by walking pointers.</p>
+
+  <div class="formula green reveal">
+    <span class="label">The one rule this entire algorithm is built on</span>
+    An object is <strong>alive</strong> if and only if it is <strong>reachable</strong> — there exists some chain of references leading to it, starting from a fixed set of <strong>roots</strong>.
+    <span class="sub">Anything not reachable, by definition, is garbage. Full stop. No exceptions, no intent required.</span>
+  </div>
+
+  <p class="reveal">Notice what this buys you: reachability is a graph question. Objects are nodes. References (pointers, in whatever form your language uses — object fields, array slots, variables) are directed edges. "Is this object alive?" becomes "is there a path from any root to this node?" — a question you can answer with nothing fancier than a graph traversal, which a computer is extremely good at.</p>
+
+  <p class="reveal">And because the definition is purely structural, it cuts both ways in ways that surprise people the first time they see them:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>⚠️ Unreachable Is Garbage, Even If You "Meant" to Keep It</h4>
+      If every path to an object has been severed — the last variable pointing to it went out of scope, the last field referencing it got overwritten — the object is garbage the instant that happens, whether or not you intended it, whether or not you're about to regret it. The collector doesn't ask why. It only asks: can I still reach this from a root? If no, it's gone at the next collection.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Reachable Is NOT Garbage, Even If You're "Done" With It</h4>
+      This is the sneakier one. If you forget to remove an entry from a global cache, a static list, or an event-listener registry, that object stays <em>reachable</em> — some root-rooted path still leads to it — even though you, the programmer, consider it finished and would call it garbage in plain English. The collector will faithfully keep it alive forever. This is precisely how "memory leaks" still happen in garbage-collected languages: not a GC bug, but a reachability truth the programmer didn't intend.
+    </div>
+  </div>
+
+  <pre class="reveal"><span class="tag">Pseudocode — the "reachable but logically dead" trap</span><code><span class="kw">const</span> <span class="var">sessionCache</span> = {};    <span class="cm">// a global — always reachable, forever, by definition</span>
+
+<span class="kw">function</span> <span class="fn">handleLogin</span>(userId, sessionData) {
+  sessionCache[userId] = sessionData;   <span class="cm">// sessionData is now reachable via the global</span>
+}
+
+<span class="kw">function</span> <span class="fn">handleLogout</span>(userId) {
+  <span class="cm">// BUG: forgot to do `delete sessionCache[userId]` here</span>
+  redirectToHomepage();
+}
+
+<span class="cm">// The user logged out. The programmer is completely done with sessionData.</span>
+<span class="cm">// But sessionCache[userId] still points to it, and sessionCache is a root-reachable</span>
+<span class="cm">// global. A tracing GC will faithfully keep sessionData alive forever. This is a</span>
+<span class="cm">// real memory leak, in a garbage-collected language, and the GC is working perfectly.</span></code></pre>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🧠 The Takeaway Worth Memorizing</div>
+    Reachability is not a proxy for "logically dead" — it's a completely separate, purely structural property. A tracing GC is extremely good at one narrow job: freeing objects nothing can reach anymore. It has zero opinion about objects you've forgotten about but can technically still reach. Those are still your problem — which is exactly why "memory leak" remains a meaningful bug report even in languages that have never given you a <code>free()</code> function to misuse.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: ROOTS -->
+<section id="roots">
+<div class="container">
+  <div class="section-num">02 — Where the Search Begins</div>
+  <h2>Roots: The <span class="accent">Starting Points</span> of Every Traversal</h2>
+
+  <p class="reveal">The reachability definition leans entirely on one term we haven't pinned down yet: <strong>roots</strong>. A root is any reference the runtime knows about <em>without</em> having to trace it from somewhere else — the fixed starting set for the whole graph search. Concretely, roots typically include:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Global Variables</span><span class="fam-count">always roots</span></div>
+      <div class="fam-desc">Anything reachable through a global object, module-level binding, or static field is trivially rooted — nothing has to point to it from outside for the runtime to know it's there.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">The Call Stack</span><span class="fam-count">always roots</span></div>
+      <div class="fam-desc">Every local variable and parameter in every currently-executing function, all the way up the call chain, counts as a root. A function three frames deep holding the only reference to an object is enough to keep it alive.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">CPU Registers</span><span class="fam-count">always roots</span></div>
+      <div class="fam-desc">A pointer sitting in a register mid-computation, not yet spilled to the stack, is just as much a live reference as one sitting in a named variable — the collector has to account for it too.</div>
+    </div>
+  </div>
+
+  <p class="reveal">The exact list of "what counts as a root" varies by language and runtime — some also root things like currently-registered exception handlers or pending finalizer callbacks — but the shape is always the same: roots are the references the runtime can enumerate directly, without following any pointer to find them. Everything else in the heap only counts as reachable if some chain of pointers connects it back to one of these starting points.</p>
+
+  <div class="sidenote reveal">
+    <b>Why this matters more than it sounds like it should.</b> The entire correctness of a tracing collector rests on getting the root set exactly right. Miss a real root — say, a pointer temporarily stashed somewhere the collector doesn't know to look — and you'll free an object something is still using, which is a self-inflicted use-after-free bug inside the "safe" language's own runtime. This is a genuinely hard engineering problem (compilers have to emit metadata describing exactly which stack slots and registers hold live pointers at every possible collection point), even though the theory above sounds simple.
+  </div>
+
+  <h3>Two Honest Ways to Find Roots: Precise vs. Conservative</h3>
+
+  <p class="reveal">Knowing "the stack is part of the root set" is the easy part. Actually scanning it raises an uncomfortable question: a stack slot is just a chunk of bytes — how does the collector know whether those bytes are a pointer into the heap, or just an ordinary integer that happens to look like one? Two honest answers exist, and real-world collectors split between them.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Precise (Exact) GC</h4>
+      The compiler emits extra metadata alongside the code — a map saying, at this exact point in execution, stack slot 3 and register RBX hold pointers, and everything else doesn't. The collector consults this map and never has to guess. Correct by construction, but requires real cooperation from the compiler at every possible collection point.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Conservative GC</h4>
+      No compiler metadata at all — the collector scans the stack and treats <em>anything</em> that looks like a plausible heap pointer (the right numeric range, correct alignment) as if it might be one, just to be safe. Simple to bolt onto an existing compiler, but it can accidentally treat a random integer as a "root," which means an object can be kept alive by sheer coincidence — a false positive, safe but wasteful, never a false negative.
+    </div>
+  </div>
+
+  <p class="reveal">Notice the asymmetry: a conservative collector's mistake can only ever keep something alive that didn't need to be — it can never free something that's still genuinely in use, because it only ever adds extra, spurious roots, never removes real ones. That asymmetry is exactly why "when in doubt, guess it's a root" is a defensible engineering shortcut, even though it means conservative collectors occasionally retain garbage a precise collector would have correctly freed.</p>
+</div>
+</section>
+
+<!-- SECTION 3: WORKED EXAMPLE -->
+<section id="graph">
+<div class="container">
+  <div class="section-num">03 — A Small Worked Example</div>
+  <h2>Roots → A → B, and the <span class="accent">Case of C</span></h2>
+
+  <p class="reveal">Theory's cheap. Let's put a tiny, concrete heap on the table and reason through it by hand before any algorithm touches it. Suppose the heap currently holds five objects: <strong>A</strong>, <strong>B</strong>, <strong>C</strong>, <strong>D</strong>, and <strong>G</strong>. The reference graph looks like this:</p>
+
+  <ul class="reveal">
+    <li>A root reference points to <strong>A</strong>.</li>
+    <li><strong>A</strong> holds a reference to <strong>B</strong>, and a separate reference to <strong>D</strong>.</li>
+    <li><strong>C</strong> holds a reference to <strong>G</strong>.</li>
+    <li>Nothing — no root, no other object — points to <strong>C</strong>.</li>
+  </ul>
+
+  <p class="reveal">Walk the reachability rule by hand. Starting from the root: root → A. From A you can reach B and D. So <strong>A, B, and D are all reachable</strong> — they're alive, no matter how long ago they were allocated or how little "work" A has done with them recently. C is a different story: nothing points to C. It doesn't matter that C points to G — that only matters if something can reach C first. Since nothing can, <strong>C is garbage</strong>, and critically, <strong>so is G</strong>, purely because the only path to G ran through an already-unreachable object.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Detail Everyone Trips On Once</div>
+    G has an incoming reference! Doesn't that make it reachable? No — having <em>a</em> reference isn't enough; the reference has to originate from something itself reachable from a root. C → G is a real edge in the graph, but C is floating disconnected from the root set, so that edge leads nowhere useful. This is exactly why reachability has to be computed by <em>traversal from roots outward</em>, not by checking "does anything point to me" in isolation — a whole disconnected cluster of objects can reference each other richly and still all be garbage together.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: MARK PHASE -->
+<section id="mark">
+<div class="container">
+  <div class="section-num">04 — Phase One</div>
+  <h2>MARK: Flood the Graph <span class="accent">From the Roots</span></h2>
+
+  <p class="reveal">The mark phase turns the reachability definition directly into an algorithm. Give every object one extra bit of storage — a <strong>mark bit</strong>, starting at 0 (unmarked) before every collection. Then, starting from each root, traverse outward: visit an object, flip its mark bit to 1, then recursively visit everything it references. This is a plain graph traversal — depth-first or breadth-first both work, the order doesn't affect the result, only the traversal's own memory usage.</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>Start at each root.</strong> For every root reference, if the object it points to isn't already marked, mark it and continue the walk from there.</div></li>
+    <li><div class="step-body"><strong>Follow every outgoing reference.</strong> For the object you just marked, look at every field, array slot, or captured variable that holds a reference, and recurse into each one.</div></li>
+    <li><div class="step-body"><strong>Skip anything already marked.</strong> This one check is what makes cycles harmless — if you arrive at an object whose mark bit is already 1, you stop immediately instead of recursing again. No infinite loop, no special-case cycle detection required.</div></li>
+    <li><div class="step-body"><strong>Stop when there's nothing left to visit.</strong> Once every root's outward traversal has exhausted itself, the mark phase is done. Every object with its mark bit set is provably reachable. Every object without it is provably not.</div></li>
+  </div>
+
+  <pre class="reveal"><span class="tag">Pseudocode</span><code><span class="kw">function</span> <span class="fn">mark</span>(obj) {
+  <span class="kw">if</span> (obj <span class="kw">is</span> null <span class="kw">or</span> obj.marked) <span class="kw">return</span>;   <span class="cm">// already visited — this is what handles cycles</span>
+  obj.marked = <span class="kw">true</span>;
+  <span class="kw">for</span> (child <span class="kw">of</span> obj.references) {
+    <span class="fn">mark</span>(child);                      <span class="cm">// recurse into every outgoing reference</span>
+  }
+}
+
+<span class="kw">function</span> <span class="fn">markPhase</span>() {
+  <span class="kw">for</span> (root <span class="kw">of</span> roots) {
+    <span class="fn">mark</span>(root.target);
+  }
+}</code></pre>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ In Our Worked Example</div>
+    Starting from the root, <code>mark(A)</code> runs: A gets marked, then recurses into A's references — B and D — marking both. Neither B nor D has outgoing references here, so those branches terminate. Nothing ever calls <code>mark(C)</code>, because nothing reachable ever points to C — so C and, transitively, G are never visited and never marked. <strong>Marked set after this phase: { A, B, D }.</strong>
+  </div>
+
+  <h3>The Recursive Version Has a Hidden Landmine</h3>
+
+  <p class="reveal">The pseudocode above is written recursively because that's the clearest way to explain it — but a real implementation almost never marks this way, and the reason is worth understanding. Every recursive call to <code>mark()</code> consumes a stack frame on the <em>collector's own</em> call stack. A long, deep chain of references — a linked list with a million nodes, a deeply nested tree, a long promise chain — turns into a million nested recursive calls before the traversal ever bottoms out and starts returning. That can overflow the collector's own stack, which means the one piece of software you absolutely cannot afford to crash just crashed, while trying to clean up memory.</p>
+
+  <pre class="reveal"><span class="tag">Pseudocode — iterative, stack-overflow-safe</span><code><span class="kw">function</span> <span class="fn">markPhase</span>() {
+  <span class="kw">const</span> worklist = [];               <span class="cm">// an explicit stack, allocated on the HEAP, not the call stack</span>
+  <span class="kw">for</span> (root <span class="kw">of</span> roots) {
+    worklist.push(root.target);
+  }
+  <span class="kw">while</span> (worklist.length &gt; <span class="num">0</span>) {
+    <span class="kw">const</span> obj = worklist.pop();
+    <span class="kw">if</span> (obj <span class="kw">is</span> null <span class="kw">or</span> obj.marked) <span class="kw">continue</span>;
+    obj.marked = <span class="kw">true</span>;
+    <span class="kw">for</span> (child <span class="kw">of</span> obj.references) {
+      worklist.push(child);          <span class="cm">// grows a data structure, not the native call stack</span>
+    }
+  }
+}</code></pre>
+
+  <p class="reveal">Same algorithm, same result, same handling of cycles via the "already marked, skip it" check — but the traversal's own bookkeeping now lives in an explicitly-managed data structure that can grow as large as available memory allows, instead of being limited by however deep the native call stack happens to be. This is a recurring pattern in real garbage collector implementations: the <em>algorithm</em> is simple and recursive-shaped, but the <em>implementation</em> has to defensively convert that recursion into an explicit loop, because the collector cannot be allowed to fail on exactly the kind of large, deeply-linked structure it exists to reclaim.</p>
+</div>
+</section>
+
+<!-- SECTION 5: SWEEP PHASE -->
+<section id="sweep">
+<div class="container">
+  <div class="section-num">05 — Phase Two</div>
+  <h2>SWEEP: Walk the <span class="accent">Whole Heap</span>, Free What's Unmarked</h2>
+
+  <p class="reveal">The mark phase only ever visits <em>reachable</em> objects — it has no reason to touch C or G at all. So how does the collector actually find and free the garbage? A second, completely different pass: the sweep phase doesn't follow references at all. It walks the entire heap linearly, object by object, in whatever order they happen to be stored — a simple list or block scan, no graph logic involved.</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>Visit every object in the heap, one at a time.</strong> Not "every reachable object" — literally every object that currently exists, marked or not.</div></li>
+    <li><div class="step-body"><strong>Check the mark bit.</strong> If it's set, the mark phase proved this object reachable. Leave it alone, and reset its mark bit to 0 so it's ready for the <em>next</em> collection cycle.</div></li>
+    <li><div class="step-body"><strong>If it's unset, free it.</strong> The mark phase never reached this object, which — given the reachability definition — means it's garbage. Reclaim its memory back to the allocator.</div></li>
+  </div>
+
+  <pre class="reveal"><span class="tag">Pseudocode</span><code><span class="kw">function</span> <span class="fn">sweepPhase</span>() {
+  <span class="kw">for</span> (obj <span class="kw">of</span> heap) {           <span class="cm">// every object, no exceptions, marked or not</span>
+    <span class="kw">if</span> (obj.marked) {
+      obj.marked = <span class="kw">false</span>;    <span class="cm">// clear it, ready for the next mark phase</span>
+    } <span class="kw">else</span> {
+      heap.remove(obj);
+      <span class="fn">free</span>(obj);           <span class="cm">// unreachable → reclaim the memory</span>
+    }
+  }
+}
+
+<span class="kw">function</span> <span class="fn">collect</span>() {
+  <span class="fn">markPhase</span>();
+  <span class="fn">sweepPhase</span>();
+}</code></pre>
+
+  <p class="reveal">In our example, the sweep pass visits A, B, C, D, and G in heap order. A, B, and D are marked — they survive, mark bits cleared for next time. C and G are unmarked — both get freed, and their memory becomes available for future allocations. Notice sweep didn't need to know <em>why</em> C and G were garbage, or that C used to reference G. It just trusted the mark bit the previous phase computed.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔀 Two Phases, Two Completely Different Access Patterns</div>
+    This split is worth sitting with: mark is a <em>pointer-chasing traversal</em> that only touches live data and can jump anywhere in memory unpredictably. Sweep is a <em>linear scan</em> that touches every object regardless of liveness but in predictable, cache-friendly order. Almost every refinement to mark-and-sweep you'll ever encounter — incremental marking, concurrent sweeping, generational splits — is really an attempt to make one or both of these two very different access patterns cheaper.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: LIVE CANVAS -->
+<section id="live">
+<div class="container">
+  <div class="section-num">06 — See It Run</div>
+  <h2>Mark-and-Sweep, <span class="accent">In Motion</span></h2>
+
+  <p class="reveal">Here's the exact heap from the worked example above, animated. Press the button to watch the mark phase flood outward from the root, then watch the sweep phase walk the whole heap and reclaim anything the flood never reached.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="gcLabel">▶ Click to run mark-and-sweep on this heap</div>
+    <canvas id="gcCanvas" height="360"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--gold)"></span>Root</span>
+      <span><span class="dot" style="background:var(--green)"></span>Marked / Live</span>
+      <span><span class="dot" style="background:var(--muted)"></span>Unvisited</span>
+      <span><span class="dot" style="background:var(--red)"></span>Swept / Freed</span>
+    </div>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runGC()">▶ Run Mark &amp; Sweep</button>
+    <button class="ctrl-btn red" onclick="resetGC()">Reset</button>
+  </div>
+
+  <p class="reveal">Watch what happens to C and G specifically: the mark phase's traveling pulse never even visits them — there's simply no path from the root that reaches them. They sit gray and untouched through the entire mark phase. Only once the sweep phase's scanner physically reaches their position in heap order does anything happen to them at all — and what happens is they're freed.</p>
+</div>
+</section>
+
+<!-- SECTION 7: COST -->
+<section id="cost">
+<div class="container">
+  <div class="section-num">07 — What This Costs You</div>
+  <h2>The Price of <span class="accent">Stopping the World</span></h2>
+
+  <p class="reveal">The version of mark-and-sweep described above has a property that sounds alarming once you say it out loud: nothing else can safely run <em>while</em> it's running. If your program kept mutating references mid-traversal — adding a new pointer, dropping an old one — the mark phase could get a wrong, inconsistent answer: it might miss marking an object that a running mutation just made reachable. The simplest fix is the one classic mark-and-sweep uses: pause every other thread of execution completely until both phases finish. This is called a <strong>stop-the-world</strong> collection.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">Where the pause time actually comes from</span>
+    Mark phase cost ∝ number of <em>reachable</em> objects (and the edges between them)
+    <br>Sweep phase cost ∝ <em>total</em> number of objects currently in the heap, reachable or not
+    <span class="sub">A heap with a lot of garbage in it doesn't make marking slower — but it does make sweeping slower, since sweep has to visit every object regardless of liveness.</span>
+  </div>
+
+  <p class="reveal">For a small heap, a stop-the-world pause is invisible. For a large, long-running program with a big heap — exactly the kind of program that benefits most from automatic memory management — that pause can become a real, user-visible stutter. This single fact is the entire motivating force behind almost every advanced GC technique that exists: incremental collectors that do a little marking at a time instead of all at once, concurrent collectors that mark alongside the running program using careful synchronization, and generational collectors (the subject of a later lesson in this series) that shrink the region being collected most of the time so the expensive full pass happens rarely.</p>
+
+  <div class="sidenote reveal">
+    <b>What about the freed memory's leftover holes?</b> A naive sweep just adds a freed object's space to a free list — it doesn't rearrange anything, so the heap can end up with usable memory scattered in small, non-contiguous gaps between surviving objects (<strong>fragmentation</strong>). Some collectors follow sweep with a <strong>compaction</strong> pass that slides live objects together to close the gaps; others accept the fragmentation and rely on a free-list allocator that's good at reusing odd-sized holes. Either way, this is a separate design decision layered on top of the mark-and-sweep core, not part of the core algorithm itself.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">08 — Side by Side</div>
+  <h2>Manual Memory Management <span class="accent">vs.</span> Tracing GC</h2>
+
+  <p class="reveal">Mark-and-sweep isn't a free lunch — it trades one set of problems for another. Worth being explicit about the trade, since "garbage collection is just strictly better" is a common oversimplification.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Manual (malloc/free)</th><th>Tracing GC (mark-and-sweep)</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Who decides an object is dead</td><td>The programmer, explicitly, per allocation</td><td class="hl">The runtime, automatically, via reachability</td></tr>
+        <tr><td class="gold">Use-after-free possible?</td><td class="neg">Yes — a classic, exploitable bug class</td><td class="pos">No — nothing is freed while still reachable</td></tr>
+        <tr><td class="gold">Double-free possible?</td><td class="neg">Yes</td><td class="pos">No — freeing is centralized in the collector</td></tr>
+        <tr><td class="gold">Memory leaks possible?</td><td class="neg">Yes — forgotten free() calls</td><td class="neg">Yes — forgotten <em>references</em> keep things reachable</td></tr>
+        <tr><td class="gold">Pause behavior</td><td class="pos">None — frees are instantaneous, local</td><td class="neg">Stop-the-world pauses possible (naive version)</td></tr>
+        <tr><td class="gold">Peak memory usage</td><td class="pos">Tight — freed the instant you say so</td><td class="neg">Garbage can pile up between collections</td></tr>
+        <tr><td class="gold">Programmer cognitive load</td><td class="neg">High — must track every object's lifetime</td><td class="pos">Low — never call free() yourself</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚖️ Neither Side Wins Outright</div>
+    Tracing GC eliminates an entire class of catastrophic, security-relevant bugs (use-after-free, double-free) at the cost of unpredictable pause timing and looser control over peak memory. That trade is so favorable for most application code that the majority of modern languages ship a tracing collector by default. It's a much worse trade for latency-critical systems code — which is exactly why browsers still write their rendering and networking cores in C++/Rust rather than a GC'd language, even while running a GC'd language (JavaScript) safely sandboxed on top.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 9: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Garbage</div><div class="glossary-def">Any object not reachable from the root set. A purely structural property, unrelated to programmer intent.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reachability</div><div class="glossary-def">The property of having some chain of references leading back to a root. The formal definition of "alive" that a tracing GC computes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Root Set</div><div class="glossary-def">Global variables, the call stack's locals/parameters, and CPU registers — the references the runtime can enumerate directly, without tracing them from anything else.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mark Phase</div><div class="glossary-def">A graph traversal starting from every root that flags each reachable object by setting its mark bit, skipping anything already marked (which is what makes cycles harmless).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sweep Phase</div><div class="glossary-def">A linear scan over every object in the heap that frees anything left unmarked and clears the mark bit on everything else, in preparation for the next cycle.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mark Bit</div><div class="glossary-def">One extra bit of per-object bookkeeping, reset to 0 before each collection, set to 1 during the mark phase for every object the traversal actually reaches.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Tracing Garbage Collector</div><div class="glossary-def">Any collector — mark-and-sweep included — that determines liveness by tracing reference chains outward from roots, as opposed to reference counting.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Stop-the-World Pause</div><div class="glossary-def">A pause in program execution during collection, needed by naive collectors so the object graph doesn't change mid-traversal and produce an incorrect answer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Fragmentation</div><div class="glossary-def">Usable free memory left scattered in small, non-contiguous gaps after a sweep, sometimes addressed by a follow-up compaction pass.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Use-After-Free</div><div class="glossary-def">A bug where code accesses memory that has already been freed — impossible under a correctly-implemented tracing GC, common under manual memory management.</div></div>
+  </div>
+
+  <div class="callout gold reveal" style="margin-top:2rem">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>An object is garbage exactly when nothing reachable from a root points to it, mark-and-sweep computes that by flooding outward from the roots and flagging everything it touches, and then reclaims everything the flood never reached — two simple phases built entirely on one precise definition.</strong>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Mark-and-Sweep From Scratch · bob_os Lesson 20 · Garbage Collection Theory</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion lesson for <a href="../../browser/B09_garbage_collector/tutorial.html">bob_os/browser module B09_garbage_collector</a>.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── GC HEAP GRAPH ──────────────────────────────────────────────────────────────
+const gcNodes={
+  R:{label:'ROOT',x:.08,y:.5,root:true},
+  A:{label:'A',x:.30,y:.26},
+  B:{label:'B',x:.55,y:.14},
+  D:{label:'D',x:.55,y:.40},
+  C:{label:'C',x:.30,y:.78},
+  G:{label:'G',x:.55,y:.78},
+};
+const gcEdges=[['R','A'],['A','B'],['A','D'],['C','G']];
+const heapOrder=['A','B','C','D','G']; // sweep visits in this order
+
+function drawGCScene(state){
+  const canvas=document.getElementById('gcCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const P=k=>({x:W*gcNodes[k].x,y:H*gcNodes[k].y});
+
+  // edges
+  ctx.lineWidth=1.6;
+  gcEdges.forEach(([a,b])=>{
+    const pa=P(a),pb=P(b);
+    ctx.strokeStyle='rgba(122,155,191,.45)';
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();
+  });
+
+  // active traveling pulse along one edge
+  if(state.pulse){
+    const pa=P(state.pulse.from), pb=P(state.pulse.to);
+    const px=pa.x+(pb.x-pa.x)*state.pulse.t, py=pa.y+(pb.y-pa.y)*state.pulse.t;
+    ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);
+    ctx.fillStyle=C.green;ctx.fill();
+  }
+
+  // sweep scanner line
+  if(state.scanNode){
+    const p=P(state.scanNode);
+    ctx.beginPath();ctx.arc(p.x,p.y,34,0,Math.PI*2);
+    ctx.strokeStyle=C.gold;ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // root box
+  const r=P('R');
+  ctx.beginPath();ctx.roundRect ? ctx.roundRect(r.x-30,r.y-18,60,36,6) : ctx.rect(r.x-30,r.y-18,60,36);
+  ctx.fillStyle='rgba(245,200,66,.15)';ctx.fill();
+  ctx.strokeStyle=C.gold;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=C.gold;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('ROOT',r.x,r.y+4);
+
+  // object nodes
+  Object.keys(gcNodes).forEach(k=>{
+    if(k==='R') return;
+    const n=P(k);
+    let col=C.muted, fill='rgba(122,155,191,.08)';
+    if(state.freed.has(k)){ col=C.red; fill='rgba(248,113,113,.12)'; }
+    else if(state.marked.has(k)){ col=C.green; fill='rgba(74,222,128,.16)'; }
+    const scale = state.freed.has(k) && state.freeFade!=null && state.freeFadeNode===k ? (1-state.freeFade*0.6) : 1;
+    ctx.beginPath();ctx.arc(n.x,n.y,26*scale,0,Math.PI*2);
+    ctx.globalAlpha = state.freed.has(k) && state.freeFade!=null && state.freeFadeNode===k ? (1-state.freeFade) : 1;
+    ctx.fillStyle=fill;ctx.fill();
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=col;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(gcNodes[k].label,n.x,n.y+5);
+    ctx.globalAlpha=1;
+  });
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(state.caption||'',W/2,H-16);
+}
+
+function runGC(){
+  const label=document.getElementById('gcLabel');
+  const markSteps=[['R','A'],['A','B'],['A','D']];
+  const sweepSteps=heapOrder;
+  const state={marked:new Set(),freed:new Set(),pulse:null,scanNode:null,caption:'',freeFade:null,freeFadeNode:null};
+  const phases=[];
+  markSteps.forEach(([f,t])=>phases.push({type:'travel',from:f,to:t,dur:600,cap:`Marking ${t}: reached from ${f} — flagging it as reachable`}));
+  phases.push({type:'pause',dur:700,cap:'Mark phase complete — A, B, D are reachable. C and G were never visited at all.'});
+  sweepSteps.forEach(k=>phases.push({type:'sweep',node:k,dur:650,cap:null}));
+  phases.push({type:'pause',dur:900,cap:'Sweep complete — C and G reclaimed. Heap now holds A, B, D.'});
+
+  let idx=0,start=performance.now();
+  label.textContent='▶ Running mark phase…';
+  function step(now){
+    const ph=phases[idx];
+    const t=Math.min(1,(now-start)/ph.dur);
+
+    if(ph.type==='travel'){
+      state.pulse={from:ph.from,to:ph.to,t};
+      state.scanNode=null;
+      state.caption=ph.cap;
+      if(t>=1){ state.marked.add(ph.to); state.pulse=null; }
+    } else if(ph.type==='pause'){
+      state.pulse=null; state.scanNode=null; state.caption=ph.cap;
+      if(idx===markSteps.length){ label.textContent='▶ Mark phase done — running sweep phase…'; }
+      else { label.textContent='▶ Complete — click Reset to run again'; }
+    } else if(ph.type==='sweep'){
+      state.pulse=null;
+      state.scanNode=ph.node;
+      const isMarked=state.marked.has(ph.node);
+      state.caption = isMarked
+        ? `Scanning ${ph.node}: mark bit set → keep, clear bit for next cycle`
+        : `Scanning ${ph.node}: mark bit unset → FREE`;
+      if(!isMarked){
+        state.freed.add(ph.node);
+        state.freeFadeNode=ph.node;
+        state.freeFade=t;
+      }
+    }
+
+    drawGCScene(state);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){ label.textContent='▶ Complete — click Reset to run again'; state.scanNode=null; state.caption='Heap after collection: { A, B, D } — C and G are gone.'; drawGCScene(state); return; }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function resetGC(){
+  document.getElementById('gcLabel').textContent='▶ Click to run mark-and-sweep on this heap';
+  drawGCScene({marked:new Set(),freed:new Set(),pulse:null,scanNode:null,caption:'Click "Run Mark & Sweep" above to begin'});
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetGC(); });
+window.addEventListener('resize',()=>{ resetGC(); });
+</script>
+</body>
+</html>

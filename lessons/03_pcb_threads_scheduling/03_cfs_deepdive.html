@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inside the Linux Scheduler — How CFS Actually Decides Who Runs Next</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:var(--green);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--green);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:180px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--green);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--green)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--green);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(74,222,128,.15);border:1.5px solid var(--green);color:var(--green);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(74,222,128,.1);border:1.5px solid var(--green);color:var(--green);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(74,222,128,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--green);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:var(--green);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* dossier component (borrowed from the PCB page, repurposed for sched_entity) */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--green);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--green);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* weight bar visualization (new, bespoke) */
+.weight-viz{margin:1.8rem 0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem 1.5rem;}
+.weight-row{display:grid;grid-template-columns:70px 1fr 90px;gap:.8rem;align-items:center;margin-bottom:.65rem;font-family:'Source Code Pro',monospace;font-size:.78rem;}
+.weight-row .wr-nice{color:var(--muted);text-align:right;}
+.weight-row .wr-track{background:var(--bg3);border-radius:4px;height:16px;overflow:hidden;border:1px solid var(--border);}
+.weight-row .wr-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--green));border-radius:4px 0 0 4px;}
+.weight-row .wr-val{color:var(--gold);}
+.weight-viz .wv-note{font-size:.72rem;color:var(--muted);margin-top:.6rem;letter-spacing:.04em;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#idealcpu" title="The Ideal CPU"></a>
+  <a class="toc-dot" href="#vruntime" title="vruntime"></a>
+  <a class="toc-dot" href="#niceweight" title="Nice & Weight"></a>
+  <a class="toc-dot" href="#decision" title="The Decision Rule"></a>
+  <a class="toc-dot" href="#rbtree" title="Red-Black Tree"></a>
+  <a class="toc-dot" href="#classes" title="Scheduling Classes"></a>
+  <a class="toc-dot" href="#runqueues" title="Per-CPU Run Queues"></a>
+  <a class="toc-dot" href="#tieback" title="Back to the PCB"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Linux Scheduler · CFS · vruntime · Red-Black Trees</div>
+    <h1>Lowest Score<br><span>Wins</span></h1>
+    <p class="hero-sub">The base module told you the scheduler picks based on "priority, quantum left," mentioned the <em>Completely Fair Scheduler</em> in passing, and moved on. This page is the part that got skipped: the single number every runnable task on Linux is quietly racing to keep low, the weight that controls how fast that number climbs, the self-balancing tree that keeps hundreds of tasks sorted by it in logarithmic time, and the two-level decision that picks a scheduling class before it ever picks a task.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1024</div><div class="lbl">Weight at nice 0 — the baseline every other weight is measured against</div></div>
+      <div class="hero-stat"><div class="num">-20…19</div><div class="lbl">The full nice value range — 40 discrete priority steps</div></div>
+      <div class="hero-stat"><div class="num">O(log n)</div><div class="lbl">Insert / rebalance cost in the vruntime-ordered red-black tree</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Rule that decides everything: run whoever has the lowest vruntime</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to open the black box<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Two Phrases We <span class="accent">Glossed Over</span></h2>
+  <p class="reveal">The PCB dossier card in the base module had a field labeled <strong>Scheduling Info</strong>, with the value written as <code>priority, quantum left</code> and the description "how important the scheduler thinks this process is, and how much more CPU time it's owed right now." Fair enough at the time — we were busy establishing that a PCB exists at all. Then, one section later, in the middle of explaining that the scheduling <em>policy</em> is identical whether you're picking among threads of one process or threads scattered across many, we dropped this sentence: "round robin, priority-based, <strong>Completely Fair Scheduler</strong>, whatever." And moved on.</p>
+  <p class="reveal">Both of those are placeholders for a real, specific, elegant piece of engineering. Modern Linux does not schedule with a fixed round-robin timeslice and a simple priority number. It runs the <strong>Completely Fair Scheduler (CFS)</strong>, the default scheduling algorithm for ordinary tasks since kernel 2.6.23, and CFS decides "who runs next" using a completely different mental model than "give everyone the same slice, in turn." This page opens that box.</p>
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Why This Deserves Its Own Page</div>
+    "Priority, quantum left" makes it sound like the scheduler keeps a countdown timer per task and a coarse priority tag. CFS keeps neither of those things in the way you'd guess. It keeps one running number per task — <strong>vruntime</strong> — and the entire scheduling decision, every single time, reduces to a one-liner: <em>run whoever's vruntime is lowest.</em> Everything else in this page is just explaining what that number means and how the kernel finds the minimum fast enough to do it thousands of times a second.
+  </div>
+  <p class="reveal">By the end of this page, you'll be able to answer, precisely: what number is actually being compared when the scheduler picks a task; why two tasks at different nice values don't just get "different-sized turns" but accumulate that one number at genuinely different <em>rates</em>; what data structure holds every runnable task in order and why that specific structure was chosen over the more obvious candidates; and how the whole vruntime story sits underneath an even simpler first-pass decision about real-time versus ordinary versus idle work. That's the full mechanism the base module's two placeholder phrases were standing in for.</p>
+</div>
+</section>
+
+<!-- THE IDEAL CPU -->
+<section id="idealcpu">
+<div class="container">
+  <div class="section-num">01 — The Problem CFS Is Actually Solving</div>
+  <h2>What Does <span class="accent">"Fair"</span> Even Mean Here?</h2>
+  <p class="reveal">Say ten threads are runnable right now and you've got one CPU core. What's the fair way to share it? Your first instinct is probably "give each of them a fixed timeslice, then rotate" — that's plain round robin, and it's not wrong, exactly. But it has a specific, nagging flaw: <em>it treats every task as equally important</em>, and real systems don't want that. Your audio driver's thread and a background log-compression thread should not get identical treatment.</p>
+  <p class="reveal">So "fair" needs a better definition than "identical." CFS's actual definition comes from an idealized, imaginary model called <strong>perfectly fair, processor-sharing scheduling</strong>: imagine the CPU were <em>infinitely divisible</em> — a smooth, continuous resource you could slice into arbitrarily small, simultaneous portions, like a pie you can cut as thin as you like. On that imaginary hardware, every one of N runnable tasks would receive an equal, continuous, simultaneous 1/N share of the CPU at every instant (or a weighted share, if some tasks are declared more important than others). Nobody waits in line. Nobody gets starved. Everyone advances at once, just slower than if they had the whole machine to themselves.</p>
+  <div class="formula green reveal">
+    <span class="label">The ideal CFS is explicitly modeling</span>
+    On an infinitely divisible CPU, every runnable task advances at rate (its weight ÷ sum of all runnable weights) — continuously, simultaneously, forever.
+    <span class="sub">No real CPU can do this — a real core executes exactly one instruction stream at a time. CFS's entire job is approximating this ideal as closely as it can with hardware that can't actually divide itself.</span>
+  </div>
+  <p class="reveal">This isn't a Linux-specific invention, either — the ideal model has a name in the wider scheduling-theory literature: <strong>Generalized Processor Sharing (GPS)</strong>, the theoretical basis behind fair-queueing algorithms used well beyond CPU scheduling, including network packet scheduling (deciding whose packets get sent first on a shared link). CFS is, in a real sense, the CPU-scheduling application of the same family of ideas that gave network engineers Weighted Fair Queueing. Different resource, same underlying question: how do you fairly divide something only one consumer can use at a time, when consumers deserve different-sized shares?</p>
+  <p class="reveal">That's the whole game. CFS isn't "a fair algorithm" in the sense of a fixed rule like round robin — it's a <em>simulation</em>. It constantly asks: if the ideal, infinitely-divisible CPU existed, who would be furthest behind their fair share right now? Then it hands the one real CPU to exactly that task, for a little while, and asks the question again. The name is honest: it isn't "the Round-Robin Scheduler" or "the Priority Scheduler" — it's the scheduler that's <em>completely fair</em>, relative to that ideal model, to the degree one real core running one thing at a time possibly can be.</p>
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🔁 Plain round robin's notion of "fair"</h4>
+      Every task gets an identical fixed timeslice, in a fixed rotation, regardless of importance. Equal treatment, full stop — which sounds fair until you remember not every task should be treated equally, and round robin has no built-in way to express that a task matters more or less than another.
+    </div>
+    <div class="compare-card good">
+      <h4>🎯 CFS's notion of "fair"</h4>
+      Every task advances at a <em>rate proportional to its declared importance</em> (weight), relative to an ideal continuous model — not an identical slice, a <em>proportional</em> one. Two equally-weighted tasks do end up getting equal treatment, as a special case, but importance is a first-class input to the model rather than something bolted on afterward.
+    </div>
+  </div>
+  <div class="sidenote reveal">
+    <b>Why not just measure and enforce fairness directly?</b> Because you can't — fairness in the ideal model is defined over infinitesimally small time slices, which don't exist on real hardware. CFS instead needs a proxy: a number that tracks, for each task, "how much of its ideal fair share has it consumed so far," updated every time it actually gets to run. That proxy is <strong>vruntime</strong>, and it's the subject of the very next section.
+  </div>
+  <p class="reveal">This wasn't Linux's first scheduler for ordinary tasks, either — worth knowing, because it explains why CFS's design reads as a deliberate correction rather than a first attempt. Kernels before 2.6.23 used a scheduler nicknamed the "O(1) scheduler" for its constant-time complexity, built around fixed priority arrays and heuristics for guessing whether a task was "interactive" enough to deserve a bonus. Those heuristics were notoriously easy to get wrong in ways that were hard to reason about. CFS's designer, Ingo Molnar, replaced the whole heuristic pile with the single, principled idea covered in this page — model the ideal, then track each task's distance from it — partly inspired by Con Kolivas's earlier "Rotating Staircase Deadline" scheduler patches, which had explored similar fairness-first thinking outside the mainline kernel.</p>
+</div>
+</section>
+
+<!-- VRUNTIME -->
+<section id="vruntime">
+<div class="container">
+  <div class="section-num">02 — The Number Everything Pivots On</div>
+  <h2><span class="accent">vruntime</span>: A Score Where Lowest Wins</h2>
+  <p class="reveal">Here's the concrete mechanism. Every task CFS manages carries a value called <strong>vruntime</strong> — "virtual runtime." Think of it like a score in a strange game where the goal is to keep your number <em>low</em>, and everyone's clock ticks at a speed set by how important they are. Every task's vruntime only ever goes up — there's no going back down — but different tasks' vruntime clocks tick at different speeds, even while running the exact same real wall-clock duration.</p>
+  <p class="reveal">Concretely: while a task is actually running on the CPU, its vruntime increases roughly proportionally to the real CPU time it consumes, adjusted by a per-task <strong>weight</strong> derived from its priority (nice value — covered next section). A task with a <em>lower</em> weight (a less favored, "nicer" task) has its vruntime increase <em>faster</em> per unit of real time — meaning it "uses up its fair share" sooner and gets scheduled away sooner. A task with a <em>higher</em> weight (a more favored, higher-priority task) has its vruntime increase <em>more slowly</em> for that same real CPU time, which lets it keep running longer before the scheduler considers it to have had its fair turn.</p>
+  <div class="formula reveal">
+    <span class="label">vruntime accumulation, every time a task actually runs</span>
+    Δvruntime = Δ(real time running) × ( NICE_0_WEIGHT ÷ this task's weight )
+    <span class="sub">NICE_0_WEIGHT is the baseline weight, 1024 — a task at nice 0 running for the same time as another task at nice 0 accumulates vruntime at exactly the same rate: the multiplier is 1024/1024 = 1.</span>
+  </div>
+  <p class="reveal">Sit with that formula for a second, because it's the whole trick. A heavier (more important, lower-nice) task divides by a bigger weight, so the multiplier shrinks below 1 — its vruntime crawls upward slowly even while burning real CPU seconds. A lighter (less important, higher-nice) task divides by a smaller weight, so the multiplier grows above 1 — its vruntime rockets upward for the same real time spent running. The scheduler doesn't need to know anything about "priority" as a separate concept once vruntime exists — priority has already been baked directly into how fast the score climbs.</p>
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>sched_entity — embedded inside every task_struct</span><span style="color:var(--muted);font-size:.7rem">CFS's per-task scheduling bookkeeping</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">vruntime</div><div class="f-val">6,482,193,004 ns</div><div class="f-desc">This task's accumulated virtual runtime — the score. Only ever increases while runnable and not currently favored.</div></div>
+      <div class="dossier-field"><div class="f-label">load.weight</div><div class="f-val">1024</div><div class="f-desc">Derived from this task's nice value — controls how fast vruntime climbs relative to real time spent running.</div></div>
+      <div class="dossier-field"><div class="f-label">run_node</div><div class="f-val">→ rb_node</div><div class="f-desc">This entity's own node inside the CPU run queue's red-black tree, keyed by vruntime.</div></div>
+      <div class="dossier-field"><div class="f-label">exec_start</div><div class="f-val">timestamp</div><div class="f-desc">When this task's current run began — used to compute how much real time to credit on its next update.</div></div>
+      <div class="dossier-field"><div class="f-label">sum_exec_runtime</div><div class="f-val">cumulative ns</div><div class="f-desc">Total real CPU time this task has ever actually consumed — pure accounting, unaffected by weight.</div></div>
+      <div class="dossier-field"><div class="f-label">on_rq</div><div class="f-val">1 / 0</div><div class="f-desc">Is this entity currently queued in the run queue's red-black tree at all, or sleeping/blocked?</div></div>
+    </div>
+  </div>
+  <div class="callout cyan reveal">
+    <div class="callout-title">🎮 The Game Analogy, Made Precise</div>
+    Picture a co-op game where every player has their own stopwatch, and the rule is "whoever's stopwatch reads the least gets to move next." Important players (low nice, high weight) have stopwatches that run in slow motion — they get to make lots of moves before their watch catches up to everyone else's. Background, low-priority players have stopwatches running in fast-forward — their watch races ahead, so they get skipped more often. Nobody is ever <em>permanently</em> skipped, though — the moment your watch is the lowest again, whether you're the "important" player or not, it's your move.
+  </div>
+  <p class="reveal">And that skip-vs-move rule — "whoever's watch reads the least gets to move" — is, word for word, CFS's actual decision rule. Not a metaphor for it: the literal thing the kernel does. We'll state it as a formula in section 04. First, the weight itself needs a source, and that source is the nice value.</p>
+  <p class="reveal">Notice, too, what this formula quietly buys the kernel: it never has to store or reason about "how much CPU time is this task owed for the rest of its life," the way a naive fixed-quantum scheme might. Fairness isn't a running balance the kernel has to remember and pay down — it's an emergent property of always comparing everyone's current score and picking the smallest one. Delete a task from the system, or add a hundred new ones, and the rule doesn't change at all; it just has a different set of numbers to compare.</p>
+</div>
+</section>
+
+<!-- NICE & WEIGHT -->
+<section id="niceweight">
+<div class="container">
+  <div class="section-num">03 — Where Weight Actually Comes From</div>
+  <h2>Nice Values &amp; the <span class="accent">Weight</span> Table</h2>
+  <p class="reveal">Linux (like classic UNIX before it) lets a process declare how "nice" it intends to be to other processes, via a single integer called the <strong>nice value</strong>, ranging from <strong>-20</strong> (least nice — I want more CPU, get out of my way) to <strong>+19</strong> (most nice — I'll happily wait, give others priority). The default, for essentially every process you start, is <strong>0</strong>. You've probably typed <code>nice -n 10 ./build.sh</code> or <code>renice</code> without ever seeing what actually happens to that number inside the scheduler.</p>
+  <p class="reveal">What happens is: the kernel translates every nice value into a <strong>weight</strong> via a fixed lookup table, and that weight is exactly the denominator in last section's vruntime formula. Nice 0 maps to weight <strong>1024</strong> — the baseline. Each step away from 0 multiplies the weight by roughly <strong>1.25</strong> (a 25%-ish change) in the appropriate direction, which compounds into a genuinely exponential relationship across the full -20..19 range, not a linear one. That's deliberate: it makes the extremes (nice -20 versus nice 19) enormously different in practice, while adjacent nice values differ only modestly — the same texture as how humans actually want "somewhat less important" to feel different from "run only if literally nothing else wants the CPU."</p>
+  <div class="weight-viz reveal">
+    <div class="weight-row"><div class="wr-nice">nice -20</div><div class="wr-track"><div class="wr-fill" style="width:100%"></div></div><div class="wr-val">88,761</div></div>
+    <div class="weight-row"><div class="wr-nice">nice -10</div><div class="wr-track"><div class="wr-fill" style="width:80.4%"></div></div><div class="wr-val">9,548</div></div>
+    <div class="weight-row"><div class="wr-nice">nice -5</div><div class="wr-track"><div class="wr-fill" style="width:70.6%"></div></div><div class="wr-val">3,121</div></div>
+    <div class="weight-row"><div class="wr-nice">nice 0</div><div class="wr-track"><div class="wr-fill" style="width:60.9%;background:linear-gradient(90deg,var(--gold2),var(--gold))"></div></div><div class="wr-val">1,024</div></div>
+    <div class="weight-row"><div class="wr-nice">nice 5</div><div class="wr-track"><div class="wr-fill" style="width:51.0%"></div></div><div class="wr-val">335</div></div>
+    <div class="weight-row"><div class="wr-nice">nice 10</div><div class="wr-track"><div class="wr-fill" style="width:41.3%"></div></div><div class="wr-val">110</div></div>
+    <div class="weight-row"><div class="wr-nice">nice 15</div><div class="wr-track"><div class="wr-fill" style="width:31.5%"></div></div><div class="wr-val">36</div></div>
+    <div class="weight-row"><div class="wr-nice">nice 19</div><div class="wr-track"><div class="wr-fill" style="width:23.8%"></div></div><div class="wr-val">15</div></div>
+    <div class="wv-note">Bar width is log-scaled (weight spans over 5,900× end to end) — a straight linear bar chart would make everything past nice -10 invisible.</div>
+  </div>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Nice Value</th><th>Approx. Weight</th><th>vruntime multiplier (1024/weight)</th><th>What it means in practice</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">-20</td><td class="gold">88,761</td><td>0.0115×</td><td>vruntime crawls — this task can run 87× longer than a nice-19 task before being considered "caught up"</td></tr>
+        <tr><td class="hl">-15</td><td class="gold">29,154</td><td>0.0351×</td><td>Heavily favored, rarely used outside kernel-internal tasks</td></tr>
+        <tr><td class="hl">-10</td><td class="gold">9,548</td><td>0.107×</td><td>Strongly favored — common for latency-sensitive background daemons</td></tr>
+        <tr><td class="hl">-5</td><td class="gold">3,121</td><td>0.328×</td><td>Modestly favored</td></tr>
+        <tr><td class="hl">-1</td><td class="gold">1,277</td><td>0.802×</td><td>Barely favored — one step up from default</td></tr>
+        <tr><td class="hl">0</td><td class="gold">1,024</td><td class="pos">1.000× (baseline)</td><td>Default — the overwhelming majority of processes on any system</td></tr>
+        <tr><td class="hl">1</td><td class="gold">820</td><td>1.249×</td><td>Barely deprioritized — one step down from default</td></tr>
+        <tr><td class="hl">5</td><td class="gold">335</td><td>3.06×</td><td>Modestly deprioritized</td></tr>
+        <tr><td class="hl">10</td><td class="gold">110</td><td>9.31×</td><td>Clearly backgrounded — <code>nice -n 10</code> on a compile job, for example</td></tr>
+        <tr><td class="hl">19</td><td class="gold">15</td><td class="neg">68.3×</td><td>Maximally nice — vruntime rockets upward, gets scheduled away almost immediately whenever anything else is runnable</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 One Table, Two Jobs</div>
+    Notice the weight table does double duty. First, it sets the vruntime accumulation multiplier, which is what actually determines scheduling order moment-to-moment. Second — as a side effect of the ratio between any two tasks' weights — it also determines their long-run <em>relative CPU share</em> whenever both are continuously runnable: two tasks at nice 0 and nice 0 split the CPU 50/50; a nice -5 task (weight 3,121) against a nice 5 task (weight 335) ends up getting roughly 3121/(3121+335) ≈ <strong>90%</strong> of the CPU between them, over a long enough window. One number, two consequences.
+  </div>
+
+  <h3>A Worked Example, With Real Numbers</h3>
+  <p class="reveal">Formulas are easy to nod along to and hard to actually trust until you push real numbers through them. Say two tasks, <strong>P</strong> at nice 0 (weight 1,024) and <strong>Q</strong> at nice 5 (weight 335), are both runnable, and the scheduler hands the CPU to each of them for a 10 millisecond real-time slice in turn.</p>
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>P runs for 10ms (real time)</strong>Δvruntime for P = 10ms × (1024 ÷ 1024) = 10ms × 1.0 = <strong>10ms of vruntime</strong>. Nice 0 is the baseline, so its virtual clock ticks in lockstep with the real clock — no surprise there.</div></li>
+    <li><div class="step-body"><strong>Q runs for the same 10ms (real time)</strong>Δvruntime for Q = 10ms × (1024 ÷ 335) = 10ms × 3.057 ≈ <strong>30.6ms of vruntime</strong>. Q burned the identical 10ms of actual CPU time, but its virtual clock leapt forward roughly three times as far.</div></li>
+    <li><div class="step-body"><strong>The scheduler compares scores, not real time</strong>After this single exchange, P's vruntime sits around 10ms while Q's sits around 30.6ms. P is now the lower score, so P gets picked again next — even though both tasks have, so far, received the exact same amount of real CPU time. Q will keep getting shorter, less frequent turns from here on, precisely because its multiplier keeps outrunning P's.</div></li>
+  </ol>
+  <div class="sidenote reveal">
+    <b>Why this converges to a stable ratio, not to P starving Q entirely.</b> Once P has run enough extra real time to push its vruntime back up near Q's, P stops being the minimum and Q gets picked instead. Run this exchange out over a long window and it settles into P getting roughly 1024/(1024+335) ≈ <strong>75%</strong> of the CPU and Q getting the remaining <strong>25%</strong> — matching the weight ratio exactly, which is the "long-run relative CPU share" mentioned above, now derived instead of just asserted.
+  </div>
+  <div class="callout cyan reveal">
+    <div class="callout-title">🐳 If You've Ever Set a Container CPU Limit, You've Used This</div>
+    Every time you set a Docker <code>--cpu-shares</code> value or a Kubernetes pod's <code>resources.requests.cpu</code>, you're setting a weight in this exact same machinery — the Linux cgroup CPU controller's <code>cpu.shares</code>/<code>cpu.weight</code> feeds directly into CFS's group-scheduling mode, where a whole cgroup (all of a container's tasks together) is treated as one weighted competitor in a parent run queue, with the weighted vruntime split recursively among the tasks inside it. There's no separate "container fairness" algorithm — it's the nice-value weight table's exact mechanism, just applied one level higher, to groups instead of individual tasks.
+  </div>
+</div>
+</section>
+
+<!-- DECISION RULE + CANVAS A -->
+<section id="decision">
+<div class="container">
+  <div class="section-num">04 — The Actual Decision Rule</div>
+  <h2>CFS's Rule, Stated <span class="accent">Simply and Correctly</span></h2>
+  <div class="formula green reveal">
+    <span class="label">The entire CFS scheduling decision, in one sentence</span>
+    Of all currently runnable tasks on this CPU, run the one with the LOWEST vruntime.
+    <span class="sub">That's it. Not "next in line." Not "highest priority number." The literal minimum of a single floating value, recomputed continuously as tasks run, sleep, wake up, and get created.</span>
+  </div>
+  <p class="reveal">Watch what this produces on its own, with no other rule bolted on. A task that just ran for a while has a vruntime that just increased, so it's now less likely to be the minimum — someone else probably has a lower score and runs next. A task that's been asleep (say, blocked on disk I/O) hasn't had its vruntime increase at all while sleeping, so when it wakes up, its old, comparatively low vruntime tends to put it near or at the front of the line again — which is exactly the behavior you want for I/O-bound, interactive tasks: get woken up, get serviced promptly, go back to waiting.</p>
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="vrLabel">▶ Four tasks, four weights — watch whose vruntime is lowest, and who that means is "running"</div>
+    <canvas id="vrCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="vrToggle()" id="vrToggleBtn">▶ Run Simulation</button>
+    <button class="ctrl-btn red" onclick="vrReset()">Reset</button>
+  </div>
+  <p class="reveal">Each bar above is a task's vruntime, climbing over simulated time. Only the task the scheduler judges to be "running" accumulates any vruntime at all in a given instant — exactly like real CFS, where a sleeping or non-running task's vruntime is frozen. Because the sim re-picks the minimum extremely frequently, you'll see the highlighted "running" task hop between bars rapidly, and — this is the point — the bars stay roughly locked together in height rather than one racing far ahead. That's CFS approximating the section 01 ideal: nobody's watch gets to run away from the pack for long, and the low-weight (green) task's bar visibly climbs in bigger jumps each time it's picked, because its multiplier is largest.</p>
+  <div class="callout orange reveal">
+    <div class="callout-title">⏱ But Doesn't Switching That Often Cost Something?</div>
+    Yes — this is a real engineering tension, not just a simulation artifact. Switching threads has real overhead (a context switch, as covered in the base module). So real CFS doesn't literally re-pick every nanosecond; it enforces a <strong>minimum granularity</strong> before it will preempt the running task for a lower-vruntime rival, even if one becomes available sooner. It's a deliberate, tunable compromise between "as close to the ideal as possible" and "don't spend more time context-switching than actually computing."
+  </div>
+
+  <h3>How Big Is "A While," Precisely?</h3>
+  <p class="reveal">CFS gives that "a while" a real, tunable shape through two numbers. <strong>sched_latency</strong> is a target period — historically defaulting around 6 milliseconds — within which, ideally, every currently runnable task gets at least one turn. A task's actual slice length is computed as roughly <code>sched_latency × (its weight ÷ total weight of every runnable task on this core)</code>, which is just the section 01 ideal made concrete for a fixed window instead of an infinitesimal instant. But if forty tasks are runnable at once, dividing 6ms forty ways gives slices so tiny that context-switch overhead would dominate — so a second number, <strong>sched_min_granularity</strong> (historically around 0.75ms), acts as a floor: no task's slice is allowed to shrink below it, even if that means the "ideal period" stretches longer than sched_latency to accommodate everyone.</p>
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">~6ms</div><div class="lbl">sched_latency — target period for every runnable task to get a turn</div></div>
+    <div class="stat-card"><div class="val">~0.75ms</div><div class="lbl">sched_min_granularity — floor on any single task's slice</div></div>
+    <div class="stat-card"><div class="val">weight ÷ Σweight</div><div class="lbl">fraction of the period each task's slice is proportional to</div></div>
+    <div class="stat-card"><div class="val">ns</div><div class="lbl">actual resolution vruntime is tracked at internally</div></div>
+  </div>
+  <p class="reveal">Both numbers are exposed as tunable <code>sysctl</code> values precisely because the right tradeoff differs by workload — a desktop wants snappy interactivity (favoring shorter slices), a batch-processing server wants maximum throughput (favoring fewer, longer switches). Neither number changes the core rule, though — they only govern <em>when</em> the kernel is willing to act on a lower vruntime it already knows about.</p>
+</div>
+</section>
+
+<!-- RED BLACK TREE + CANVAS B -->
+<section id="rbtree">
+<div class="container">
+  <div class="section-num">05 — Finding the Minimum, Fast, Over and Over</div>
+  <h2>Why a <span class="accent">Red-Black Tree</span>, Specifically</h2>
+  <p class="reveal">Okay — "run the lowest vruntime" is a clean rule, but it implies a computational problem: with potentially hundreds of runnable tasks on one CPU's run queue, and a scheduling decision needing to happen constantly (every context switch, every wakeup, every timer tick that might trigger preemption), how do you find the current minimum <em>fast</em>, while tasks are constantly being inserted (waking up), removed (blocking, exiting), and re-sorted (their vruntime changing every time they run)?</p>
+  <p class="reveal">CFS's answer: keep every runnable task on a CPU in a <strong>red-black tree</strong> — a self-balancing binary search tree — keyed by vruntime. A plain sorted array or linked list would make "find the minimum" trivially O(1) if you kept it sorted, but keeping it sorted through constant insertions would cost O(n) per insert, shifting everything else. A plain unsorted list makes insertion O(1) but finding the minimum O(n) every single time — unacceptable when it happens thousands of times a second. A basic (unbalanced) binary search tree can degrade to a linked list in the worst case, giving you O(n) again. A red-black tree specifically guarantees O(log n) worst-case for insert, delete, <em>and</em> search, no matter what order operations happen in, by enforcing balance rules (a handful of coloring and rotation invariants) on every mutation.</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Data Structure</th><th>Insert a Woken Task</th><th>Find the Minimum</th><th>Why CFS Doesn't Use It</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Unsorted list / array</td><td class="pos">O(1)</td><td class="neg">O(n)</td><td>"Who's next" scan gets slower as more tasks pile up — the one operation done most often is the slow one</td></tr>
+        <tr><td class="hl">Kept-sorted array</td><td class="neg">O(n)</td><td class="pos">O(1)</td><td>Every vruntime update (i.e. every time a task runs at all) forces a shift of every element after it</td></tr>
+        <tr><td class="hl">Binary heap / priority queue</td><td>O(log n)</td><td class="pos">O(1)</td><td>Fast to insert and peek the min, but re-keying an arbitrary task already in the middle (needed on every vruntime update) isn't a native heap operation</td></tr>
+        <tr><td class="hl">Unbalanced BST</td><td>O(log n) average</td><td>O(log n) average</td><td>No balance guarantee — an adversarial or unlucky insert order degrades it toward a linked list, O(n) worst case</td></tr>
+        <tr><td class="hl gold">Red-black tree</td><td class="pos gold">O(log n) worst case</td><td class="pos gold">O(1) cached</td><td class="pos">Balance is guaranteed regardless of insert order, and CFS caches the leftmost pointer — this is the one actually used</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="rbLabel">▶ Tasks laid out by vruntime — leftmost node is always next to run</div>
+    <canvas id="rbCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="rbInsert()">▶ Insert Random Task</button>
+    <button class="ctrl-btn gold" onclick="rbTick()">▶ Run Leftmost (Tick)</button>
+    <button class="ctrl-btn red" onclick="rbReset()">Reset</button>
+  </div>
+  <p class="reveal">Try <em>Insert Random Task</em> a couple of times before clicking anything else, and look at where the new node lands relative to the existing ones — it slots in purely by vruntime value, with no regard for insertion order, which is exactly the "ordered by key, not by arrival" property a binary search tree gives you for free and a plain queue does not.</p>
+  <p class="reveal">Click <em>Run Leftmost</em> a few times and watch the tree reshuffle. The currently-leftmost task runs, its vruntime jumps forward by a chunk sized according to its weight, and — because the tree is re-keyed on the new vruntime values — a completely different task can become the new leftmost immediately. That constant reordering, happening on essentially every scheduling event, is precisely why the balance guarantee matters: an unbalanced tree fed this kind of relentless, adversarial-looking insert/remove pattern is exactly the case that degrades toward a linked list.</p>
+  <div class="callout cyan reveal">
+    <div class="callout-title">⚡ The Detail That Makes This Even Faster Than It Sounds</div>
+    Technically, finding the minimum in a red-black tree is an O(log n) walk down the left spine. But CFS doesn't even pay that — the kernel's <code>cfs_rq</code> run-queue structure keeps a cached pointer, <code>rb_leftmost</code>, updated incrementally as the tree changes. So the actual "who runs next" lookup on the hot path is <strong>O(1)</strong>: follow the cached pointer. The O(log n) cost only shows up on <em>insert</em> and <em>delete</em> — when a task wakes up, sleeps, or gets re-queued after running — which is exactly where a red-black tree's guarantees are worth paying for.
+  </div>
+  <div class="sidenote reveal">
+    <b>One more wrinkle: sleepers don't get to "cash in" a huge backlog.</b> If a task slept for ten minutes, its vruntime is now far behind everyone else's — naively, it would win every scheduling decision for a long time once it wakes, monopolizing the CPU to "catch up." Real CFS guards against this: on wakeup, a task's vruntime is adjusted (bumped up close to the run queue's tracked minimum, <code>min_vruntime</code>) so it gets a fair, prompt turn — not an unlimited backlog of free turns.
+  </div>
+</div>
+</section>
+
+<!-- SCHEDULING CLASSES -->
+<section id="classes">
+<div class="container">
+  <div class="section-num">06 — The Layer Above CFS</div>
+  <h2>Not Every Task Even <span class="accent">Reaches</span> the Red-Black Tree</h2>
+  <p class="reveal">Here's a piece the "vruntime, always run the minimum" story leaves out on its own: vruntime comparisons only happen <em>among tasks that are already competing under CFS</em>. Linux doesn't run every runnable thing through the same red-black tree. The real "which task runs next" decision is a <strong>two-level</strong> decision — first pick the highest-priority <em>scheduling class</em> that currently has any runnable task at all, and only then, within that one class, apply that class's own algorithm.</p>
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">🚨</div><div class="pipe-name">Check: real-time class</div><div class="pipe-desc">Any SCHED_FIFO/SCHED_RR task runnable?</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage" style="border-color:var(--green)"><div class="pipe-icon">✅</div><div class="pipe-name" style="color:var(--red)">Yes → run it</div><div class="pipe-desc">Picked by fixed real-time priority, then FIFO/RR order. CFS never consulted.</div></div>
+    <div class="pipe-arrow">or ↓</div>
+    <div class="pipe-stage"><div class="pipe-icon">🌳</div><div class="pipe-name">Check: fair (CFS) class</div><div class="pipe-desc">Any SCHED_NORMAL task runnable?</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">✅</div><div class="pipe-name" style="color:var(--green)">Yes → run lowest vruntime</div><div class="pipe-desc">Leftmost node of this core's red-black tree, section 05.</div></div>
+    <div class="pipe-arrow">or ↓</div>
+    <div class="pipe-stage"><div class="pipe-icon">💤</div><div class="pipe-name" style="color:var(--muted)">Fall through to SCHED_IDLE</div><div class="pipe-desc">Only reached when both classes above are completely empty.</div></div>
+  </div>
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--red)">SCHED_FIFO / SCHED_RR</span><span class="fam-count">real-time</span></div>
+      <div class="fam-desc">Strictly higher priority than any CFS task, period — if a SCHED_FIFO task is runnable, it runs, full stop, no vruntime comparison involved at all. SCHED_FIFO runs to completion or until it blocks/yields; SCHED_RR adds a fixed round-robin timeslice among same-priority real-time tasks. Reserved for latency-critical work — professional audio processing, industrial control loops — where "wait your fair turn" is the wrong answer.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">SCHED_NORMAL / SCHED_OTHER</span><span class="fam-count">CFS</span></div>
+      <div class="fam-desc">Everything covered by this entire page — ordinary processes and threads, the vast majority of everything running on any Linux system, scheduled by vruntime comparison in the red-black tree. This is the default policy every process gets unless it explicitly asks for something else.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--muted)">SCHED_IDLE</span><span class="fam-count">lowest</span></div>
+      <div class="fam-desc">Only runs when literally nothing else in any higher class wants the CPU at all — even lower than a maximally-niced (nice 19) SCHED_NORMAL task. Useful for genuinely backgrounded work you want to run only on true leftover cycles.</div>
+    </div>
+  </div>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Priority (highest first)</th><th>Scheduling Class</th><th>Policies</th><th>Decides "who's next" via</th></tr></thead>
+      <tbody>
+        <tr><td class="center gold">1</td><td class="hl">Real-time class</td><td>SCHED_FIFO, SCHED_RR</td><td>Fixed real-time priority number, then FIFO or round-robin order</td></tr>
+        <tr><td class="center gold">2</td><td class="hl">Fair (CFS) class</td><td>SCHED_NORMAL / SCHED_OTHER, SCHED_BATCH</td><td class="pos">Lowest vruntime — the red-black tree from section 05</td></tr>
+        <tr><td class="center gold">3</td><td class="hl">Idle class</td><td>SCHED_IDLE</td><td>Runs only when no higher class has anything runnable</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ What This Means in Practice</div>
+    A single misbehaving SCHED_FIFO task — say, an infinite loop mistakenly given real-time priority — can starve the <em>entire rest of the system</em>, including every SCHED_NORMAL task no matter how favorable its nice value, because the class check happens first and CFS's red-black tree never even gets consulted. This is exactly why SCHED_FIFO/SCHED_RR require elevated privilege to set, and why it's used sparingly and deliberately, not as a general "make my app faster" priority knob.
+  </div>
+  <div class="sidenote reveal">
+    <b>For completeness: there's actually a fourth class, above real-time.</b> <strong>SCHED_DEADLINE</strong> (added in kernel 3.14) sits even higher than SCHED_FIFO/SCHED_RR in the real priority order, scheduling tasks by an Earliest-Deadline-First algorithm paired with a bandwidth-reservation mechanism, for workloads that need to guarantee "this much CPU time, within this exact window" rather than just "run me first." It's rarer in practice than the three classes covered above, which is why this page focuses on those — but the full stack, top to bottom, is deadline → real-time → fair (CFS) → idle.
+  </div>
+  <p class="reveal">So the fully precise version of the decision is: <em>pick the highest-priority class with a runnable task; within the real-time class, pick by fixed priority and FIFO/round-robin order; within the fair class, pick the lowest vruntime via the red-black tree; the idle class only ever gets a turn when both classes above it are completely empty.</em> CFS, and everything in this page, is entirely the middle tier of that stack.</p>
+</div>
+</section>
+
+<!-- PER-CPU RUN QUEUES -->
+<section id="runqueues">
+<div class="container">
+  <div class="section-num">07 — One Detail the Single-CPU Story Skips</div>
+  <h2>There's One Tree <span class="accent">Per Core</span>, Not One Tree Total</h2>
+  <p class="reveal">Every diagram so far has quietly assumed one CPU core and one red-black tree. Real machines have many cores, and Linux does not keep one single global tree of every runnable task on the whole system — that would mean every core contending on one shared data structure for every scheduling decision, an obvious bottleneck. Instead, <strong>each CPU core has its own run queue</strong> (its own <code>cfs_rq</code>, its own red-black tree, its own <code>min_vruntime</code>), and a task's vruntime is only ever directly compared against other tasks sitting in the <em>same</em> core's tree.</p>
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>⚡ Why per-core trees are the right call</h4>
+      No cross-core lock contention on the hot path — picking "who runs next" on core 3 never has to wait on core 0's scheduler doing the same thing. Each core's decision is fully independent, which is exactly what you want when the decision happens thousands of times a second, per core, simultaneously.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚖️ The cost: queues can drift out of balance</h4>
+      If core 0 ends up with six runnable tasks and core 3 ends up with none, per-core fairness alone doesn't fix that — the tasks stuck behind each other on core 0 are worse off than they'd be spread across idle cores, even though each core's own tree is perfectly "fair" internally.
+    </div>
+  </div>
+  <p class="reveal">The fix is a separate mechanism layered on top, called the <strong>load balancer</strong>. Periodically — and also reactively, whenever a core goes idle and looks for work — the kernel compares how much runnable work sits on each core and migrates tasks from busier cores to idle or lighter ones. Migrating a task means removing its <code>sched_entity</code> from one core's red-black tree and inserting it into another's, with its vruntime re-anchored against the destination core's <code>min_vruntime</code> so it doesn't unfairly jump the queue or get unfairly buried, the same normalization trick used for a task waking up from sleep.</p>
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔧 Related Knob: CPU Affinity</div>
+    A process can request (via <code>sched_setaffinity()</code>, or the <code>taskset</code> command) that it only ever run on a specific subset of cores, opting out of the load balancer's freedom to move it anywhere. This trades potential load-balancing benefit for cache locality — a task that always runs on the same core keeps reusing that core's L1/L2 cache contents instead of starting cold every time it migrates.
+  </div>
+</div>
+</section>
+
+<!-- TIE BACK -->
+<section id="tieback">
+<div class="container">
+  <div class="section-num">08 — Tying It Back</div>
+  <h2>Back to the <span class="accent">PCB Dossier</span></h2>
+  <p class="reveal">Remember the dossier card's <strong>Scheduling Info</strong> field: <code>priority, quantum left</code>? You can now translate that placeholder into the real fields Linux's <code>task_struct</code> actually carries for an ordinary SCHED_NORMAL task: a <code>prio</code>/nice value, the <code>sched_entity</code> struct holding <code>vruntime</code> and <code>load.weight</code>, and a <code>run_node</code> linking the task into its CPU's red-black tree. "Quantum left" was never a literal countdown timer for CFS — there's no fixed quantum to count down at all. What's actually being tracked is a relative position in an ordering, constantly recomputed, not a shrinking allowance.</p>
+  <p class="reveal">And "Completely Fair Scheduler, whatever" was quietly doing a lot of work in that earlier sentence. Now you know precisely what it means: an approximation of an idealized, infinitely-divisible CPU, implemented via a virtual clock (vruntime) that ticks at a rate set by weight (derived from nice value), always handing the real CPU to whoever's virtual clock reads lowest, using a red-black tree so that "find the minimum" and "insert/reorder constantly" both stay fast — sitting one layer below an even simpler decision about which scheduling class gets to compete at all.</p>
+  <div class="callout green reveal">
+    <div class="callout-title">✅ The Full Picture, One Sentence</div>
+    Every scheduling decision on a Linux box is: <strong>pick the highest-priority class with something runnable, and if that class is CFS, run whoever's vruntime — a real-time-weighted proxy for "share of the ideal fair CPU consumed so far" — is currently lowest, found in O(1) via a cached pointer into a red-black tree that stays balanced in O(log n) no matter how often tasks wake, sleep, or get re-queued.</strong> That sentence was hiding, in full, behind eleven words in the base module.
+  </div>
+  <h3>None of This Is Hidden — You Can Read It Live</h3>
+  <p class="reveal">Everything in this page is directly observable on any running Linux box, no kernel debugger required. A handful of commands turn the abstract vruntime story into numbers on your own terminal:</p>
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Command</th><th>What it shows you</th></tr></thead>
+      <tbody>
+        <tr><td class="hl"><code>cat /proc/&lt;pid&gt;/sched</code></td><td>The live sched_entity fields for that task — se.vruntime, se.sum_exec_runtime, its current nice value, and more, straight from the kernel</td></tr>
+        <tr><td class="hl"><code>nice -n &lt;N&gt; cmd</code> / <code>renice</code></td><td>Launch a process at (or change a running process's) nice value — directly picks its row in the weight table from section 03</td></tr>
+        <tr><td class="hl"><code>chrt -p &lt;pid&gt;</code></td><td>Show or set a task's scheduling policy and priority — including moving it into SCHED_FIFO/SCHED_RR, the real-time class from section 06</td></tr>
+        <tr><td class="hl"><code>taskset -pc &lt;cpus&gt; &lt;pid&gt;</code></td><td>Pin a task to specific cores — the CPU affinity knob from section 07, opting it out of the load balancer</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="sidenote reveal">
+    <b>A note on staying current.</b> Everything above describes CFS, which was the default SCHED_NORMAL implementation from kernel 2.6.23 (2007) through kernel 6.5. Starting with Linux 6.6 (2023), the default was replaced by <strong>EEVDF</strong> (Earliest Eligible Virtual Deadline First) — a scheduler from the same intellectual family, still built on a per-task virtual-time concept and a red-black tree, but that additionally tracks an eligibility time and a virtual deadline per task for tighter latency guarantees. The vruntime/weight/red-black-tree mental model in this page is still exactly the right foundation — EEVDF refines it rather than discarding it — but if you go reading current kernel source and see <code>vdeadline</code> alongside <code>vruntime</code>, that's why.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">vruntime</div><div class="glossary-def">A per-task "virtual runtime" score that increases roughly proportionally to real CPU time consumed, scaled inversely by weight. CFS always runs whichever runnable task's vruntime is lowest.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Run Queue (cfs_rq)</div><div class="glossary-def">The per-CPU structure holding that core's red-black tree of runnable CFS tasks and its own min_vruntime. Each core has its own — there is no single global run queue.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Load Balancer</div><div class="glossary-def">The kernel mechanism that periodically migrates tasks between cores' run queues to keep runnable work spread evenly, since per-core fairness alone can't fix an unevenly loaded machine.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Nice Value</div><div class="glossary-def">A user/administrator-set integer from -20 (least nice, most favored) to +19 (most nice, least favored), defaulting to 0, that the kernel translates into a scheduling weight.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Weight (load weight)</div><div class="glossary-def">A number derived from nice value via a fixed table (1024 at nice 0) that sets how fast a task's vruntime accumulates relative to real time spent running — and, as a side effect, its long-run CPU share.</div></div>
+    <div class="glossary-card"><div class="glossary-term">NICE_0_LOAD</div><div class="glossary-def">The baseline weight, 1024, assigned to any task at nice 0 — the reference point every other weight (and every vruntime multiplier) is computed relative to.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Red-Black Tree</div><div class="glossary-def">A self-balancing binary search tree guaranteeing O(log n) worst-case insert, delete, and search regardless of insertion order — what CFS uses to keep runnable tasks ordered by vruntime.</div></div>
+    <div class="glossary-card"><div class="glossary-term">min_vruntime</div><div class="glossary-def">A run queue's tracked floor value, used to keep the tree's overall vruntime range from drifting unboundedly and to fairly re-anchor a task's vruntime when it wakes from sleep.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Scheduling Class</div><div class="glossary-def">The top-level layer that picks which algorithm governs a task at all — real-time, fair (CFS), or idle — checked in strict priority order before any within-class comparison happens.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SCHED_FIFO / SCHED_RR</div><div class="glossary-def">Real-time scheduling policies, strictly higher priority than any CFS task, used for latency-critical work like audio processing; require elevated privilege to set.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SCHED_IDLE</div><div class="glossary-def">The lowest-priority scheduling class — only runs when no real-time or CFS task anywhere is currently runnable.</div></div>
+    <div class="glossary-card"><div class="glossary-term">sched_entity</div><div class="glossary-def">The struct embedded in a Linux task_struct holding a task's CFS-specific bookkeeping: vruntime, weight, and its node in the run queue's red-black tree.</div></div>
+    <div class="glossary-card"><div class="glossary-term">sched_latency / min_granularity</div><div class="glossary-def">Tunable target period (~6ms) within which every runnable task should get a turn, and the floor (~0.75ms) below which no task's slice is allowed to shrink regardless of how many tasks are competing.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Generalized Processor Sharing (GPS)</div><div class="glossary-def">The academic ideal-fairness model — an infinitely divisible resource shared continuously in proportion to weight — that CFS is explicitly designed to approximate as closely as one real CPU allows.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Preemption</div><div class="glossary-def">The kernel forcibly interrupting a running task to switch to another before its slice would naturally end — how CFS actually enforces the "run the lowest vruntime" rule once sched_min_granularity allows it.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Inside the Linux Scheduler: How CFS Actually Decides Who Runs Next</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion deep-dive to "PCBs, Threads &amp; Shared Memory" · OS Sweet Stories series</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CANVAS A: vruntime race (bar chart, live simulation) ──────────────────────
+const vrTasks=[
+  {name:'T1', nice:-5, weight:3121, color:C.green,  vruntime:0, real:0},
+  {name:'T2', nice:0,  weight:1024, color:C.cyan,   vruntime:0, real:0},
+  {name:'T3', nice:5,  weight:335,  color:C.gold,   vruntime:0, real:0},
+  {name:'T4', nice:10, weight:110,  color:C.red,    vruntime:0, real:0}
+];
+let vrRunning=false, vrRaf=null, vrLast=null;
+const NICE0=1024;
+
+function vrCurrentMin(){
+  let m=vrTasks[0];
+  for(const t of vrTasks) if(t.vruntime<m.vruntime) m=t;
+  return m;
+}
+
+function drawVR(){
+  const canvas=document.getElementById('vrCanvas');
+  const W=gW(canvas), H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const running=vrCurrentMin();
+  const maxV=Math.max(1,...vrTasks.map(t=>t.vruntime));
+  const padTop=30, padBot=70, chartH=H-padTop-padBot;
+  const n=vrTasks.length, gap=W*0.06, barW=(W-gap*(n+1))/n;
+
+  ctx.fillStyle=C.muted;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('vruntime (higher = fallen further behind ideal share)',10,16);
+
+  vrTasks.forEach((t,i)=>{
+    const x=gap+i*(barW+gap);
+    const h=maxV>0?(t.vruntime/maxV)*chartH:0;
+    const y=padTop+chartH-h;
+    const isRunning=(t===running);
+
+    ctx.fillStyle=isRunning?t.color:t.color+'55';
+    ctx.fillRect(x,y,barW,h);
+    ctx.strokeStyle=isRunning?'#fff':t.color;
+    ctx.lineWidth=isRunning?2:1;
+    ctx.strokeRect(x,y,barW,h);
+
+    if(isRunning){
+      ctx.fillStyle='#fff';ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText('RUNNING',x+barW/2,y-8);
+    }
+
+    ctx.fillStyle=C.text;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(t.name,x+barW/2,padTop+chartH+18);
+    ctx.fillStyle=C.muted;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('nice '+t.nice+' · w='+t.weight,x+barW/2,padTop+chartH+34);
+    ctx.fillStyle=t.color;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('vr='+t.vruntime.toFixed(0),x+barW/2,padTop+chartH+50);
+  });
+
+  ctx.fillStyle=C.muted;ctx.font='10px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(vrRunning?'simulation running — lower bar keeps getting picked':'paused — press Run Simulation',W/2,H-8);
+}
+
+function vrStep(now){
+  if(vrLast===null) vrLast=now;
+  const dtMs=Math.min(now-vrLast,50);
+  vrLast=now;
+  const dtSec=dtMs/1000;
+
+  const running=vrCurrentMin();
+  const mult=NICE0/running.weight;
+  running.vruntime += dtSec*mult*140; // 140 = visual rate scaling factor
+  running.real += dtSec;
+
+  drawVR();
+  if(vrRunning) vrRaf=requestAnimationFrame(vrStep);
+}
+
+function vrToggle(){
+  vrRunning=!vrRunning;
+  document.getElementById('vrToggleBtn').textContent=vrRunning?'⏸ Pause':'▶ Run Simulation';
+  document.getElementById('vrLabel').textContent=vrRunning?'▶ Simulating — the scheduler re-picks the minimum continuously':'▶ Paused — press Run Simulation to continue';
+  if(vrRunning){ vrLast=null; vrRaf=requestAnimationFrame(vrStep); }
+  else if(vrRaf) cancelAnimationFrame(vrRaf);
+}
+
+function vrReset(){
+  vrRunning=false; vrLast=null;
+  if(vrRaf) cancelAnimationFrame(vrRaf);
+  document.getElementById('vrToggleBtn').textContent='▶ Run Simulation';
+  document.getElementById('vrLabel').textContent='▶ Four tasks, four weights — watch whose vruntime is lowest, and who that means is "running"';
+  vrTasks.forEach(t=>{t.vruntime=0;t.real=0;});
+  drawVR();
+}
+
+// ── CANVAS B: simplified red-black-tree-style view, ordered by vruntime ───────
+let rbTasks=[
+  {id:1,name:'A',vruntime:120,weight:1024},
+  {id:2,name:'B',vruntime:340,weight:335},
+  {id:3,name:'C',vruntime:80, weight:3121},
+  {id:4,name:'D',vruntime:410,weight:110},
+  {id:5,name:'E',vruntime:210,weight:1024},
+  {id:6,name:'F',vruntime:290,weight:820},
+  {id:7,name:'G',vruntime:60, weight:9548}
+];
+let rbNextId=8;
+
+// Build a visually-balanced BST layout from tasks sorted by vruntime
+// (middle-out recursion — same trick used to build a balanced BST from a sorted array).
+function rbBuildLayout(){
+  const sorted=[...rbTasks].sort((a,b)=>a.vruntime-b.vruntime);
+  const nodes=[];
+  function build(lo,hi,depth,xlo,xhi){
+    if(lo>hi) return null;
+    const mid=Math.floor((lo+hi)/2);
+    const node={task:sorted[mid],depth,x:(xlo+xhi)/2,left:null,right:null};
+    nodes.push(node);
+    node.left=build(lo,mid-1,depth+1,xlo,node.x);
+    node.right=build(mid+1,hi,depth+1,node.x,xhi);
+    return node;
+  }
+  const root=build(0,sorted.length-1,0,0.03,0.97);
+  return {root,nodes,leftmost:sorted[0]};
+}
+
+function drawRB(){
+  const canvas=document.getElementById('rbCanvas');
+  const W=gW(canvas), H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const {root,nodes,leftmost}=rbBuildLayout();
+  const depthGap=(H-70)/5, r=22;
+
+  function drawEdges(node){
+    if(!node) return;
+    const y=40+node.depth*depthGap;
+    if(node.left){
+      ctx.strokeStyle=C.border;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(node.x*W,y);ctx.lineTo(node.left.x*W,40+node.left.depth*depthGap);ctx.stroke();
+      drawEdges(node.left);
+    }
+    if(node.right){
+      ctx.strokeStyle=C.border;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(node.x*W,y);ctx.lineTo(node.right.x*W,40+node.right.depth*depthGap);ctx.stroke();
+      drawEdges(node.right);
+    }
+  }
+  drawEdges(root);
+
+  nodes.forEach(node=>{
+    const y=40+node.depth*depthGap;
+    const x=node.x*W;
+    const isMin=(node.task.id===leftmost.id);
+    const isRedNode=(node.depth%2===1);
+
+    ctx.beginPath();ctx.arc(x,y,isMin?r+5:r,0,Math.PI*2);
+    ctx.fillStyle=isMin?'rgba(74,222,128,.18)':'rgba(20,28,46,1)';
+    ctx.fill();
+    ctx.lineWidth=isMin?3:2;
+    ctx.strokeStyle=isMin?C.green:(isRedNode?C.red:'#8899aa');
+    ctx.stroke();
+
+    ctx.fillStyle=isMin?C.green:C.text;
+    ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(node.task.name,x,y+4);
+
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('vr='+node.task.vruntime.toFixed(0),x,y+r+14);
+
+    if(isMin){
+      ctx.fillStyle=C.green;ctx.font='bold 10px Source Code Pro,monospace';
+      ctx.fillText('◀ LEFTMOST — RUNS NEXT',x,y-r-10);
+    }
+  });
+
+  ctx.fillStyle=C.muted;ctx.font='10px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText('layout is a balanced BST built fresh from the vruntime-sorted order — real CFS maintains this incrementally via rotations',W/2,H-10);
+}
+
+function rbInsert(){
+  if(rbTasks.length>=11) { document.getElementById('rbLabel').textContent='▶ Tree is getting crowded — press Reset to start over'; return; }
+  const letters='HIJKLMNOP';
+  const name=letters[(rbNextId-8)%letters.length];
+  const weight=[9548,3121,1024,335,110,36][Math.floor(Math.random()*6)];
+  const vruntime=Math.floor(Math.random()*420)+40;
+  rbTasks.push({id:rbNextId++,name,vruntime,weight});
+  document.getElementById('rbLabel').textContent='▶ Inserted a new task — tree rebalances, leftmost may change';
+  drawRB();
+}
+
+function rbTick(){
+  const sorted=[...rbTasks].sort((a,b)=>a.vruntime-b.vruntime);
+  const running=sorted[0];
+  const mult=NICE0/running.weight;
+  running.vruntime += mult*35;
+  document.getElementById('rbLabel').textContent='▶ '+running.name+' ran a tick — its vruntime jumped by '+mult.toFixed(2)+'× the base slice — watch the new leftmost';
+  drawRB();
+}
+
+function rbReset(){
+  rbTasks=[
+    {id:1,name:'A',vruntime:120,weight:1024},
+    {id:2,name:'B',vruntime:340,weight:335},
+    {id:3,name:'C',vruntime:80, weight:3121},
+    {id:4,name:'D',vruntime:410,weight:110},
+    {id:5,name:'E',vruntime:210,weight:1024},
+    {id:6,name:'F',vruntime:290,weight:820},
+    {id:7,name:'G',vruntime:60, weight:9548}
+  ];
+  rbNextId=8;
+  document.getElementById('rbLabel').textContent='▶ Tasks laid out by vruntime — leftmost node is always next to run';
+  drawRB();
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ drawVR(); drawRB(); });
+window.addEventListener('resize',()=>{ drawVR(); drawRB(); });
+</script>
+</body>
+</html>

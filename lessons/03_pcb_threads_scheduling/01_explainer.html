@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCBs, Threads &amp; Shared Memory — The Kernel's Paperwork, X-Rayed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* PCB dossier card */
+.dossier{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;margin:1.8rem 0;overflow:hidden;}
+.dossier-head{background:rgba(245,200,66,.08);padding:.8rem 1.3rem;border-bottom:1px solid var(--gold2);display:flex;justify-content:space-between;align-items:center;}
+.dossier-head span{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);}
+.dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+@media(max-width:640px){.dossier-body{grid-template-columns:1fr}}
+.dossier-field{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
+.dossier-field:nth-child(2n){border-right:none;}
+.dossier-field .f-label{font-family:'Source Code Pro',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem;}
+.dossier-field .f-val{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--cyan);}
+.dossier-field .f-desc{font-size:.78rem;color:var(--muted);margin-top:.2rem;line-height:1.4;}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#pcb" title="The PCB"></a>
+  <a class="toc-dot" href="#threadvsprocess" title="Thread vs Process"></a>
+  <a class="toc-dot" href="#scheduling" title="Scheduling"></a>
+  <a class="toc-dot" href="#idle" title="Is the Kernel Idle?"></a>
+  <a class="toc-dot" href="#traps" title="Traps & the PCB"></a>
+  <a class="toc-dot" href="#sharedmem" title="Shared Memory"></a>
+  <a class="toc-dot" href="#browsertie" title="Back to the Browser"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · PCBs · Threads · Scheduling · Shared Memory</div>
+    <h1>The Kernel's<br><span>Paperwork</span></h1>
+    <p class="hero-sub">Every process on your machine has a file kept on it — a dossier the kernel updates constantly, the moment it's not running, the moment it is. This page is about that dossier (the PCB), the difference between the "citizen" and the "workers inside it" (process vs thread), whether the kernel ever actually rests, and how two separate, walled-off worlds ever get to share a room without going through the door every single time.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">PCB per Process (or per Thread)</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Doors Into Ring 0</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Kinds of Register Save</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Syscalls Per Byte, Once Shared Memory Is Set Up</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Wall Is <span class="accent">Old News Now</span></h2>
+  <p class="reveal">You already know the headline: user space is sandboxed, kernel space is privileged, and a system call is the one guarded door between them. What we glossed over is <em>bookkeeping</em> — when the kernel lets a process run, stops it, and hands the CPU to someone else, it needs somewhere to actually write down "here's exactly where this program was, so I can put it back exactly as I found it." That somewhere is today's first character: the <strong>Process Control Block</strong>.</p>
+</div>
+</section>
+
+<!-- PCB -->
+<section id="pcb">
+<div class="container">
+  <div class="section-num">01 — The Kernel's Dossier On You</div>
+  <h2>What Is a <span class="accent">PCB</span>, Really?</h2>
+
+  <p class="reveal">Picture a hotel's front desk keeping a card for every guest currently checked in: room number, key status, do-not-disturb flag, what they last ordered from room service, when their reservation started. The <strong>Process Control Block (PCB)</strong> is exactly this, but for a process, kept by the kernel, one per process (well — per <em>schedulable entity</em>, more on that soon).</p>
+
+  <p class="reveal">The PCB isn't optional bureaucracy — it's the <em>only</em> reason the kernel can stop a process mid-instruction, run twelve other things, and then resume that exact process later as if no time had passed at all. Without it, "pausing" a process would mean losing it forever.</p>
+
+  <div class="dossier reveal">
+    <div class="dossier-head"><span>Process Control Block — PID 4021</span><span style="color:var(--muted);font-size:.7rem">kept in kernel memory, never user-readable</span></div>
+    <div class="dossier-body">
+      <div class="dossier-field"><div class="f-label">Process State</div><div class="f-val">RUNNING / READY / BLOCKED</div><div class="f-desc">Where this process sits right now — is it actually executing, waiting for its turn, or waiting on I/O?</div></div>
+      <div class="dossier-field"><div class="f-label">Program Counter</div><div class="f-val">0x00007fA3...</div><div class="f-desc">The exact next instruction to execute when this process runs again.</div></div>
+      <div class="dossier-field"><div class="f-label">CPU Registers</div><div class="f-val">rax, rbx, rsp, rbp…</div><div class="f-desc">A full snapshot of every general-purpose register, saved the instant this process stopped running.</div></div>
+      <div class="dossier-field"><div class="f-label">Memory / Page Table Pointer</div><div class="f-val">→ CR3 value</div><div class="f-desc">Points to this process's own virtual-to-physical address mapping — its private view of memory.</div></div>
+      <div class="dossier-field"><div class="f-label">Open File Table</div><div class="f-val">fd 0,1,2,5,7…</div><div class="f-desc">Which files, sockets, and pipes this process currently has open, and at what offset.</div></div>
+      <div class="dossier-field"><div class="f-label">Scheduling Info</div><div class="f-val">priority, quantum left</div><div class="f-desc">How important the scheduler thinks this process is, and how much more CPU time it's owed right now.</div></div>
+      <div class="dossier-field"><div class="f-label">Parent / Children</div><div class="f-val">PPID 3980 → [4022, 4023]</div><div class="f-desc">Who spawned this process, and what it has spawned — the process tree.</div></div>
+      <div class="dossier-field"><div class="f-label">Accounting Info</div><div class="f-val">CPU time used, limits</div><div class="f-desc">How much CPU time it's burned so far, and any resource limits imposed on it.</div></div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    A PCB is <strong>never touched by user code</strong> — it lives entirely in kernel memory, exactly as privileged as the kernel itself. That's not incidental: if a process could edit its own PCB, it could just set its own priority to "run forever" or point its page table at someone else's memory. The PCB being kernel-only <em>is</em> the enforcement mechanism for a huge chunk of what the OS guarantees.
+  </div>
+</div>
+</section>
+
+<!-- THREAD VS PROCESS -->
+<section id="threadvsprocess">
+<div class="container">
+  <div class="section-num">02 — The Critical Difference</div>
+  <h2>Thread vs <span class="accent">Process</span></h2>
+
+  <p class="reveal">Back to the restaurant. A <strong>process</strong> is the whole restaurant location: its own building (address space), its own walk-in freezer (open files), its own lease and business license (resources granted by the OS). A <strong>thread</strong> is one chef working inside that restaurant. You can have several chefs (threads) working in the very same kitchen (address space) at the same time, each chopping a different vegetable (executing different code), but all of them reach into the <em>same</em> walk-in freezer, because there's only one.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The one-line critical difference</span>
+    A process owns resources. A thread owns nothing but its own execution — and borrows everything else from the process it lives in.
+    <span class="sub">Multiple threads in one process share the same memory, same open files, same everything — except each gets its own stack, its own registers, and its own program counter.</span>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Attribute</th><th>Shared across threads of one process?</th><th>Unique per thread?</th></tr></thead>
+      <tbody>
+        <tr><td>Address space (heap, globals, code)</td><td class="pos">Shared</td><td></td></tr>
+        <tr><td>Open file descriptors</td><td class="pos">Shared</td><td></td></tr>
+        <tr><td>Page table / memory mappings</td><td class="pos">Shared</td><td></td></tr>
+        <tr><td class="hl">Stack</td><td></td><td class="neg">Unique</td></tr>
+        <tr><td class="hl">Registers / Program Counter</td><td></td><td class="neg">Unique</td></tr>
+        <tr><td class="hl">Scheduling state (ready/blocked/running)</td><td></td><td class="neg">Unique</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Makes Threads Dangerous <em>and</em> Cheap</div>
+    Because threads share memory by default, two threads can read and write the exact same variable with zero kernel involvement — which is <strong>fast</strong> (no IPC, no syscalls, no copying), but also <strong>unsafe</strong> without discipline: two chefs grabbing the same knife at once is a race condition. This is precisely why threaded code needs mutexes/locks, while two separate <em>processes</em> are automatically protected from each other by the page-table wall you already know — no discipline required, just less sharing by default.
+  </div>
+
+  <p class="reveal">One more piece of vocabulary worth having: a single-threaded process is really just a process that happens to contain exactly one thread. There's no such thing as a process running with zero threads — the thread <em>is</em> the thing that actually executes; the process is the container of resources around it.</p>
+</div>
+</section>
+
+<!-- SCHEDULING -->
+<section id="scheduling">
+<div class="container">
+  <div class="section-num">03 — Answering Your Question Directly</div>
+  <h2>Is Scheduling a Process the <span class="accent">Same</span> as Scheduling a Thread?</h2>
+
+  <p class="reveal">Short answer: <strong>the algorithm is the same; the unit it's applied to is not the same, and the cost of switching between units is not the same either.</strong> Let's unpack both halves.</p>
+
+  <h3>Same algorithm, finer-grained unit</h3>
+  <p class="reveal">Classic OS courses teach "the scheduler picks the next <em>process</em> to run." In reality, on every modern OS (Linux included), the scheduler doesn't actually operate on whole processes — it operates on individual <strong>threads</strong> (Linux calls the underlying schedulable unit a <em>task</em>, represented by a <code>task_struct</code>, which is really a merged PCB-plus-thread record). A single-threaded process just happens to have exactly one schedulable entity, so the distinction was invisible in the simple case everyone learns first.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 So What Is the PCB, Precisely, in a Multi-Threaded World?</div>
+    Think of it split into two layers: a shared <strong>process-level record</strong> holding the things all threads share (address space pointer, open file table), and a <strong>per-thread record</strong> (sometimes literally called a Thread Control Block, or just a lighter-weight <code>task_struct</code> in Linux) holding the things that must be unique per thread (saved registers, program counter, stack pointer, scheduling state). The scheduler's run queue is a queue of these per-thread records — never a queue of whole processes.
+  </div>
+
+  <h3>Same algorithm, very different switching cost</h3>
+  <p class="reveal">Here's the part that actually matters in practice. Whether the scheduler is switching between two threads of the <em>same</em> process, or between threads of two <em>different</em> processes, it runs the exact same priority/quantum logic to decide who goes next. But the mechanical cost of actually performing the switch differs enormously:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🧵 Switch between two threads, same process</h4>
+      Registers and stack pointer change, but the <strong>page table stays identical</strong> — same address space, so no TLB flush, no expensive memory-mapping reload. This is why threads are often called "lightweight" — the switch is cheap.
+    </div>
+    <div class="compare-card bad">
+      <h4>🏢 Switch between threads of different processes</h4>
+      Everything above, <em>plus</em> the kernel must load a different page table (a different CR3 value on x86), which typically flushes the translation lookaside buffer (TLB) — a real, measurable performance cost. This is a genuine "process context switch," not just a thread switch.
+    </div>
+  </div>
+
+  <p class="reveal">So to directly answer it: the scheduling <em>policy</em> (round robin, priority-based, Completely Fair Scheduler, whatever) is identical whether you're picking among threads of one process or among threads scattered across many processes — it's one unified run queue of schedulable entities. What differs is purely the <em>execution cost</em> of actually carrying out the switch once it's been decided, because crossing a process boundary means crossing the memory-isolation wall too.</p>
+</div>
+</section>
+
+<!-- IS KERNEL IDLE -->
+<section id="idle">
+<div class="container">
+  <div class="section-num">04 — Answering Your Question Directly</div>
+  <h2>Is the Kernel Idle Until a <span class="accent">System Call</span> Happens?</h2>
+
+  <p class="reveal">No — and this is a common and very reasonable misconception, because syscalls are the door we spent the most time on. But syscalls are only <em>one</em> of three separate doors into Ring 0, and the other two fire constantly, with zero cooperation from any running program.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Door Into the Kernel</th><th>Triggered By</th><th>Voluntary?</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">System Call</td><td>Running user program, deliberately</td><td class="pos">Voluntary, synchronous</td><td><code>read()</code>, <code>write()</code>, <code>fork()</code></td></tr>
+        <tr><td class="hl">Exception / Fault</td><td>The CPU itself, reacting to the current instruction</td><td class="neg">Involuntary, synchronous</td><td>Page fault, divide-by-zero, illegal instruction</td></tr>
+        <tr><td class="hl">Hardware Interrupt</td><td>A device, completely unrelated to what's currently executing</td><td class="neg">Involuntary, asynchronous</td><td>Timer tick, keypress, disk I/O completion, network packet arrival</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">That third row is the answer to your question. A hardware timer chip fires an interrupt hundreds to a thousand times a second (on traditional "ticking" kernels), completely independent of whether any program made a syscall. Every disk finishing a read, every network packet arriving, every key you press generates its own interrupt. The kernel is woken up by all of these, constantly, whether or not anyone asked it for anything.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ So What Does "The Kernel Is Idle" Actually Mean?</div>
+    When there's genuinely nothing runnable, the CPU doesn't sit inside "kernel code doing nothing" in a busy loop burning power — it runs a special, lowest-priority <strong>idle task</strong>, which typically executes a halt instruction (like x86's <code>HLT</code>) that pauses the core until the <em>next interrupt of any kind</em> arrives. Modern "tickless" kernels go further: instead of a fixed periodic timer interrupt firing even with nothing to do, they compute the next actually-necessary wakeup and program a one-shot timer for exactly then — saving power, especially on laptops and phones. Either way: the kernel's idle state is itself just another kind of scheduled entity, waiting on the same three doors as everyone else.
+  </div>
+</div>
+</section>
+
+<!-- TRAPS AND PCB -->
+<section id="traps">
+<div class="container">
+  <div class="section-num">05 — Answering Your Question Directly</div>
+  <h2>Registers, Traps, and the <span class="accent">PCB</span></h2>
+
+  <p class="reveal">So is a syscall the only time registers get saved? No — <strong>any</strong> of the three doors above forces at least a minimal register save, because the CPU must be able to resume exactly where it left off no matter which door was used. But there are actually two different <em>levels</em> of "saving," and mixing them up is where most confusion comes from.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="trapLabel">▶ Compare a light trap vs a full context switch</div>
+    <canvas id="trapCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runTrap('light')">▶ Timer interrupt — no reschedule needed</button>
+    <button class="ctrl-btn gold" onclick="runTrap('full')">▶ Timer interrupt — reschedule to another thread</button>
+    <button class="ctrl-btn red" onclick="resetTrap()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Level 1 — The Trap Frame (always happens)</strong>The instant <em>any</em> trap fires — syscall, fault, or interrupt — the CPU (often with a little help from the kernel's entry-point code) pushes a small, fixed set of values onto the kernel stack: the program counter, flags register, stack pointer, and a handful of general registers. This minimal bundle is the <strong>trap frame</strong>. It costs almost nothing and happens on every single trip into Ring 0, no exceptions.</div></li>
+    <li><div class="step-body"><strong>The kernel handles the trap</strong>Using just the trap frame, the kernel runs whatever handler is appropriate — the syscall's logic, the fault handler, or the interrupt service routine. Often, this is fast and the answer is "nothing else needs to change" — e.g., a disk-completion interrupt just marks some data ready and returns.</div></li>
+    <li><div class="step-body"><strong>The kernel decides: reschedule or resume?</strong>This is the fork in the road. If the trap handler decides the currently interrupted thread should keep running next (very common for a quick interrupt), the kernel simply restores the trap frame and resumes exactly where it stopped — no PCB/TCB involved at all beyond what was already there.</div></li>
+    <li><div class="step-body"><strong>Level 2 — The Full Context Switch (only sometimes)</strong>If instead the kernel decides a <em>different</em> thread should run next — because the current thread's time quantum expired, or it just blocked on I/O, or a higher-priority thread just became ready — <em>then</em> it performs a full context switch: save every remaining register the interrupted thread cares about into <strong>that thread's own PCB/TCB</strong>, then load an entirely different saved register set from the <strong>next thread's PCB/TCB</strong>, possibly swap the page table too, and only then return to Ring 3 — now running someone else entirely.</div></li>
+  </ol>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Relationship to the PCB, Stated Plainly</div>
+    The <strong>trap frame</strong> is a short-lived, on-the-kernel-stack scratchpad used for the duration of handling one trap. The <strong>PCB/TCB</strong> is the long-term, permanent parking spot for a thread's saved state whenever that thread isn't currently running at all. A full context switch is precisely the act of moving saved register state <em>out of</em> a trap frame and <em>into</em> a PCB/TCB (for the outgoing thread), and pulling previously parked state <em>out of</em> another thread's PCB/TCB and back <em>into</em> live registers (for the incoming thread). Most traps never reach this step — they're resolved with just the cheap trap frame.
+  </div>
+</div>
+</section>
+
+<!-- SHARED MEMORY -->
+<section id="sharedmem">
+<div class="container">
+  <div class="section-num">06 — Answering Your Question Directly</div>
+  <h2>Shared Memory: <span class="accent">When</span> Do Processes Actually Use It?</h2>
+
+  <p class="reveal">Threads get shared memory automatically — it's simply what "same process" means. Processes do not: by design, the wall (separate page tables) keeps every process's memory invisible to every other process. So if two <em>processes</em> want to share memory, they have to explicitly ask the kernel to punch a deliberate, controlled hole in that wall — once, during setup. This is exactly what <code>shmget()</code>/<code>shmat()</code> (System V) or <code>mmap()</code> with <code>MAP_SHARED</code> (POSIX) do.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label">▶ Shared Memory vs a Pipe — Where the Kernel Gets Involved</div>
+    <canvas id="shmCanvas" height="320"></canvas>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐌 Pipe / Socket IPC</h4>
+      Every single message requires a syscall in each direction — the kernel copies data from one process's buffer into its own, then out into the other process's buffer. Safe and simple, but every byte pays the "cross the wall" tax.
+    </div>
+    <div class="compare-card good">
+      <h4>⚡ Shared Memory IPC</h4>
+      One-time setup cost: the kernel maps the <em>same physical page frames</em> into both processes' page tables (at possibly different virtual addresses). After that, both processes read and write with ordinary load/store instructions — <strong>zero syscalls per access</strong>, because the CPU's normal memory hardware, not the kernel, is doing the work.
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 The Catch: You Traded Safety for Speed</div>
+    Shared memory removes the kernel's involvement in each access — which also removes the kernel's automatic protection against race conditions. Two processes writing the same shared page at once is exactly as dangerous as two threads doing so, for exactly the same reason: they're now, deliberately, sharing memory. This is why shared-memory IPC is almost always paired with a separate kernel-mediated synchronization primitive — a semaphore, futex, or named mutex — used sparingly, only to coordinate <em>who</em> gets to touch the shared region <em>when</em>, while the actual data transfer stays syscall-free.
+  </div>
+
+  <p class="reveal">So, precisely answering "at which point": processes reach for shared memory when they need to exchange <strong>large or frequent</strong> data and the per-message cost of pipes/sockets would dominate — think video frame buffers, large scientific datasets, or (as you're about to see) a browser's rendering pipeline. It's a deliberate trade: pay a one-time setup cost through the guarded door, then enjoy unguarded, wall-free access for as long as the mapping lives.</p>
+</div>
+</section>
+
+<!-- BROWSER TIE-IN -->
+<section id="browsertie">
+<div class="container">
+  <div class="section-num">07 — Tying It Back</div>
+  <h2>This Is Exactly What Your <span class="accent p">Browser</span> Does</h2>
+
+  <p class="reveal">Remember the renderer process handing paint instructions to the GPU process via Mojo IPC? In practice, Chromium doesn't want to pay a full IPC round-trip for every single drawing command during heavy rendering or video playback — that's the "pipe" cost, at browser scale. So the renderer and GPU process actually set up a <strong>shared memory command buffer</strong>: a chunk of memory mapped into both processes once, into which the renderer writes a stream of draw commands directly, with the GPU process reading them out the other side — no IPC message per command, only a lightweight IPC "signal" to say "new commands are ready."</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Same Trade-off, One Layer Up</div>
+    Exactly like OS-level shared memory: one guarded setup step through Mojo IPC (the "door"), then raw, wall-free memory access for the actual high-frequency data (draw commands, video frames), with a small separate signal used only to coordinate timing — the browser's version of a semaphore.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Process Control Block (PCB)</div><div class="glossary-def">The kernel-only data structure holding everything needed to pause and later perfectly resume a process/thread: state, registers, program counter, memory pointers, open files, scheduling info.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Thread Control Block (TCB)</div><div class="glossary-def">The per-thread slice of that bookkeeping — unique registers, stack, and scheduling state — while address space and open files stay shared at the process level.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Process</div><div class="glossary-def">A container of resources: its own address space, open files, and at least one thread of execution.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Thread</div><div class="glossary-def">A schedulable unit of execution that borrows its process's resources but keeps its own registers, stack, and program counter.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Task (Linux)</div><div class="glossary-def">Linux's actual scheduled unit (<code>task_struct</code>) — effectively a merged PCB/TCB representing one thread, whether or not it shares a process with others.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Trap Frame</div><div class="glossary-def">The minimal register/PC/flags snapshot pushed to the kernel stack on every trap (syscall, fault, or interrupt) — cheap, short-lived, always happens.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Context Switch</div><div class="glossary-def">The full save of an outgoing thread's state into its PCB/TCB and load of an incoming thread's state from its own — only performed when the kernel actually decides to run someone else next.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Exception / Fault</div><div class="glossary-def">A synchronous, involuntary trap caused by the currently executing instruction itself — a page fault or divide-by-zero, for example.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Hardware Interrupt</div><div class="glossary-def">An asynchronous, involuntary trap caused by a device, unrelated to whatever instruction the CPU happens to be running.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Idle Task</div><div class="glossary-def">The lowest-priority schedulable entity that runs (often halting the CPU) when nothing else is ready, until the next interrupt wakes it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Shared Memory</div><div class="glossary-def">A region of physical memory deliberately mapped into more than one process's page tables via the kernel, enabling syscall-free reads/writes after a one-time setup.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TLB (Translation Lookaside Buffer)</div><div class="glossary-def">A CPU cache of virtual-to-physical address translations. Switching page tables (a process-level context switch) typically flushes it, adding real cost beyond a same-process thread switch.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>PCBs, Threads &amp; Shared Memory · Part 3 of the OS/Browser series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">The paperwork behind the wall.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── TRAP VS CONTEXT SWITCH CANVAS ──────────────────────────────────────────────
+function drawTrapScene(t,phase,mode){
+  const canvas=document.getElementById('trapCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const laneY=H*0.42, laneH=70;
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(0,laneY,W,laneH);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;ctx.strokeRect(0,laneY,W,laneH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Thread A — running',10,laneY-8);
+
+  const pcbY=H*0.72, pcbH=70;
+  ctx.fillStyle='rgba(245,200,66,.06)';ctx.fillRect(0,pcbY,W,pcbH);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1;ctx.strokeRect(0,pcbY,W,pcbH);
+  ctx.fillStyle=C.gold;ctx.font='11px Source Code Pro,monospace';
+  ctx.fillText('PCB / TCB storage (kernel memory)',10,pcbY-8);
+
+  const captions={
+    idle:'Choose a scenario above',
+    fire:'⚡ Timer interrupt fires — CPU forced into Ring 0 mid-instruction',
+    frame:'Trap frame pushed to kernel stack — PC, flags, a few registers saved (cheap, always happens)',
+    decide:mode==='light'?'Kernel checks: still Thread A\u2019s turn — no reschedule needed':'Kernel checks: Thread A\u2019s quantum is up — reschedule!',
+    resume_light:'Trap frame restored — Thread A resumes exactly where it left off',
+    full_save:'Full context switch: ALL of Thread A\u2019s state saved into ITS OWN PCB/TCB',
+    full_load:'Thread B\u2019s previously saved state loaded FROM ITS PCB/TCB',
+    resume_full:'CPU resumes running Thread B — a different thread entirely'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-14);
+
+  // interrupt bolt marker
+  if(phase==='fire'||phase==='frame'||phase==='decide'){
+    ctx.fillStyle=C.orange;ctx.font='bold 20px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',W*0.5,laneY-24);
+  }
+
+  let dotX=W*0.15,dotY=laneY+laneH/2,dotCol=C.cyan,dotR=8;
+  if(phase==='fire'){dotX=W*(0.15+0.15*t);dotCol=C.cyan;}
+  else if(phase==='frame'){dotX=W*0.3+ (W*0.15)*t; dotY=laneY+laneH/2 + (pcbY-laneY-laneH/2)*0.25*t; dotCol=C.orange;}
+  else if(phase==='decide'){dotX=W*0.45;dotY=laneY+laneH*0.65;dotCol=C.orange;}
+  else if(phase==='resume_light'){dotX=W*(0.45+0.35*t);dotY=laneY+laneH/2;dotCol=C.cyan;}
+  else if(phase==='full_save'){dotX=W*0.45+(W*0.05)*t;dotY=laneY+laneH*0.65+(pcbY-laneY*0.65)*0*t; dotY=laneY+laneH/2+(pcbY+pcbH/2-(laneY+laneH/2))*t; dotCol=C.gold;}
+  else if(phase==='full_load'){dotX=W*(0.5+0.25*t);dotY=pcbY+pcbH/2;dotCol=C.purple;}
+  else if(phase==='resume_full'){dotX=W*0.75+(W*0.15)*t; dotY=pcbY+pcbH/2 - (pcbY+pcbH/2-(laneY+laneH/2))*t; dotCol=C.green;}
+  ctx.beginPath();ctx.arc(dotX,dotY,dotR,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+
+  if(phase==='resume_full'){
+    ctx.fillStyle=C.green;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText('Thread B — now running',10,laneY-8+laneH+18>H?H-4:10);
+  }
+}
+
+function runTrap(mode){
+  const phasesLight=['fire','frame','decide','resume_light'];
+  const phasesFull=['fire','frame','decide','full_save','full_load','resume_full'];
+  const phases=mode==='light'?phasesLight:phasesFull;
+  const durations=mode==='light'?[350,500,500,500]:[350,500,500,550,550,550];
+  let idx=0,start=performance.now();
+  document.getElementById('trapLabel').textContent=mode==='light'?'▶ Light path: trap frame only, no full context switch':'▶ Full path: trap frame → full context switch via PCB/TCB';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawTrapScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('trapLabel').textContent='▶ Done — try the other scenario';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetTrap(){
+  document.getElementById('trapLabel').textContent='▶ Compare a light trap vs a full context switch';
+  drawTrapScene(0,'idle','');
+}
+
+// ── SHARED MEMORY VS PIPE CANVAS ──────────────────────────────────────────────
+function drawSHM(){
+  const canvas=document.getElementById('shmCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // top half: pipe path
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('PIPE / SOCKET — every message crosses the wall',12,26);
+  const pY=50, pH=70;
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(20,pY,W*0.28,pH);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(20,pY,W*0.28,pH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Process A',20+W*0.14,pY+pH/2);
+
+  ctx.fillStyle='rgba(248,113,113,.1)';ctx.fillRect(W*0.42,pY,W*0.16,pH);
+  ctx.strokeStyle=C.red;ctx.strokeRect(W*0.42,pY,W*0.16,pH);
+  ctx.fillStyle=C.red;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('KERNEL',W*0.42+W*0.08,pY+pH/2-6);
+  ctx.fillText('copies data',W*0.42+W*0.08,pY+pH/2+8);
+
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(W*0.72,pY,W*0.26,pH);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(W*0.72,pY,W*0.26,pH);
+  ctx.fillStyle=C.cyan;
+  ctx.fillText('Process B',W*0.72+W*0.13,pY+pH/2);
+
+  ctx.strokeStyle=C.muted;ctx.setLineDash([3,3]);ctx.beginPath();
+  ctx.moveTo(20+W*0.28,pY+pH/2);ctx.lineTo(W*0.42,pY+pH/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W*0.58,pY+pH/2);ctx.lineTo(W*0.72,pY+pH/2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.orange;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('syscall',20+W*0.35,pY+pH/2-10);
+  ctx.fillText('syscall',W*0.65,pY+pH/2-10);
+  ctx.fillStyle=C.muted;ctx.font='10px Lato,sans-serif';
+  ctx.fillText('↑ repeated for every single message',W/2,pY+pH+20);
+
+  // bottom half: shared memory
+  const sY=H*0.62;
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('SHARED MEMORY — one-time setup, then direct access',12,sY-4);
+
+  const sH=90;
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(20,sY+14,W*0.28,sH);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(20,sY+14,W*0.28,sH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Process A',20+W*0.14,sY+14+sH/2);
+
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(W*0.72,sY+14,W*0.26,sH);
+  ctx.strokeStyle=C.cyan;ctx.strokeRect(W*0.72,sY+14,W*0.26,sH);
+  ctx.fillText('Process B',W*0.72+W*0.13,sY+14+sH/2);
+
+  ctx.fillStyle='rgba(74,222,128,.14)';ctx.fillRect(W*0.42,sY,W*0.16,sH+28);
+  ctx.strokeStyle=C.green;ctx.lineWidth=1.5;ctx.strokeRect(W*0.42,sY,W*0.16,sH+28);
+  ctx.fillStyle=C.green;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Same physical',W*0.42+W*0.08,sY+sH/2-6);
+  ctx.fillText('page frames',W*0.42+W*0.08,sY+sH/2+8);
+
+  ctx.strokeStyle=C.green;ctx.setLineDash([]);ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(20+W*0.28,sY+14+sH/2);ctx.lineTo(W*0.42,sY+sH/2+14);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W*0.58,sY+sH/2+14);ctx.lineTo(W*0.72,sY+14+sH/2);ctx.stroke();
+  ctx.fillStyle=C.green;ctx.font='9px Source Code Pro,monospace';
+  ctx.fillText('direct load/store — no kernel',W/2,sY+sH+42>H-6?H-6:sY+sH+42);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetTrap(); drawSHM(); });
+window.addEventListener('resize',()=>{ resetTrap(); drawSHM(); });
+</script>
+</body>
+</html>

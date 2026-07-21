@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B09 — Garbage Collector | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(74,222,128,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--green);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--green);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--green);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--green);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(56,189,248,0.08));border:1px solid rgba(74,222,128,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--green);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .gc-heap{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0;padding:16px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;}
+  .gc-obj{padding:10px 14px;border-radius:8px;font-family:'Source Code Pro',monospace;font-size:12px;text-align:center;min-width:80px;}
+  .gc-obj.live{background:rgba(74,222,128,0.15);border:1px solid var(--green);color:var(--green);}
+  .gc-obj.dead{background:rgba(248,113,113,0.15);border:1px solid var(--red);color:var(--red);}
+  .gc-obj.root{background:rgba(245,200,66,0.15);border:2px solid var(--gold);color:var(--gold);}
+  .gc-obj .obj-name{font-weight:700;margin-bottom:2px;}
+  .gc-obj .obj-state{font-size:10px;opacity:0.8;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B09 — GARBAGE COLLECTOR</div>
+  <h1>Mark, Sweep, <span>Free</span></h1>
+  <p class="tagline">JavaScript allocates objects constantly and never frees them manually. The GC finds objects no longer reachable from roots and reclaims them. A use-after-free happens when the GC frees an object that the engine still holds a pointer to.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">mark</div><div class="label">DFS from roots, set mark bit</div></div>
+    <div class="hero-stat"><div class="num">sweep</div><div class="label">free all unmarked objects</div></div>
+    <div class="hero-stat"><div class="num">UAF</div><div class="label">use-after-free = dangling pointer</div></div>
+    <div class="hero-stat"><div class="num">write barrier</div><div class="label">incremental GC safety mechanism</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-stack">The Stack</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>The GC is like a cleaning crew that sweeps through the engine room every so often. First they put a green sticky note on every machine actively being used (mark). Then they remove every machine without a sticky note (sweep). The problem: if an engineer has the machine's serial number written on a notepad but the cleaning crew already took it away — that's a use-after-free. The engineer goes to use serial number 0xDEAD and finds something completely different sitting there now.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Heap and Mark Bits</h2>
+    <pre><code>/* gc.h — minimal mark-and-sweep heap */
+#define HEAP_SIZE    (1024 * 1024)  /* 1MB */
+#define MAX_OBJECTS  4096
+
+typedef struct gc_obj {
+    uint8_t   marked;
+    uint8_t   type;       /* OBJ_ARRAY, OBJ_STRING, etc. */
+    uint16_t  n_refs;     /* number of child pointers */
+    struct gc_obj **refs; /* child pointers (for marking) */
+    uint8_t   data[];     /* payload */
+} gc_obj_t;
+
+static gc_obj_t *heap[MAX_OBJECTS];
+static int       heap_count = 0;
+
+gc_obj_t *gc_alloc(size_t size, uint8_t type) {
+    gc_obj_t *obj = malloc(sizeof(gc_obj_t) + size);
+    obj->marked = 0;
+    obj->type   = type;
+    obj->n_refs = 0;
+    obj->refs   = NULL;
+    heap[heap_count++] = obj;
+    if (heap_count >= MAX_OBJECTS) gc_collect();
+    return obj;
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — Mark and Sweep</h2>
+    <pre><code>/* Roots: global variables, stack values, registers */
+extern gc_obj_t **gc_roots;
+extern int        gc_root_count;
+
+/* MARK PHASE: DFS from all roots */
+void gc_mark_object(gc_obj_t *obj) {
+    if (!obj || obj->marked) return;  /* already visited */
+    obj->marked = 1;
+    for (int i = 0; i < obj->n_refs; i++)
+        gc_mark_object(obj->refs[i]);  /* recurse into children */
+}
+
+void gc_mark_phase(void) {
+    for (int i = 0; i < gc_root_count; i++)
+        gc_mark_object(gc_roots[i]);
+}
+
+/* SWEEP PHASE: free all unmarked objects */
+void gc_sweep_phase(void) {
+    int write = 0;
+    for (int i = 0; i < heap_count; i++) {
+        if (heap[i]->marked) {
+            heap[i]->marked = 0;  /* clear for next collection */
+            heap[write++] = heap[i];
+        } else {
+            free(heap[i]);        /* not reachable → free */
+        }
+    }
+    heap_count = write;
+}
+
+void gc_collect(void) {
+    gc_mark_phase();
+    gc_sweep_phase();
+}</code></pre>
+
+    <div class="gc-heap">
+      <div class="gc-obj root"><div class="obj-name">window</div><div class="obj-state">ROOT → live</div></div>
+      <div class="gc-obj live"><div class="obj-name">Array[0]</div><div class="obj-state">reachable</div></div>
+      <div class="gc-obj live"><div class="obj-name">String</div><div class="obj-state">reachable</div></div>
+      <div class="gc-obj dead"><div class="obj-name">obj_42</div><div class="obj-state">unreachable → FREE</div></div>
+      <div class="gc-obj dead"><div class="obj-name">closure</div><div class="obj-state">unreachable → FREE</div></div>
+      <div class="gc-obj live"><div class="obj-name">callback</div><div class="obj-state">reachable</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Use-After-Free</h2>
+    <pre><code>/* UAF demo: engine caches a pointer to an object,
+   GC collects the object, engine uses the stale pointer */
+
+gc_obj_t *cached_obj = gc_alloc(64, OBJ_ARRAY);
+cached_obj->data[0]  = 42;
+
+/* attacker removes all references to cached_obj from roots */
+remove_from_roots(cached_obj);
+
+/* GC runs — cached_obj is unmarked, gets freed */
+gc_collect();
+
+/* BUG: engine still has `cached_obj` pointer */
+printf("%d\n", cached_obj->data[0]);
+/* cached_obj memory is now free — could be reallocated
+   to a different object. Reading it is undefined behavior.
+   Writing to it corrupts whatever now lives at that address. */
+
+/* Exploit: allocate a new object at the same address */
+gc_obj_t *evil = gc_alloc(64, OBJ_FUNCTION);  /* same slot! */
+/* Now cached_obj == evil — type confusion via UAF!
+   Engine thinks cached_obj is OBJ_ARRAY,
+   but it's actually OBJ_FUNCTION. Exploit proceeds. */</code></pre>
+
+    <div class="callout red">
+      <div class="label">Heap Grooming</div>
+      <p>Attackers deliberately spray many same-sized allocations before triggering a UAF to control which object gets placed at the freed address. This "heap grooming" (or "heap feng shui") maximizes the chance that the UAF pointer now points to an attacker-controlled object of the right size and type to enable type confusion (B10).</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B09 — Garbage Collector</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B09_garbage_collector && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>[gc] heap: 6 objects allocated
+[gc] roots: window → Array[0] → String, callback
+[gc] mark phase: 4 objects marked live
+[gc] sweep phase: freeing obj_42, closure (2 objects)
+[gc] heap: 4 objects remain
+
+UAF demo:
+  cached_obj allocated at 0x55a3c0
+  references removed → GC collects it
+  new allocation at 0x55a3c0 (same slot)
+  cached_obj->type now reads as OBJ_FUNCTION (was OBJ_ARRAY)
+  UAF type confusion: demonstrated ✓</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>Our stop-the-world GC pauses all JS execution while marking and sweeping. For a page with 100MB of heap, this pause could be hundreds of milliseconds — a terrible user experience. Incremental GC breaks the work into small slices, but now new objects can be allocated and pointers can change between mark slices.</p>
+      <p style="margin-top:14px;color:var(--muted);">This requires a "write barrier": every time a pointer inside a marked object is updated, the barrier adds the target to the mark worklist. Without it, a pointer added after the object was marked would be missed. How would you implement a write barrier in <code>gc_obj_set_ref()</code>?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why not just use reference counting instead of mark-and-sweep?</div>
+      <div class="a">Reference counting is simple but can't collect cycles: if object A points to B and B points to A, both have refcount > 0 forever even if nothing else refers to them. Python and Swift use refcounting + a separate cycle detector. V8 uses a generational GC (fast "young" generation + slow "old" generation) which handles cycles naturally.</div>
+      <div class="q">Q: Can the GC be used as a security mitigation?</div>
+      <div class="a">Yes — some engines zero memory before freeing it (zeroing sweeper) to prevent UAF reads from returning useful data. Others use pointer authentication (PAC on ARM) or "handle-based" references (the engine uses an indirection table; if an object is moved or freed, the handle is invalidated) to make UAF pointers invalid rather than dangerous. Chrome's MiraclePtr (PartitionAlloc quarantine) is a recent example of GC-adjacent UAF mitigation.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B10 — Type Confusion Exploit</div>
+      <p>B07 introduced type confusion as a concept. B10 weaponizes it: a real exploit chain that uses type confusion to build <code>addrof</code> and <code>fakeobj</code> primitives, then constructs arbitrary read/write from those, then escapes the renderer sandbox. The full attack, step by step.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>gc.c</code> · <code>heap.c</code> · <code>uaf_demo.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B09 of 18 &nbsp;|&nbsp; <a href="../B08_jit_compiler/tutorial.html">← B08</a> &nbsp;·&nbsp; <a href="../B10_type_confusion/tutorial.html">B10 →</a></footer>
+</body>
+</html>

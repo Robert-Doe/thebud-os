@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B05 — HTML Tokenizer | BobOS Browser Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f1a;--bg2:#111827;--bg3:#1a2235;--card:#141c2e;--border:#1e3a5f;--gold:#f5c842;--cyan:#38bdf8;--teal:#0d9488;--red:#f87171;--green:#4ade80;--purple:#a78bfa;--orange:#fb923c;--text:#e2e8f0;--muted:#7a9bbf;--code-bg:#060d1a;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.75;}
+  .hero{background:var(--bg2);border-bottom:1px solid var(--border);padding:70px 40px 60px;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(245,200,66,0.07) 0%,transparent 70%);pointer-events:none;}
+  .module-badge{display:inline-block;background:var(--gold);color:#0b0f1a;font-family:'Source Code Pro',monospace;font-weight:600;font-size:13px;padding:4px 14px;border-radius:20px;letter-spacing:1px;margin-bottom:20px;}
+  .hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.2rem,5vw,3.4rem);font-weight:900;color:#fff;margin-bottom:16px;}
+  .hero h1 span{color:var(--gold);}
+  .hero .tagline{font-size:1.15rem;color:var(--muted);max-width:640px;margin:0 auto;}
+  .hero-grid{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .hero-stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 28px;text-align:center;}
+  .hero-stat .num{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold);font-weight:700;}
+  .hero-stat .label{font-size:13px;color:var(--muted);margin-top:2px;}
+  .container{max-width:820px;margin:0 auto;padding:0 28px 80px;}
+  section{margin-top:64px;}
+  h2{font-family:'Playfair Display',serif;font-size:1.75rem;color:#fff;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+  h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--gold);margin:28px 0 10px;}
+  p{margin-bottom:14px;}
+  .callout{border-radius:10px;padding:20px 24px;margin:24px 0;border-left:4px solid;}
+  .callout.gold{background:rgba(245,200,66,0.07);border-color:var(--gold);}
+  .callout.cyan{background:rgba(56,189,248,0.07);border-color:var(--cyan);}
+  .callout.green{background:rgba(74,222,128,0.07);border-color:var(--green);}
+  .callout.red{background:rgba(248,113,113,0.07);border-color:var(--red);}
+  .callout.purple{background:rgba(167,139,250,0.07);border-color:var(--purple);}
+  .callout.orange{background:rgba(251,146,60,0.07);border-color:var(--orange);}
+  .callout.teal{background:rgba(13,148,136,0.07);border-color:var(--teal);}
+  .callout .label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;}
+  .callout.gold .label{color:var(--gold);} .callout.cyan .label{color:var(--cyan);}
+  .callout.green .label{color:var(--green);} .callout.red .label{color:var(--red);}
+  .callout.purple .label{color:var(--purple);} .callout.orange .label{color:var(--orange);}
+  .callout.teal .label{color:var(--teal);}
+  .callout p{margin-bottom:0;}
+  pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:20px 22px;overflow-x:auto;margin:20px 0;}
+  code{font-family:'Source Code Pro',monospace;font-size:14px;color:#93c5fd;}
+  pre code{color:#c4deff;}
+  .win-box{background:var(--code-bg);border:2px solid var(--teal);border-radius:10px;padding:22px 24px;margin:24px 0;}
+  .win-box h4{color:var(--teal);font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .win-box .step{margin-bottom:12px;}
+  .win-box .step .desc{color:var(--muted);font-size:13px;margin-bottom:4px;}
+  .win-box pre{margin:0;background:transparent;border:1px solid rgba(13,148,136,0.3);padding:10px 14px;}
+  .qa{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:22px 26px;margin:28px 0;}
+  .qa h4{color:var(--gold);font-size:13px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;}
+  .qa .q{color:var(--cyan);font-weight:700;margin-bottom:4px;}
+  .qa .a{color:var(--text);margin-bottom:16px;padding-left:12px;border-left:2px solid var(--border);}
+  .qa .a:last-child{margin-bottom:0;}
+  .brain{background:linear-gradient(135deg,rgba(245,200,66,0.08),rgba(251,146,60,0.08));border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:22px 26px;margin:28px 0;}
+  .brain .brain-label{font-size:13px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .state-flow{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0;align-items:center;}
+  .state-box{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:7px 14px;font-family:'Source Code Pro',monospace;font-size:12px;color:var(--cyan);}
+  .state-arrow{color:var(--muted);font-size:14px;}
+  footer{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);margin-top:80px;}
+  footer a{color:var(--cyan);text-decoration:none;}
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="module-badge">BROWSER B05 — HTML TOKENIZER</div>
+  <h1>Bytes to <span>DOM</span></h1>
+  <p class="tagline">The HTML spec has 80+ tokenizer states. Every browser must implement them identically — or attackers exploit the differences. Parser differentials are the root cause of mutation XSS.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">80+</div><div class="label">tokenizer states in the HTML spec</div></div>
+    <div class="hero-stat"><div class="num">state machine</div><div class="label">char-by-char input processing</div></div>
+    <div class="hero-stat"><div class="num">mXSS</div><div class="label">mutation XSS via parser differentials</div></div>
+    <div class="hero-stat"><div class="num">forgiving</div><div class="label">HTML parsers must accept malformed input</div></div>
+  </div>
+</div>
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../../prerequisite.html#sec-numbers">Number Systems</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>HTML parsing is like reading a book in a foreign language with no punctuation — you have to infer sentence boundaries as you go. The parser sees a stream of characters and decides: "is this a tag? an attribute? text content?" based entirely on what state it's currently in. The tricky part: HTML was designed to be fault-tolerant. <code>&lt;p&gt;Hello&lt;/p&gt;&lt;/b&gt;</code> is invalid, but every browser must parse it — and parse it the <em>same way</em>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The State Machine</h2>
+    <div class="state-flow">
+      <div class="state-box">DATA</div>
+      <div class="state-arrow">→ &lt;</div>
+      <div class="state-box">TAG_OPEN</div>
+      <div class="state-arrow">→ a-z</div>
+      <div class="state-box">TAG_NAME</div>
+      <div class="state-arrow">→ space</div>
+      <div class="state-box">BEFORE_ATTR</div>
+      <div class="state-arrow">→ a-z</div>
+      <div class="state-box">ATTR_NAME</div>
+      <div class="state-arrow">→ =</div>
+      <div class="state-box">BEFORE_ATTR_VAL</div>
+      <div class="state-arrow">→ "</div>
+      <div class="state-box">ATTR_VAL_DQ</div>
+      <div class="state-arrow">→ "</div>
+      <div class="state-box">AFTER_ATTR_VAL</div>
+      <div class="state-arrow">→ &gt;</div>
+      <div class="state-box">DATA</div>
+    </div>
+
+    <pre><code>typedef enum {
+    STATE_DATA, STATE_TAG_OPEN, STATE_TAG_NAME,
+    STATE_BEFORE_ATTR, STATE_ATTR_NAME,
+    STATE_BEFORE_ATTR_VAL, STATE_ATTR_VAL_DQ,
+    STATE_ATTR_VAL_SQ, STATE_ATTR_VAL_UNQUOTED,
+    STATE_AFTER_ATTR_VAL, STATE_SELF_CLOSING,
+    STATE_END_TAG_OPEN, STATE_COMMENT_START,
+    STATE_SCRIPT_DATA,  /* special raw-text state */
+} tok_state_t;
+
+typedef struct {
+    tok_state_t state;
+    char        tag_name[64];
+    char        attr_name[64];
+    char        attr_val[1024];
+    int         is_end_tag;
+} tokenizer_t;
+
+void tokenizer_feed(tokenizer_t *t, char c, dom_builder_t *dom) {
+    switch (t->state) {
+    case STATE_DATA:
+        if (c == '&lt;') { t->state = STATE_TAG_OPEN; break; }
+        dom_append_text(dom, c);
+        break;
+    case STATE_TAG_OPEN:
+        if (c == '/') { t->state = STATE_END_TAG_OPEN; break; }
+        if (c == '!') { t->state = STATE_COMMENT_START; break; }
+        if (isalpha(c)) {
+            t->is_end_tag = 0;
+            t->tag_name[0] = tolower(c);
+            t->tag_name[1] = '\0';
+            t->state = STATE_TAG_NAME;
+        }
+        break;
+    case STATE_TAG_NAME:
+        if (c == '&gt;') {
+            /* emit open tag token */
+            dom_open_tag(dom, t->tag_name);
+            /* switch to raw-text state for script/style */
+            if (strcmp(t->tag_name,"script")==0 ||
+                strcmp(t->tag_name,"style")==0)
+                t->state = STATE_SCRIPT_DATA;
+            else
+                t->state = STATE_DATA;
+        } else if (isspace(c)) {
+            t->state = STATE_BEFORE_ATTR;
+        } else {
+            strncat(t->tag_name, &c, 1);
+        }
+        break;
+    /* ... ~75 more states ... */
+    }
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>03 — Parser Differentials and mXSS</h2>
+    <div class="callout red">
+      <div class="label">Mutation XSS (mXSS)</div>
+      <p>A sanitizer serializes your HTML to a string, then the browser re-parses it. If the sanitizer's parser and the browser's parser interpret the same bytes differently, the sanitizer says "safe" while the browser renders a script. This is mutation XSS.</p>
+    </div>
+    <pre><code>/* Classic mXSS: inserting HTML into innerHTML triggers re-parsing */
+
+/* Step 1: attacker supplies this string */
+const char *payload = "&lt;noscript&gt;&lt;p title='&lt;/noscript&gt;"
+                      "&lt;img src=x onerror=alert(1)&gt;'&gt;";
+
+/* Step 2: sanitizer sees &lt;noscript&gt; as harmless, allows it.
+   Sanitizer's parser (with scripting disabled) treats the
+   &lt;/noscript&gt; inside the attribute as closing the noscript
+   element — payload looks safe.
+
+   Step 3: browser sets innerHTML with the "sanitized" string.
+   Browser's parser (scripting enabled) treats &lt;noscript&gt; as
+   raw text — &lt;/noscript&gt; inside attributes is NOT a closer.
+   The img tag and its onerror handler are now OUTSIDE noscript.
+   XSS fires. */
+
+/* Lesson: sanitize after serialization+re-parse, not before. */</code></pre>
+
+    <div class="callout purple">
+      <div class="label">The Fix: Parse, Don't String-Match</div>
+      <p>A correct sanitizer (like DOMPurify) parses the HTML into a DOM tree using the browser's own parser, walks the tree to remove dangerous nodes/attributes, then serializes back to a string. It never tries to make security decisions on raw HTML strings.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Run It on Windows</h2>
+    <div class="win-box">
+      <h4>Run B05 — HTML Tokenizer</h4>
+      <div class="step"><div class="desc">Build and run via WSL:</div>
+      <pre><code>wsl -d Ubuntu -- bash -c "cd /mnt/c/Users/bobcumulus/Desktop/bob_os/browser/B05_html_tokenizer && make && ./demo"</code></pre></div>
+      <div class="step"><div class="desc">Expected output:</div>
+      <pre><code>Tokenizing: &lt;div class="hello"&gt;World&lt;/div&gt;
+  OPEN_TAG: div [class="hello"]
+  TEXT: "World"
+  CLOSE_TAG: div
+
+mXSS demo:
+  Input:     &lt;noscript&gt;&lt;p title='&lt;/noscript&gt;&lt;img onerror=alert(1)&gt;'&gt;
+  Sanitized: [sanitizer says: safe]
+  Browser re-parse: &lt;img onerror=alert(1)&gt; is now LIVE — XSS!
+HTML tokenizer: OK</code></pre></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p>Our tokenizer has a <code>STATE_SCRIPT_DATA</code> for raw-text elements. In this state, the only way to exit is seeing the exact string <code>&lt;/script&gt;</code>. But what about <code>&lt;/SCRIPT&gt;</code> or <code>&lt;/Script&gt;</code>? HTML tag names are case-insensitive.</p>
+      <p style="margin-top:14px;color:var(--muted);">Add case-insensitive exit detection to <code>STATE_SCRIPT_DATA</code>. Then consider: could an attacker craft a string that exits raw-text state prematurely and injects a new script tag? Try: <code>&lt;script&gt;var x = "&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;"</code>.</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why does HTML have ~80 states? That seems like a lot.</div>
+      <div class="a">The HTML spec was written to describe how browsers already behaved — meaning all the quirks and special cases of IE, Netscape, and early Firefox were codified. Special elements like &lt;script&gt;, &lt;style&gt;, &lt;textarea&gt;, &lt;title&gt; have unique parsing rules. Comments have their own states. DOCTYPE detection, CDATA, character references — each adds states. It grew organically, not by design.</div>
+      <div class="q">Q: Why can't we just use a regex to parse HTML?</div>
+      <div class="a">HTML is not a regular language — it has nesting (requires a stack/push-down automaton at minimum), context-sensitive parsing (the same bytes mean different things inside &lt;script&gt; vs. &lt;div&gt;), and complex error recovery rules. The famous Stack Overflow answer "you can't parse HTML with regex" is correct — not as a joke, but as a formal computational theory statement.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Up Next: B06 — CSS Cascade</div>
+      <p>Once you have a DOM tree, you need to style it. The CSS cascade resolves which rule applies when multiple rules target the same element. Specificity, inheritance, and the order of stylesheets all interact — and timing side-channels in CSS selector matching can leak information about which selectors matched.</p>
+    </div>
+    <p style="color:var(--muted);font-size:15px;">Key files: <code>tokenizer.c</code> · <code>dom.c</code> · <code>mxss_demo.c</code></p>
+  </section>
+</div>
+<footer>BobOS Browser Tutorial — B05 of 18 &nbsp;|&nbsp; <a href="../B04_site_isolation/tutorial.html">← B04</a> &nbsp;·&nbsp; <a href="../B06_css_cascade/tutorial.html">B06 →</a></footer>
+</body>
+</html>

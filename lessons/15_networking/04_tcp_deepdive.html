@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCP: The Three-Way Handshake and Faking Reliability — bob_os</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.t{color:var(--teal)}
+h2 .accent.gd{color:var(--gold)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--red);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.red{border-color:var(--red);color:var(--red)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--red);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.cy{color:var(--cyan)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.gold li::before{background:rgba(245,200,66,.15);border-color:var(--gold);color:var(--gold)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(248,113,113,.1);border:1.5px solid var(--red);color:var(--red);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(248,113,113,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#unreliableip" title="IP Promises Nothing"></a>
+  <a class="toc-dot" href="#handshake" title="Three-Way Handshake"></a>
+  <a class="toc-dot" href="#seqack" title="Sequence Numbers & ACKs"></a>
+  <a class="toc-dot" href="#retransmit" title="Retransmission"></a>
+  <a class="toc-dot" href="#flowcontrol" title="Flow Control"></a>
+  <a class="toc-dot" href="#udpcontrast" title="TCP vs UDP"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">TCP · Handshakes · Reliability · Flow Control</div>
+    <h1>Faking Reliability<br><span>Over an Unreliable Wire</span></h1>
+    <p class="hero-sub">IP promises almost nothing: your packet might arrive, might arrive twice, might arrive after the packet you sent behind it, or might just vanish with no explanation. TCP is built entirely on top of that shaky foundation, and yet somehow gives you a connection that feels like a perfectly ordered, lossless stream of bytes. It isn't magic — it's three simple ideas (numbered bytes, acknowledgments, and retransmission) applied with total discipline. This lesson is about how that trick actually works, and about UDP, which looks at the whole trick and says "no thanks."</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Segments to Open a Connection (SYN, SYN-ACK, ACK)</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Sequence Number Per Byte, Not Per Packet</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Reliability Guarantees From IP Itself</div></div>
+      <div class="hero-stat"><div class="num">11</div><div class="lbl">States in TCP's Full Connection Machine</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Lesson 1 Named the <span class="accent">Transport Layer</span> — This Is It</h2>
+  <p class="reveal">Lesson 1 of this cluster put TCP and UDP side by side in the same box — "transport layer, kernel code, chooses reliable vs. unreliable." This lesson is entirely about the "reliable" half of that choice, and what "reliable" actually costs to build.</p>
+  <p class="reveal">Worth being upfront: bob_os's own module <code>26_network</code> ships UDP only. Its tutorial says exactly why, and it's a good list to have in front of you before this lesson starts, because it's the syllabus for everything below: <em>"connection state (CLOSED, SYN_SENT, ESTABLISHED, FIN_WAIT_1, FIN_WAIT_2, TIME_WAIT, CLOSE_WAIT, LAST_ACK — 11 states), sequence numbers, ACK tracking, retransmission timers, window sizing, and congestion control."</em> This lesson covers the conceptual core of that list — sequence numbers, ACKs, retransmission, and windowing — the ideas you'd reach for first if you built TCP into bob_os yourself.</p>
+
+  <div class="sidenote reveal">
+    <b>Scope note:</b> full TCP also includes congestion control (slow start, AIMD, and friends) and the complete 11-state connection teardown machine. Both are real subjects worth their own lesson; this one focuses on the two ideas that make TCP <em>reliable</em> in the first place — sequencing/acknowledgment and flow control — since those are the concepts the handshake exists to set up.
+  </div>
+</div>
+</section>
+
+<!-- UNRELIABLE IP -->
+<section id="unreliableip">
+<div class="container">
+  <div class="section-num">01 — The Foundation TCP Has to Work Around</div>
+  <h2>IP Promises <span class="accent">Almost Nothing</span></h2>
+
+  <p class="reveal">It's worth stating plainly, because everything else in this lesson is a reaction to it: IP is a <strong>best-effort</strong> protocol. It makes no guarantee your packet will arrive, arrive only once, or arrive in the order you sent it. Routers drop packets under congestion. Different packets between the same two machines can take different physical paths and arrive out of order. A packet can even be duplicated by a misbehaving link. IP shrugs at all of this — its job is "try to get this packet roughly where it's going," full stop.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">Drop</div><div class="lbl">A router queue fills up, packet discarded</div></div>
+    <div class="stat-card"><div class="val">Reorder</div><div class="lbl">Packet 2 arrives before packet 1</div></div>
+    <div class="stat-card"><div class="val">Duplicate</div><div class="lbl">The same packet arrives twice</div></div>
+    <div class="stat-card"><div class="val">Delay</div><div class="lbl">Wildly variable arrival timing</div></div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Everything Below Exists Because of This List</div>
+    Every mechanism TCP has — sequence numbers, acknowledgments, retransmission timers, reordering buffers — exists solely to paper over one or more of these four failure modes. Take any one of them away and some part of TCP would become unnecessary. Understanding TCP is really just understanding "what specific trick cancels out which specific way IP can fail you."
+  </div>
+</div>
+</section>
+
+<!-- HANDSHAKE -->
+<section id="handshake">
+<div class="container">
+  <div class="section-num">02 — Before Any Data Moves</div>
+  <h2>The Three-Way <span class="accent">Handshake</span></h2>
+
+  <p class="reveal">Before a single byte of your actual data travels anywhere, TCP spends three segments just agreeing on bookkeeping. The goal: both sides need to pick a starting number — an <strong>Initial Sequence Number (ISN)</strong> — for their own outgoing byte stream, and both sides need proof the other end is actually there and listening, not just a spoofed packet.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>SYN — client proposes an ISN</strong>The client picks a (effectively random) starting sequence number, say 5000, and sends a segment with the <code>SYN</code> flag set and <code>seq=5000</code>. This says: "I'd like to connect, and my byte stream starts counting from 5000."</div></li>
+    <li><div class="step-body"><strong>SYN-ACK — server proposes its own ISN and acknowledges the client's</strong>The server picks its own starting number, say 9000, and replies with both flags set: <code>SYN</code> (its own proposal, <code>seq=9000</code>) and <code>ACK</code> (acknowledging the client's SYN, <code>ack=5001</code> — one more than the client's ISN, since a SYN itself consumes one sequence number).</div></li>
+    <li><div class="step-body"><strong>ACK — client acknowledges the server's ISN</strong>The client replies once more, <code>ACK</code> only, <code>ack=9001</code>. At this point both sides have sent, and had acknowledged, a starting number. The connection is now <strong>ESTABLISHED</strong> and ordinary data segments can flow in either direction.</div></li>
+  </ol>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="handshakeLabel">▶ Run the three-way handshake</div>
+    <canvas id="handshakeCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runHandshake()">▶ Animate: SYN → SYN-ACK → ACK</button>
+    <button class="ctrl-btn gold" onclick="runHandshake(true)">▶ Animate With a Dropped SYN (retry)</button>
+    <button class="ctrl-btn cyan" onclick="resetHandshake()">Reset</button>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    Why does it take <em>three</em> messages, not two? Because agreement has to be <strong>mutual</strong> and <strong>confirmed</strong>. After message 2 (SYN-ACK), the server has proposed its ISN but doesn't yet know the client actually received it — for all the server knows, that segment got dropped. Message 3 closes that gap: it's the client's proof, back to the server, that the server's ISN was received. Two messages would leave the server permanently unsure; three is the minimum needed for both sides to be confident the other is synchronized.
+  </div>
+</div>
+</section>
+
+<!-- SEQ/ACK -->
+<section id="seqack">
+<div class="container">
+  <div class="section-num">03 — The Actual Reliability Trick</div>
+  <h2>Every Byte Gets <span class="accent">a Number</span></h2>
+
+  <p class="reveal">Once the handshake is done, here's the entire idea that makes TCP "reliable," stripped to its essence:</p>
+
+  <div class="formula red reveal">
+    <span class="label">TCP's reliability trick, in one sentence</span>
+    Number every byte → the receiver says which bytes it has → the sender resends whatever wasn't acknowledged
+    <span class="sub">That's it. No byte is ever "trusted" to have arrived until the other side explicitly says so, in terms of exact sequence numbers.</span>
+  </div>
+
+  <p class="reveal">Concretely: TCP doesn't track "packet 1, packet 2, packet 3" — it tracks individual <strong>byte offsets</strong> within the stream, starting from the ISN agreed on in the handshake. If the client's ISN was 5000 and it sends 200 bytes, those bytes occupy sequence numbers 5000 through 5199, and the segment carrying them is labeled <code>seq=5000, len=200</code>. When the server has successfully received all of them, it sends back <code>ack=5200</code> — meaning, precisely, "I have everything up through byte 5199; send me 5200 next."</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Sender Sends</th><th>Meaning</th><th>Receiver Replies</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">seq=5000, len=200</td><td>"Here are bytes 5000–5199"</td><td class="cy">ack=5200</td><td>"Got everything through 5199"</td></tr>
+        <tr><td class="hl">seq=5200, len=200</td><td>"Here are bytes 5200–5399"</td><td class="cy">ack=5400</td><td>"Got everything through 5399"</td></tr>
+        <tr><td class="hl">seq=5400, len=200 <em>(lost in transit)</em></td><td>"Here are bytes 5400–5599"</td><td class="neg">ack=5400 (again)</td><td>"Still only have through 5399 — resend!"</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧠 ACKs Are Cumulative, Not Per-Packet</div>
+    A single <code>ack=5400</code> confirms <em>every</em> byte up to that point, not just the most recent segment — so a lost ACK isn't fatal; the next ACK that does arrive re-confirms everything anyway. This is also exactly how gaps get detected: if the receiver keeps getting new data but a chunk is missing in the middle, it keeps re-sending the <em>same</em> ack number (the last byte it has <em>contiguously</em>) until the gap is filled, which is a strong signal to the sender that something specific needs resending.
+  </div>
+</div>
+</section>
+
+<!-- RETRANSMISSION -->
+<section id="retransmit">
+<div class="container">
+  <div class="section-num">04 — When an ACK Never Comes</div>
+  <h2>Retransmission: <span class="accent">The Safety Net</span></h2>
+
+  <p class="reveal">Sending data and hoping an ACK shows up isn't enough by itself — what if it never does, because the original segment was dropped by an overloaded router? TCP's answer: every segment sent starts a <strong>retransmission timer</strong>. If the corresponding ACK hasn't arrived by the time that timer expires — the <strong>Retransmission Timeout (RTO)</strong> — TCP assumes the segment (or its ACK) was lost, and sends it again.</p>
+
+  <ol class="step-list gold reveal">
+    <li><div class="step-body"><strong>Segment sent, timer starts</strong>The sender keeps an unacknowledged copy of the data in a local buffer — it can't discard it until it's confirmed received.</div></li>
+    <li><div class="step-body"><strong>RTO expires with no ACK</strong>The sender assumes loss (of either the data or the ACK — it can't tell which, and it doesn't need to) and retransmits the exact same bytes.</div></li>
+    <li><div class="step-body"><strong>The timer itself is adaptive</strong>A real TCP implementation doesn't use a fixed timeout — it continuously measures round-trip time (RTT) to the peer and sets RTO a bit above the observed average, so it retransmits promptly on a fast local network and patiently on a slow, high-latency one.</div></li>
+  </ol>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧵 Why the Sender Can't Just "Know" Data Was Lost</div>
+    There is no notification from IP saying "your packet was dropped." IP is fire-and-forget in both directions — routers that discard a packet under congestion don't (reliably) tell anyone. Silence is the <em>only</em> signal TCP ever gets, which is exactly why a timeout, not an error message, is the mechanism. This is a direct consequence of section 01: IP promises nothing, so TCP can't even ask it what went wrong.
+  </div>
+</div>
+</section>
+
+<!-- FLOW CONTROL -->
+<section id="flowcontrol">
+<div class="container">
+  <div class="section-num">05 — Not Overwhelming the Other Side</div>
+  <h2>Flow Control: <span class="accent">The Receive Window</span></h2>
+
+  <p class="reveal">Reliability alone would let a fast sender blast data at a slow receiver faster than it can process it — filling up buffers and forcing drops that then trigger the exact retransmission machinery from section 04, wastefully. TCP avoids this with a second, independent number riding along on every ACK: the <strong>receive window (rwnd)</strong>.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">What the receive window actually says</span>
+    "Don't send more than N more bytes beyond what I've already acknowledged"
+    <span class="sub">The receiver advertises this number on every ACK, based on how much free space is currently left in its own receive buffer — it shrinks under load and grows back as the buffer drains.</span>
+  </div>
+
+  <p class="reveal">This is purely about <em>pace</em>, not about correctness — it has nothing to do with lost packets. Think of it as the receiver constantly saying "here's how much more I can currently handle," and the sender respecting that ceiling no matter how fast it's technically capable of sending. If the receive window ever drops to zero — the receiver's buffer is completely full — the sender must stop entirely and wait for a later ACK announcing free space again.</p>
+
+  <div class="sidenote reveal">
+    <b>Not the same thing as congestion control:</b> flow control protects the <em>receiver</em> from being overwhelmed by <em>this one sender</em>. Congestion control (slow start, AIMD, and similar algorithms — out of scope for this lesson, and for bob_os's current module 26 syllabus) protects the <em>network itself</em> from being overwhelmed by <em>all senders combined</em>. TCP runs both limits simultaneously and always obeys whichever one is currently smaller.
+  </div>
+</div>
+</section>
+
+<!-- UDP CONTRAST -->
+<section id="udpcontrast">
+<div class="container">
+  <div class="section-num">06 — The Deliberate Alternative</div>
+  <h2>TCP vs <span class="accent c">UDP</span>: A Real Choice, Not a Downgrade</h2>
+
+  <p class="reveal">Every mechanism above — the handshake, sequence numbers, ACKs, retransmission, the receive window — costs something: extra round trips before data can flow, buffering on both ends, and delay while lost data is re-requested and re-delivered. UDP is what you get by deliberately deleting all of it: no handshake, no sequence numbers, no acknowledgments, no retransmission, no ordering guarantee. You hand the kernel a datagram, it does its best-effort IP send, and that's the entire contract — precisely bob_os's own module 26 transport layer today.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>TCP</th><th>UDP</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Connection setup</td><td class="pos">Three-way handshake required</td><td class="neg">None — first datagram just goes</td></tr>
+        <tr><td class="hl">Delivery guarantee</td><td class="pos">Retransmits until acknowledged</td><td class="neg">Fire-and-forget, may be lost silently</td></tr>
+        <tr><td class="hl">Ordering</td><td class="pos">Reassembled in original order</td><td class="neg">Delivered in whatever order it arrives</td></tr>
+        <tr><td class="hl">Duplicate suppression</td><td class="pos">Sequence numbers filter duplicates</td><td class="neg">A duplicated datagram is delivered twice</td></tr>
+        <tr><td class="hl">Flow / congestion control</td><td class="pos">Built in (receive window + congestion control)</td><td class="neg">None — application's problem if it needs one</td></tr>
+        <tr><td class="hl">Per-message overhead</td><td class="neg">20-byte header, handshake latency</td><td class="pos">8-byte header, zero setup latency</td></tr>
+        <tr><td class="hl">Head-of-line blocking</td><td class="neg">A lost segment stalls everything behind it</td><td class="pos">A lost datagram never blocks the next one</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐢 When TCP's Overhead Is Worth Paying</h4>
+      File transfers, web pages, anything where <strong>correctness matters more than latency</strong> and losing or reordering a byte would corrupt the result. You'd rather wait an extra 100ms for a retransmit than receive a broken file.
+    </div>
+    <div class="compare-card good">
+      <h4>⚡ Why Applications Deliberately Choose UDP</h4>
+      Live voice/video calls, competitive multiplayer games, DNS lookups. A voice packet that arrives late is <em>worse than useless</em> — you'd rather drop it and move on than pause the whole stream waiting for a retransmit. Lower latency, and no head-of-line blocking, matter more than perfect delivery.
+    </div>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ "No Reliability" Doesn't Mean "No Reliability Ever"</div>
+    Choosing UDP doesn't forbid reliability — it just moves the decision of <em>what kind</em> of reliability up to the application layer, where it can be made smarter than TCP's generic one-size-fits-all guarantee. A video call might resend only the most recent frame instead of every old one; a game might only care about the <em>latest</em> position update, where TCP's strict-ordering retransmission of a stale packet would actively make things worse. This is precisely the "application layer" box from lesson 1 of this cluster, doing real, custom work — using UDP as its foundation instead of trusting TCP's specific tradeoffs.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Three-Way Handshake</div><div class="glossary-def">The SYN / SYN-ACK / ACK exchange that establishes a TCP connection and lets both sides agree on initial sequence numbers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ISN (Initial Sequence Number)</div><div class="glossary-def">The starting byte-offset each side chooses for its own outgoing stream, proposed during the handshake.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sequence Number</div><div class="glossary-def">The byte offset of the first byte in a given segment, counted from that side's ISN — TCP numbers bytes, not packets.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Acknowledgment (ACK)</div><div class="glossary-def">A cumulative confirmation of "everything up through this byte offset has been received," carried on segments flowing the other direction.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Retransmission Timeout (RTO)</div><div class="glossary-def">How long a sender waits for an ACK before assuming loss and resending — adaptively set based on measured round-trip time.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Receive Window (rwnd)</div><div class="glossary-def">The amount of additional data a receiver is currently willing to accept, advertised on every ACK — TCP's flow-control mechanism.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Congestion Control</div><div class="glossary-def">A separate mechanism (not covered in depth here) that limits sending rate to protect the shared network itself, independent of any one receiver's buffer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Head-of-Line Blocking</div><div class="glossary-def">When one lost or delayed unit of data forces everything queued behind it to wait, even if that later data has already arrived — a TCP tradeoff UDP avoids.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Best-Effort Delivery</div><div class="glossary-def">IP's own guarantee level: it tries to deliver a packet but makes no promise about success, order, or duplication — the problem TCP exists to solve.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>TCP: The Three-Way Handshake and How Reliability Is Faked Over an Unreliable Wire · Companion lesson for bob_os module 26_network</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Number the bytes. Wait for the ACK. Resend if silence. That's the whole trick.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='';const lines=[];
+  for(const w of words){
+    const test=line+w+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){lines.push(line);line=w+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY=y-(lines.length-1)*lh/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(),cx,startY+i*lh));
+}
+
+// ── THREE-WAY HANDSHAKE CANVAS ──────────────────────────────────────────────
+function drawHandshake(now,events,clientLabel,serverLabel,caption){
+  const canvas=document.getElementById('handshakeCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cx=W*0.18, sx=W*0.82, topY=50, botY=H-70;
+  ctx.strokeStyle=C.border;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx,topY);ctx.lineTo(cx,botY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(sx,topY);ctx.lineTo(sx,botY);ctx.stroke();
+
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('CLIENT',cx,topY-16);
+  ctx.fillStyle=C.teal;
+  ctx.fillText('SERVER',sx,topY-16);
+
+  // draw each completed/animating event as an arrow
+  events.forEach(ev=>{
+    const y0=topY + (botY-topY)*ev.yStart;
+    const y1=topY + (botY-topY)*ev.yEnd;
+    const x0 = ev.dir==='right'? cx : sx;
+    const x1 = ev.dir==='right'? sx : cx;
+    let progress = ev.done ? 1 : Math.max(0,Math.min(1,(now-ev.start)/ev.dur));
+    if(progress<=0) return;
+    const curX = x0 + (x1-x0)*progress;
+    const curY = y0 + (y1-y0)*progress;
+
+    ctx.strokeStyle = ev.dropped ? C.red : ev.color;
+    ctx.lineWidth=2;
+    ctx.setLineDash(ev.dropped? [4,3] : []);
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(curX,curY);ctx.stroke();
+    ctx.setLineDash([]);
+
+    if(!ev.dropped || progress<0.85){
+      ctx.beginPath();ctx.arc(curX,curY,5,0,Math.PI*2);
+      ctx.fillStyle= ev.dropped? C.red : ev.color; ctx.fill();
+    }
+    if(ev.dropped && progress>=0.55 && progress<0.9){
+      ctx.fillStyle=C.red;ctx.font='16px sans-serif';ctx.textAlign='center';
+      ctx.fillText('✕',curX,curY-10);
+    }
+    // label
+    if(progress>0.15){
+      ctx.fillStyle= ev.dropped? C.red : ev.color;ctx.font='10px Source Code Pro,monospace';
+      const midX=(x0+x1)/2, midY=(y0+y1)/2 - 10;
+      ctx.textAlign='center';
+      ctx.fillText(ev.label, midX, y0-8+(y1-y0)*Math.min(progress,1)*0 + (y0));
+    }
+  });
+
+  // static labels above each arrow's origin row, drawn separately for legibility
+  events.forEach(ev=>{
+    if(!ev.done) return;
+    const y0=topY + (botY-topY)*ev.yStart;
+    const x0 = ev.dir==='right'? cx : sx;
+    const x1 = ev.dir==='right'? sx : cx;
+    ctx.fillStyle= ev.dropped? C.red : ev.color;
+    ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(ev.label,(x0+x1)/2, y0-6);
+  });
+
+  ctx.fillStyle=C.text;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,caption,W/2,H-30,W-80,17);
+}
+
+let hsAnim=null;
+function runHandshake(withDrop){
+  if(hsAnim) cancelAnimationFrame(hsAnim);
+  const dur=750;
+  const seq = withDrop ? [
+    {dir:'right',label:'SYN seq=5000',color:C.cyan,yStart:0.08,yEnd:0.32,dropped:true, cap:'Client sends SYN — but this one gets lost on the wire'},
+    {dir:'right',label:'SYN seq=5000 (retry)',color:C.cyan,yStart:0.4,yEnd:0.62,dropped:false, cap:'No SYN-ACK arrived before the RTO — client retransmits the SYN'},
+    {dir:'left',label:'SYN-ACK seq=9000 ack=5001',color:C.teal,yStart:0.62,yEnd:0.78,dropped:false, cap:'This time it arrives — server proposes ISN 9000, acks client’s 5000'},
+    {dir:'right',label:'ACK ack=9001',color:C.gold,yStart:0.78,yEnd:0.92,dropped:false, cap:'Client acknowledges — connection is now ESTABLISHED'},
+  ] : [
+    {dir:'right',label:'SYN seq=5000',color:C.cyan,yStart:0.1,yEnd:0.35,dropped:false, cap:'Client proposes ISN 5000 — "I want to connect, my stream starts here"'},
+    {dir:'left',label:'SYN-ACK seq=9000 ack=5001',color:C.teal,yStart:0.4,yEnd:0.65,dropped:false, cap:'Server proposes its own ISN 9000, and acknowledges the client’s 5000'},
+    {dir:'right',label:'ACK ack=9001',color:C.gold,yStart:0.7,yEnd:0.92,dropped:false, cap:'Client acknowledges the server’s ISN — connection is now ESTABLISHED'},
+  ];
+
+  const events=[];
+  document.getElementById('handshakeLabel').textContent = withDrop
+    ? '▶ Animating — a dropped SYN and a real-world retry'
+    : '▶ Animating — the happy-path three-way handshake';
+
+  let idx=0,start=performance.now();
+  function frame(t){
+    const elapsed=t-start;
+    if(idx<seq.length){
+      const cur={...seq[idx],start:start,dur};
+      const activeEvents=[...events, cur];
+      drawHandshake(t,activeEvents,'CLIENT','SERVER',seq[idx].cap);
+      if(elapsed>=dur){
+        events.push({...seq[idx],done:true});
+        idx++;
+        start=t;
+      }
+      hsAnim=requestAnimationFrame(frame);
+    } else {
+      drawHandshake(t,events,'CLIENT','SERVER','Handshake complete — ESTABLISHED. Ordinary numbered data segments can now flow.');
+    }
+  }
+  hsAnim=requestAnimationFrame(frame);
+}
+function resetHandshake(){
+  if(hsAnim) cancelAnimationFrame(hsAnim);
+  document.getElementById('handshakeLabel').textContent='▶ Run the three-way handshake';
+  drawHandshake(0,[],'CLIENT','SERVER','Choose a scenario above to begin');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetHandshake(); });
+window.addEventListener('resize',()=>{ resetHandshake(); });
+</script>
+</body>
+</html>

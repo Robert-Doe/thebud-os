@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building malloc() From Scratch: What a Heap Allocator Actually Does</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(13,148,136,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(13,148,136,.12);border:1px solid rgba(13,148,136,.4);color:var(--teal);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--teal)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--teal);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--teal);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--teal)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--teal);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--teal);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.teal{border-color:var(--teal);color:var(--teal)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--teal);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(13,148,136,.15);border:1.5px solid var(--teal);color:var(--teal);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(13,148,136,.1);border:1.5px solid var(--teal);color:var(--teal);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(13,148,136,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--teal);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: static memory-block diagram for the free list */
+.mem-row{display:flex;align-items:stretch;gap:2px;margin:1.6rem 0;overflow-x:auto;padding-bottom:1.2rem;}
+.mem-blk{position:relative;min-width:90px;border-radius:6px;display:flex;flex-direction:column;}
+.mem-blk .hdr-part{background:rgba(245,200,66,.16);border:1.5px solid var(--gold);color:var(--gold);border-radius:6px 6px 0 0;font-family:'Source Code Pro',monospace;font-size:.68rem;text-align:center;padding:.35rem 0;}
+.mem-blk .data-part{flex:1;display:flex;align-items:center;justify-content:center;font-family:'Source Code Pro',monospace;font-size:.72rem;text-align:center;padding:.6rem .4rem;border:1.5px solid var(--border);border-top:none;border-radius:0 0 6px 6px;}
+.mem-blk.free .data-part{background:rgba(74,222,128,.1);border-color:var(--green);color:var(--green);}
+.mem-blk.used .data-part{background:rgba(248,113,113,.1);border-color:var(--red);color:var(--red);}
+.mem-blk .nextptr{position:absolute;top:-1.5rem;left:0;right:0;text-align:center;font-family:'Source Code Pro',monospace;font-size:.62rem;color:var(--teal);white-space:nowrap;}
+.mem-blk .ptrlabel{position:absolute;bottom:-1.5rem;left:0;right:0;text-align:center;font-family:'Source Code Pro',monospace;font-size:.62rem;color:var(--cyan);white-space:nowrap;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#nolibc" title="No libc Down Here"></a>
+  <a class="toc-dot" href="#freelist" title="The Free List Idea"></a>
+  <a class="toc-dot" href="#header" title="The Block Header"></a>
+  <a class="toc-dot" href="#mallocptr" title="Why malloc Returns Past the Header"></a>
+  <a class="toc-dot" href="#freewalk" title="How free() Finds Its Way Back"></a>
+  <a class="toc-dot" href="#realcode" title="bob_os's heap.c"></a>
+  <a class="toc-dot" href="#pitfalls" title="Pitfalls"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Module 08 · Heap · Free Lists · malloc() / free()</div>
+    <h1>Building <span>malloc()</span><br>From Scratch</h1>
+    <p class="hero-sub">Every user-space program you've ever written got <code>malloc()</code> for free, supplied by libc. The kernel has no such luxury — it <em>is</em> the thing libc eventually calls down into. This page is about the single idea that makes a from-scratch allocator possible: a linked list of free chunks, threaded through the very memory it manages, with no separate bookkeeping table anywhere.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Header Per Chunk</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">External Bookkeeping Tables</div></div>
+      <div class="hero-stat"><div class="num">8B</div><div class="lbl">Typical Header Size (bob_os)</div></div>
+      <div class="hero-stat"><div class="num">O(n)</div><div class="lbl">Cost of a Naive Free-List Search</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- NO LIBC -->
+<section id="nolibc">
+<div class="container">
+  <div class="section-num">00 — The Problem</div>
+  <h2>Why the Kernel Needs Its <span class="accent">Own</span> Heap</h2>
+
+  <p class="reveal">In every C program you've written before this project, when you called <code>malloc(64)</code>, you were calling into glibc (or musl, or whatever libc your platform ships). That library has already done the hard part: it asked the OS for a big slab of memory via <code>brk()</code> or <code>mmap()</code>, and then it carves that slab into whatever sizes your program asks for. <strong>You never had to think about where the memory inside that slab actually comes from.</strong></p>
+
+  <p class="reveal">Now flip the perspective. bob_os <em>is</em> the OS. There is no layer underneath it to call <code>malloc()</code> on. By Module 06 the kernel has a Physical Memory Manager (the PMM) that can hand out whole 4&nbsp;KB pages — and only whole pages. But kernel code constantly needs small, oddly-sized, dynamically-lived chunks: a 32-byte process control block here, a 96-byte linked-list node there, a 12-byte string buffer somewhere else. Rounding every single one of those up to a full page would be catastrophic waste — a 12-byte allocation eating an entire 4096-byte page is over 99.7% wasted space.</p>
+
+  <div class="callout teal reveal">
+    <div class="callout-title">The Aha Moment</div>
+    A <strong>heap allocator</strong> is the software layer that sits between "the PMM hands out whole pages" and "kernel code wants arbitrary-sized chunks." It takes a small number of pages, and subdivides them into as many differently-sized pieces as needed — handing pieces out with <code>kmalloc()</code>, and taking them back with <code>kfree()</code>. Everything below this page is about exactly how that subdividing actually works, with zero help from any pre-existing allocator.
+  </div>
+
+  <p class="reveal">This is genuinely a "turtles all the way down, until they aren't" moment. User-space <code>malloc()</code> is implemented in terms of pages the kernel hands it. The kernel's own <code>kmalloc()</code> is implemented in terms of pages <em>its own</em> PMM hands it. Same problem, one level lower, and this time you're the one writing the solution.</p>
+
+  <div class="sidenote reveal"><b>Naming convention:</b> bob_os calls its kernel allocator <code>kmalloc()</code>/<code>kfree()</code> rather than <code>malloc()</code>/<code>free()</code> — this mirrors real kernels (Linux's own internal allocator is also called <code>kmalloc()</code>). The "k" is just a reminder that this is the kernel's private heap, not a process's user-space heap. The underlying idea is identical either way, which is why this lesson uses "malloc" and "kmalloc" interchangeably when talking about the concept.</div>
+</div>
+</section>
+
+<!-- FREE LIST -->
+<section id="freelist">
+<div class="container">
+  <div class="section-num">01 — The Core Idea</div>
+  <h2>The <span class="accent">Free List</span>: Bookkeeping With No Bookkeeping</h2>
+
+  <p class="reveal">Here's the problem an allocator has to solve, stated plainly: given a pool of raw memory, and a stream of requests like "give me 64 bytes," "give me 128 bytes," "here, take this 64 bytes back," "give me 200 bytes" — how do you keep track of which parts of the pool are currently free, without spending memory <em>outside</em> the pool to track it?</p>
+
+  <p class="reveal">You could imagine a separate array somewhere: <code>{ address: 0x1000, size: 256, free: true }</code>, one entry per chunk. That works, but it has an ugly property: you don't know in advance how many chunks there will be, so that array itself needs its own dynamic memory — which is exactly the problem you're trying to solve in the first place. Circular.</p>
+
+  <div class="formula teal reveal">
+    <span class="label">The trick that breaks the circularity</span>
+    Store the bookkeeping <em>inside</em> the memory being managed.
+    <span class="sub">Every free chunk's own bytes double as a tiny record: "I am free, I am this big, and here's where the next free chunk is." No external table required — the free memory tracks itself.</span>
+  </div>
+
+  <p class="reveal">This is the <strong>free list</strong>: a singly-linked list of every currently-unused chunk of memory, where the list nodes aren't allocated separately — they <em>are</em> the free chunks. The first few bytes of each free chunk are repurposed to hold a small header, and that header's "next" field points at the next free chunk somewhere else in the pool. Follow the chain, and you've walked every free chunk in the heap without a single byte of memory spent outside the heap itself.</p>
+
+  <div class="mem-row reveal">
+    <div class="mem-blk used" style="flex:1"><div class="hdr-part">HDR</div><div class="data-part">used · 32B<br>(process struct)</div></div>
+    <div class="mem-blk free" style="flex:2">
+      <div class="nextptr">free list head →</div>
+      <div class="hdr-part">HDR · next→C</div>
+      <div class="data-part">free · 128B</div>
+    </div>
+    <div class="mem-blk used" style="flex:1"><div class="hdr-part">HDR</div><div class="data-part">used · 16B<br>(fd table)</div></div>
+    <div class="mem-blk free" style="flex:1">
+      <div class="hdr-part">HDR · next→NULL</div>
+      <div class="data-part">free · 64B</div>
+    </div>
+  </div>
+  <p class="reveal" style="font-size:.9rem;color:var(--muted);margin-top:-.6rem;">Four chunks laid out contiguously in the heap pool. Only two of them (B and D) are actually part of the free list — their headers hold "next" pointers chaining them together. The used chunks A and C simply aren't in the chain at all; nothing ever needs to walk to them.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">Why "Threaded Through Memory" Is the Right Phrase</div>
+    Notice that chunk B's header and chunk D's header are physically far apart, separated by a used chunk (C) sitting between them in the pool. The free list doesn't care about physical adjacency — it's a logical chain built purely out of "next" pointers, laid on top of whatever the physical layout happens to be. That's exactly what "threaded through the underlying memory" means: the list <em>is</em> the memory, just interpreted a certain way.
+  </div>
+</div>
+</section>
+
+<!-- HEADER -->
+<section id="header">
+<div class="container">
+  <div class="section-num">02 — The Anatomy of a Chunk</div>
+  <h2>The <span class="accent">Block Header</span>: Metadata Riding Along For Free</h2>
+
+  <p class="reveal">Every chunk in the pool — free <em>or</em> used — starts with a small fixed-size header immediately followed by the chunk's usable data area. The header is the only overhead the allocator ever pays per chunk, and in a minimal design it needs to answer just two or three questions:</p>
+
+  <ul class="reveal">
+    <li><strong>How big is this chunk's data area?</strong> — a <code>size</code> field, so <code>kfree()</code> and <code>kmalloc()</code> both know exactly how far the data extends before the next chunk's header begins.</li>
+    <li><strong>Is it currently free or in use?</strong> — a one-bit flag (often packed into the low bit of another field, since a flag rarely needs a whole extra word to itself).</li>
+    <li><strong>If it's free, what's the next free chunk?</strong> — a <code>next</code> pointer, present in the classic explicit free-list design taught here. (You'll see in the grounding callout below that bob_os's actual <code>heap.c</code> skips this field and finds the next chunk by pure arithmetic instead — both are valid, and the trade-off is worth understanding.)</li>
+  </ul>
+
+  <pre class="reveal"><span class="tag">C — the textbook explicit free-list header</span><code><span class="kw">typedef struct</span> free_block {
+    <span class="cls">uint32_t</span>          size;   <span class="cm">/* bytes of usable data, NOT including this header */</span>
+    <span class="cls">uint32_t</span>          is_free; <span class="cm">/* 1 = free, 0 = in use */</span>
+    <span class="kw">struct</span> free_block *next;  <span class="cm">/* next chunk in the free list (garbage/unused when in use) */</span>
+} <span class="cls">free_block_t</span>;
+
+<span class="cm">/* One chunk in memory looks like this:
+ *
+ *   [ free_block_t header ][ ......... usable data ......... ]
+ *    ^ size, is_free, next   ^ this is the pointer malloc() returns
+ */</span></code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Aha Moment</div>
+    The header lives <strong>immediately before</strong> the data area, at a fixed, predictable offset: exactly <code>sizeof(free_block_t)</code> bytes before whatever pointer the caller ends up holding. That single fact — a fixed, known distance between "the pointer the caller has" and "the header describing it" — is the entire mechanism that lets <code>kfree()</code> work with no lookup table. Hold onto this; the next two sections are just this idea, played out in both directions.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Field</th><th>Purpose</th><th>Present in bob_os's real header?</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">size</td><td>Bytes of usable data in this chunk (header excluded)</td><td class="pos">Yes</td></tr>
+        <tr><td class="hl">is_free / flags</td><td>Whether this chunk is currently handed out</td><td class="pos">Yes (packed into <code>flags</code>)</td></tr>
+        <tr><td class="hl">next</td><td>Pointer to the next chunk in the free list</td><td class="neg">No — see the grounding callout in the next section</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- WHY PTR PAST HEADER -->
+<section id="mallocptr">
+<div class="container">
+  <div class="section-num">03 — Answering It Directly</div>
+  <h2>Why Does <span class="accent">malloc()</span> Return a Pointer <em>Past</em> the Header?</h2>
+
+  <p class="reveal">This is the detail that trips people up the first time they read allocator source: <code>kmalloc()</code> never hands back a pointer to the header it just found. It hands back a pointer to the byte <em>immediately after</em> the header — the start of the usable data area. Once you see why, it becomes obvious it couldn't work any other way.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>The caller only wants to use the data.</strong> When kernel code calls <code>kmalloc(64)</code>, it wants 64 usable bytes to store a struct in. It has no business reading or writing the header — that's the allocator's own private bookkeeping, and if the caller could freely scribble over the <code>size</code>/<code>flags</code>/<code>next</code> fields, one buggy write would corrupt the entire heap's internal structure.</div></li>
+    <li><div class="step-body"><strong>So the returned pointer must skip the header entirely.</strong> If the chunk starts at address <code>0x2000</code> and the header is 8 bytes, the caller's usable region starts at <code>0x2008</code> — and that's exactly the address <code>kmalloc()</code> returns. In C this is just pointer arithmetic on the header type: <code>return (void*)(header_ptr + 1);</code> — "add 1" to a <code>free_block_t*</code> advances by <code>sizeof(free_block_t)</code> bytes automatically.</div></li>
+    <li><div class="step-body"><strong>This keeps the header invisible and safe by construction.</strong> The caller never even needs to know a header exists. It just has a plain pointer into the middle of the pool that behaves exactly like memory from any other allocator. The header is "hidden in plain sight" a fixed number of bytes to the left.</div></li>
+  </ol>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="mallocLabel">▶ Watch kmalloc(64) search the free list and return a pointer past the header</div>
+    <canvas id="mallocCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runMalloc()">▶ Run kmalloc(64)</button>
+    <button class="ctrl-btn red" onclick="resetHeapCanvas()">Reset</button>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">The Pointer Math, Spelled Out</div>
+    If a chunk's header sits at address <var>H</var> and the header type is <code>HDR_SIZE</code> bytes wide, the data area starts at exactly <var>H + HDR_SIZE</var>. That's the address returned to the caller. Go the other direction — <var>data_ptr − HDR_SIZE</var> — and you're back at the header. This is a plain, constant-time subtraction; no search, no table, no metadata lookup by address. That reversibility is the whole point, and it's exactly what the next section is about.
+  </div>
+</div>
+</section>
+
+<!-- FREE WALK BACK -->
+<section id="freewalk">
+<div class="container">
+  <div class="section-num">04 — Answering It Directly</div>
+  <h2>How <span class="accent">free()</span> Finds Its Way Back</h2>
+
+  <p class="reveal">Here's the question that makes the whole design click into place: when kernel code calls <code>kfree(ptr)</code>, all it hands the allocator is a bare pointer — the same one <code>kmalloc()</code> returned earlier. No size, no extra info, nothing. How does <code>kfree()</code> know how big the chunk is, or how to put it back in the free list?</p>
+
+  <p class="reveal">The answer is the mirror image of section 03. Since <code>kmalloc()</code> <em>always</em> returns <var>header_address + HDR_SIZE</var>, <code>kfree()</code> can always recover the header by doing the exact opposite: subtract <code>HDR_SIZE</code> (or, in typed pointer arithmetic, subtract 1 from a header-typed pointer) from whatever address it was given. No searching. No guessing. The header was never lost — it was sitting exactly <code>HDR_SIZE</code> bytes to the left the entire time.</p>
+
+  <pre class="reveal"><span class="tag">C — the textbook kfree()</span><code><span class="kw">void</span> <span class="fn">free</span>(<span class="kw">void</span> *ptr) {
+    <span class="kw">if</span> (ptr == <span class="kw">NULL</span>) <span class="kw">return</span>;
+
+    <span class="cm">// Step back from the data pointer to find the header again —</span>
+    <span class="cm">// this is possible ONLY because kmalloc() always returned</span>
+    <span class="cm">// header + 1, so header is always exactly ptr - 1 away.</span>
+    <span class="cls">free_block_t</span> *blk = (<span class="cls">free_block_t</span> *)ptr - <span class="numc">1</span>;
+
+    blk->is_free = <span class="numc">1</span>;
+
+    <span class="cm">// Relink it into the free list — here, pushed onto the front</span>
+    blk->next  = free_list_head;
+    free_list_head = blk;
+}</code></pre>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="freeLabel">▶ Watch kfree(ptr) walk backward to the header and relink it</div>
+    <canvas id="freeCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runFree()">▶ Run kfree(ptr)</button>
+    <button class="ctrl-btn red" onclick="resetHeapCanvas()">Reset</button>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">This Is the Whole Trick</div>
+    No separate table ever maps "address 0x2008 → its size is 64 bytes." That mapping doesn't need to exist as a table, because it's <em>computable</em>: walk back <code>HDR_SIZE</code> bytes and read it straight out of the header that was there all along. This is why a free-list allocator needs zero memory overhead beyond the headers themselves — the headers <em>are</em> the entire bookkeeping system, and they travel with the memory they describe.
+  </div>
+
+  <p class="reveal">One consequence worth sitting with: this is also exactly <em>why</em> calling <code>kfree()</code> on a pointer that <code>kmalloc()</code> never actually returned is undefined and dangerous. <code>kfree()</code> trusts the caller completely — it will happily step back <code>HDR_SIZE</code> bytes from whatever address it's handed and reinterpret those bytes as a header, size and all. Hand it a pointer into the middle of an array, or a stack address, and it will cheerfully corrupt whatever bytes happen to sit there, because there is no way for it to verify the pointer's origin.</p>
+</div>
+</section>
+
+<!-- REAL CODE -->
+<section id="realcode">
+<div class="container">
+  <div class="section-num">05 — Grounding This in bob_os</div>
+  <h2>What <span class="accent">08_heap/heap.c</span> Actually Does Differently</h2>
+
+  <p class="reveal">Everything above described the classic <strong>explicit</strong> free list — free chunks carry a literal <code>next</code> pointer, so walking the free list only ever touches free chunks. bob_os's real implementation in <code>08_heap/heap.c</code> uses a close cousin called an <strong>implicit</strong> free list, and it's worth seeing exactly how it differs, because both approaches are common in real allocators.</p>
+
+  <pre class="reveal"><span class="tag">C — bob_os's actual header, from 08_heap/heap.c</span><code><span class="kw">struct</span> block_header {
+    <span class="cls">uint32_t</span> size;    <span class="cm">/* bytes of data (not including this header) */</span>
+    <span class="cls">uint32_t</span> flags;   <span class="cm">/* bit 0: USED(1) or FREE(0) */</span>
+};
+<span class="cm">/* Notice: no `next` field at all. */</span></code></pre>
+
+  <p class="reveal">Instead of a <code>next</code> pointer, bob_os walks <strong>every</strong> chunk — free and used alike — by pure address arithmetic: <code>next_chunk = (char*)current + HDR_SIZE + current-&gt;size</code>. Since every chunk's header records its own size, and chunks are laid out back-to-back with no gaps, that formula always lands exactly on the start of the following chunk's header, whether that chunk happens to be free or in use. A special zero-size "sentinel" header marks the very end of the pool so the walk knows when to stop.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>Explicit free list (taught above)</h4>
+      <code>kmalloc()</code> only ever visits free chunks — the <code>next</code> chain skips used ones entirely, which can be faster when much of the heap is in use. Costs an extra pointer-sized field in every chunk's header, whether that chunk is currently free or not.
+    </div>
+    <div class="compare-card bad">
+      <h4>Implicit list (bob_os's actual heap.c)</h4>
+      <code>kmalloc()</code> walks every chunk, free or used, to get from one to the next. Simpler code, a smaller 8-byte header, and one fewer field to keep consistent — at the cost of visiting used chunks it can never allocate from during a search.
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">Same Core Trick, Either Way</div>
+    Whichever style you pick, the answer to "why does malloc return a pointer past the header" and "how does free find its way back" is <strong>identical</strong>. Both designs place a header immediately before the data and hand back <var>header + HDR_SIZE</var>. bob_os's <code>kfree()</code> does the exact same <code>(struct block_header *)ptr - 1</code> step-back you saw in section 04 — go re-read the real <code>kfree()</code> in <code>08_heap/heap.c</code> and you'll recognize it immediately.
+  </div>
+
+  <p class="reveal">bob_os's <code>kfree()</code> also coalesces — merging a freshly-freed chunk with the block immediately after it if that one is free too, so the heap doesn't slowly disintegrate into unusable slivers. That's a big enough topic to earn its own lesson: the next page in this module, <em>First-Fit, Best-Fit, Worst-Fit</em>, covers exactly how a real search picks <em>which</em> free chunk to use, and what coalescing buys you.</p>
+</div>
+</section>
+
+<!-- PITFALLS -->
+<section id="pitfalls">
+<div class="container">
+  <div class="section-num">06 — Common Bugs</div>
+  <h2>Where This Design <span class="accent r">Bites</span> You</h2>
+
+  <p class="reveal">A hand-rolled free-list allocator is small enough to fully understand, but that same simplicity means it has almost no defenses against misuse. Three bugs show up constantly:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Bug</th><th>What Actually Happens</th><th>Why It's Dangerous</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Double free</td><td><code>kfree(ptr)</code> called twice on the same pointer</td><td>The chunk gets linked into the free list twice, so a later <code>kmalloc()</code> can hand the <em>same</em> memory out to two different callers simultaneously.</td></tr>
+        <tr><td class="hl">Heap buffer overflow</td><td>Writing past the end of an allocated chunk's data area</td><td>Overwrites the <em>next</em> chunk's header — corrupting its size/flags/next fields, which are trusted blindly on the next allocation or free.</td></tr>
+        <tr><td class="hl">Freeing a bad pointer</td><td><code>kfree()</code> called on something <code>kmalloc()</code> never returned</td><td>The allocator steps back <code>HDR_SIZE</code> bytes and treats whatever's there as a real header — instant heap corruption, as described in section 04.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">Why User-Space malloc() Is Harder to Corrupt</div>
+    Production allocators like glibc's ptmalloc add extra "canary" values around headers specifically to detect this class of corruption before it causes silent damage — trading a little memory and CPU for a loud crash instead of a subtle, hard-to-debug heap corruption bug later. bob_os's <code>heap.c</code> deliberately skips this for teaching clarity: the goal here is to see the mechanism working, not to make it bulletproof.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Heap Allocator</div><div class="glossary-def">The software layer that subdivides pages from the PMM into arbitrary-sized chunks, handed out via <code>kmalloc()</code> and reclaimed via <code>kfree()</code>.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Free List</div><div class="glossary-def">A linked chain of currently-unused chunks, threaded through the pool's own memory with no external bookkeeping table.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Block Header</div><div class="glossary-def">A small fixed-size struct placed immediately before every chunk's usable data, recording at minimum its size and free/used state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Explicit Free List</div><div class="glossary-def">A free-list design where each free chunk's header carries a literal <code>next</code> pointer, so searches only visit free chunks.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Implicit List</div><div class="glossary-def">bob_os's real design: no <code>next</code> field — every chunk (free or used) is reached from the previous one via <code>size</code>-based address arithmetic.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Sentinel Block</div><div class="glossary-def">A zero-size, always-used header placed at the very end of the pool, marking where the implicit-list walk should stop.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Coalescing</div><div class="glossary-def">Merging a newly-freed chunk with an adjacent free chunk into one larger chunk, preventing the heap from fragmenting into tiny unusable slivers.</div></div>
+    <div class="glossary-card"><div class="glossary-term">kmalloc() / kfree()</div><div class="glossary-def">bob_os's kernel-space equivalents of user-space <code>malloc()</code>/<code>free()</code> — same concept, running with no libc underneath them.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Building malloc() From Scratch · Companion lesson for bob_os module 08_heap</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next up: First-Fit, Best-Fit, Worst-Fit — picking a chunk, and the fragmentation bill you pay later.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── Shared heap layout used by both canvases ────────────────────────────────
+// Four chunks: A(used,32) B(free,128) C(used,16) D(free,64)
+const chunks=[
+  {label:'A',size:32,kind:'used',w:0.20},
+  {label:'B',size:128,kind:'free',w:0.34},
+  {label:'C',size:16,kind:'used',w:0.16},
+  {label:'D',size:64,kind:'free',w:0.30}
+];
+
+function layout(W){
+  const pad=16, top=70, h=90;
+  const usable=W-pad*2;
+  let x=pad, out=[];
+  chunks.forEach(ch=>{
+    const w=usable*ch.w;
+    out.push({...ch,x,w,y:top,h});
+    x+=w;
+  });
+  return out;
+}
+
+function drawChunk(ctx,c,opts){
+  opts=opts||{};
+  const hdrH=22;
+  const usedCol = opts.overrideColor || (c.kind==='free'?C.green:C.red);
+  ctx.fillStyle = opts.hdrHighlight ? 'rgba(245,200,66,.35)' : 'rgba(245,200,66,.16)';
+  ctx.strokeStyle = opts.hdrHighlight ? C.gold : C.gold;
+  ctx.lineWidth = opts.hdrHighlight ? 2.5 : 1.2;
+  ctx.fillRect(c.x,c.y,c.w,hdrH);
+  ctx.strokeRect(c.x,c.y,c.w,hdrH);
+  ctx.fillStyle=C.gold;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('HDR',c.x+c.w/2,c.y+14);
+
+  ctx.fillStyle = 'rgba('+(c.kind==='free'?'74,222,128':'248,113,113')+',.12)';
+  ctx.strokeStyle = usedCol;
+  ctx.lineWidth = opts.dataHighlight ? 2.5 : 1.2;
+  ctx.fillRect(c.x,c.y+hdrH,c.w,c.h-hdrH);
+  ctx.strokeRect(c.x,c.y+hdrH,c.w,c.h-hdrH);
+  ctx.fillStyle=usedCol;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText(c.label+' · '+c.size+'B',c.x+c.w/2,c.y+hdrH+(c.h-hdrH)/2+3);
+  ctx.font='8px Source Code Pro,monospace';ctx.fillStyle=C.muted;
+  ctx.fillText(c.kind,c.x+c.w/2,c.y+c.h-8);
+}
+
+// ── kmalloc(64) demo canvas ──────────────────────────────────────────────────
+function drawMallocScene(phase,t,extra){
+  const canvas=document.getElementById('mallocCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cs=layout(W);
+  // draw base chunks, splitting B if we've reached that phase
+  let drawList=cs;
+  if(phase==='split'||phase==='used'||phase==='return'){
+    const B=cs[1];
+    const usedW=B.w*(64/128);
+    const remW=B.w-usedW;
+    const bUsed={label:'B₁',size:64,kind:'used',x:B.x,w:usedW,y:B.y,h:B.h};
+    const bRem={label:'B₂',size:56,kind:'free',x:B.x+usedW,w:remW,y:B.y,h:B.h};
+    drawList=[cs[0],bUsed,bRem,cs[2],cs[3]];
+  }
+
+  drawList.forEach((c,i)=>{
+    let opts={};
+    if(phase==='scan'){
+      // highlight chunk currently being scanned based on t
+      const scanIdx=Math.min(Math.floor(t*cs.length),cs.length-1);
+      if(cs[scanIdx]===c || (c===cs[scanIdx])) opts.hdrHighlight=true;
+    }
+    drawChunk(ctx,c,opts);
+  });
+
+  // scanning marker dot travels along header row during 'scan'
+  if(phase==='scan'){
+    const idx=Math.min(t*cs.length,cs.length-0.001);
+    const i=Math.floor(idx);
+    const frac=idx-i;
+    const c=cs[i];
+    const dx=c.x+c.w*Math.min(frac*1.6,1);
+    ctx.beginPath();ctx.arc(dx,c.y-14,6,0,Math.PI*2);ctx.fillStyle=C.cyan;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  if(phase==='split'||phase==='used'||phase==='return'){
+    ctx.fillStyle=C.teal;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    const B=cs[1];
+    ctx.fillText('split: 128B → 64B used + 56B free remainder',B.x+B.w/2,B.y-10);
+  }
+
+  if(phase==='return'){
+    const B=cs[1];
+    const usedW=B.w*(64/128);
+    const dataX=B.x+ (usedW*0.35);
+    const arrowY=B.y+B.h+26;
+    ctx.strokeStyle=C.cyan;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(dataX,arrowY);ctx.lineTo(dataX,B.y+B.h+4);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(dataX-4,B.y+B.h+10);ctx.lineTo(dataX,B.y+B.h+4);ctx.lineTo(dataX+4,B.y+B.h+10);ctx.stroke();
+    ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';
+    ctx.fillText('ptr returned by kmalloc(64) — header+8, past the HDR box',dataX,arrowY+16);
+  }
+
+  const captions={
+    idle:'Click "Run kmalloc(64)" to search the free list',
+    scan:'Walking the free list: A is used (skip) → B is free & size 128 ≥ 64 — fits!',
+    split:'B is bigger than needed — split it: front 64B becomes used, remainder 56B stays free',
+    used:'Front piece marked used (flags = USED)',
+    return:'kmalloc() returns a pointer just past the header — the caller never sees the HDR box'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,24);
+}
+
+function runMalloc(){
+  const phases=['scan','split','used','return'];
+  const durations=[1400,700,500,900];
+  let idx=0,start=performance.now();
+  document.getElementById('mallocLabel').textContent='▶ kmalloc(64) in progress…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawMallocScene(phases[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('mallocLabel').textContent='▶ Done — that returned pointer is what kfree() will see below';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function resetMallocCanvas(){
+  document.getElementById('mallocLabel').textContent='▶ Watch kmalloc(64) search the free list and return a pointer past the header';
+  drawMallocScene('idle',0);
+}
+
+// ── kfree(ptr) demo canvas ───────────────────────────────────────────────────
+function drawFreeScene(phase,t){
+  const canvas=document.getElementById('freeCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cs=layout(W);
+  // Start from the post-malloc state: B split into B1(used,64) B2(free,56)
+  const B=cs[1];
+  const usedW=B.w*(64/128);
+  const remW=B.w-usedW;
+  let b1={label:'B₁',size:64,kind:'used',x:B.x,w:usedW,y:B.y,h:B.h};
+  const b2={label:'B₂',size:56,kind:'free',x:B.x+usedW,w:remW,y:B.y,h:B.h};
+
+  if(phase==='freed'||phase==='relink'){
+    b1={...b1,kind:'free',label:'B₁'};
+  }
+
+  const drawList=[cs[0],b1,b2,cs[2],cs[3]];
+  drawList.forEach(c=>drawChunk(ctx,c,{}));
+
+  const hdrH=22;
+  const dataX=b1.x+usedW*0.35;
+
+  if(phase==='ptr'||phase==='walkback'||phase==='freed'||phase==='relink'){
+    // caller's pointer sitting at data start
+    const ptrY=b1.y-14;
+    ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('ptr (passed to kfree)',dataX,ptrY-6);
+    ctx.beginPath();ctx.arc(dataX,ptrY,5,0,Math.PI*2);ctx.fillStyle=C.cyan;ctx.fill();
+  }
+
+  if(phase==='walkback'||phase==='freed'||phase==='relink'){
+    const hdrX=b1.x+ (b1.w/2);
+    const fromX = dataX - (dataX-hdrX)*t;
+    ctx.strokeStyle=C.orange;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(dataX,b1.y-14);ctx.lineTo(fromX,b1.y+hdrH/2);ctx.stroke();
+    ctx.beginPath();ctx.arc(fromX,b1.y+hdrH/2,5,0,Math.PI*2);ctx.fillStyle=C.orange;ctx.fill();
+    ctx.fillStyle=C.orange;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('ptr - HDR_SIZE',fromX,b1.y-4);
+  }
+
+  if(phase==='relink'){
+    ctx.strokeStyle=C.teal;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(b1.x+b1.w/2,b1.y-30);ctx.lineTo(b2.x+b2.w/2,b2.y-30);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.teal;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('B₁ relinked — next → B₂ (pushed onto free-list head)',(b1.x+b2.x+b2.w)/2,b1.y-36);
+  }
+
+  const captions={
+    idle:'Click "Run kfree(ptr)" to free the chunk kmalloc(64) just returned',
+    ptr:'kfree() receives only a bare pointer — no size, nothing else',
+    walkback:'Step back HDR_SIZE bytes: (block_header*)ptr - 1 — the header was always right there',
+    freed:'Header found — flip its flag: free = 1',
+    relink:'Relink it into the free list (pushed onto the head) — O(1), no search needed'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,24);
+}
+
+function runFree(){
+  const phases=['ptr','walkback','freed','relink'];
+  const durations=[500,900,500,900];
+  let idx=0,start=performance.now();
+  document.getElementById('freeLabel').textContent='▶ kfree(ptr) in progress…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawFreeScene(phases[idx],t);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('freeLabel').textContent='▶ Done — B₁ and B₂ are both free again, ready to be coalesced';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function resetFreeCanvas(){
+  document.getElementById('freeLabel').textContent='▶ Watch kfree(ptr) walk backward to the header and relink it';
+  drawFreeScene('idle',0);
+}
+
+function resetHeapCanvas(){
+  resetMallocCanvas();
+  resetFreeCanvas();
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetHeapCanvas(); });
+window.addEventListener('resize',()=>{ resetHeapCanvas(); });
+</script>
+</body>
+</html>

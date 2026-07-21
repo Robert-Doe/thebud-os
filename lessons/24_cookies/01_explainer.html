@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cookies — The Web's Original (and Still Primary) State Mechanism</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(245,200,66,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(245,200,66,.12);border:1px solid rgba(245,200,66,.3);color:var(--gold);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--gold);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--gold);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--gold)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.p{color:var(--purple)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--gold);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.05rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}.hdr{color:var(--gold)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(245,200,66,.15);border:1.5px solid var(--gold);color:var(--gold);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(245,200,66,.1);border:1.5px solid var(--gold);color:var(--gold);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(245,200,66,.22);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--gold);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.attr-breakdown{margin:1.8rem 0;display:flex;flex-direction:column;gap:.7rem;}
+.attr-row{display:flex;gap:1rem;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.8rem 1.1rem;}
+.attr-row .attr-code{font-family:'Source Code Pro',monospace;font-size:.85rem;color:var(--gold);white-space:nowrap;min-width:210px;font-weight:600;}
+.attr-row .attr-desc{font-size:.9rem;color:var(--text);}
+.attr-row .attr-desc em{color:var(--cyan)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--gold);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#stateless" title="HTTP Is Stateless"></a>
+  <a class="toc-dot" href="#mechanism" title="The Mechanism"></a>
+  <a class="toc-dot" href="#roundtrip" title="Round-Trip Demo"></a>
+  <a class="toc-dot" href="#anatomy" title="Set-Cookie Anatomy"></a>
+  <a class="toc-dot" href="#scoping" title="Domain & Path Scoping"></a>
+  <a class="toc-dot" href="#lifecycle" title="Lifecycle & Storage"></a>
+  <a class="toc-dot" href="#limits" title="Standard & Limits"></a>
+  <a class="toc-dot" href="#originrelation" title="Cookies vs Origins"></a>
+  <a class="toc-dot" href="#whycare" title="Why It Matters"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">HTTP Statelessness · Set-Cookie / Cookie Headers · Domain &amp; Path Scoping</div>
+    <h1>The Web's Original<br><span>State Mechanism</span></h1>
+    <p class="hero-sub">HTTP was born amnesiac. Every request your browser sends arrives at the server as a total stranger — no memory of the request before it, no idea you were "logged in" three seconds ago. Cookies are the eighty-byte patch that fixed this in 1994 and, thirty years later, is still the thing quietly keeping you logged into every site you use. This lesson is the mechanism, stripped to its bones: one header out, one header back, forever.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Built-in memory HTTP has</div></div>
+      <div class="hero-stat"><div class="num">Set-Cookie</div><div class="lbl">Server → browser header</div></div>
+      <div class="hero-stat"><div class="num">Cookie</div><div class="lbl">Browser → server header</div></div>
+      <div class="hero-stat"><div class="num">~4KB</div><div class="lbl">Typical per-cookie size cap</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: STATELESS -->
+<section id="stateless">
+<div class="container">
+  <div class="section-num">00 — The Problem Cookies Exist To Solve</div>
+  <h2>HTTP Has <span class="accent">No Memory</span></h2>
+
+  <p class="reveal">Here's the fact everything in this lesson hangs off: <strong>HTTP is a stateless protocol.</strong> When your browser sends a GET request for <code>/dashboard</code>, that request contains a method, a path, some headers, maybe a body — and nothing else. The server that receives it has no built-in concept of "this is the same visitor who logged in a moment ago." As far as the raw protocol is concerned, every single request is a brand-new stranger walking up to the counter, even if it's the 400th request from the exact same browser in the exact same minute.</p>
+
+  <p class="reveal">This wasn't an oversight — it was a deliberate simplicity decision by HTTP's original designers. A stateless protocol is trivially easy to scale: any server can answer any request, because no server needs to "remember" you from a previous one. The trade-off is that the protocol itself gives you zero help building anything that requires continuity — a shopping cart, a logged-in session, a "you were here before" experience. All of that has to be bolted on top.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Picture It Concretely</div>
+    You type your password into <code>bank.com/login</code>. The server checks it, decides you're legitimate, and responds "200 OK, welcome." Then you click a link to <code>bank.com/accounts</code>. That's a <strong>brand new TCP connection carrying a brand new HTTP request</strong> — nothing about it inherently says "this is the same person who just authenticated." Without some bolted-on mechanism, the server would have to ask you to log in again on every single click, forever. That's the actual disease cookies were invented to cure.
+  </div>
+
+  <p class="reveal">The fix, standardized by Netscape engineer Lou Montulli in 1994, is almost embarrassingly simple: let the server hand the browser a small, opaque piece of data on one response, and have the browser <em>automatically</em> hand that same piece of data back on every future request to that server. The server doesn't need to remember anything about you between requests — it just needs to recognize the token it gave out earlier. State gets pushed out to the client and echoed back, request after request, turning a stateless protocol into something that behaves statefully.</p>
+</div>
+</section>
+
+<!-- SECTION 1: MECHANISM -->
+<section id="mechanism">
+<div class="container">
+  <div class="section-num">01 — The Two Headers That Do Everything</div>
+  <h2>Set-Cookie <span class="accent">Out</span>, Cookie <span class="accent">Back</span></h2>
+
+  <p class="reveal">The entire cookie mechanism is exactly two HTTP headers, used in exactly two directions. Nothing about cookies requires JavaScript, a database, or any special browser feature beyond "store this string, and re-send it later when told to."</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Set-Cookie</span><span class="fam-count">server → browser</span></div>
+      <div class="fam-desc">Sent by the <em>server</em>, inside an HTTP response. Tells the browser: "here is a key-value pair, store it, and here are the rules for when to send it back to me."</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.3)">response header</span><span class="feat-pill" style="background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.3)">can appear multiple times</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Cookie</span><span class="fam-count">browser → server</span></div>
+      <div class="fam-desc">Sent by the <em>browser</em>, inside every matching HTTP request, automatically — no page code has to ask for this to happen. Just the name=value pairs, none of the original attributes.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.3)">request header</span><span class="feat-pill" style="background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.3)">automatic, not opt-in</span></div>
+    </div>
+  </div>
+
+  <p class="reveal">That word <strong>automatic</strong> is doing a lot of work and is worth sitting with. The page you're visiting doesn't attach the <code>Cookie</code> header — the <em>browser</em> does, on your behalf, for every outgoing request that matches a stored cookie's rules, whether that request came from you clicking a link, a page's own JavaScript calling <code>fetch()</code>, an image tag loading, or a hidden form auto-submitting. This design choice is exactly what makes "staying logged in" effortless — and, as the companion lesson in this cluster covers, it's also the root cause of an entire category of attack, because the browser doesn't ask the <em>page</em> for permission before attaching your cookies to a request that page triggered.</p>
+
+  <ol class="step-list reveal">
+    <li>
+      <div class="step-body"><strong>You log in.</strong> Your browser POSTs your username and password to <code>bank.com/login</code>.</div>
+    </li>
+    <li>
+      <div class="step-body"><strong>The server authenticates you and replies with Set-Cookie.</strong> It generates a random, unguessable session identifier, stores it server-side associated with your account, and sends it back as <code>Set-Cookie: session_id=a1b2c3...</code>.</div>
+    </li>
+    <li>
+      <div class="step-body"><strong>The browser stores it.</strong> Not in the page, not in JavaScript memory — in a dedicated cookie jar tied to the site's domain, outliving that one page load.</div>
+    </li>
+    <li>
+      <div class="step-body"><strong>Every later request re-attaches it.</strong> You click "Accounts," and the browser automatically adds <code>Cookie: session_id=a1b2c3...</code> to that outgoing request, with zero involvement from the page's JavaScript.</div>
+    </li>
+    <li>
+      <div class="step-body"><strong>The server recognizes you.</strong> It looks up <code>a1b2c3...</code> in its own session store, finds it belongs to you, and serves your account page — never re-checking your password.</div>
+    </li>
+  </ol>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 This Is the Entire "Staying Logged In" Mechanism</div>
+    There is no deeper magic behind "why am I still logged in after refreshing the page." A random session identifier goes out once in a <code>Set-Cookie</code> header, gets stored by the browser, and comes back in a <code>Cookie</code> header on every subsequent request until it expires, gets deleted, or the server invalidates it server-side. Log out, and the server typically just deletes that session ID from its store (and asks the browser to overwrite the cookie) — the old ID becomes useless even if someone still has it.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: ROUND TRIP DEMO -->
+<section id="roundtrip">
+<div class="container">
+  <div class="section-num">02 — Watch It Happen</div>
+  <h2>The Set-Cookie / Cookie <span class="accent">Round Trip</span></h2>
+
+  <p class="reveal">Below is the exact sequence from Section 01, animated. Run it once for the login response that plants the cookie, then run it again to see a completely separate later request automatically carry that cookie back — with no user action beyond "click a link."</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="rtLabel">▶ Click a button to run a request/response cycle</div>
+    <canvas id="rtCanvas" height="300"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runRoundTrip('login')">▶ Run Login Response (plants cookie)</button>
+    <button class="ctrl-btn cyan" onclick="runRoundTrip('later')">▶ Run Later Request (re-attaches cookie)</button>
+    <button class="ctrl-btn red" onclick="resetRoundTrip()">Reset Jar</button>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Try clicking "Later Request" before "Login Response."</b> Nothing gets attached — the browser's cookie jar starts empty, and it can only echo back a cookie it actually received and stored first. This is worth doing once so the automatic re-attachment doesn't feel like magic; it's just "replay what was stored."
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: SET-COOKIE ANATOMY -->
+<section id="anatomy">
+<div class="container">
+  <div class="section-num">03 — Reading the Real Thing</div>
+  <h2>A Real <span class="accent">Set-Cookie</span> Header, Attribute by Attribute</h2>
+
+  <p class="reveal">Here's an actual <code>Set-Cookie</code> header, the kind a real login endpoint might send. It looks like one long string, but it's really a <code>name=value</code> pair followed by a semicolon-separated list of rules governing when and how the browser is allowed to send that value back.</p>
+
+  <pre class="reveal"><span class="tag">HTTP Response Header</span><code><span class="hdr">Set-Cookie:</span> session_id=8f14e45fceea167a5a36dedd4bea2543; Domain=.example.com; Path=/; Expires=Wed, 21 Aug 2026 07:28:00 GMT; Secure; HttpOnly; SameSite=Lax</code></pre>
+
+  <div class="attr-breakdown reveal">
+    <div class="attr-row">
+      <div class="attr-code">session_id=8f14e45f...</div>
+      <div class="attr-desc">The actual <em>name=value</em> pair — the only part the server's application code reads back later. Everything after this is instructions <em>to the browser</em>, not data for the server.</div>
+    </div>
+    <div class="attr-row">
+      <div class="attr-code">Domain=.example.com</div>
+      <div class="attr-desc">Which hosts this cookie is eligible to be sent to. Covered in full in the next section — this is the widened, subdomain-including form.</div>
+    </div>
+    <div class="attr-row">
+      <div class="attr-code">Path=/</div>
+      <div class="attr-desc">Which URL paths on that domain the cookie applies to. <code>/</code> means "every path" — the most common setting for a session cookie that should follow you around the whole site.</div>
+    </div>
+    <div class="attr-row">
+      <div class="attr-code">Expires=Wed, 21 Aug...</div>
+      <div class="attr-desc">An absolute expiration date. Without <code>Expires</code> (or the equivalent <code>Max-Age=&lt;seconds&gt;</code>), a cookie is a <em>session cookie</em> — deleted when the browser fully closes, not merely on tab close.</div>
+    </div>
+    <div class="attr-row">
+      <div class="attr-code">Secure</div>
+      <div class="attr-desc">Only ever sent over HTTPS connections. Covered attack-by-attack in the companion lesson, <em>02_cookie_attributes_deepdive.html</em>.</div>
+    </div>
+    <div class="attr-row">
+      <div class="attr-code">HttpOnly</div>
+      <div class="attr-desc">Invisible to JavaScript's <code>document.cookie</code>. Also covered in depth in the companion lesson.</div>
+    </div>
+    <div class="attr-row">
+      <div class="attr-code">SameSite=Lax</div>
+      <div class="attr-desc">Controls whether this cookie is sent on cross-site requests. The modern default, and the subject of the companion lesson's CSRF walkthrough.</div>
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Attributes Are Instructions to the Browser, Not to the Server</div>
+    A subtlety that trips people up: when the browser sends the <code>Cookie</code> header back on a later request, it sends <strong>only</strong> <code>session_id=8f14e45f...</code> — none of <code>Domain</code>, <code>Path</code>, <code>Expires</code>, <code>Secure</code>, <code>HttpOnly</code>, or <code>SameSite</code> travel with it. Those attributes were consumed once, by the browser, at storage time, to decide the rules of the game. The server never sees them again; it only ever sees the raw name=value pairs that survived those rules for this particular request.
+  </div>
+
+  <h3>One response, several Set-Cookie headers</h3>
+  <p class="reveal">A single HTTP response is allowed to include <code>Set-Cookie</code> more than once — one occurrence per cookie the server wants to plant. This is actually a special case in the HTTP spec: almost every other header is supposed to be safely combinable into one comma-separated line, but <code>Set-Cookie</code> is explicitly exempted, because a cookie's own value can legally contain commas, which would make merging ambiguous. A real login response often looks like this:</p>
+
+  <pre class="reveal"><span class="tag">HTTP Response Headers</span><code><span class="hdr">Set-Cookie:</span> session_id=8f14e45fceea167a5a36dedd4bea2543; Path=/; Secure; HttpOnly; SameSite=Lax
+<span class="hdr">Set-Cookie:</span> csrf_token=d3b07384d113edec49eaa6238ad5ff0; Path=/; Secure; SameSite=Strict
+<span class="hdr">Set-Cookie:</span> theme=dark; Path=/; Max-Age=31536000</code></pre>
+
+  <p class="reveal">Three separate <code>Set-Cookie</code> headers, three separate cookies, each with its own independent set of attributes — a session identifier that's <code>HttpOnly</code>, a CSRF token that isn't (it needs to be readable so it can be embedded in a form), and a long-lived UI preference with no security attributes at all because it isn't sensitive. On the way back out, though, the browser flattens all matching stored cookies into <strong>one single</strong> <code>Cookie</code> header, semicolon-separated:</p>
+
+  <pre class="reveal"><span class="tag">HTTP Request Header</span><code><span class="hdr">Cookie:</span> session_id=8f14e45fceea167a5a36dedd4bea2543; csrf_token=d3b07384d113edec49eaa6238ad5ff0; theme=dark</code></pre>
+
+  <div class="sidenote reveal">
+    <b>Notice what's gone.</b> No attributes survived the trip — just three bare name=value pairs, semicolon-joined, with no indication of which cookie was HttpOnly or Secure or what its original expiration was. The request side of this protocol is deliberately minimal; all the richness lives only in the Set-Cookie headers that established each cookie in the first place.
+  </div>
+
+  <h3>What the browser actually does when Set-Cookie arrives</h3>
+  <p class="reveal">Mechanically, parsing a <code>Set-Cookie</code> header is a small, precise algorithm — this project's own browser module implements exactly this logic in <code>cookie.c</code>. The header value is split into segments on <code>;</code>. The first segment, before the first <code>=</code>, becomes the cookie's name; everything after that <code>=</code> becomes its value. Every subsequent segment is checked against a fixed list of known attribute keywords (<code>Domain</code>, <code>Path</code>, <code>Expires</code>, <code>Max-Age</code>, <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite</code>) case-insensitively; anything matching one of those sets a field on the stored cookie struct, and anything that doesn't match a known attribute is simply ignored rather than causing an error.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Parser step</th><th>Input segment</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">1. Split on first ;</td><td class="hl">session_id=8f14e45f...; Domain=.example.com; ...</td><td>name=value pair separated from the attribute list</td></tr>
+        <tr><td class="gold">2. Split name=value on first =</td><td class="hl">session_id=8f14e45f...</td><td>name: session_id, value: 8f14e45f...</td></tr>
+        <tr><td class="gold">3. Walk remaining ;-segments</td><td class="hl">Domain=.example.com</td><td>matches known attribute → cookie.domain = ".example.com"</td></tr>
+        <tr><td class="gold">4. Bare keyword segment</td><td class="hl">HttpOnly</td><td>no = sign, matches a known flag → cookie.http_only = 1</td></tr>
+        <tr><td class="gold">5. No Domain segment present</td><td class="hl">(absent)</td><td>defaults to host-only using the responding server's own hostname</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: DOMAIN & PATH SCOPING -->
+<section id="scoping">
+<div class="container">
+  <div class="section-num">04 — Where a Cookie Is Actually Sent</div>
+  <h2>Domain &amp; Path <span class="accent">Scoping</span></h2>
+
+  <p class="reveal">A cookie is never just "sent everywhere." Every stored cookie carries scoping rules that the browser checks on <em>every</em> outgoing request before deciding whether to attach it — this is what stops your bank's session cookie from accidentally riding along on a request to an unrelated site.</p>
+
+  <h3>No explicit Domain: host-only, exact match</h3>
+  <p class="reveal">If a <code>Set-Cookie</code> header from <code>example.com</code> omits the <code>Domain</code> attribute entirely, the browser defaults to the narrowest possible scope: a <strong>host-only cookie</strong>. It will be sent on requests to <code>example.com</code> itself — and, notably, <em>not</em> to <code>www.example.com</code> or <code>shop.example.com</code>, even though those look like "the same site" to a human. Host-only means exactly the host that set it, nothing wider.</p>
+
+  <h3>Domain=.example.com (or Domain=example.com): widened to subdomains</h3>
+  <p class="reveal">Add <code>Domain=.example.com</code> (the leading dot is a historical convention; modern browsers treat <code>Domain=example.com</code> without the dot identically) and the cookie's scope widens deliberately: now it's sent to <code>example.com</code>, <em>and also</em> to every subdomain — <code>www.example.com</code>, <code>shop.example.com</code>, <code>accounts.example.com</code>, all of it. This is exactly what a company running services split across subdomains wants for a single sign-on session; it is also, if misused, a way to accidentally hand a cookie to a subdomain the security team doesn't fully trust.</p>
+
+  <h3>Path narrows within a domain</h3>
+  <p class="reveal">Path scoping works the same way but on the URL path instead of the host. A cookie set with <code>Path=/checkout</code> is only attached to requests whose path starts with <code>/checkout</code> — a request to <code>example.com/blog</code> won't carry it, even from the exact same browser, same domain, same everything else. In practice almost every session cookie uses <code>Path=/</code> (match everything) because there's rarely a reason to fragment a login session by URL path — but the mechanism exists, and you'll see it used for things like admin-panel-only cookies scoped to <code>/admin</code>.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Set-Cookie attribute</th><th>Request to example.com</th><th>Request to www.example.com</th><th>Request to example.com/other</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">(no Domain, Path=/)</td><td class="pos">Sent</td><td class="neg">Not sent</td><td class="pos">Sent</td></tr>
+        <tr><td class="gold">Domain=.example.com</td><td class="pos">Sent</td><td class="pos">Sent</td><td class="pos">Sent</td></tr>
+        <tr><td class="gold">(no Domain, Path=/checkout)</td><td class="neg">Not sent (wrong path)</td><td class="neg">Not sent</td><td class="neg">Not sent unless path starts with /checkout</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🪆 One Domain You Can Never Widen To</div>
+    Browsers maintain a "public suffix list" of registrable domain boundaries (<code>.com</code>, <code>.co.uk</code>, <code>github.io</code>, and thousands more) specifically to block a cookie from ever being set with <code>Domain=.com</code>. Without this guard, any site could set a cookie scoped to the entire top-level domain, which every other <code>.com</code> site would then receive. This is a narrow, cookie-specific rule — full cross-site isolation between unrelated domains is the job of the <strong>Same-Origin Policy</strong>, covered in this project's origin-security material; cookies interact with that boundary but are scoped by their own domain/path rules rather than by strict origin equality (more on that distinction in Section 07).
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: LIFECYCLE -->
+<section id="lifecycle">
+<div class="container">
+  <div class="section-num">05 — How Long a Cookie Sticks Around</div>
+  <h2>Session Cookies vs. <span class="accent">Persistent Cookies</span></h2>
+
+  <p class="reveal">Every cookie falls into one of two lifecycle categories, decided entirely by whether the server included an expiration.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>⏳ Session Cookie</h4>
+      No <code>Expires</code> or <code>Max-Age</code> attribute. Lives only as long as the browser considers the "session" ongoing — historically, until you fully close the browser (not just the tab). Most login session cookies are session cookies by design: close the browser, and you'd need to log in again next time.
+    </div>
+    <div class="compare-card bad">
+      <h4>📅 Persistent Cookie</h4>
+      Has an explicit <code>Expires=&lt;date&gt;</code> or <code>Max-Age=&lt;seconds&gt;</code>. Survives browser restarts, sometimes for years — this is how "remember me" checkboxes and long-lived tracking cookies work. The browser deletes it automatically once the expiration passes, without the server needing to do anything.
+    </div>
+  </div>
+
+  <p class="reveal"><code>Max-Age</code> and <code>Expires</code> can both appear; when they conflict, most browsers prefer <code>Max-Age</code> since it's relative (in seconds from now) rather than dependent on the client's system clock being correct. A server can also delete a cookie early by re-sending <code>Set-Cookie</code> for the same name with a date in the past — this is exactly how "log out" typically clears your session cookie client-side, on top of invalidating the session server-side.</p>
+
+  <div class="sidenote reveal">
+    <b>Cookies aren't the only browser storage mechanism — so why do sessions still use them?</b> <code>localStorage</code> and <code>sessionStorage</code> can hold far more data and aren't limited to ~4KB, but neither is <em>automatically</em> attached to outgoing HTTP requests the way cookies are — a page has to explicitly read them and put the value somewhere (a header, a request body). For a login session that needs to travel with every server request without extra client-side code, that automatic re-attachment is exactly the feature cookies uniquely provide — the same feature that, handled carelessly, opens the door explored in the companion lesson.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5b: STANDARD & LIMITS -->
+<section id="limits">
+<div class="container">
+  <div class="section-num">06 — The Standard Behind the Header</div>
+  <h2>RFC 6265 <span class="accent">and the Limits Every Browser Enforces</span></h2>
+
+  <p class="reveal">Cookies shipped in Netscape's browser in 1994 as a pragmatic, undocumented hack — there was no standard describing them at all for the first two years of their existence. An early formal attempt, <strong>RFC 2965</strong> (1997), tried to introduce a cleaner, stricter cookie model (<code>Set-Cookie2</code>, explicit port lists, mandatory comments) and was largely ignored by real browsers, which kept shipping the informal Netscape behavior instead. The standard that actually describes the web's real cookie behavior, <strong>RFC 6265</strong> (2011, later revised as 6265bis), took the opposite approach: it documented what browsers were <em>already doing</em> rather than prescribing something new. This is a recurring pattern in web standards — the spec that wins is usually the one that describes reality, not the one that tries to fix it from a clean slate.</p>
+
+  <p class="reveal">That same pragmatic spirit shows up in the hard limits every browser enforces on cookies — none of which are exotic, all of which matter the moment a real application starts storing anything nontrivial in a cookie.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Constraint</th><th>Typical limit</th><th>What happens when exceeded</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Single cookie size</td><td class="hl">~4096 bytes (name + value + attributes)</td><td>Browser silently refuses to store that Set-Cookie header at all</td></tr>
+        <tr><td class="gold">Cookies per domain</td><td class="hl">~50–180, browser-dependent</td><td>Browser evicts the least-recently-used cookie for that domain to make room</td></tr>
+        <tr><td class="gold">Total request header size</td><td class="hl">~8KB, server-dependent</td><td>Server rejects the whole request with 400 Bad Request — every cookie is sent on every matching request, so they add up fast</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Total-Header-Size Limit Is an Attack Surface, Not Just a Quirk</div>
+    Because every stored cookie matching a request's domain and path gets concatenated into one <code>Cookie</code> header automatically — the exact mechanism from Section 01 — an attacker who can set cookies for your domain (via an XSS bug, or a cookie-setting endpoint on a sibling subdomain under a widened <code>Domain</code>) can deliberately set enough large cookies to push the total past a server's header size limit. The next legitimate request, including the one carrying the real session cookie, gets rejected outright with a 400 error before the server ever reads it — a denial-of-service against one specific user, sometimes nicknamed a "cookie bomb." It's the size-limit table above, weaponized.
+  </div>
+
+  <p class="reveal">The practical upshot: cookies are meant for small, opaque identifiers — a session ID, a CSRF token, a locale preference — not for storing meaningful application state. Anything larger belongs in <code>localStorage</code>, <code>IndexedDB</code>, or server-side storage keyed by the (small) cookie value.</p>
+</div>
+</section>
+
+<!-- SECTION 6: COOKIES VS ORIGINS -->
+<section id="originrelation">
+<div class="container">
+  <div class="section-num">07 — A Boundary That Isn't Quite the Same One</div>
+  <h2>Cookie Scope vs. <span class="accent">Origin</span></h2>
+
+  <p class="reveal">If you've studied the Same-Origin Policy, you already know browsers usually reason about isolation using an <strong>origin</strong>: the exact triple of scheme + host + port. <code>https://example.com</code> and <code>http://example.com</code> are different origins (different scheme). <code>https://example.com</code> and <code>https://example.com:8443</code> are different origins (different port). Two scripts on different origins normally can't read each other's DOM or data at all.</p>
+
+  <p class="reveal">Cookies, being older than the formal Same-Origin Policy, don't fully play by that rule. Cookie scoping ignores <strong>port</strong> entirely, and — as Section 04 covered — can be deliberately widened across <strong>subdomains</strong> with <code>Domain</code>. So a cookie set by <code>https://example.com</code> is, by default, also sent to <code>https://example.com:9999</code> (different origin, same cookie), and can be explicitly widened to <code>https://accounts.example.com</code> (different origin again) via <code>Domain=.example.com</code>. This is a real, known mismatch between "what counts as the same site for cookies" and "what counts as the same origin for script access" — and it's precisely why security-sensitive systems shouldn't assume a cookie is only reachable from the exact origin that set it.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Mismatch Matters in Practice</div>
+    If any subdomain of <code>example.com</code> is compromised, or run by a less-trusted team, a <code>Domain=.example.com</code> cookie is fully exposed to it — that subdomain can read it (if not <code>HttpOnly</code>) and, depending on <code>SameSite</code>, can trigger requests that carry it. This is a real reason large organizations sometimes deliberately <em>avoid</em> widening auth cookies across all subdomains, isolating sensitive sessions to a narrower host-only scope instead. The Same-Origin Policy material in this project's origin-security lessons covers the general script-isolation boundary in depth; cookies are the one major exception that predates and doesn't fully align with it.
+  </div>
+
+  <h3>A third vocabulary word: "site"</h3>
+  <p class="reveal">To make matters slightly more confusing, the <code>SameSite</code> attribute — covered in full in the companion lesson — introduces a third boundary that's neither "origin" nor plain "domain": a <strong>site</strong> is the scheme plus the <em>registrable domain</em> (roughly, the top-level-domain-plus-one, like <code>example.com</code>), ignoring both port and subdomain entirely. Under this definition, <code>https://accounts.example.com</code> and <code>https://shop.example.com</code> are considered <strong>same-site</strong> (same registrable domain) even though they are different <strong>origins</strong> (different host). This is a deliberate, separate classification built specifically for cookie cross-site decisions — three different boundaries, three different words, and it's worth keeping them straight: <em>origin</em> for script/DOM isolation, <em>domain/path</em> for raw cookie eligibility, <em>site</em> for whether a request counts as cross-site under SameSite.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Boundary concept</th><th>What it compares</th><th>Used by</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Origin</td><td class="hl">scheme + host + port, exact match</td><td>Same-Origin Policy (script/DOM/fetch access)</td></tr>
+        <tr><td class="gold">Domain / Path</td><td class="hl">host suffix + path prefix, per stored cookie</td><td>Whether a cookie is attached to a given request at all</td></tr>
+        <tr><td class="gold">Site</td><td class="hl">scheme + registrable domain, ignoring port &amp; subdomain</td><td>SameSite's cross-site vs. same-site classification</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: WHY IT MATTERS -->
+<section id="whycare">
+<div class="container">
+  <div class="section-num">08 — Tying It Together</div>
+  <h2>Why This Mechanism Is <span class="accent">Worth Knowing Cold</span></h2>
+
+  <p class="reveal">Once the two-header round trip and the domain/path scoping rules actually click, a long list of everyday browser behavior stops being mysterious.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🔁</div><div class="lbl">You stay logged in across page loads without re-entering a password</div></div>
+    <div class="stat-card"><div class="val">🚪</div><div class="lbl">Clearing cookies logs you out of everything at once</div></div>
+    <div class="stat-card"><div class="val">🏠</div><div class="lbl">Logging into shop.example.com doesn't log you into unrelated.com</div></div>
+    <div class="stat-card"><div class="val">🧩</div><div class="lbl">Single sign-on across subdomains needs a widened Domain</div></div>
+  </div>
+
+  <p class="reveal">Next time you see "you've been logged out, please sign in again" after clearing browser data, that's just the deletion half of this mechanism — the server-side session may still technically exist, but with no <code>Cookie</code> header carrying its identifier, the server has no way to associate your new, memoryless request with it. And next time a login on one subdomain "just works" on another, you now know that's a deliberately widened <code>Domain</code> attribute at work, not some deeper session-sharing magic.</p>
+
+  <div class="sidenote reveal">
+    <b>The same mechanism, aimed at a different site, is what "third-party cookies" are.</b> Nothing about the Set-Cookie/Cookie round trip changes when the server setting the cookie is an embedded ad or analytics script's own domain rather than the site you meant to visit — it's the identical mechanism, just triggered by a request to a third party embedded inside the page you're looking at, which is exactly how cross-site ad tracking historically worked. This is a major reason recent browsers restrict or block third-party cookies by default and lean harder on <code>SameSite=None; Secure</code> as the explicit, auditable opt-in for the legitimate cross-site cases that remain — the same attribute from the companion lesson, doing double duty as a privacy control and not just a CSRF control.
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>HTTP forgets everything between requests by design, so the server hands the browser a small token via <code>Set-Cookie</code>, the browser stores it under domain/path rules and echoes it back via <code>Cookie</code> on every matching future request — and that automatic echo is simultaneously the entire mechanism behind "staying logged in" and, unprotected, the root cause of the attacks the companion lesson covers.</strong>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Stateless Protocol</div><div class="glossary-def">A protocol where each request is handled independently, with no built-in memory of prior requests. HTTP is stateless by design.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Set-Cookie</div><div class="glossary-def">The HTTP response header a server uses to tell the browser to store a name=value pair, plus rules governing when to send it back.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cookie (header)</div><div class="glossary-def">The HTTP request header the browser automatically attaches, containing only name=value pairs of every stored cookie matching the request.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cookie Jar</div><div class="glossary-def">The browser's internal store of all cookies, indexed by domain and path, consulted before every outgoing request.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Session Cookie</div><div class="glossary-def">A cookie with no explicit expiration, cleared when the browser fully closes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Persistent Cookie</div><div class="glossary-def">A cookie with an explicit Expires or Max-Age, surviving browser restarts until that date passes.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Host-Only Cookie</div><div class="glossary-def">A cookie with no Domain attribute — sent only to the exact host that set it, not to its subdomains.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Domain Attribute</div><div class="glossary-def">Explicitly widens a cookie's scope to include subdomains of the given domain.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Path Attribute</div><div class="glossary-def">Restricts a cookie to requests whose URL path starts with the given prefix.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Origin</div><div class="glossary-def">The scheme + host + port triple used by the Same-Origin Policy — a narrower, stricter boundary than cookie domain/path scoping.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Cookies: The Web's Original State Mechanism — companion lesson for bob_os/browser module B17_cookies</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Two headers, one jar, and thirty years of the web logging you in.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── ROUND TRIP CANVAS ────────────────────────────────────────────────────────
+let jarHasCookie=false;
+
+function drawRoundTrip(t,phase,kind){
+  const canvas=document.getElementById('rtCanvas');
+  const W=gW(canvas),H=300;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftW=W*0.28, midX=leftW, midW=W*0.44, rightX=midX+midW, rightW=W-rightX;
+
+  // browser box
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(0,20,leftW,H-70);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(2,20,leftW-4,H-70);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('BROWSER',leftW/2,40);
+
+  // cookie jar indicator
+  ctx.font='11px Source Code Pro,monospace';
+  ctx.fillStyle=jarHasCookie?C.gold:C.muted;
+  ctx.fillText(jarHasCookie?'🍪 jar: session_id=8f14e...':'jar: empty',leftW/2,H-90);
+
+  // server box
+  ctx.fillStyle='rgba(245,200,66,.06)';ctx.fillRect(rightX,20,rightW,H-70);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(rightX+2,20,rightW-4,H-70);
+  ctx.fillStyle=C.gold;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('SERVER',rightX+rightW/2,40);
+
+  const captions={
+    idle:'Click a button below to run a request/response cycle',
+    req_out:kind==='login'?'Browser POSTs username+password to /login':'Browser navigates to /accounts',
+    at_server:kind==='login'?'Server verifies credentials, creates a session record':'Server looks up session_id in its session store',
+    resp_out:kind==='login'?'Server replies: Set-Cookie: session_id=8f14e45f...':'Server replies with the requested page — same user, no password needed',
+    stored:kind==='login'?'Browser stores the cookie in its jar, scoped to this domain':'Request included Cookie: session_id=8f14e45f... automatically'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+
+  // header label above the moving packet
+  let pktX=leftW+midW*0.5, pktY=H/2-40, pktCol=C.cyan, pktLabel='';
+  if(phase==='req_out'){ pktX=leftW+midW*t; pktCol=C.cyan; pktLabel=kind==='login'?'POST /login':'GET /accounts'+(jarHasCookie?' + Cookie: session_id=...':''); }
+  else if(phase==='at_server'){ pktX=rightX+8; pktCol=C.gold; pktLabel='processing…'; }
+  else if(phase==='resp_out'){ pktX=rightX-midW*t; pktCol=C.gold; pktLabel=kind==='login'?'Set-Cookie: session_id=...':'200 OK (page content)'; }
+  else if(phase==='stored'){ pktX=leftW+6; pktCol=C.green; pktLabel='✓ done'; }
+
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(pktX,pktY,7,0,Math.PI*2);ctx.fillStyle=pktCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle=pktCol;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(pktLabel,W/2,pktY-14);
+  }
+
+  // connecting line
+  ctx.strokeStyle='rgba(122,155,191,.35)';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(leftW,H/2-40);ctx.lineTo(rightX,H/2-40);ctx.stroke();ctx.setLineDash([]);
+}
+
+function runRoundTrip(kind){
+  const phases=['req_out','at_server','resp_out','stored'];
+  const durations=[550,500,550,450];
+  let idx=0,start=performance.now();
+  document.getElementById('rtLabel').textContent='▶ Running '+(kind==='login'?'login response':'later request')+'…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawRoundTrip(t,phases[idx],kind);
+    if(t>=1){
+      if(phases[idx]==='stored' && kind==='login'){ jarHasCookie=true; }
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('rtLabel').textContent='▶ Complete — click a button to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetRoundTrip(){
+  jarHasCookie=false;
+  document.getElementById('rtLabel').textContent='▶ Click a button to run a request/response cycle';
+  drawRoundTrip(0,'idle','');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRoundTrip(); });
+window.addEventListener('resize',()=>{ drawRoundTrip(0,'idle',''); });
+</script>
+</body>
+</html>

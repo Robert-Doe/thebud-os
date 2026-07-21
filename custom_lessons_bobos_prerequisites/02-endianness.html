@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8' />
+<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+<title>Endianness — Assembly &amp; OS-from-Scratch Refresher</title>
+<style>
+:root {
+  --bg: #0b1020; --panel: rgba(18,25,47,0.88); --panel-2: rgba(25,33,60,0.9);
+  --text: #e9edf7; --muted: #aab4cf; --soft: #7f8bb0; --line: rgba(255,255,255,0.08);
+  --blue: #7aa2ff; --blue-2: #5f87f8; --green: #4ade80; --red: #fb7185; --amber: #fbbf24; --purple: #a78bfa;
+  --cyan: #5eead4; --pink: #f472b6;
+  --shadow: 0 20px 60px rgba(0,0,0,0.35); --radius: 18px;
+}
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; background: radial-gradient(circle at top, #121a35 0%, #09101f 55%, #060a14 100%); color:var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { line-height: 1.6; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 28px; }
+.hero { padding: 28px; background: linear-gradient(180deg, rgba(119,157,255,0.15), rgba(255,255,255,0.03)); border:1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content:''; position:absolute; inset:auto -10% -45% auto; width:340px; height:340px; background: radial-gradient(circle, rgba(122,162,255,0.28), transparent 65%); pointer-events:none; }
+h1,h2,h3,h4 { margin:0 0 10px; line-height:1.2; }
+h1 { font-size: 34px; letter-spacing: -0.03em; }
+h2 { font-size: 23px; margin-top: 4px; }
+h3 { font-size: 18px; }
+h4 { font-size: 15px; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 10px 0; color: var(--muted); }
+a { color: var(--blue); }
+.lede { max-width: 980px; font-size: 16px; }
+.grid-4, .grid-3, .grid-2, .grid-6 { display:grid; gap:16px; }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.card { background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.card.soft { background: var(--panel-2); }
+.stat-card { background: rgba(255,255,255,0.03); border:1px solid var(--line); border-radius: 16px; padding: 16px; }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--soft); }
+.value { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.tag-row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding: 7px 10px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.05); color: var(--text); border:1px solid var(--line); }
+.pill.blue { background: rgba(122,162,255,0.13); color:#cfdcff; }
+.pill.green { background: rgba(74,222,128,0.13); color:#bdf5d2; }
+.pill.amber { background: rgba(251,191,36,0.13); color:#ffe6ad; }
+.pill.red { background: rgba(251,113,133,0.13); color:#ffd0d6; }
+.pill.purple { background: rgba(167,139,250,0.13); color:#d4c6ff; }
+.pill.cyan { background: rgba(94,234,212,0.13); color:#bdf8ee; }
+.good { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+.section { margin-top: 22px; }
+.callout { padding: 16px 18px; border-radius: 14px; border:1px solid var(--line); background: rgba(122,162,255,0.08); color: var(--text); }
+.callout.warn { background: rgba(251,191,36,0.09); }
+.callout.red { background: rgba(251,113,133,0.09); }
+.callout.green { background: rgba(74,222,128,0.08); }
+.callout h4 { margin-top:0; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: rgba(0,0,0,0.28); border:1px solid var(--line); border-radius: 14px; padding: 14px; font-size: 13.5px; overflow-x:auto; color: #e8eeff; white-space:pre; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius: 16px; margin-top: 14px; }
+table { width:100%; border-collapse: collapse; background: rgba(255,255,255,0.02); }
+th, td { text-align:left; padding: 10px 13px; border-bottom:1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+th { position: sticky; top: 0; background: rgba(10,15,30,0.97); z-index: 1; color: var(--text); font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; }
+tr:hover td { background: rgba(255,255,255,0.025); }
+.bytegrid { display:flex; gap:4px; flex-wrap:wrap; margin: 10px 0; }
+.byte { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.05); border:1px solid var(--line); border-radius: 8px; padding: 8px 10px; text-align:center; min-width: 64px; }
+.byte .addr { font-size: 10px; color: var(--soft); display:block; }
+.byte .v { font-size: 15px; font-weight:700; margin-top:3px; }
+.regbox { font-family: ui-monospace, monospace; display:flex; border:1px solid var(--line); border-radius: 10px; overflow:hidden; margin: 10px 0; }
+.regbox > div { padding: 10px 8px; text-align:center; font-size: 12px; border-right: 1px solid var(--line); }
+.regbox > div:last-child { border-right:none; }
+.qa { border-left: 3px solid var(--purple); padding: 6px 0 6px 14px; margin: 14px 0; }
+.qa .q { color: #d4c6ff; font-weight: 700; }
+.scenario { border:1px dashed rgba(122,162,255,0.4); border-radius: 14px; padding: 16px; background: rgba(122,162,255,0.05); }
+.scenario .tag { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color: var(--blue); font-weight:700; }
+.nav { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.nav a { text-decoration:none; }
+.navpill { display:inline-flex; align-items:center; gap:6px; padding: 8px 13px; border-radius: 999px; font-size: 12.5px; background: rgba(255,255,255,0.04); color: var(--muted); border:1px solid var(--line); transition: all .15s; }
+.navpill:hover { background: rgba(122,162,255,0.12); color: var(--text); }
+.navpill.active { background: rgba(122,162,255,0.18); color: var(--text); border-color: rgba(122,162,255,0.4); }
+.pagefoot { display:flex; justify-content:space-between; gap:16px; margin-top: 30px; }
+.pagefoot a { text-decoration:none; }
+.navbtn { display:block; padding:16px 20px; border-radius:16px; border:1px solid var(--line); background: var(--panel-2); flex:1; }
+.navbtn .label { margin-bottom:4px; }
+.navbtn .title { color: var(--text); font-size: 16px; font-weight:700; }
+.footer-note { margin-top: 24px; color: var(--soft); font-size: 13px; text-align:center; }
+.checklist { list-style:none; padding:0; margin: 10px 0; }
+.checklist li { padding: 8px 0 8px 30px; position:relative; border-bottom:1px solid var(--line); color: var(--muted); }
+.checklist li:last-child { border-bottom:none; }
+.checklist li::before { content:'✓'; position:absolute; left:0; top:8px; color: var(--green); font-weight:700; }
+.bitfield { display:flex; font-family:ui-monospace,monospace; font-size:12px; margin:10px 0; flex-wrap:wrap; }
+.bitfield .bit { border:1px solid var(--line); padding:8px 4px; text-align:center; min-width:34px; background: rgba(255,255,255,0.03); }
+.bitfield .bit .n { display:block; color:var(--soft); font-size:9px; }
+@media (max-width: 1100px) { .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) {
+  .shell { padding: 16px; } h1 { font-size: 27px; }
+  .grid-4, .grid-3, .grid-2, .grid-6 { grid-template-columns: 1fr; }
+  .pagefoot { flex-direction:column; }
+}
+
+</style>
+</head>
+<body>
+<div class='shell'>
+<div class='nav'><a href='index.html'><span class='navpill'>Home</span></a><a href='01-registers.html'><span class='navpill'>Registers</span></a><a href='02-endianness.html'><span class='navpill active'>Endianness</span></a><a href='03-memory.html'><span class='navpill'>Memory & Stack</span></a><a href='04-instructions.html'><span class='navpill'>Instructions & Flow</span></a><a href='05-os-bootstrap.html'><span class='navpill'>Build an OS</span></a></div>
+
+<section class='hero'>
+  <div class='label'>Page 02</div>
+  <h1>Endianness: which end of the number comes first in memory</h1>
+  <p class='lede'>The number forty-two doesn't care how it's written. Memory does. Endianness is just an agreement about which byte of a multi-byte value gets the lowest address — and x86 made a choice that confuses everyone exactly once.</p>
+</section>
+
+<section class='section scenario'>
+  <span class='tag'>Scenario</span>
+  <p style='margin-top:8px'>Imagine writing the date "2026" on four separate index cards, one digit each, then handing them to a friend to place in four numbered mail slots, left to right. Do you hand them "2, 0, 2, 6" (most significant digit first — the way you'd read it aloud) or "6, 2, 0, 2" (least significant digit first)? Either way, your friend can reconstruct "2026" perfectly — <em>as long as they know which convention you used.</em> Endianness is exactly this agreement, applied to bytes instead of digits.</p>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Big-endian: write it the way you'd say it</h2>
+    <p>Big-endian stores the <strong>most significant byte (MSB) at the lowest address</strong> — the same left-to-right order you'd read a number aloud. Network protocols (TCP/IP headers) use big-endian, which is why it's also called <strong>"network byte order."</strong></p>
+    <p>Take the 32-bit value <code>0x12345678</code>. In big-endian memory, starting at address 0x1000:</p>
+    <div class='bytegrid'>
+      <div class='byte'><span class='addr'>0x1000</span><span class='v'>12</span></div>
+      <div class='byte'><span class='addr'>0x1001</span><span class='v'>34</span></div>
+      <div class='byte'><span class='addr'>0x1002</span><span class='v'>56</span></div>
+      <div class='byte'><span class='addr'>0x1003</span><span class='v'>78</span></div>
+    </div>
+    <p>Bytes appear in the same order as you'd write the hex number. Intuitive to read in a debugger, but mildly annoying to extract "just the low byte" from in hardware.</p>
+  </div>
+  <div class='card soft'>
+    <h3>Little-endian: x86's choice</h3>
+    <p>Little-endian stores the <strong>least significant byte (LSB) at the lowest address</strong>. x86 and x86-64 (and ARM in its default mode) are little-endian. The same value <code>0x12345678</code> at address 0x1000 looks like:</p>
+    <div class='bytegrid'>
+      <div class='byte'><span class='addr'>0x1000</span><span class='v'>78</span></div>
+      <div class='byte'><span class='addr'>0x1001</span><span class='v'>56</span></div>
+      <div class='byte'><span class='addr'>0x1002</span><span class='v'>34</span></div>
+      <div class='byte'><span class='addr'>0x1003</span><span class='v'>12</span></div>
+    </div>
+    <p>Bytes appear "backwards" from how you'd write the number — which is exactly why staring at a raw hex dump of x86 memory is so disorienting the first time.</p>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Why would anyone choose little-endian?</h2>
+    <p>It's not arbitrary cruelty. Little-endian has a genuine engineering advantage: <strong>the address of a value never changes when you reinterpret it as a smaller type.</strong></p>
+    <div class='formula'><span class='c'>; 32-bit value 0x000000FF at address 0x1000, little-endian:</span>
+<span class='c'>; 0x1000: FF  0x1001: 00  0x1002: 00  0x1003: 00</span>
+<span class='c'>; Reading just the low 8 bits (AL-sized) means reading address 0x1000 — </span>
+<span class='c'>; the SAME address as the start of the 32-bit value. No offset math needed.</span></div>
+    <p>In big-endian, the low byte of that same value would sit at 0x1003 — so "give me this as a byte instead of a dword" requires knowing the full width up front to compute the offset. Little-endian lets hardware add small numbers (the common case) by just looking at the first byte or two, without caring how wide the full value eventually turns out to be.</p>
+  </div>
+  <div class='card'>
+    <h2>Where this bites OS developers specifically</h2>
+    <ul style='color:var(--muted); padding-left:18px'>
+      <li><strong>Reading multi-byte fields from disk/network structures by hand.</strong> File system superblocks, ELF headers, partition tables — when you dump them in a hex editor, multi-byte numeric fields are backwards from how you'd naturally read them.</li>
+      <li><strong>Building values byte-by-byte into a boot sector.</strong> If you hand-assemble a 16-bit or 32-bit immediate value into raw bytes (e.g. writing a disk address into a boot sector), you must write the low byte first.</li>
+      <li><strong>Network code.</strong> TCP/IP headers are big-endian by spec, but x86 is little-endian. Every OS networking stack calls byte-swap functions (<code>htons</code>, <code>ntohl</code>, or by hand <code>bswap</code>) at the boundary. Forget one and your port numbers come out as nonsense like 0x3930 instead of 0x1357.</li>
+      <li><strong>It is NOT about bit order.</strong> Endianness only governs byte order within a multi-byte value. Inside a single byte, bit 7 is always the most significant bit regardless of endianness — there's no such thing as "little-endian bits" in any architecture you'll meet here.</li>
+    </ul>
+  </div>
+</section>
+
+<section class='section card'>
+  <h2>The <code>bswap</code> instruction and the mental flip-test</h2>
+  <p>x86 has a dedicated instruction, <code>bswap reg</code>, that reverses the byte order of a 32- or 64-bit register in place — this exists specifically because byte-order conversion is common enough to deserve hardware support.</p>
+  <div class='formula'><span class='c'>; eax = 0x12345678</span>
+<span class='kw'>bswap</span> <span class='reg'>eax</span>
+<span class='c'>; eax = 0x78563412</span></div>
+  <div class='callout'>
+    <h4>The flip-test, for whenever you're staring at a hex dump</h4>
+    <p>If you know the architecture is little-endian (true for essentially every OS-dev tutorial and every x86/ARM system you'll touch), and you see consecutive bytes <code>78 56 34 12</code> in memory representing a 32-bit value, mentally reverse the byte order to get <code>0x12345678</code>. Do this every single time you read a raw memory or disk dump — it becomes automatic within a week.</p>
+  </div>
+</section>
+
+<section class='section grid-2'>
+  <div class='card'>
+    <h2>Try this: predict the bytes</h2>
+    <p>You write the 16-bit value <code>0xABCD</code> to memory address <code>0x2000</code> on an x86 machine using <code>mov [0x2000], ax</code> (with AX = 0xABCD). What byte sits at address 0x2000, and what byte sits at 0x2001?</p>
+    <div class='callout green'>
+      <p><strong>Answer:</strong> 0x2000 holds <code>0xCD</code> (the low byte), 0x2001 holds <code>0xAB</code> (the high byte) — little-endian means the least significant byte gets the lowest address, full stop.</p>
+    </div>
+  </div>
+  <div class='card'>
+    <h2>Try this: the network boundary</h2>
+    <p>Your OS's network stack receives a raw Ethernet frame and needs to read a 16-bit "EtherType" field that arrives as bytes <code>08 00</code> (meaning IPv4, per the IEEE spec, which is big-endian on the wire). If you naively load those two bytes into an x86 register with a 16-bit <code>mov</code>, what value do you actually get, and what do you need to do about it?</p>
+    <div class='callout green'>
+      <p><strong>Answer:</strong> A plain little-endian load interprets byte <code>08</code> as the low byte and <code>00</code> as the high byte, giving <code>0x0008</code> — wrong! The wire value is meant to be read big-endian as <code>0x0800</code>. You must byte-swap (or just compare against the raw byte sequence in network order) before treating it as a normal x86 integer.</p>
+    </div>
+  </div>
+</section>
+
+<div class='pagefoot'><a href='01-registers.html'><div class='navbtn'><div class='label'>&larr; previous</div><div class='title'>Registers</div></div></a><a href='03-memory.html'><div class='navbtn' style='text-align:right'><div class='label'>next &rarr;</div><div class='title'>Memory & Stack</div></div></a></div>
+<div class='footer-note'>Assembly &amp; OS-from-Scratch Refresher — built the head-first way: scenario first, jargon second.</div>
+</div>
+</body>
+</html>

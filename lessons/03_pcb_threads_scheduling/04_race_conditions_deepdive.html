@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Race Conditions From First Principles — Why Shared Memory Needs Locks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--red);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:var(--red);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--orange)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#atomicity" title="The Illusion of Atomicity"></a>
+  <a class="toc-dot" href="#interleaving" title="The Bad Interleaving"></a>
+  <a class="toc-dot" href="#scheduler" title="Why the Scheduler Makes It Worse"></a>
+  <a class="toc-dot" href="#criticalsection" title="The Critical Section"></a>
+  <a class="toc-dot" href="#mutex" title="The Mutex"></a>
+  <a class="toc-dot" href="#spinlock" title="Spinlocks"></a>
+  <a class="toc-dot" href="#futex" title="Futexes"></a>
+  <a class="toc-dot" href="#deadlock" title="Deadlock"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Operating Systems · Race Conditions · Critical Sections · Mutexes · Futexes</div>
+    <h1>When Two Threads<br><span>Reach For The Same Thing</span></h1>
+    <p class="hero-sub">The last module told you threaded code needs mutexes and locks, and left it there — an instruction to trust, not a mechanism to understand. This page opens the box. You'll watch <code>counter++</code> quietly split into three separate machine instructions, watch two threads interleave those instructions in exactly the wrong order, and watch a real increment vanish into thin air. Then you'll meet the actual tools — mutexes, spinlocks, futexes — that exist for no reason other than to stop that from happening.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Machine Instructions Hiding Inside counter++</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Lost Update, Every Time It Races</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Operations On Every Mutex: lock() &amp; unlock()</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Syscalls On An Uncontended Futex</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Sentence That Got <span class="accent r">Skipped Over</span></h2>
+  <p class="reveal">You already know threads inside one process share the same address space, the same open files, the same everything — except each gets its own registers, its own stack, its own program counter. And you already read the warning that came with that fact: two threads touching the same variable with zero kernel involvement is fast, but unsafe without discipline, and that "this is precisely why threaded code needs mutexes/locks."</p>
+  <p class="reveal">Fair sentence. Completely unhelpful sentence, on its own. It tells you locks exist and never tells you <em>what goes wrong without them</em>, at the level of an actual instruction stream — which means "use a mutex" reads like a rule to obey rather than a fact you could have derived yourself. So let's derive it. By the end of this page you'll be able to look at two lines of ordinary-looking code running on two threads and predict, correctly, whether they can silently corrupt each other's work.</p>
+</div>
+</section>
+
+<!-- ATOMICITY -->
+<section id="atomicity">
+<div class="container">
+  <div class="section-num">01 — The Aha the Base Module Skipped</div>
+  <h2>Something That <span class="accent r">Looks</span> Atomic Usually Isn't</h2>
+
+  <p class="reveal">Here's a line of code so ordinary you've written it a thousand times without thinking twice:</p>
+
+  <div class="formula red reveal">
+    <span class="label">The line everyone assumes is one step</span>
+    counter++;
+    <span class="sub">One line of source code. One semicolon. Looks like a single, indivisible action — read it, bump it, done.</span>
+  </div>
+
+  <p class="reveal">It is not one step. Not even close. The CPU doesn't have an instruction that means "go find this variable in memory, add one to it, and put it back," all in a single uninterruptible motion. What it actually has is three separate, independently-schedulable instructions, and the compiler quietly expands your one line into all three:</p>
+
+  <pre class="reveal"><code><span class="cm">// what you wrote:</span>
+<span class="var">counter</span>++;
+
+<span class="cm">// what the CPU actually executes — three separate instructions:</span>
+<span class="kw">LOAD</span>   <span class="var">R1</span>, <span class="var">counter</span>     <span class="cm">// (1) read the current value of counter from memory into a register</span>
+<span class="kw">INC</span>    <span class="var">R1</span>              <span class="cm">// (2) increment the register — memory itself is still untouched</span>
+<span class="kw">STORE</span>  <span class="var">counter</span>, <span class="var">R1</span>   <span class="cm">// (3) write the register back out to memory</span></code></pre>
+
+  <p class="reveal">Three instructions, three separate moments in time, with a register sitting in between holding a value that only the executing thread can see. As long as exactly one thread is doing this, it's harmless — the three steps always run back-to-back, and the result is always correct. The trouble starts the instant a <em>second</em> thread is allowed to run any of its own load/increment/store sequence on the <strong>same memory location</strong> before the first thread has finished all three of its steps.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    "Atomic" is not a property of how a line of code <em>looks</em> in your source file. It's a property of whether the hardware executes it as one uninterruptible unit. <code>counter++</code> looks atomic because it's short. It isn't atomic, because underneath, it's a load, then a separate increment, then a separate store — three points where another thread could legally step in.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Real-world escape hatch:</b> hardware often <em>does</em> provide a genuinely atomic increment — x86 has a <code>LOCK XADD</code> instruction, for instance, that performs load-modify-store as one indivisible, bus-locked step. But your compiler will only emit it if you explicitly ask for atomic semantics — <code>std::atomic&lt;int&gt;</code> in C++11, <code>AtomicInteger</code> in Java, <code>atomic.AddInt64</code> in Go. Plain <code>int counter</code> with plain <code>counter++</code> gets you the naive three-instruction version, every time, on every mainstream compiler.
+  </div>
+
+  <p class="reveal">Worth being precise about why the compiler doesn't just make everything atomic by default: bus-locked atomic instructions are meaningfully slower than their ordinary counterparts, because on a multi-core machine they have to coordinate across cores — stalling other cores' access to that same cache line while the atomic operation completes. If every plain variable increment paid that cost, most programs would slow down for a guarantee the vast majority of code never actually needs, since most variables are never touched by more than one thread. So the default is fast-and-unsafe, and atomicity is something you opt into, deliberately, only where it matters.</p>
+
+  <p class="reveal">And this three-instruction pattern isn't unique to <code>++</code>. Any read-modify-write on shared state has the same shape: <code>balance -= amount</code>, <code>list.append(item)</code>, <code>flag = flag || newCondition</code> — all of them decompose into "read the current state, compute something from it, write the result back," and all of them are vulnerable to exactly the interleaving you're about to see below. <code>counter++</code> is just the smallest possible example that still shows the whole mechanism.</p>
+</div>
+</section>
+
+<!-- INTERLEAVING -->
+<section id="interleaving">
+<div class="container">
+  <div class="section-num">02 — Watch It Happen</div>
+  <h2>The Interleaving That Loses <span class="accent r">an Entire Increment</span></h2>
+
+  <p class="reveal">Let's make this concrete instead of hand-wavy. Two threads, Thread A and Thread B, both run <code>counter++</code> on a shared variable that currently holds <strong>5</strong>. If they ran one after another, with no overlap, the answer is obviously <strong>7</strong>: 5 → 6 → 7. Here is a perfectly ordinary interleaving — no malice, no bugs in either thread's code, nobody did anything wrong in isolation — that instead lands on <strong>6</strong>.</p>
+
+  <ol class="step-list red reveal">
+    <li><div class="step-body"><strong>Thread A: LOAD</strong>A reads <code>counter</code> from memory. Its register, RA, is now 5. Memory itself still says 5.</div></li>
+    <li><div class="step-body"><strong>⚡ Preempted</strong>Before A can run INC, the scheduler cuts it off — a timer interrupt, or A simply loses the core to B on another physical core. A is frozen mid-job, holding RA = 5.</div></li>
+    <li><div class="step-body"><strong>Thread B: LOAD</strong>B now reads <code>counter</code> from memory. It's still 5 — A never got far enough to change it. B's register, RB, is now 5.</div></li>
+    <li><div class="step-body"><strong>Thread B: INC, then STORE</strong>B increments RB to 6, then stores it back. Memory now correctly says 6 — as far as B knows, it just did its job perfectly.</div></li>
+    <li><div class="step-body"><strong>Thread A resumes: INC</strong>The scheduler lets A continue exactly where it paused. A never re-reads memory — it already has RA = 5 sitting in its register from step 1. It increments that stale value: RA becomes 6.</div></li>
+    <li><div class="step-body"><strong>Thread A: STORE — the update vanishes</strong>A writes RA (6) back to memory. Memory now says 6 — overwriting B's write, which also produced 6, purely by coincidence of both starting from 5.</div></li>
+  </ol>
+
+  <div class="formula red reveal">
+    <span class="label">Expected vs. actual</span>
+    5 + 1 + 1 = 6, not 7
+    <span class="sub">Two increments happened. Only one is reflected in memory. That silently disappeared increment is the entire definition of a lost update — the signature symptom of a race condition.</span>
+  </div>
+
+  <p class="reveal">Press the button below and watch that exact interleaving play out step by step — registers, memory, and the moment the update gets lost. Then run it again with a mutex guarding the critical section, and watch the same two threads land on the correct answer, 7, every time.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="raceLabel">▶ Choose a scenario below</div>
+    <canvas id="raceCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn red" onclick="runRace('race')">▶ Run WITHOUT a lock — race</button>
+    <button class="ctrl-btn green" onclick="runRace('safe')">▶ Run WITH a mutex — correct</button>
+    <button class="ctrl-btn gold" onclick="resetRace()">Reset</button>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Nobody Did Anything Wrong</div>
+    Look back at those six steps. Thread A's code is correct. Thread B's code is correct. Neither thread is buggy in isolation — you could unit-test each one forever and never see a problem. The bug exists <em>only</em> in the interleaving, in the timing relationship between two otherwise-correct pieces of code. That's what makes race conditions uniquely nasty: they're not in any one function you can read and audit; they're in the gaps between functions.
+  </div>
+
+  <p class="reveal">Zoom out from "a counter" for a second, because the pattern generalizes to something that costs real money. Imagine <code>counter</code> is actually a bank account balance, and instead of incrementing it, Thread A and Thread B are each processing a $50 deposit at the same moment on the same account. Run the exact same interleaving — both LOAD the starting balance, both compute "+$50" in their own private register, both STORE — and one entire $50 deposit evaporates, silently, with no error, no exception, no log line to point at. The customer's receipt says the deposit went through. The ledger disagrees. This is not a hypothetical: unguarded read-modify-write races on financial and inventory systems are a real, recurring, expensive category of production bug, and the mechanism is <em>exactly</em> the one you just watched happen to a variable named <code>counter</code>.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 How To Spot One in the Wild</div>
+    The tell is always the same shape: some piece of state is <strong>read</strong>, then a decision or computation is made <strong>based on that read</strong>, then the state is <strong>written back</strong> — and any other thread could touch that same state in the gap between the read and the write. "Check if the seat is free, then book it." "Read the current stock count, then subtract one." "See if the file exists, then create it." All read-modify-write. All racy without a lock.
+  </div>
+</div>
+</section>
+
+<!-- SCHEDULER -->
+<section id="scheduler">
+<div class="container">
+  <div class="section-num">03 — Tying Back to the Kernel</div>
+  <h2>The Scheduler Makes This <span class="accent r">Worse</span>, Not Better</h2>
+
+  <p class="reveal">Here's the part the base module set you up to understand but never connected: you already learned that the kernel can preempt a running thread at essentially <em>any</em> point, because a hardware timer interrupt fires hundreds to a thousand times a second, completely independent of what the running code is doing. It doesn't wait for a convenient moment. It doesn't know or care that a thread is halfway through a load/increment/store sequence. It can land between LOAD and INC. It can land between INC and STORE. It can land anywhere.</p>
+
+  <p class="reveal">That means the bad interleaving from the last section isn't some rare, hard-to-trigger edge case that only shows up if you're unlucky or malicious. It's a routine, statistically <em>inevitable</em> consequence of two threads touching the same unprotected memory, given enough iterations. Run <code>counter++</code> from two threads a million times each with no lock, and you will not get 2,000,000. You'll get some smaller number, and it'll be a different smaller number practically every run — because exactly which interleavings occurred depends on scheduling decisions and interrupt timing that are, from your program's point of view, essentially random.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 And Multi-Core Makes It Worse Again</div>
+    Everything above assumed the two threads take turns on <em>one</em> core, interleaved in time. On a multi-core machine — which is to say, on basically every machine — Thread A and Thread B can be running their LOAD/INC/STORE sequences on two physically separate cores at the exact same instant, not just interleaved but genuinely simultaneous. You don't even need a preemption for the race to occur; you just need ordinary, unremarkable concurrent execution. Multi-core didn't invent race conditions, but it turned them from "an occasional consequence of scheduling" into "the default outcome of running code in parallel without coordination."
+  </div>
+
+  <p class="reveal">This is also why race conditions are so miserable to debug: they're timing-dependent, so they can pass every test you run on your laptop and then show up once a month in production under real load, on a machine with a different core count, a different scheduler mood, a different set of background processes stealing time slices. The bug was always there. The interleaving that exposes it just wasn't common enough to hit in your test run.</p>
+
+  <p class="reveal">There's a second, subtler multi-core effect worth flagging even though it's a step beyond what this page needs to fully unpack: <strong>false sharing</strong>. CPU caches move data around in fixed-size chunks called cache lines (64 bytes on most modern hardware), not single variables. If <code>counter</code> for Thread A and some unrelated variable used only by Thread B happen to land in the <em>same</em> 64-byte cache line, the cores end up fighting over that line even though the two threads never touch each other's actual data — a performance problem, not a correctness one, but it's another reminder that on real multi-core hardware, "shared memory" has physical consequences that go beyond the clean load/store model in a textbook.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔁 Adding It Up</div>
+    Preemption can land mid-instruction-sequence at any time. Multiple cores can execute truly simultaneously. Neither of those facts is a bug in the scheduler or the hardware — they're the entire point of preemptive, multi-core scheduling, which is what makes your machine fast and responsive. The cost of that design is that <em>your code</em> now has to explicitly declare "don't interleave here" wherever it matters, because the kernel has no way to know which few instructions in your program were secretly meant to be one atomic unit.
+  </div>
+</div>
+</section>
+
+<!-- CRITICAL SECTION -->
+<section id="criticalsection">
+<div class="container">
+  <div class="section-num">04 — Naming the Danger Zone</div>
+  <h2>The <span class="accent r">Critical Section</span></h2>
+
+  <p class="reveal">Now that you've seen the mechanism, it's worth naming the exact span of code where the danger lives. The <strong>critical section</strong> is the specific span of code that touches shared, unprotected state — in our example, precisely the three instructions LOAD, INC, STORE. Not the whole function. Not the whole program. Just that narrow window during which a thread has read a value it hasn't yet finished acting on.</p>
+
+  <div class="formula reveal">
+    <span class="label">A precise definition</span>
+    Critical section = any code that must run to completion, on shared state, without another thread interleaving into the middle of it
+    <span class="sub">Everything before the LOAD and everything after the STORE is perfectly safe to interleave freely. Only the window in between is dangerous.</span>
+  </div>
+
+  <p class="reveal">Every synchronization primitive that exists — mutexes, spinlocks, futexes, semaphores, the works — exists for exactly one purpose: guaranteeing that only <strong>one</strong> thread is ever inside a given critical section at a time. That guarantee has a name, and it's hiding in plain sight in the word you've been reading this whole page: <strong>mutual exclusion</strong> — mutually excluding every other thread from a region that's currently occupied. Say "mutex" out loud slowly and you're saying "MUTual EXclusion." That's not a coincidence; that's the entire feature, compressed into a name.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 One Sentence That Explains All of Synchronization</div>
+    If you remember nothing else from this page: a race condition happens when two threads are both inside the same critical section at the same time. Every lock, of every kind, at every layer of the stack, exists solely to make that impossible.
+  </div>
+
+  <p class="reveal">It helps to mark the boundary explicitly, because "critical section" is a property of a specific stretch of code, not of a whole function or a whole program:</p>
+
+  <pre class="reveal"><code><span class="kw">void</span> <span class="fn">increment</span>(<span class="cls">Counter</span>* <span class="var">c</span>) {
+    <span class="fn">setup_local_state</span>();          <span class="cm">// safe to interleave freely — touches no shared state</span>
+
+    <span class="cm">// ---- critical section begins ----</span>
+    <span class="var">c</span>-&gt;<span class="var">value</span> = <span class="var">c</span>-&gt;<span class="var">value</span> + <span class="num">1</span>;    <span class="cm">// LOAD, INC, STORE on shared memory — the danger zone</span>
+    <span class="cm">// ---- critical section ends ----</span>
+
+    <span class="fn">log_locally</span>(<span class="str">"incremented"</span>);   <span class="cm">// safe again — no shared state involved</span>
+}</code></pre>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Outside the critical section</h4>
+      Local variables, function arguments, anything not visible to other threads — freely interleavable, no lock needed, no race possible, because there's nothing to race over.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Inside the critical section</h4>
+      Any read-modify-write touching state another thread can also reach — this, and only this, is what a lock needs to wrap. Lock too little and you're back to a race; lock too much and you've turned a concurrent program into an accidentally serial one.
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- MUTEX -->
+<section id="mutex">
+<div class="container">
+  <div class="section-num">05 — The Standard Tool</div>
+  <h2>Meet the <span class="accent r">Mutex</span></h2>
+
+  <p class="reveal">A mutex is a lock object with exactly two operations: <code>lock()</code> (sometimes called <code>acquire()</code>) and <code>unlock()</code> (<code>release()</code>). The rule is simple to state and absolute in effect: a thread calling <code>lock()</code> either gets the mutex immediately, if it's currently free, or it gets <strong>blocked</strong> — moved into the BLOCKED state you met on the PCB dossier in the last module, set aside by the scheduler entirely — until whichever thread currently holds the mutex calls <code>unlock()</code>. At that point the kernel wakes exactly one waiting thread, moves it back to READY, and eventually schedules it to actually acquire the lock and proceed.</p>
+
+  <pre class="reveal"><code><span class="kw">void</span> <span class="fn">increment</span>(<span class="cls">Counter</span>* <span class="var">c</span>) {
+    <span class="fn">mutex_lock</span>(&<span class="var">c</span>-&gt;<span class="var">lock</span>);      <span class="cm">// blocks here if another thread already holds it</span>
+    <span class="var">c</span>-&gt;<span class="var">value</span>++;                 <span class="cm">// the critical section — now provably safe</span>
+    <span class="fn">mutex_unlock</span>(&<span class="var">c</span>-&gt;<span class="var">lock</span>);    <span class="cm">// wakes the next waiting thread, if any</span>
+}</code></pre>
+
+  <p class="reveal">Notice what changed versus the bare <code>counter++</code>: the three-instruction load/increment/store sequence is now wrapped so that no second thread can ever be inside it while the first is still there. Run the mutex-protected scenario in the canvas above again if you skipped it — Thread B doesn't spin, doesn't retry, doesn't waste a single cycle guessing. It's parked, asleep, until the kernel taps it on the shoulder.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Blocked, Not Busy</div>
+    "Blocked" is the operative word. A thread waiting on a mutex isn't consuming CPU while it waits — it's sitting in the same BLOCKED state a thread enters while waiting on disk I/O or a network packet. The scheduler is completely free to run other, unrelated, ready threads on that core in the meantime. This is precisely why mutexes are the default, go-to synchronization tool for ordinary application code: waiting costs you nothing but latency, never wasted CPU cycles.
+  </div>
+
+  <p class="reveal">Two practical failure modes are worth knowing before you go add mutexes everywhere. First: a thread that calls <code>lock()</code> a second time on a mutex it already holds — without an unlock in between — will simply block forever, waiting for itself to release something it's still holding. Ordinary mutexes aren't reentrant by default; if you need that pattern, you reach for a specifically-documented <em>recursive mutex</em> instead, which tracks an owner and a count. Second: forgetting to call <code>unlock()</code> on every exit path out of a function — including exception/error paths — leaves the mutex permanently held, and every other thread that ever calls <code>lock()</code> on it blocks forever too. This is exactly why most languages pair mutexes with a scope-based guard (C++'s <code>std::lock_guard</code>, Rust's <code>MutexGuard</code>, Python's <code>with lock:</code>) that calls <code>unlock()</code> automatically when control leaves the block, no matter how it leaves.</p>
+
+  <div class="sidenote reveal">
+    <b>Mutex vs. semaphore, briefly:</b> a mutex is really a special case of a more general primitive called a <em>semaphore</em> — a counter that <code>lock()</code>/<code>wait()</code> decrements (blocking if it would go below zero) and <code>unlock()</code>/<code>signal()</code> increments. A mutex is a semaphore capped at 1, with the extra rule that only the thread that acquired it may release it. A general semaphore initialized to N instead lets up to N threads through at once — the tool of choice when the shared resource has more than one interchangeable unit, like a fixed-size connection pool.
+  </div>
+</div>
+</section>
+
+<!-- SPINLOCK -->
+<section id="spinlock">
+<div class="container">
+  <div class="section-num">06 — The Honest Alternative</div>
+  <h2><span class="accent r">Spinlocks</span>: Waiting Without Sleeping</h2>
+
+  <p class="reveal">A spinlock is a lock with the same intent — mutual exclusion around a critical section — but a completely different waiting strategy. Instead of blocking, a thread that can't acquire a spinlock just loops: check if it's free, check again, check again, "spinning" in a tight loop, burning CPU cycles the entire time, until the lock becomes available.</p>
+
+  <p class="reveal">That sounds obviously worse than a mutex — you're wasting CPU instead of yielding it, right? Not always, and the honest tradeoff is worth sitting with rather than dismissing. Blocking on a mutex isn't free either: putting a thread to sleep and later waking it up means a full context switch, at minimum, possibly twice (once to sleep, once to wake) — and you already know from the last module that a context switch, especially one that crosses process boundaries, is real, measurable, non-trivial work. If the expected wait for the lock is <em>shorter</em> than a context switch would cost, spinning and immediately getting the lock beats sleeping and paying two switches to wait for something that was about to free up anyway.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">~1–2ns</div><div class="lbl">One spin-loop check, uncontended</div></div>
+    <div class="stat-card"><div class="val">~1–10µs</div><div class="lbl">Typical full context switch</div></div>
+    <div class="stat-card"><div class="val">1000×+</div><div class="lbl">Roughly how much costlier a switch is than a spin check</div></div>
+    <div class="stat-card"><div class="val">64B</div><div class="lbl">Cache-line size these locks typically contend on</div></div>
+  </div>
+  <p class="reveal">Those numbers are order-of-magnitude, not gospel — actual costs depend heavily on the CPU, the OS, and whether the wake path has to cross cores — but the ratio is the point: a context switch can easily cost a thousand times what a single spin check costs. Spin for a handful of iterations while genuinely waiting on a lock that's about to be released, and you're still cheaper than blocking. Spin for a long time because the holder is stuck doing disk I/O with the lock held, and you've just wasted a huge amount of CPU for nothing — which is exactly why holding a spinlock across anything that could block (I/O, another lock, a page fault) is considered a serious bug in kernel code.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Spinning makes sense</h4>
+      Critical section is a handful of instructions, expected to be held for nanoseconds — common deep inside kernel code (interrupt handlers, scheduler internals) protecting tiny shared data structures, on systems with multiple cores so the lock-holder is actively running elsewhere and will finish soon.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Spinning backfires</h4>
+      Critical section is long, or might block on I/O while held, or you're on a single core (the spinning thread just burns the only CPU that could ever free the lock) — the waiting thread can spin for a very long time doing nothing useful, starving everything else that wanted that core.
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why This Is Rare in Application Code, Common in the Kernel</div>
+    Ordinary user-space application code almost always reaches for a mutex, because you rarely have tight guarantees on how short your critical section will stay, and wasting a whole CPU core spinning is a bad trade for typical app workloads. Inside the kernel itself, though, spinlocks are everywhere — protecting very short, very hot data structures where a context switch would cost dramatically more than the few dozen cycles spent spinning. Same tool, same goal (mutual exclusion), radically different verdict depending on how long the wait is expected to be.
+  </div>
+</div>
+</section>
+
+<!-- FUTEX -->
+<section id="futex">
+<div class="container">
+  <div class="section-num">07 — What's Actually Under the Hood on Linux</div>
+  <h2>The <span class="accent r">Futex</span>: Fast Userspace Mutex</h2>
+
+  <p class="reveal">Here's a question worth asking: if calling into the kernel to block and wake a thread is genuinely expensive, why does every <code>pthread_mutex_lock()</code> call on Linux seemingly involve the kernel at all? The honest answer is: <strong>most of the time, it doesn't.</strong> The mechanism that makes this possible is the <strong>futex</strong> — literally short for "fast userspace mutex" — and it's the real machinery underneath most user-space mutex implementations on Linux today.</p>
+
+  <p class="reveal">The clever optimization is a split into two paths, and it hinges entirely on whether the lock is actually contested:</p>
+
+  <pre class="reveal"><code><span class="fn">lock</span>(<span class="var">futex_word</span>) {
+    <span class="kw">if</span> (<span class="fn">compare_and_swap</span>(<span class="var">futex_word</span>, <span class="num">0</span>, <span class="num">1</span>))
+        <span class="kw">return</span>;                                     <span class="cm">// uncontended: pure userspace, zero syscalls</span>
+
+    <span class="fn">syscall</span>(<span class="cls">SYS_futex</span>, &<span class="var">futex_word</span>, <span class="cls">FUTEX_WAIT</span>, <span class="num">1</span>);   <span class="cm">// contended: ask the kernel to sleep us</span>
+}</code></pre>
+
+  <ul class="reveal">
+    <li><strong>Uncontended case (nobody else wants the lock):</strong> acquiring and releasing it is done entirely with a userspace atomic CPU instruction — a compare-and-swap (CAS) that flips a single word from 0 to 1. No syscall, no kernel involvement whatsoever, no cost beyond a couple of machine instructions. This is the overwhelmingly common case in most real programs.</li>
+    <li><strong>Contended case (someone's already holding it):</strong> only now does the thread make an actual <code>futex()</code> syscall, asking the kernel to put it to sleep — genuinely BLOCKED, off the CPU — and the holder's eventual <code>unlock()</code> makes a matching syscall to wake it back up.</li>
+  </ul>
+
+  <p class="reveal">The name is the whole idea, restated: it's fast precisely because it only pays the "ask the kernel" tax exactly when it's truly unavoidable — when there's real contention that requires putting a thread to sleep. For the common, lucky case of an uncontended lock, a futex-backed mutex is barely more expensive than incrementing a variable.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Primitive</th><th>Waiting Thread</th><th>Kernel Involved?</th><th>Cost, Uncontended</th><th>Cost, Contended</th><th>Typical Home</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Mutex (classic)</td><td>Blocks / sleeps</td><td class="pos">Always, to block/wake</td><td class="gold">Syscall-ish</td><td class="neg">Two context switches</td><td>Application code</td></tr>
+        <tr><td class="hl">Spinlock</td><td>Busy-loops, checking</td><td>Never, while waiting</td><td class="pos">A few cycles</td><td class="neg">Wasted cycles the whole wait</td><td>Kernel internals</td></tr>
+        <tr><td class="hl">Futex-backed mutex</td><td>CAS first, blocks only if needed</td><td class="pos">Only when contended</td><td class="pos">A couple of instructions</td><td class="gold">Same as classic mutex</td><td>Modern Linux pthreads</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Real-world fact:</b> the futex syscall was added to Linux in 2003 (kernel 2.5.7) specifically because glibc's threading library needed a way to build fast mutexes without paying a syscall on every single lock/unlock pair. Today, <code>pthread_mutex_t</code>, <code>std::mutex</code> in C++, and the locks underneath most language runtimes on Linux are, one layer down, futexes.
+  </div>
+
+  <p class="reveal">One more detail that shows how carefully this is engineered: when <code>unlock()</code> happens and there are multiple threads waiting, the kernel-side <code>FUTEX_WAKE</code> operation can be told to wake exactly one waiter rather than all of them. Waking every waiting thread just so all but one immediately discover the lock is taken and go back to sleep is called the <strong>thundering herd</strong> problem — a burst of wasted context switches for nothing. A well-implemented futex-backed mutex wakes precisely as many threads as could plausibly make progress, which in the simple mutex case is exactly one.</p>
+</div>
+</section>
+
+<!-- DEADLOCK -->
+<section id="deadlock">
+<div class="container">
+  <div class="section-num">08 — The Cost of Fixing It Carelessly</div>
+  <h2>Locks Solve Races. They Can Cause <span class="accent r">Deadlock</span></h2>
+
+  <p class="reveal">Locking everything isn't automatically safe — it trades one failure mode for another if you're not careful. The classic illustration is the <strong>Dining Philosophers</strong> problem: five philosophers sit around a round table, a single fork placed between each adjacent pair — five forks total. To eat, a philosopher needs <em>both</em> the fork to their left <strong>and</strong> the fork to their right. If every philosopher simultaneously picks up the fork on their left, every single fork is now held, and every philosopher is stuck waiting forever for the fork on their right — which will never come, because whoever holds it is equally stuck waiting on their own left neighbor's fork. Nobody eats. Nobody ever will, without outside intervention.</p>
+
+  <p class="reveal">That frozen standstill is a <strong>deadlock</strong>: a set of threads each holding a resource the next one needs, in a closed loop, none willing to give up what they're holding. Computer science names four conditions that must <em>all</em> be true simultaneously for deadlock to occur — break any single one, and deadlock becomes structurally impossible.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Mutual Exclusion</span><span class="fam-count">1 of 4</span></div>
+      <div class="fam-desc">At least one resource (a fork, a lock) can only be held by one thread at a time — which is, uncomfortably, exactly the property mutexes exist to provide in the first place.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Hold and Wait</span><span class="fam-count">2 of 4</span></div>
+      <div class="fam-desc">A thread is holding at least one resource while simultaneously waiting to acquire another one held by someone else — like a philosopher gripping their left fork while reaching for the right.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">No Preemption</span><span class="fam-count">3 of 4</span></div>
+      <div class="fam-desc">A resource can't forcibly be taken away from the thread holding it — it can only be released voluntarily. Nobody can walk up and pry a fork out of a philosopher's hand.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Circular Wait</span><span class="fam-count">4 of 4</span></div>
+      <div class="fam-desc">There's a closed loop of threads, each waiting on a resource held by the next one in the circle — philosopher 1 waits on 2's fork, 2 waits on 3's, ... , and the last waits on 1's.</div>
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why This Matters Right After Learning Mutexes</div>
+    The moment you start sprinkling mutexes around shared state to fix races, you've reintroduced mutual exclusion, hold-and-wait becomes possible the instant any thread needs two locks at once, and preemption of a held lock is exactly what a mutex refuses to allow by design. Three of the four conditions come essentially free with correct, ordinary mutex usage. The only one left to actively defend against is circular wait.
+  </div>
+
+  <p class="reveal">Which leads to the simplest practical fix in wide real-world use: a strict, consistent <strong>lock-ordering convention</strong> — decide on one global order for every lock in your system (by memory address, by an assigned ID, whatever's consistent), and require every single thread, everywhere in the codebase, to always acquire locks in that same order, never the reverse. If every philosopher were instead required to always pick up the lower-numbered fork first, deadlock becomes structurally impossible — there's no way to form a circular wait when everyone is queuing up in the same global direction. It costs nothing at runtime and requires zero clever detection machinery; it just requires discipline enforced at the moment locks are taken.</p>
+
+  <p class="reveal">Lock ordering isn't the only strategy in the toolbox, just the cheapest one. Some systems instead use timeout-based acquisition — <code>try_lock_for(500ms)</code> — and back off, release whatever they're holding, and retry if they can't get everything they need in time, trading a guaranteed-no-deadlock property for occasional wasted retries. Databases go further and run actual deadlock <em>detection</em>: periodically build a graph of who's waiting on whom, look for cycles, and forcibly abort one transaction to break the cycle if one is found. Both are heavier machinery than lock ordering, and both exist because lock ordering requires every piece of code touching those locks to cooperate — which gets harder to guarantee as a codebase grows across teams.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Throughline</div>
+    A race condition is what happens when you forget to protect a critical section. A deadlock is what happens when you protect <em>too many</em> critical sections, in an order that lets threads box each other in. Both are consequences of the exact same underlying fact: threads share memory by default, and coordinating access to it is a real design problem, not a checkbox you tick once by sprinkling <code>lock()</code> calls around and moving on.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent r">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Race Condition</div><div class="glossary-def">A bug that occurs only because of the specific timing/interleaving of two or more threads touching shared state — correct in isolation, wrong together, depending on scheduling luck.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Critical Section</div><div class="glossary-def">The specific span of code that touches shared, unprotected state — for <code>counter++</code>, precisely the load, increment, and store instructions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Lost Update</div><div class="glossary-def">The signature symptom of a race condition: two writes happen, but only one survives, because the second overwrote the first without ever seeing it.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mutual Exclusion</div><div class="glossary-def">The guarantee that only one thread is ever inside a given critical section at a time — the property every lock exists to provide. It's the "mutex" in "mutex."</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mutex</div><div class="glossary-def">A lock with two operations, lock() and unlock(). A thread that can't acquire it is put in the BLOCKED state and woken by the kernel once it's free.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Spinlock</div><div class="glossary-def">A lock where a waiting thread loops, repeatedly checking if it's free, instead of blocking — wastes CPU cycles but avoids context-switch cost, useful only for very short waits.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Futex</div><div class="glossary-def">"Fast userspace mutex" — acquired via a pure userspace atomic instruction when uncontended (zero syscalls), falling back to a real <code>futex()</code> syscall only when a thread must actually block.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Compare-and-Swap (CAS)</div><div class="glossary-def">An atomic CPU instruction that checks a memory location's current value and, only if it matches an expected value, swaps in a new one — the building block of lock-free and futex fast paths.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Deadlock</div><div class="glossary-def">A standstill where a cycle of threads each hold a resource the next one needs, and none will release what they hold — requires mutual exclusion, hold-and-wait, no preemption, and circular wait all at once.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Lock Ordering</div><div class="glossary-def">A convention requiring every thread to acquire multiple locks in the same global order, which makes circular wait — and therefore deadlock — structurally impossible.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Semaphore</div><div class="glossary-def">A counting generalization of a mutex — allows up to N threads through at once, decremented on wait()/lock() and incremented on signal()/unlock(), instead of being capped at exactly one holder.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reentrant Mutex</div><div class="glossary-def">A mutex variant that tracks an owner and a hold-count, allowing the same thread to lock() it multiple times without deadlocking itself — not the default behavior of an ordinary mutex.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Thundering Herd</div><div class="glossary-def">The waste that occurs when releasing a lock wakes every waiting thread instead of just one, causing most of them to immediately find the lock taken and go back to sleep.</div></div>
+    <div class="glossary-card"><div class="glossary-term">False Sharing</div><div class="glossary-def">A multi-core performance problem (not a correctness bug) where unrelated variables used by different threads land on the same CPU cache line, causing needless cross-core contention.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Race Conditions From First Principles · A companion deep-dive to "PCBs, Threads &amp; Shared Memory" · OS Sweet Stories series</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Three instructions, two threads, one lost update.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── RACE / MUTEX INTERLEAVING CANVAS ──────────────────────────────────────────
+const raceSteps=[
+  {
+    regA:null, regB:null, mem:5,
+    actor:null, action:'none',
+    caption:'Starting state: counter = 5 in memory. Neither thread has touched it yet.'
+  },
+  {
+    regA:5, regB:null, mem:5,
+    actor:'A', action:'load',
+    caption:'Thread A executes LOAD — reads counter (5) from memory into its own register, RA.'
+  },
+  {
+    regA:5, regB:null, mem:5,
+    actor:'A', action:'preempt',
+    caption:'⚡ Timer interrupt fires. The scheduler preempts Thread A mid-job — right between its LOAD and its INC.'
+  },
+  {
+    regA:5, regB:5, mem:5,
+    actor:'B', action:'load',
+    caption:'Thread B now runs its own LOAD. counter is still 5 in memory, so RB also becomes 5.'
+  },
+  {
+    regA:5, regB:6, mem:5,
+    actor:'B', action:'inc',
+    caption:'Thread B executes INC — RB becomes 6. Still only inside B’s private register; memory untouched.'
+  },
+  {
+    regA:5, regB:6, mem:6,
+    actor:'B', action:'store',
+    caption:'Thread B executes STORE — writes RB (6) back to memory. counter is now correctly 6.'
+  },
+  {
+    regA:5, regB:6, mem:6,
+    actor:'A', action:'resume',
+    caption:'Scheduler resumes Thread A exactly where it paused. A does NOT reload memory — it still has RA = 5 from step 1.'
+  },
+  {
+    regA:6, regB:6, mem:6,
+    actor:'A', action:'inc',
+    caption:'Thread A executes INC on its STALE value — RA becomes 5 + 1 = 6, unaware memory already moved to 6.'
+  },
+  {
+    regA:6, regB:6, mem:6,
+    actor:'A', action:'store',
+    caption:'Thread A executes STORE — writes RA (6) back to memory, silently overwriting Thread B’s update.'
+  },
+  {
+    regA:6, regB:6, mem:6,
+    actor:null, action:'result', tag:'error',
+    caption:'FINAL VALUE: 6. Two increments from 5 should give 7. One entire increment vanished — that is a race condition.'
+  }
+];
+
+const safeSteps=[
+  {
+    regA:null, regB:null, mem:5,
+    mutex:'free', blocked:null,
+    actor:null, action:'none',
+    caption:'Starting state: counter = 5. This time, a mutex guards the critical section.'
+  },
+  {
+    regA:null, regB:null, mem:5,
+    mutex:'A', blocked:null,
+    actor:'A', action:'lock',
+    caption:'Thread A calls lock(). The mutex is free, so A acquires it immediately.'
+  },
+  {
+    regA:null, regB:null, mem:5,
+    mutex:'A', blocked:'B',
+    actor:'B', action:'blockedtry',
+    caption:'Thread B calls lock() too — but A already holds it. B does NOT spin; it is put in the BLOCKED state.'
+  },
+  {
+    regA:5, regB:null, mem:5,
+    mutex:'A', blocked:'B',
+    actor:'A', action:'load',
+    caption:'Thread A executes LOAD — RA = 5.'
+  },
+  {
+    regA:6, regB:null, mem:5,
+    mutex:'A', blocked:'B',
+    actor:'A', action:'inc',
+    caption:'Thread A executes INC — RA = 6.'
+  },
+  {
+    regA:6, regB:null, mem:6,
+    mutex:'A', blocked:'B',
+    actor:'A', action:'store',
+    caption:'Thread A executes STORE — counter becomes 6.'
+  },
+  {
+    regA:6, regB:null, mem:6,
+    mutex:'free', blocked:null,
+    actor:'A', action:'unlock',
+    caption:'Thread A calls unlock(). The kernel wakes Thread B — B moves from BLOCKED back to READY.'
+  },
+  {
+    regA:6, regB:null, mem:6,
+    mutex:'B', blocked:null,
+    actor:'B', action:'lock',
+    caption:'Thread B’s lock() now succeeds — B acquires the mutex and enters the critical section.'
+  },
+  {
+    regA:6, regB:6, mem:6,
+    mutex:'B', blocked:null,
+    actor:'B', action:'load',
+    caption:'Thread B executes LOAD — and this time reads the up-to-date value: RB = 6.'
+  },
+  {
+    regA:6, regB:7, mem:6,
+    mutex:'B', blocked:null,
+    actor:'B', action:'inc',
+    caption:'Thread B executes INC — RB = 7.'
+  },
+  {
+    regA:6, regB:7, mem:7,
+    mutex:'B', blocked:null,
+    actor:'B', action:'store',
+    caption:'Thread B executes STORE — counter becomes 7.'
+  },
+  {
+    regA:6, regB:7, mem:7,
+    mutex:'free', blocked:null,
+    actor:null, action:'result', tag:'correct',
+    caption:'FINAL VALUE: 7 — correct. The mutex guaranteed only one thread was ever in the critical section at a time.'
+  }
+];
+
+function drawRace(step,mode,t){
+  const canvas=document.getElementById('raceCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const laneAy=20,laneH=65,laneBy=100;
+  const memX=W*0.74,memW=Math.min(W*0.22,220),memY=20,memH=145;
+  const regW=64,regH=34;
+
+  // lanes
+  ctx.fillStyle='rgba(56,189,248,.06)';ctx.fillRect(20,laneAy,memX-40,laneH);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;ctx.strokeRect(20,laneAy,memX-40,laneH);
+  ctx.fillStyle=C.cyan;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('Thread A',30,laneAy-6);
+
+  ctx.fillStyle='rgba(167,139,250,.06)';ctx.fillRect(20,laneBy,memX-40,laneH);
+  ctx.strokeStyle=C.purple;ctx.strokeRect(20,laneBy,memX-40,laneH);
+  ctx.fillStyle=C.purple;ctx.fillText('Thread B',30,laneBy-6);
+
+  // register boxes
+  const regAx=memX-40-regW-10+20, regAy=laneAy+laneH/2-regH/2;
+  const regBx=regAx, regBy=laneBy+laneH/2-regH/2;
+  function regBox(x,y,label,val,col,glow){
+    ctx.fillStyle= glow? col+'33':'rgba(255,255,255,.03)';
+    ctx.fillRect(x,y,regW,regH);
+    ctx.strokeStyle=col;ctx.lineWidth=glow?2.5:1.3;ctx.strokeRect(x,y,regW,regH);
+    ctx.fillStyle=col;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(label,x+regW/2,y-4);
+    ctx.font='bold 15px Source Code Pro,monospace';
+    ctx.fillText(val===null||val===undefined?'—':val,x+regW/2,y+regH/2+5);
+  }
+  regBox(regAx,regAy,'RA',step.regA,C.cyan,step.action==='inc'&&step.actor==='A');
+  regBox(regBx,regBy,'RB',step.regB,C.purple,step.action==='inc'&&step.actor==='B');
+
+  // memory box
+  ctx.fillStyle='rgba(245,200,66,.07)';ctx.fillRect(memX,memY,memW,memH);
+  ctx.strokeStyle=C.gold;ctx.lineWidth= (step.action==='store')?2.5:1.3;ctx.strokeRect(memX,memY,memW,memH);
+  ctx.fillStyle=C.gold;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('MEMORY: counter',memX+memW/2,memY+20);
+  ctx.font='bold 34px Source Code Pro,monospace';
+  ctx.fillStyle= step.tag==='error'?C.red: step.tag==='correct'?C.green:C.gold;
+  ctx.fillText(step.mem,memX+memW/2,memY+memH/2+16);
+
+  // mutex bar
+  const barY=laneBy+laneH+20,barH=30;
+  if(mode==='safe'){
+    let bcol=step.mutex==='free'?C.green:(step.mutex==='A'?C.cyan:C.purple);
+    let btxt=step.mutex==='free'?'MUTEX: free':'MUTEX: held by '+step.mutex;
+    if(step.blocked){btxt+='   |   Thread '+step.blocked+': BLOCKED (waiting)';}
+    ctx.fillStyle=bcol+'22';ctx.fillRect(20,barY,memX+memW-40,barH);
+    ctx.strokeStyle=bcol;ctx.lineWidth=1.3;ctx.strokeRect(20,barY,memX+memW-40,barH);
+    ctx.fillStyle=bcol;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(btxt,20+(memX+memW-40)/2,barY+barH/2+4);
+  } else {
+    ctx.fillStyle=C.red+'18';ctx.fillRect(20,barY,memX+memW-40,barH);
+    ctx.strokeStyle=C.red;ctx.setLineDash([4,3]);ctx.lineWidth=1.3;ctx.strokeRect(20,barY,memX+memW-40,barH);
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.red;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('NO LOCK — unsynchronized access to counter',20+(memX+memW-40)/2,barY+barH/2+4);
+  }
+
+  // arrows for load/store
+  function arrow(x1,y1,x2,y2,col,tt){
+    const x=x1+(x2-x1)*tt, y=y1+(y2-y1)*tt;
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x,y);ctx.stroke();
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  }
+  if(step.action==='load'){
+    const y= step.actor==='A'?regAy+regH/2:regBy+regH/2;
+    const col= step.actor==='A'?C.cyan:C.purple;
+    arrow(memX,y,regAx+regW,y,col,t);
+  } else if(step.action==='store'){
+    const y= step.actor==='A'?regAy+regH/2:regBy+regH/2;
+    const col= step.actor==='A'?C.cyan:C.purple;
+    arrow(regAx+regW,y,memX,y,col,t);
+  } else if(step.action==='preempt'||step.action==='resume'){
+    ctx.fillStyle=C.orange;ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡',regAx+regW/2,laneAy-14);
+  } else if(step.action==='blockedtry'){
+    ctx.fillStyle=C.red;ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+    ctx.fillText('✕',regBx+regW/2,laneBy-14);
+  }
+
+  // caption
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx,step.caption,W/2,barY+barH+30,W-60,17);
+
+  if(step.action==='result'){
+    ctx.font='bold 13px Source Code Pro,monospace';
+    ctx.fillStyle= step.tag==='error'?C.red:C.green;
+    ctx.fillText(step.tag==='error'?'✖ LOST UPDATE':'✓ CORRECT RESULT',W/2,barY+barH+64);
+  }
+}
+function wrapText(ctx,text,cx,y,maxW,lh){
+  const words=text.split(' ');let line='';let ly=y;
+  for(let i=0;i<words.length;i++){
+    const test=line+words[i]+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){ctx.fillText(line,cx,ly);line=words[i]+' ';ly+=lh;}
+    else line=test;
+  }
+  ctx.fillText(line,cx,ly);
+}
+
+let raceTimer=null;
+function runRace(mode){
+  if(raceTimer) cancelAnimationFrame(raceTimer);
+  const steps= mode==='race'?raceSteps:safeSteps;
+  const label=document.getElementById('raceLabel');
+  label.textContent= mode==='race'?'▶ Running WITHOUT a lock — watch the update get lost':'▶ Running WITH a mutex — watch it land on the correct value';
+  let idx=0,start=performance.now();
+  const dur= (i)=> steps[i].action==='result'?1400:750;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur(idx));
+    drawRace(steps[idx],mode,t);
+    if(t>=1){
+      idx++;
+      if(idx>=steps.length){
+        label.textContent= mode==='race'?'▶ Done — try the mutex-protected run above':'▶ Done — try the unlocked run above';
+        return;
+      }
+      start=now;
+    }
+    raceTimer=requestAnimationFrame(step);
+  }
+  raceTimer=requestAnimationFrame(step);
+}
+function resetRace(){
+  if(raceTimer) cancelAnimationFrame(raceTimer);
+  document.getElementById('raceLabel').textContent='▶ Choose a scenario below';
+  drawRace(raceSteps[0],'race',0);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRace(); });
+window.addEventListener('resize',()=>{ resetRace(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Real Allocators Do Better: Buddy Systems, Bins, and Slabs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.35);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.4rem,5.6vw,4.6rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:730px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--purple);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.t{color:var(--teal)}
+h2 .accent.g{color:var(--green)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--purple);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout.teal{border-color:var(--teal);background:rgba(13,148,136,.08)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+.callout.teal .callout-title{color:var(--teal)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.numc{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--purple);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--purple);}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: buddy tree diagram */
+.buddy-tree{display:flex;flex-direction:column;gap:6px;margin:1.6rem 0;}
+.buddy-level{display:flex;gap:6px;}
+.buddy-node{flex:1;border-radius:6px;padding:.5rem;text-align:center;font-family:'Source Code Pro',monospace;font-size:.72rem;border:1.5px solid var(--border);background:var(--card);color:var(--muted);}
+.buddy-node.free{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.1);}
+.buddy-node.used{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.1);}
+.buddy-node.split{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.06);opacity:.5;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#buddy" title="Buddy Allocator"></a>
+  <a class="toc-dot" href="#buddydemo" title="Buddy in Action"></a>
+  <a class="toc-dot" href="#pmm" title="Tying to bob_os's PMM"></a>
+  <a class="toc-dot" href="#bins" title="Segregated Bins"></a>
+  <a class="toc-dot" href="#slab" title="Slab Allocator"></a>
+  <a class="toc-dot" href="#trainingwheels" title="Training Wheels"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Module 08 · Heap Deep Dive · Production Allocator Designs</div>
+    <h1>How Real Allocators<br>Do <span>Better</span></h1>
+    <p class="hero-sub">A single free list with first-fit or best-fit search is honest, teachable, and genuinely how bob_os's <code>heap.c</code> works. It is also not what Linux, glibc, or any serious kernel actually ships. This page is a tour of three ideas — buddy systems, segregated bins, and slab allocators — that all attack the same weakness: a plain free list has to search, and searching costs time.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">O(log n)</div><div class="lbl">Buddy Alloc/Free Time</div></div>
+      <div class="hero-stat"><div class="num">~128</div><div class="lbl">Size Classes in ptmalloc</div></div>
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Header Overhead, Per-Object, in a Slab</div></div>
+      <div class="hero-stat"><div class="num">3</div><div class="lbl">Designs, One Underlying Problem</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>The Bill For a Plain <span class="accent">Free List</span></h2>
+
+  <p class="reveal">Two lessons ago you built the core idea: a free list threaded through memory itself, headers doing all the bookkeeping. One lesson ago you saw that <em>which</em> chunk gets chosen from that list — first-fit, best-fit, worst-fit — trades search speed against fragmentation, and that coalescing is the standard patch-up afterward. All of that is real, correct, and it's exactly what bob_os's <code>08_heap/heap.c</code> does.</p>
+
+  <p class="reveal">It's also, structurally, an <strong>O(n) search every single time</strong>. Whether it's first-fit's best-case early exit or best-/worst-fit's mandatory full scan, the allocator is walking a linked list, one chunk at a time, comparing sizes. For a kernel with a few dozen live allocations, that's invisible. For a real OS doing millions of allocations per second across every subsystem, that linear search becomes a real, measurable bottleneck. This page is about the three main ways production allocators sidestep it.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">The Shape of Every Answer Below</div>
+    Notice the pattern before you even see the details: buddy systems, segregated bins, and slabs all trade a little bit of <em>structure imposed in advance</em> (power-of-two sizes, fixed size classes, fixed object pools) for <em>no search at all</em> at allocation time. That trade — pre-organize now so you don't have to search later — is the single idea underneath all three designs.
+  </div>
+</div>
+</section>
+
+<!-- BUDDY -->
+<section id="buddy">
+<div class="container">
+  <div class="section-num">01 — Design One</div>
+  <h2>The <span class="accent">Buddy</span> Allocator</h2>
+
+  <p class="reveal">A buddy allocator starts from a single, powerful restriction: every block handed out is a power-of-two size — 4&nbsp;KB, 8&nbsp;KB, 16&nbsp;KB, and so on, never anything in between. In exchange for that restriction, splitting and — crucially — merging become almost trivially cheap.</p>
+
+  <h3>Splitting: halve until it fits</h3>
+  <p class="reveal">Say the allocator manages one 512&nbsp;KB region and a request for 100&nbsp;KB arrives. The smallest power-of-two that covers 100&nbsp;KB is 128&nbsp;KB. To produce a 128&nbsp;KB block, the allocator splits the 512&nbsp;KB block in half (two 256&nbsp;KB blocks), then splits one of those halves again (two 128&nbsp;KB blocks), and hands out one of those. Each split produces exactly two equal "buddy" blocks — and that word "buddy" is the whole trick.</p>
+
+  <h3>Merging: the buddy address is a computation, not a search</h3>
+  <p class="reveal">When a block is freed, the allocator needs to know: is my buddy — the other half I was split from — also free right now? If so, merge back into the larger parent block immediately. The genuinely elegant part is <em>how</em> it finds that buddy: because block sizes are powers of two and blocks are aligned to their own size, a block's buddy address is always just its own address with <strong>one bit flipped</strong> — no pointer chasing, no list search, just a single XOR.</p>
+
+  <pre class="reveal"><span class="tag">C — computing a buddy's address</span><code><span class="cm">// block_addr must be aligned to block_size (a power of two),
+// relative to the start of the managed region.</span>
+<span class="cls">uintptr_t</span> <span class="fn">buddy_of</span>(<span class="cls">uintptr_t</span> block_addr, <span class="cls">size_t</span> block_size) {
+    <span class="kw">return</span> block_addr ^ block_size;   <span class="cm">// flip the one bit that matters</span>
+}
+
+<span class="cm">// On free: check the buddy. If it's ALSO free, merge and repeat
+// one level up — this is what makes buddy coalescing so cheap.</span>
+<span class="kw">void</span> <span class="fn">buddy_free</span>(<span class="cls">uintptr_t</span> addr, <span class="cls">size_t</span> size) {
+    <span class="kw">while</span> (size < MAX_BLOCK_SIZE) {
+        <span class="cls">uintptr_t</span> buddy = <span class="fn">buddy_of</span>(addr, size);
+        <span class="kw">if</span> (!<span class="fn">is_free</span>(buddy, size)) <span class="kw">break</span>;  <span class="cm">// buddy is in use — stop merging</span>
+        <span class="fn">remove_from_free_list</span>(buddy, size);
+        addr = addr & ~size;    <span class="cm">// address of the merged parent block</span>
+        size <<= <span class="numc">1</span>;
+    }
+    <span class="fn">add_to_free_list</span>(addr, size);
+}</code></pre>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">The Aha Moment</div>
+    A plain free-list allocator finds an adjacent free neighbor by <em>walking to it</em> — following pointers or address arithmetic through memory. A buddy allocator finds its neighbor by <em>computing its address directly</em> from a size and an XOR. That's the entire performance win: coalescing goes from "search" to "arithmetic," and it composes — merging one level can immediately trigger checking the next level up, all the way back to one giant free block if the whole region happens to empty out.
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Order</th><th>Block size</th><th>Typical use</th></tr></thead>
+      <tbody>
+        <tr><td class="center">0</td><td>4 KB</td><td>Single page</td></tr>
+        <tr><td class="center">1</td><td>8 KB</td><td>2 pages</td></tr>
+        <tr><td class="center">2</td><td>16 KB</td><td>4 pages</td></tr>
+        <tr><td class="center">...</td><td>...</td><td>...</td></tr>
+        <tr><td class="center">10</td><td>4 MB</td><td>1024 pages — Linux's practical max order</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">This is not a hypothetical design — it is <strong>literally how Linux's low-level page allocator works</strong>. Linux's buddy allocator (visible in <code>/proc/buddyinfo</code> on any running Linux machine) manages physical page frames in exactly these power-of-two "orders," from order 0 (a single 4&nbsp;KB page) up to order 10 (4&nbsp;MB) by default. Every <code>alloc_pages()</code> call in the Linux kernel ultimately goes through this exact split/merge machinery.</p>
+</div>
+</section>
+
+<!-- BUDDY DEMO -->
+<section id="buddydemo">
+<div class="container">
+  <div class="section-num">02 — See It Happen</div>
+  <h2>Buddy Splitting &amp; Merging, <span class="accent">Live</span></h2>
+
+  <p class="reveal">Below is a 512&nbsp;KB region managed by a buddy allocator. Request 100&nbsp;KB (which needs a 128&nbsp;KB block) and watch it recursively split. Then free it and watch the merges cascade back up — but only as far as a real neighbor stays free.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="buddyLabel">▶ Split a 512KB region down to a 128KB block, then free & watch it merge back</div>
+    <canvas id="buddyCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runBuddySplit()">▶ Allocate 100KB (splits to 128KB)</button>
+    <button class="ctrl-btn gold" onclick="runBuddyMerge()">▶ Free it (merge buddies back up)</button>
+    <button class="ctrl-btn red" onclick="resetBuddyCanvas()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal"><b>Watch for this:</b> after allocating, one 128 KB block is USED and its buddy is FREE — they don't automatically recombine just because they're related; a buddy merge only happens when <em>both</em> halves are simultaneously free. That's what the second button demonstrates.</div>
+</div>
+</section>
+
+<!-- PMM TIE-IN -->
+<section id="pmm">
+<div class="container">
+  <div class="section-num">03 — Grounding This in bob_os</div>
+  <h2>Does bob_os's <span class="accent t">PMM</span> Use a Buddy System?</h2>
+
+  <p class="reveal">Worth checking your assumptions against the real code: bob_os's Physical Memory Manager (<code>06_pmm/pmm.c</code>, carried forward into every later module including <code>08_heap</code>) does <strong>not</strong> use a buddy system. It uses something simpler — a flat bitmap, one bit per 4&nbsp;KB page, where 1 means free and 0 means used.</p>
+
+  <pre class="reveal"><span class="tag">C — bob_os's actual PMM, from pmm.c</span><code><span class="kw">static</span> <span class="cls">uint8_t</span> bitmap[PMM_MAX_PAGES / <span class="numc">8</span>];  <span class="cm">/* one bit per page */</span>
+
+<span class="cm">// pmm_alloc_page(): scan the bitmap for the first free bit —
+// an O(n) linear scan over pages, byte by byte.</span>
+<span class="kw">void</span> *<span class="fn">pmm_alloc_page</span>(<span class="kw">void</span>) {
+    <span class="kw">for</span> (<span class="cls">uint32_t</span> i = <span class="numc">0</span>; i < byte_count; i++) {
+        <span class="kw">if</span> (bitmap[i] == <span class="numc">0</span>) <span class="kw">continue</span>;  <span class="cm">// all 8 pages used, skip fast</span>
+        <span class="cm">// ...find the free bit, mark it used, return that page...</span>
+    }
+}</code></pre>
+
+  <p class="reveal">This is a deliberate, reasonable simplification for a teaching kernel: bob_os's PMM only ever hands out single, uniform 4&nbsp;KB pages — it never needs to satisfy a request for "16 contiguous pages," so there's nothing for a buddy system's size classes to buy it. A bitmap scan is simple to write, simple to verify, and fast enough at the scale this project operates at.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>bob_os's PMM — bitmap</h4>
+      One bit per page, first-fit linear scan to allocate. Coalescing isn't really a concept here — there's nothing to merge, since every unit is already the same fixed size. Simple, auditable, O(n) worst case.
+    </div>
+    <div class="compare-card good">
+      <h4>Linux's low-level allocator — buddy</h4>
+      Powers-of-two block sizes, O(log n) split/merge, and — critically — supports handing out <em>large contiguous runs</em> of physical pages efficiently, which a plain bitmap scan struggles to do well once memory gets fragmented at the page level.
+    </div>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">Same Family, Different Layer</div>
+    Notice the shape of this comparison: it's exactly the shape of the first-fit/best-fit/worst-fit lesson, one layer down. bob_os's PMM made the same kind of simplicity-over-scalability trade at the physical-page level that its heap allocator made at the byte level. If you ever extend this project to hand out multi-page contiguous physical regions efficiently, a buddy system is precisely the upgrade path — this page is effectively a preview of that future module.
+  </div>
+</div>
+</section>
+
+<!-- BINS -->
+<section id="bins">
+<div class="container">
+  <div class="section-num">04 — Design Two</div>
+  <h2>Segregated Free Lists — <span class="accent">"Bins"</span></h2>
+
+  <p class="reveal">A different fix for "searching one big free list is slow": don't have one big free list. Instead, maintain <em>many</em> free lists, one per size class, and route every allocation straight to the list that already holds chunks of roughly the right size. This is the approach behind dlmalloc and glibc's ptmalloc — the allocator family behind most Linux user-space <code>malloc()</code> calls.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Small bins</span><span class="fam-count">exact size</span></div>
+      <div class="fam-desc">One free list per exact small size (e.g. every multiple of 8 bytes up to some threshold). An allocation request for 24 bytes goes straight to the "24-byte bin" — zero search, just a direct lookup by size.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Large bins</span><span class="fam-count">size ranges</span></div>
+      <div class="fam-desc">Above the small-bin threshold, exact-size bins stop being practical (too many possible sizes). Instead, each bin covers a range of sizes, sorted internally, and a best-fit-style search happens only within that one narrow bin.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Fastbins</span><span class="fam-count">LIFO, no coalesce</span></div>
+      <div class="fam-desc">glibc's optimization for the most common tiny sizes: a stack-like list that skips coalescing on free for extra speed, trading a bit of fragmentation risk for very hot allocation/free cycles (churn-heavy code paths).</div>
+    </div>
+  </div>
+
+  <pre class="reveal"><span class="tag">C — the shape of a segregated-bin lookup</span><code><span class="cm">// Conceptual sketch — NOT actual glibc source, but the same idea:
+// route straight to the bin for this size class, no scanning.</span>
+<span class="kw">struct</span> free_block *bins[NUM_SIZE_CLASSES];
+
+<span class="kw">void</span> *<span class="fn">bin_malloc</span>(<span class="cls">size_t</span> size) {
+    <span class="cls">int</span> class_idx = <span class="fn">size_to_bin_index</span>(size);   <span class="cm">// O(1) — just math on `size`</span>
+    <span class="kw">if</span> (bins[class_idx]) {
+        <span class="kw">struct</span> free_block *blk = bins[class_idx];
+        bins[class_idx] = blk->next;             <span class="cm">// pop — no search inside this bin</span>
+        <span class="kw">return</span> (<span class="kw">void</span>*)(blk + <span class="numc">1</span>);
+    }
+    <span class="kw">return</span> <span class="fn">request_more_memory_for_bin</span>(class_idx);
+}</code></pre>
+
+  <div class="callout green reveal">
+    <div class="callout-title">Why This Beats One Big Free List</div>
+    A single free list forces every search to wade through chunks of every size, most of which are irrelevant to the current request. Segregating by size class means a request for a 32-byte object never has to look at, skip past, or even know about a 4-kilobyte chunk sitting somewhere in the heap — it goes straight to the 32-byte bin. This is the direct, structural answer to the O(n) search problem from section 00: don't search a mixed list at all.
+  </div>
+
+  <p class="reveal">The trade-off: more bookkeeping structure overall (many list heads instead of one), and a chunk freed in one size class doesn't automatically help satisfy a request in a different size class without extra coalescing-and-resizing logic. Real implementations like ptmalloc do coalesce across bin boundaries when chunks merge into a larger size, then re-file the merged chunk into whichever bin now fits it.</p>
+</div>
+</section>
+
+<!-- SLAB -->
+<section id="slab">
+<div class="container">
+  <div class="section-num">05 — Design Three</div>
+  <h2>The <span class="accent">Slab</span> Allocator</h2>
+
+  <p class="reveal">Bins solve "route requests to the right size class." Slabs go one step further, for one specific and extremely common kernel pattern: objects that are not just similarly-sized, but <strong>identically</strong> sized and allocated/freed constantly. Think process control blocks, file descriptor structs, inode structs — the kernel creates and destroys thousands of these, always the exact same size, for the entire lifetime of the system.</p>
+
+  <p class="reveal">A slab allocator pre-carves a chunk of memory (a "slab," usually one or a few physical pages) into an array of fixed-size, ready-to-use object slots — no header per object, no size field, no free/used flag beyond a simple bitmap or free-list-of-slots for the whole slab. Handing out an object is popping a slot off a per-slab free list; freeing is pushing it back. There's no splitting, no coalescing, no size search, ever — because every object in this slab is already exactly the size that's needed.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">0</div><div class="lbl">Per-object header overhead</div></div>
+    <div class="stat-card"><div class="val">0</div><div class="lbl">Internal fragmentation, per slot</div></div>
+    <div class="stat-card"><div class="val">O(1)</div><div class="lbl">Alloc / free time</div></div>
+  </div>
+
+  <pre class="reveal"><span class="tag">C — the shape of a slab cache</span><code><span class="kw">struct</span> slab_cache {
+    <span class="cls">size_t</span> object_size;        <span class="cm">// e.g. sizeof(struct pcb) — fixed, known in advance</span>
+    <span class="kw">struct</span> slab *slabs_partial;  <span class="cm">// slabs with some free slots</span>
+    <span class="kw">struct</span> slab *slabs_full;     <span class="cm">// slabs fully in use</span>
+    <span class="kw">struct</span> slab *slabs_empty;    <span class="cm">// slabs entirely free — candidates to release</span>
+};
+
+<span class="kw">void</span> *<span class="fn">slab_alloc</span>(<span class="kw">struct</span> slab_cache *cache) {
+    <span class="kw">struct</span> slab *s = cache->slabs_partial ? cache->slabs_partial
+                                            : <span class="fn">grow_cache</span>(cache);
+    <span class="kw">return</span> <span class="fn">pop_free_slot</span>(s);   <span class="cm">// O(1) — every slot is already object_size</span>
+}</code></pre>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">Why Not Just Use kmalloc() For Everything?</div>
+    You could route every PCB allocation through the general-purpose <code>kmalloc()</code> from lesson one of this module — it would work. But every one of those allocations would pay a header (8 bytes in bob_os's design), risk internal fragmentation from rounding, and contend with whatever else is in the free list at that moment. Multiply that by thousands of PCB allocations over a kernel's lifetime, and a slab dedicated purely to "PCB-sized objects" removes all three costs at once, for exactly the objects that are allocated often enough for it to matter.
+  </div>
+
+  <p class="reveal">This is exactly why Linux's actual internal allocator is a two-tier system: <code>kmalloc()</code> for general-purpose, variable-sized kernel allocations (itself backed by size-class bins, much like section 04), and a dedicated slab layer (historically SLAB, now more often SLUB) sitting underneath and alongside it specifically for the kernel's hot, fixed-size, frequently-recycled object types.</p>
+
+  <div class="sidenote reveal"><b>Naming trivia:</b> Linux has shipped three different slab-family implementations over the years — the original <b>SLAB</b> (per-CPU object caches, complex but fast), <b>SLUB</b> (the modern default since the mid-2000s, simpler internal structure with comparable performance), and <b>SLOB</b> ("Simple List Of Blocks," a tiny-footprint variant for memory-constrained embedded systems that behaves closer to a plain free list). All three implement the same slab <em>concept</em> described above — they differ in internal bookkeeping, not in the core idea.</div>
+</div>
+</section>
+
+<!-- TRAINING WHEELS -->
+<section id="trainingwheels">
+<div class="container">
+  <div class="section-num">06 — Tying It Back</div>
+  <h2>bob_os's Free List: The <span class="accent">Training Wheels</span> Version of All Three</h2>
+
+  <p class="reveal">Here's the reassuring part. Nothing in this lesson makes lesson one's design "wrong" — it's the same conceptual DNA, minus the optimizations that only start paying off at scale. Look at how directly each idea traces back to what you already built:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Production design</th><th>What it's really doing</th><th>Where you already saw the seed of it</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Buddy allocator</td><td>Splits on allocation, merges (coalesces) neighbors on free, using computed addresses instead of a search</td><td>bob_os's <code>kmalloc()</code> splitting a block, and <code>kfree()</code>'s forward coalescing — same two operations, cheaper neighbor-finding</td></tr>
+        <tr><td class="hl">Segregated bins</td><td>Many free lists instead of one, indexed by size class, to avoid searching irrelevant sizes</td><td>bob_os's single free list is the n=1 case: one bin holding every size, hence the O(n) scan bins are built to avoid</td></tr>
+        <tr><td class="hl">Slab allocator</td><td>Skips headers and splitting entirely for objects that are always the same fixed size</td><td>bob_os's 8-byte <code>block_header</code> on every chunk is exactly the per-object overhead a slab eliminates for its one dedicated size</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Design</th><th>Alloc/free cost</th><th>Best suited for</th><th>Weak point</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Plain free list (bob_os)</td><td>O(n) search</td><td>Small heaps, teaching clarity, low allocation volume</td><td>Search cost grows with chunk count</td></tr>
+        <tr><td class="hl">Buddy allocator</td><td>O(log n) split/merge</td><td>Physical page management — large, power-of-two-friendly regions</td><td>Internal fragmentation when a request isn't near a power of two</td></tr>
+        <tr><td class="hl">Segregated bins</td><td>O(1) typical, small search inside a bin</td><td>General-purpose user-space malloc() across wildly varying sizes</td><td>More bookkeeping structures; cross-bin coalescing adds complexity</td></tr>
+        <tr><td class="hl">Slab allocator</td><td>O(1), no search</td><td>Fixed-size, high-churn kernel objects (PCBs, inodes, file structs)</td><td>Only pays off for types allocated often enough to justify a dedicated cache</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula purple reveal">
+    <span class="label">The one idea underneath everything in this module</span>
+    Every allocator, from bob_os's simplest free list to Linux's full buddy + slab stack, answers the exact same two questions: "which free chunk do I hand out?" and "how do I get merged-back space when something's freed?"
+    <span class="sub">The three designs in this lesson just answer those questions with pre-computed structure instead of runtime search — faster, but built on identical foundations to what you already understand.</span>
+  </div>
+
+  <p class="reveal">You now have the full arc of this module: why a kernel needs its own allocator at all, the free-list mechanism that makes one possible with zero external bookkeeping, the strategy question of which chunk to pick and the fragmentation trade-offs that follow, and finally how production systems layer smarter structure on top of that same free-list core to make allocation and coalescing fast at scale. bob_os's <code>heap.c</code> is a complete, correct allocator — it's simply an early point on a design spectrum that Linux, glibc, and every serious kernel continue further down.</p>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Buddy Allocator</div><div class="glossary-def">Manages memory in power-of-two block sizes; splits blocks in half to satisfy requests and merges a freed block with its "buddy" via address arithmetic (XOR), not a search.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Buddy</div><div class="glossary-def">The other half a block was split from — always computable as <code>address ^ block_size</code> due to power-of-two alignment.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Order</div><div class="glossary-def">The exponent describing a buddy block's size relative to a base unit — e.g. order 0 = one page, order 3 = eight pages, in Linux's page allocator.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Segregated Free Lists / Bins</div><div class="glossary-def">Multiple free lists, one per size class, so an allocation request is routed directly to relevant-sized chunks instead of scanning a single mixed list.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Size Class</div><div class="glossary-def">A specific size (or narrow range) that one bin is dedicated to — small bins are often exact sizes, large bins cover ranges.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Fastbin</div><div class="glossary-def">glibc's LIFO, non-coalescing bin for very common small sizes, optimized for allocation/free churn at the cost of some fragmentation risk.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Slab Allocator</div><div class="glossary-def">Pre-carves memory into fixed-size object slots for one specific, frequently-allocated type, eliminating per-object headers and splitting entirely.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Physical Memory Manager (PMM)</div><div class="glossary-def">bob_os's page-granularity allocator (<code>06_pmm/pmm.c</code>), implemented as a flat bitmap rather than a buddy system.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>How Real Allocators Do Better · Companion lesson for bob_os module 08_heap</p>
+  <p style="margin-top:.5rem;font-size:.78rem">This closes out the Heap module — from a hand-rolled free list to the designs powering real kernels.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── Buddy allocator visualization ────────────────────────────────────────────
+// Levels: 512 -> 256 -> 128 (three levels shown, root at top)
+// State per node: 'whole' | 'split' | 'free' | 'used'
+let buddyState = null;
+
+function initBuddyState(){
+  // tree keyed by [level][index]; level 0 = 512KB (root), level 1 = 256KB x2, level 2 = 128KB x4
+  buddyState = {
+    0:[{status:'split'}],
+    1:[{status:'split'},{status:'free'}],
+    2:[{status:'used'},{status:'free'},null,null] // only left 256KB block is split into 128KB pieces
+  };
+}
+initBuddyState();
+
+const LEVEL_SIZES=['512 KB','256 KB','128 KB'];
+
+function drawBuddyScene(caption){
+  const canvas=document.getElementById('buddyCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const pad=16, rowH=70, gap=14;
+  const usable=W-pad*2;
+
+  for(let level=0;level<3;level++){
+    const nodes=buddyState[level];
+    const count=Math.pow(2,level);
+    const nodeW=(usable-(count-1)*gap)/count;
+    const y=20+level*(rowH+22);
+
+    ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='left';
+    ctx.fillText(LEVEL_SIZES[level]+' blocks',pad,y-6);
+
+    for(let i=0;i<count;i++){
+      const node=nodes[i];
+      const x=pad+i*(nodeW+gap);
+      if(!node){ continue; } // this slot doesn't exist at this granularity (parent not split this far)
+
+      let fill='rgba(122,155,191,.06)', stroke=C.muted, label='', txtCol=C.muted;
+      if(node.status==='split'){ fill='rgba(167,139,250,.05)'; stroke=C.purple; label='SPLIT ↓'; txtCol=C.purple; }
+      if(node.status==='free'){ fill='rgba(74,222,128,.12)'; stroke=C.green; label='FREE'; txtCol=C.green; }
+      if(node.status==='used'){ fill='rgba(248,113,113,.14)'; stroke=C.red; label='USED'; txtCol=C.red; }
+
+      ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=1.4;
+      ctx.fillRect(x,y,nodeW,rowH);
+      ctx.strokeRect(x,y,nodeW,rowH);
+      ctx.fillStyle=txtCol;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+      ctx.fillText(label,x+nodeW/2,y+rowH/2+4);
+    }
+  }
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(caption||'',W/2,H-10);
+}
+
+function runBuddySplit(){
+  document.getElementById('buddyLabel').textContent='▶ Allocating 100KB — smallest power-of-two that fits is 128KB…';
+  const frames=[
+    ()=>{ initBuddyState(); drawBuddyScene('Start: one whole 512KB free block'); },
+    ()=>{ buddyState={0:[{status:'split'}],1:[{status:'split'},{status:'free'}],2:[null,null,null,null]};
+          drawBuddyScene('Split 512KB into two 256KB buddies (100KB does not need all of 512KB)'); },
+    ()=>{ buddyState={0:[{status:'split'}],1:[{status:'split'},{status:'free'}],2:[{status:'split'},{status:'free'},null,null]};
+          drawBuddyScene('Split the left 256KB → two 128KB buddies'); },
+    ()=>{ buddyState={0:[{status:'split'}],1:[{status:'split'},{status:'free'}],2:[{status:'used'},{status:'free'},null,null]};
+          drawBuddyScene('128KB block #0 handed out (USED) — its buddy (#1) stays FREE, ready for reuse'); }
+  ];
+  let i=0;
+  function step(){ frames[i](); i++; if(i<frames.length) setTimeout(()=>requestAnimationFrame(step),900); else document.getElementById('buddyLabel').textContent='▶ Allocated — now click "Free it" to watch the merge'; }
+  requestAnimationFrame(step);
+}
+
+function runBuddyMerge(){
+  document.getElementById('buddyLabel').textContent='▶ Freeing the 128KB block — checking its buddy…';
+  const frames=[
+    ()=>{ buddyState={0:[{status:'split'}],1:[{status:'split'},{status:'free'}],2:[{status:'free'},{status:'free'},null,null]};
+          drawBuddyScene('128KB block #0 marked free — its buddy (#1) is ALSO free → merge!'); },
+    ()=>{ buddyState={0:[{status:'split'}],1:[{status:'free'},{status:'free'}],2:[null,null,null,null]};
+          drawBuddyScene('Merged back into one 256KB free block. Check ITS buddy (right 256KB)…'); },
+    ()=>{ buddyState={0:[{status:'free'}],1:[null,null],2:[null,null,null,null]};
+          drawBuddyScene('Right 256KB was also free — merge again, all the way back to one 512KB free block'); }
+  ];
+  let i=0;
+  function step(){ frames[i](); i++; if(i<frames.length) setTimeout(()=>requestAnimationFrame(step),1000); else document.getElementById('buddyLabel').textContent='▶ Fully merged — this cascading merge is why buddy coalescing is cheap: pure address math, no search'; }
+  requestAnimationFrame(step);
+}
+
+function resetBuddyCanvas(){
+  initBuddyState();
+  document.getElementById('buddyLabel').textContent='▶ Split a 512KB region down to a 128KB block, then free & watch it merge back';
+  drawBuddyScene('Click "Allocate 100KB" to begin');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetBuddyCanvas(); });
+window.addEventListener('resize',()=>{ resetBuddyCanvas(); });
+</script>
+</body>
+</html>

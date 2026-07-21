@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reference Counting vs Tracing GC — Why Cycles Break Refcounting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+.compare-card.cyan h4{color:var(--cyan)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;align-items:center;padding:.8rem 1rem;font-family:'Source Code Pro',monospace;font-size:.72rem;color:var(--muted);border-top:1px solid var(--border);}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:.4rem;vertical-align:middle;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Where We Left Off"></a>
+  <a class="toc-dot" href="#refcounting" title="Reference Counting"></a>
+  <a class="toc-dot" href="#immediate" title="Instant Freeing"></a>
+  <a class="toc-dot" href="#cycles" title="The Fatal Flaw"></a>
+  <a class="toc-dot" href="#live" title="See It Leak"></a>
+  <a class="toc-dot" href="#realworld" title="Python & Swift"></a>
+  <a class="toc-dot" href="#weakrefs" title="Weak References"></a>
+  <a class="toc-dot" href="#compare" title="Side by Side"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Garbage Collection Theory · Engine-Agnostic Foundations · bob_os Lesson 20</div>
+    <h1>Reference Counting<br><span>vs. Tracing GC</span></h1>
+    <p class="hero-sub">Mark-and-sweep answers "is this object garbage?" by searching outward from roots. There's a completely different strategy that never searches anything: have every object carry its own count of who's pointing at it, and free it the instant that count hits zero. It's simpler, it's more predictable — and it has exactly one blind spot, baked into its own arithmetic, that no amount of clever engineering inside the algorithm itself can fix.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">0</div><div class="lbl">Separate Collection Pass Needed</div></div>
+      <div class="hero-stat"><div class="num">±1</div><div class="lbl">Per Reference Created / Destroyed</div></div>
+      <div class="hero-stat"><div class="num">∞</div><div class="lbl">How Long a Cycle's Refcount Stays &gt; 0</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Real Languages That Bolt On a Fix</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>One Strategy Down, <span class="accent">One Big One to Go</span></h2>
+
+  <p class="reveal">Last lesson established the reachability definition of garbage and walked through mark-and-sweep, the algorithm that acts on it directly: flood outward from the roots, mark everything you touch, then sweep the whole heap and free whatever wasn't marked. That's one entire family of garbage collectors — <strong>tracing collectors</strong> — and it's the dominant one in modern language runtimes. But it isn't the only idea anyone ever had.</p>
+
+  <p class="reveal">There's a second, much older, conceptually simpler family: <strong>reference counting</strong>. Instead of periodically asking "starting from the roots, what can I still reach?", every object just keeps a running tally of how many references currently point to it — and frees itself the moment that tally reaches zero. No traversal, no roots to enumerate, no separate "collection" step at all. It sounds like a strictly better deal. It has one specific, unfixable-from-the-inside flaw, and understanding exactly why is the entire point of this lesson.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">📦 Carry This Forward From Last Time</div>
+    Keep the reachability definition in your head: an object is alive iff some chain of references leads to it from a root. Reference counting is going to approximate that same idea using purely <em>local</em> information — no object needs to know about roots at all, just its own incoming reference count. Watch closely for where that local approximation and the real, global reachability definition quietly stop agreeing with each other.
+  </div>
+
+  <p class="reveal">Historically, reference counting is actually the <em>older</em> idea of the two — early Lisp implementations experimented with it before mark-and-sweep became the more common default for languages with rich, cyclic data structures. It never went away, though; it simply found the niches its strengths were best suited for, which turns out to be a recurring theme in garbage collection design generally: very few real systems pick one pure strategy and never borrow from the other.</p>
+</div>
+</section>
+
+<!-- SECTION 1: REFCOUNTING BASICS -->
+<section id="refcounting">
+<div class="container">
+  <div class="section-num">01 — The Alternative Strategy</div>
+  <h2>Every Object <span class="accent">Just Knows</span> How Popular It Is</h2>
+
+  <p class="reveal">Reference counting gives every object one extra field: an integer, its <strong>reference count</strong> (refcount), starting at zero. The rule is mechanical and entirely local to the object itself:</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>A new reference to the object is created</strong> — an assignment, a function call passing it as an argument, inserting it into a list — the object's refcount goes up by one.</div></li>
+    <li><div class="step-body"><strong>An existing reference to the object is destroyed</strong> — a variable goes out of scope, gets reassigned to point elsewhere, or its containing object is itself freed — the object's refcount goes down by one.</div></li>
+    <li><div class="step-body"><strong>The refcount hits exactly zero.</strong> That's the whole liveness check: no traversal, no roots, no marking. Zero incoming references means nothing anywhere can possibly reach this object anymore, so it's freed <em>immediately</em>, right there in the code path that just dropped the last reference.</div></li>
+  </div>
+
+  <pre class="reveal"><span class="tag">Pseudocode</span><code><span class="kw">function</span> <span class="fn">retain</span>(obj) {         <span class="cm">// a new reference to obj is created</span>
+  obj.refcount += <span class="num">1</span>;
+}
+
+<span class="kw">function</span> <span class="fn">release</span>(obj) {        <span class="cm">// an existing reference to obj is destroyed</span>
+  obj.refcount -= <span class="num">1</span>;
+  <span class="kw">if</span> (obj.refcount == <span class="num">0</span>) {
+    <span class="kw">for</span> (child <span class="kw">of</span> obj.references) {
+      <span class="fn">release</span>(child);        <span class="cm">// dropping obj also drops ITS references</span>
+    }
+    <span class="fn">free</span>(obj);                <span class="cm">// no traversal, no roots — just: count is zero, gone</span>
+  }
+}
+
+<span class="kw">function</span> <span class="fn">assign</span>(variable, newTarget) {
+  <span class="kw">if</span> (variable.target) <span class="fn">release</span>(variable.target);  <span class="cm">// drop the old reference first</span>
+  variable.target = newTarget;
+  <span class="kw">if</span> (newTarget) <span class="fn">retain</span>(newTarget);              <span class="cm">// then add the new one</span>
+}</code></pre>
+
+  <p class="reveal">Notice what's genuinely elegant here: <code>release()</code> cascades. Freeing an object automatically releases every reference <em>it</em> was holding, which can cascade into freeing those objects too, and so on down the chain — a whole tree of no-longer-needed objects can unwind and free itself in one cheap, local operation, with no global scan of anything.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 The Key Structural Difference From Tracing GC</div>
+    Mark-and-sweep answers "is this object alive?" by asking a <em>global</em> question — can I reach it from a root, right now, via some path through the whole graph? Reference counting answers the same question using only <em>local</em> information stored on the object itself — how many incoming edges does it currently have? Local information is cheap to check and update incrementally. It's also, as you're about to see, an imperfect proxy for the real, global answer.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Objective-C did this by hand for years before ARC existed.</b> Before Apple introduced ARC in 2011, Objective-C programmers wrote <code>retain</code> and <code>release</code> calls themselves, directly, by hand — close to literally the <code>retain()</code>/<code>release()</code> pseudocode above. Forgetting a <code>release</code> leaked memory; calling it one time too many freed an object something else still needed, a manual-refcounting double-free. ARC's actual innovation wasn't the counting scheme itself — that stayed the same — it was having the <em>compiler</em> insert those calls automatically and correctly, at every possible point a reference is created or destroyed, removing an entire category of by-hand bookkeeping mistakes.
+  </div>
+
+  <h3>The Cascade Has a Cost Too</h3>
+
+  <p class="reveal">That cascading <code>release()</code> is elegant, but it hides a real performance trap of its own — one with an almost eerie parallel to a problem in the mark-and-sweep lesson. Recall that a naively-recursive mark phase can blow the collector's own call stack on a long, deep chain of objects. The exact same failure mode exists here: dropping the last reference to the head of a million-node linked list triggers <code>release()</code> on node 1, which — because its refcount also hits zero — recursively calls <code>release()</code> on node 2, and so on, a million recursive calls deep, all inside what looked to the programmer like one simple, "instant" statement: <code>list = null</code>.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⏱️ Refcounting's Own Hidden "Pause"</div>
+    This is the sharpest myth to retire about reference counting: "no collection pass" does not mean "no possible pause." Dropping one reference can, in the worst case, trigger an arbitrarily long cascade of frees, all happening synchronously on whatever thread happened to drop that one reference — a real-time stall with a shape that's arguably harder to predict than a tracing collector's, precisely because it can be triggered by code that looks like it's doing nothing more than a single, ordinary assignment. Production-grade refcounting implementations typically guard against this the same way the mark-and-sweep lesson's fix worked: convert the recursive cascade into an explicit worklist and free iteratively, or defer some of the cascade to a background thread instead of doing it all inline.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: IMMEDIATE / PREDICTABLE -->
+<section id="immediate">
+<div class="container">
+  <div class="section-num">02 — Why It Feels Different to Use</div>
+  <h2>No Collection Pass — <span class="accent">Freed the Instant It's Zero</span></h2>
+
+  <p class="reveal">Tracing GC, even a well-engineered one, has an inherently <em>episodic</em> character: garbage piles up between collections, and then a collection runs — possibly pausing your program — and reclaims a batch of it all at once. Reference counting has no such rhythm at all. There is no "collection" as a distinct event; freeing is smeared continuously across ordinary program execution, one decrement at a time, exactly at the moment the last reference disappears.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The practical consequence</span>
+    Tracing GC: garbage accumulates → a collection pass runs → a batch gets reclaimed, possibly with a pause
+    <br>Reference counting: an object is reclaimed the instant refcount hits zero — no batching, no separate pass, no pause tied to "collection"
+    <span class="sub">This is why refcounting is often called deterministic — you can reason about exactly when an object's destructor runs, just by reading the code.</span>
+  </div>
+
+  <p class="reveal">That determinism is not just a performance footnote — it's a genuine feature real programs rely on. If an object's destructor also releases a scarce external resource (closing a file handle, releasing a lock, returning a database connection to a pool), knowing <em>exactly</em> when that happens, synchronously, at the point the last reference is dropped, is extremely useful. Under a tracing collector, an unreachable object might sit around uncollected for an indeterminate amount of time before a collection finally reclaims it and runs its cleanup — which is why languages with tracing GC generally need a separate, explicit resource-management idiom (like a <code>with</code> block or a <code>try</code>-with-resources construct) instead of leaning on garbage collection for that job.</p>
+
+  <div class="sidenote reveal">
+    <b>This is exactly what Swift's ARC and Python's refcounting buy their respective ecosystems.</b> Swift's <code>deinit</code> and Python's <code>__del__</code> both run synchronously and predictably at the moment an object's refcount hits zero — not at some later, GC-scheduled moment. Objective-C's ARC (Automatic Reference Counting) — the mechanism Swift's reference counting descends from — was specifically designed around this predictability for exactly this reason, in a systems context (Apple's frameworks) where deterministic resource cleanup mattered a great deal.
+  </div>
+
+  <pre class="reveal"><span class="tag">Why deterministic timing matters, concretely</span><code><span class="kw">function</span> <span class="fn">processFile</span>(path) {
+  <span class="kw">const</span> <span class="var">handle</span> = <span class="fn">openFile</span>(path);  <span class="cm">// handle.refcount = 1 (held by this local variable)</span>
+  <span class="fn">readAndParse</span>(handle);
+}                                <span class="cm">// `handle` goes out of scope here → release(handle) → refcount hits 0</span>
+                                 <span class="cm">// → handle's destructor runs RIGHT HERE, closing the OS file descriptor,</span>
+                                 <span class="cm">// synchronously, before the next line of the CALLER even executes.</span>
+
+<span class="cm">// Under a tracing GC, `handle` would just become unreachable when the function</span>
+<span class="cm">// returns — but WHEN its finalizer actually runs is up to the collector's own</span>
+<span class="cm">// schedule, which could be milliseconds or seconds later. If the program opens</span>
+<span class="cm">// file descriptors faster than the GC gets around to closing old ones, it can</span>
+<span class="cm">// exhaust the OS's file descriptor limit despite every object being, eventually,</span>
+<span class="cm">// correctly collected. Determinism isn't just nice — it avoids this entire class</span>
+<span class="cm">// of "technically not a leak, but runs out of a scarce resource anyway" bug.</span></code></pre>
+</div>
+</section>
+
+<!-- SECTION 3: CYCLES -->
+<section id="cycles">
+<div class="container">
+  <div class="section-num">03 — The Fatal Flaw</div>
+  <h2>Two Objects, Pointing at <span class="accent">Each Other</span></h2>
+
+  <p class="reveal">Here's the scenario that breaks everything. Suppose object <strong>A</strong> holds a reference to object <strong>B</strong>, and object <strong>B</strong> holds a reference back to object <strong>A</strong> — a reference cycle. Now suppose every <em>external</em> reference to both of them — the variable in the code that originally created them — goes away: the function returns, the variable goes out of scope, whatever it was gets reassigned.</p>
+
+  <p class="reveal">Walk the refcounts by hand, step by step, and the failure becomes impossible to miss:</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>A is created.</strong> One external variable points to it. A.refcount = 1.</div></li>
+    <li><div class="step-body"><strong>B is created, and A.field = B.</strong> A now references B. B.refcount = 1.</div></li>
+    <li><div class="step-body"><strong>B.field = A closes the cycle.</strong> B now references A back. A.refcount = 2 (the external variable, plus B's pointer).</div></li>
+    <li><div class="step-body"><strong>The external variable goes out of scope.</strong> <code>release(A)</code> runs: A.refcount drops from 2 to 1 — <em>not zero</em>, because B is still pointing at it. Nothing further happens. No cascade, no free.</div></li>
+    <li><div class="step-body"><strong>Final state, forever.</strong> A.refcount = 1 (held by B). B.refcount = 1 (held by A). Both are completely unreachable from any root — precisely the scenario that made C garbage in the mark-and-sweep worked example last lesson — but neither count will ever reach zero on its own.</div></li>
+  </div>
+
+  <div class="formula red reveal">
+    <span class="label">The arithmetic that never resolves</span>
+    A.refcount = 1 (held by B)  ·  B.refcount = 1 (held by A)
+    <span class="sub">Both counts are honestly, correctly nonzero — refcounting isn't malfunctioning here. It's doing exactly what it was designed to do. The design itself has a blind spot.</span>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">🚫 Why This Isn't a Bug You Can Patch</div>
+    Reference counting only ever looks at local information: "how many things point at me, right now?" A cycle of otherwise-unreachable objects satisfies that local check for every object in the cycle simultaneously — each one genuinely has an incoming reference, it's just a reference from another equally-unreachable object. Detecting this requires exactly the kind of <em>global</em> reasoning reference counting was specifically designed to avoid: you have to ask "is there a path from any root to this whole cluster?" — which is the reachability question mark-and-sweep answers, and refcounting, by construction, cannot ask on its own.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: LIVE CANVAS -->
+<section id="live">
+<div class="container">
+  <div class="section-num">04 — See It Leak</div>
+  <h2>Watch a Cycle's <span class="accent">Refcount Get Stuck</span></h2>
+
+  <p class="reveal">Here's A and B, referencing each other, both currently kept alive by one external root reference into A. Press the button to drop that root reference and watch what refcounting does — and doesn't do — in response.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="cycLabel">▶ Click to drop the root reference and watch the refcounts</div>
+    <canvas id="cycCanvas" height="360"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--gold)"></span>Root Reference</span>
+      <span><span class="dot" style="background:var(--cyan)"></span>Object, Refcount &gt; 0</span>
+      <span><span class="dot" style="background:var(--red)"></span>Leaked: Unreachable, Refcount Stuck &gt; 0</span>
+    </div>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runCycle()">▶ Drop the Root Reference</button>
+    <button class="ctrl-btn green" onclick="runCycleTraceCompare()">Compare: What Would Tracing GC Do?</button>
+    <button class="ctrl-btn red" onclick="resetCycle()">Reset</button>
+  </div>
+
+  <p class="reveal">The refcounts drop from 2/1 to 1/1 and then simply... stop. Nothing further happens, because nothing further <em>can</em> happen — both objects still show a positive count, and refcounting only ever frees an object whose count is exactly zero. Compare that against what a mark-and-sweep collector, from last lesson, would do with this exact same graph: it doesn't look at counts at all. It starts at the root, finds nothing reachable now that the root reference is gone, and correctly frees both A and B in the very next collection.</p>
+
+  <p class="reveal">Sit with how quietly this failure happens. There's no crash, no exception, no error message — refcounting doesn't know anything went wrong, because from its own local, per-object point of view, nothing did. Every increment and decrement it ever performed was arithmetically correct. The bug isn't in the mechanism's execution; it's in the mechanism's fundamental inability to ask the one question — "is there a path back to a root?" — that would have revealed A and B were garbage the moment the root reference was dropped.</p>
+</div>
+</section>
+
+<!-- SECTION 5: REAL WORLD -->
+<section id="realworld">
+<div class="container">
+  <div class="section-num">05 — Real-World Fallout</div>
+  <h2>How Python and Swift <span class="accent">Actually Handle This</span></h2>
+
+  <p class="reveal">This isn't a theoretical footnote — it's a well-known problem that every production reference-counted language has had to solve one way or another. Two very different real answers:</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Python: Refcounting + a Bolted-On Cycle Detector</span><span class="fam-count">automatic</span></div>
+      <div class="fam-desc">CPython's primary memory management is straight reference counting — every <code>PyObject</code> carries a refcount field, and it's why <code>del obj</code> or a variable going out of scope can trigger immediate, synchronous deallocation. But CPython <em>also</em> ships a supplementary <strong>generational cycle detector</strong> (the <code>gc</code> module), which periodically scans specifically for groups of container-like objects (objects that can hold references to other objects) that reference each other but aren't reachable from anywhere else, and reclaims them. Refcounting handles the vast majority of frees immediately and cheaply; the cycle detector runs occasionally to mop up exactly the pathological case this lesson is about.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25)">automatic, no code changes needed</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Swift / Objective-C: ARC, No Built-In Cycle Collector</span><span class="fam-count">manual</span></div>
+      <div class="fam-desc">Swift's Automatic Reference Counting (and the Objective-C ARC it's descended from) is pure compiler-inserted reference counting — the compiler automatically emits the retain/release calls for you, but there is deliberately <strong>no runtime cycle detector</strong> at all. If your object graph forms a cycle, ARC will leak it, permanently, with no automatic recovery. The classic real-world instance: a closure that captures <code>self</code> strongly while also being stored as a property on that same object — a textbook two-node cycle, common enough that it has its own well-known name in the Swift community ("strong reference cycle" / "retain cycle").</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25)">programmer must break cycles manually</span></div>
+    </div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧩 Same Root Cause, Two Different Bets</div>
+    Python's designers judged the cost of a periodic cycle-scanning pass acceptable in exchange for programmers never having to think about this at all. Swift's designers, targeting performance-sensitive UI and systems code, judged the unpredictability and overhead of any background scanning pass unacceptable, and pushed the responsibility for breaking cycles explicitly onto the programmer instead. Neither choice is "solving" the underlying limitation of reference counting — both are managing it, in opposite directions.
+  </div>
+
+  <h3>It's Not Just Application Languages, Either</h3>
+
+  <p class="reveal">Reference counting shows up below the application-language layer too, wherever a language wants automatic memory management without the overhead of a full tracing runtime. C++'s <code>std::shared_ptr&lt;T&gt;</code> and Rust's <code>Rc&lt;T&gt;</code> (and its thread-safe counterpart <code>Arc&lt;T&gt;</code>) are both library-level, opt-in reference counting — you choose to wrap a value in one when you specifically need shared ownership, rather than the whole language defaulting to it. Both have the exact same cycle blind spot described above: a <code>Rc&lt;RefCell&lt;Node&gt;&gt;</code> tree with parent pointers back to children, or two <code>shared_ptr</code>s pointing at each other, will leak in precisely the way A and B leaked in the example above — and both ecosystems ship the identical fix, a non-owning <code>Weak&lt;T&gt;</code> / <code>std::weak_ptr&lt;T&gt;</code> type, for the identical reason: break the cycle by hand, on the edge you choose, because neither runtime is scanning for cycles on your behalf.</p>
+
+  <div class="sidenote reveal">
+    <b>Why Rust in particular makes this an interesting case study.</b> Rust's ordinary ownership model (its borrow checker) is not reference counting at all — most Rust values have exactly one owner and are freed deterministically when that owner's scope ends, no counting required. <code>Rc&lt;T&gt;</code> is a deliberate, explicit opt-out from that model, reached for specifically when a value genuinely needs more than one simultaneous owner. Rust's designers considered a full tracing GC and rejected it for the language's core; reference counting survives as an opt-in escape hatch precisely because its cost and its cycle limitation are both easy to reason about locally, one <code>Rc&lt;T&gt;</code> at a time, rather than being an invisible, ambient runtime cost.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: WEAK REFERENCES -->
+<section id="weakrefs">
+<div class="container">
+  <div class="section-num">06 — Breaking Cycles on Purpose</div>
+  <h2><span class="accent">Weak References</span>: A Pointer That Doesn't Count</h2>
+
+  <p class="reveal">If a language gives you no automatic cycle detector, you need a manual way to prevent cycles from forming in the first place — without simply refusing to let two objects reference each other, which is often exactly the relationship your data actually has (a parent and child that both need to reach one another, for instance). The tool for this is a <strong>weak reference</strong>: a reference that lets you access an object, but that deliberately does <em>not</em> increment its refcount.</p>
+
+  <pre class="reveal"><span class="tag">Swift-flavored pseudocode</span><code><span class="kw">class</span> <span class="cls">Parent</span> {
+  <span class="kw">var</span> child: <span class="cls">Child</span>?          <span class="cm">// STRONG reference — increments child's refcount</span>
+}
+<span class="kw">class</span> <span class="cls">Child</span> {
+  <span class="kw">weak var</span> parent: <span class="cls">Parent</span>?   <span class="cm">// WEAK reference — does NOT increment parent's refcount</span>
+}
+
+<span class="cm">// parent.child = someChild retains someChild → someChild.refcount += 1</span>
+<span class="cm">// child.parent = someParent does NOT retain someParent → refcount unchanged</span>
+<span class="cm">// When every STRONG (external) reference to parent is dropped, its refcount</span>
+<span class="cm">// can finally reach zero — the weak edge from child never held it up.</span></code></pre>
+
+  <p class="reveal">The pattern above is the standard fix: pick one direction of a naturally-cyclic relationship (commonly, the "back-pointer" — a child pointing back to its parent, a delegate pointing back to the object that owns it) and make <em>that</em> direction weak. The strong references still form a clean tree with no cycle in it; the weak reference lets code still navigate "upward" without contributing to anyone's refcount. When the last strong, external reference to the parent goes away, its refcount can finally reach zero — normally, correctly — because the child's pointer back to it was never counted in the first place.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ What Happens If You Follow a Weak Reference to a Freed Object</div>
+    A correctly-implemented weak reference doesn't leave you holding a dangling pointer if the object it points to gets freed through its strong references — that would just reintroduce use-after-free by another name. Instead, weak references are typically implemented so that accessing one after the target is deallocated safely yields "nothing" (<code>nil</code>/<code>None</code>, or an explicit "expired" state), rather than a pointer to freed memory. The runtime tracks outstanding weak references and clears or invalidates them at deallocation time — which is itself a small amount of extra bookkeeping refcounting has to do, on top of the basic increment/decrement, to make weak references safe to use.
+  </div>
+
+  <h3>Swift Actually Gives You Two Flavors, on Purpose</h3>
+
+  <p class="reveal">Swift is worth a closer look here because it doesn't stop at one non-counting reference type — it offers two, and the difference between them is a genuinely useful piece of real-world nuance. A <code>weak</code> reference (shown above) is for relationships where the referenced object might legitimately outlive or not exist independent of the reference holder, so it has to support becoming "nothing" safely — which is why <code>weak</code> references in Swift must always be declared as optional. An <code>unowned</code> reference is for relationships where the two objects are guaranteed, by the programmer's own reasoning about the code, to have the same lifetime or a strictly dependent one — it skips the extra "safely becomes nil" bookkeeping entirely, and trades that safety for slightly less overhead.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Reference Kind</th><th>Increments Refcount?</th><th>If Target Is Freed</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Strong</td><td class="neg">Yes</td><td>N/A — it's the reason the target stays alive</td></tr>
+        <tr><td class="gold">Weak</td><td class="pos">No</td><td class="hl">Safely resolves to nil / "expired" — always optional</td></tr>
+        <tr><td class="gold">Unowned</td><td class="pos">No</td><td class="neg">Undefined / a crash if accessed — programmer guarantees this never happens</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">That third row is the trade being made explicit: <code>unowned</code> is a promise from the programmer that the reference will never outlive its target, in exchange for not paying the (small) runtime cost of tracking and safely nil-ing the reference. Get that promise wrong, and you've reintroduced exactly the dangling-pointer bug reference counting was supposed to prevent — which is a good reminder that "break the cycle with a non-counting reference" moves the correctness burden from "did I remember to free this" onto "did I correctly reason about which direction of this relationship is safe to leave uncounted."</p>
+</div>
+</section>
+
+<!-- SECTION 7: COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">07 — Side by Side</div>
+  <h2>Reference Counting <span class="accent">vs.</span> Tracing GC</h2>
+
+  <p class="reveal">Neither strategy is a strict upgrade over the other — they trade different costs for different guarantees. Worth having the full comparison in one place.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Reference Counting</th><th>Tracing GC (mark-and-sweep)</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">When is an object freed</td><td class="hl">Instantly, when its refcount hits zero</td><td>In a batch, during the next collection pass</td></tr>
+        <tr><td class="gold">Handles reference cycles?</td><td class="neg">No — cycles leak forever without extra help</td><td class="pos">Yes — cycles are collected naturally</td></tr>
+        <tr><td class="gold">Per-object memory overhead</td><td class="neg">Extra refcount field on every object</td><td class="pos">Just a mark bit (or none, between collections)</td></tr>
+        <tr><td class="gold">Per-operation cost</td><td class="neg">Every pointer assignment touches a counter</td><td class="pos">Pointer assignments are free; cost is at collection time</td></tr>
+        <tr><td class="gold">Pause behavior</td><td class="pos">No distinct "collection" pause (mostly)</td><td class="neg">Can pause the program during collection</td></tr>
+        <tr><td class="gold">Destructor timing</td><td class="pos">Deterministic — exactly when refcount hits 0</td><td class="neg">Non-deterministic — whenever GC gets to it</td></tr>
+        <tr><td class="gold">Needs to know the root set?</td><td class="pos">No — purely local bookkeeping</td><td class="neg">Yes — must enumerate globals, stack, registers</td></tr>
+        <tr><td class="gold">Real-world users</td><td>CPython, Swift/ARC, Rust's <code>Rc&lt;T&gt;</code>, C++'s <code>shared_ptr</code></td><td>V8/JavaScript, JVM, Go, .NET CLR</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ Pick Refcounting When</h4>
+      You need deterministic, immediate cleanup of external resources; your object graphs are naturally tree-shaped (or cycles are rare and easy to mark with weak references by hand); and you'd rather pay a small, constant cost on every pointer write than an occasional larger collection pause.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ Pick Tracing GC When</h4>
+      Your object graphs are rich, deeply interconnected, and likely to contain cycles that would be error-prone to hunt down and manually break; per-pointer-write overhead would dominate hot paths; and occasional, batched collection pauses (especially ones you can make short with modern incremental/concurrent techniques) are an acceptable trade.
+    </div>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>These two strategies aren't always an either/or choice in practice.</b> Some real systems hybridize them — for instance, using refcounting for large, expensive-to-scan resources (like buffers or native objects wrapped by a scripting language) while the scripting language's own object graph is managed by a separate tracing GC underneath, with the two systems bridged carefully at the boundary. Even Python's own architecture is arguably a hybrid: refcounting as the primary mechanism, with a tracing-style cycle detector bolted on specifically to cover refcounting's blind spot. The next lesson in this series takes tracing GC in a different optimization direction entirely — splitting the heap by object age rather than changing the underlying liveness test.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 8: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Reference Count</div><div class="glossary-def">A per-object integer tracking how many active references currently point to it — incremented on reference creation, decremented on reference destruction.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Retain / Release</div><div class="glossary-def">The two operations that adjust a refcount: retain increments it (a new reference), release decrements it and frees the object if the count reaches zero.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Reference Cycle</div><div class="glossary-def">A group of objects that reference each other (directly or transitively) such that every member has a nonzero refcount even though nothing outside the group can reach any of them.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cycle Detector</div><div class="glossary-def">A supplementary mechanism (like CPython's <code>gc</code> module) that periodically scans for unreachable reference cycles and collects them, layered on top of ordinary refcounting.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Strong Reference</div><div class="glossary-def">An ordinary reference that increments the target's refcount — the default kind of reference in a refcounted system.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Weak Reference</div><div class="glossary-def">A reference that lets code access an object without incrementing its refcount, used deliberately to break potential cycles; safely resolves to "nothing" if the target has already been freed.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Unowned Reference</div><div class="glossary-def">Swift's non-counting reference that skips the safety bookkeeping weak references pay for, trading it for a programmer's promise that the reference will never outlive its target.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ARC (Automatic Reference Counting)</div><div class="glossary-def">Swift's (and Objective-C's) compiler-inserted reference counting — the compiler automatically emits retain/release calls, with no built-in cycle collector.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Deterministic Destruction</div><div class="glossary-def">The property of reference counting where an object's cleanup (destructor/deinit) runs synchronously and predictably at the exact point its last reference is dropped.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Tracing Garbage Collector</div><div class="glossary-def">The alternative family covered in the prior lesson — determines liveness via reachability traversal from roots rather than local reference counts.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Root Set</div><div class="glossary-def">Globals, the call stack, and registers — the starting points a tracing collector needs; reference counting notably never needs to know this set at all.</div></div>
+  </div>
+
+  <div class="callout gold reveal" style="margin-top:2rem">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>Reference counting trades a global reachability search for cheap, local, per-object bookkeeping that frees things the instant they're truly unreferenced — but that same locality is exactly why it structurally cannot see a cycle of mutually-referencing garbage, which is why every real refcounted language ships either an automatic cycle detector or a manual weak-reference convention to cover the gap.</strong>
+  </div>
+
+  <p class="reveal" style="margin-top:1.5rem;color:var(--muted);font-size:.95rem">One closing thought worth carrying forward: notice that both garbage collection strategies covered so far — tracing and refcounting — are trying to answer the exact same underlying question, "is this object still needed?" They just answer it from opposite directions: tracing GC asks it globally, by searching from roots outward; refcounting asks it locally, by tallying incoming edges. Every other GC scheme you'll ever encounter is, in some way, a variation, hybrid, or optimization of one of these two answers.</p>
+</div>
+</section>
+
+<footer>
+  <p>Reference Counting vs Tracing GC · bob_os Lesson 20 · Garbage Collection Theory</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion lesson for <a href="../../browser/B09_garbage_collector/tutorial.html">bob_os/browser module B09_garbage_collector</a>.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── CYCLE CANVAS ─────────────────────────────────────────────────────────────
+function drawCycleScene(state){
+  const canvas=document.getElementById('cycCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const rootX=W*0.14, rootY=H*0.5;
+  const aX=W*0.48, aY=H*0.32;
+  const bX=W*0.72, bY=H*0.62;
+
+  // root -> A edge (fades out when dropped)
+  if(state.rootAlive){
+    ctx.strokeStyle='rgba(245,200,66,.7)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(rootX+30,rootY);ctx.lineTo(aX-28,aY+10);ctx.stroke();
+  } else if(state.rootFading!=null){
+    ctx.globalAlpha=1-state.rootFading;
+    ctx.strokeStyle='rgba(245,200,66,.7)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(rootX+30,rootY);ctx.lineTo(aX-28,aY+10);ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+
+  // A <-> B mutual edges (curved so both directions are visible)
+  ctx.strokeStyle='rgba(56,189,248,.55)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(aX+18,aY+22);ctx.quadraticCurveTo((aX+bX)/2,(aY+bY)/2-24,bX-10,bY-16);ctx.stroke();
+  drawArrowhead(ctx,bX-10,bY-16,Math.atan2(bY-16-((aY+bY)/2-24),(bX-10)-(aX+bX)/2),C.cyan);
+  ctx.beginPath();ctx.moveTo(bX-18,bY-10);ctx.quadraticCurveTo((aX+bX)/2,(aY+bY)/2+24,aX+10,aY+30);ctx.stroke();
+  drawArrowhead(ctx,aX+10,aY+30,Math.atan2(aY+30-((aY+bY)/2+24),(aX+10)-(aX+bX)/2),C.cyan);
+
+  // root box
+  ctx.strokeStyle= state.rootAlive ? C.gold : 'rgba(122,155,191,.4)';
+  ctx.lineWidth=2;
+  ctx.strokeRect(rootX-30,rootY-18,60,36);
+  ctx.fillStyle= state.rootAlive ? 'rgba(245,200,66,.15)' : 'rgba(122,155,191,.06)';
+  ctx.fillRect(rootX-30,rootY-18,60,36);
+  ctx.fillStyle= state.rootAlive ? C.gold : C.muted;
+  ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(state.rootAlive?'ROOT':'(dropped)',rootX,rootY+4);
+
+  // node A and B
+  [['A',aX,aY,state.refA],['B',bX,bY,state.refB]].forEach(([lab,x,y,ref])=>{
+    const leaked=!state.rootAlive && state.done;
+    const col= leaked ? C.red : C.cyan;
+    ctx.beginPath();ctx.arc(x,y,32,0,Math.PI*2);
+    ctx.fillStyle= leaked ? 'rgba(248,113,113,.14)' : 'rgba(56,189,248,.14)';
+    ctx.fill();
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=col;ctx.font='bold 14px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(lab,x,y-2);
+    ctx.font='11px Source Code Pro,monospace';
+    ctx.fillText('refcount='+ref,x,y+14);
+  });
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(state.caption||'',W/2,H-16);
+}
+function drawArrowhead(ctx,x,y,angle,col){
+  const size=7;
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-size,-size*0.5);ctx.lineTo(-size,size*0.5);ctx.closePath();
+  ctx.fillStyle=col;ctx.fill();ctx.restore();
+}
+
+function runCycle(){
+  const label=document.getElementById('cycLabel');
+  const state={rootAlive:true,refA:2,refB:1,rootFading:null,done:false,caption:'A.refcount=2 (root + B), B.refcount=1 (A) — both alive'};
+  drawCycleScene(state);
+  label.textContent='▶ Dropping the root reference…';
+  let start=performance.now();
+  function step(now){
+    const t=Math.min(1,(now-start)/700);
+    state.rootAlive=false;
+    state.rootFading=t;
+    state.caption='Dropping the external root reference to A…';
+    drawCycleScene(state);
+    if(t>=1){
+      state.rootFading=null;
+      state.refA=1; // B still points at A
+      state.done=true;
+      state.caption='A.refcount=1 (still held by B), B.refcount=1 (still held by A) — STUCK, never reaches 0';
+      drawCycleScene(state);
+      label.textContent='▶ Leaked — refcounts never reach zero. Try "Compare" below.';
+      return;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function runCycleTraceCompare(){
+  const label=document.getElementById('cycLabel');
+  const state={rootAlive:false,refA:1,refB:1,rootFading:null,done:true,caption:'A tracing GC ignores refcounts entirely — it asks: reachable from root? A: no. B: no.'};
+  drawCycleScene(state);
+  label.textContent='▶ Simulating what mark-and-sweep would do instead…';
+  setTimeout(()=>{
+    state.caption='Neither A nor B is reachable from the root → both correctly marked garbage → both freed.';
+    // fade both to freed-green briefly by drawing green ring
+    const canvas=document.getElementById('cycCanvas');
+    drawCycleScene(state);
+    const ctx=canvas.getContext('2d');
+    label.textContent='▶ Tracing GC: both A and B collected correctly. Refcounting could not do this alone.';
+  },900);
+}
+
+function resetCycle(){
+  document.getElementById('cycLabel').textContent='▶ Click to drop the root reference and watch the refcounts';
+  drawCycleScene({rootAlive:true,refA:2,refB:1,rootFading:null,done:false,caption:'A.refcount=2 (root + B), B.refcount=1 (A) — both alive'});
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetCycle(); });
+window.addEventListener('resize',()=>{ resetCycle(); });
+</script>
+</body>
+</html>

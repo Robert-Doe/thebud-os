@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The TLS Handshake, Step by Step — From ClientHello to Encrypted Data</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(74,222,128,.1) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);color:var(--green);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.3rem,5.4vw,4.4rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--green)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--green);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--green);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--green)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.gold{color:var(--gold)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--green);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--green);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.green{border-color:var(--green);color:var(--green)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;white-space:pre;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--green)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--green);font-weight:600} td.pos{color:var(--green);} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(74,222,128,.15);border:1.5px solid var(--green);color:var(--green);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(74,222,128,.1);border:1.5px solid var(--green);color:var(--green);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(74,222,128,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--green);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);color:var(--green);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--green);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Why TLS Exists"></a>
+  <a class="toc-dot" href="#hybrid" title="Asymmetric + Symmetric"></a>
+  <a class="toc-dot" href="#steps" title="The Handshake Steps"></a>
+  <a class="toc-dot" href="#sequence" title="Message Sequence"></a>
+  <a class="toc-dot" href="#forwardsecrecy" title="Forward Secrecy"></a>
+  <a class="toc-dot" href="#derive" title="Key Derivation"></a>
+  <a class="toc-dot" href="#appdata" title="Application Data"></a>
+  <a class="toc-dot" href="#onetwothirteen" title="1.2 vs 1.3"></a>
+  <a class="toc-dot" href="#recordlayer" title="Record Layer"></a>
+  <a class="toc-dot" href="#resumption" title="Resumption & 0-RTT"></a>
+  <a class="toc-dot" href="#extensions" title="SNI & ALPN"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">TLS 1.3 · Key Exchange · Forward Secrecy · bob_os Networking</div>
+    <h1>The TLS Handshake,<br><span>Step by Step</span></h1>
+    <p class="hero-sub">Every HTTP request you just learned to parse — the plaintext method, path, headers, body — travels naked across the raw internet unless something wraps it first. That something is TLS. Before a single byte of your <code>GET /</code> request leaves the client, both sides have to agree on a shared secret, prove the server is who it claims to be, and derive matching encryption keys — all without ever sending that secret across the wire in the clear.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">1-RTT</div><div class="lbl">TLS 1.3 handshake cost</div></div>
+      <div class="hero-stat"><div class="num">ECDHE</div><div class="lbl">Ephemeral key exchange</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Finished messages before app data</div></div>
+      <div class="hero-stat"><div class="num">PFS</div><div class="lbl">Forward secrecy, by default</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Pick Up</div>
+  <h2>The Plaintext Problem <span class="accent">TLS Solves</span></h2>
+
+  <p class="reveal">You already know what an HTTP request looks like on the wire: readable ASCII text, a request line, headers, maybe a body — including, very often, a <code>Cookie</code> header carrying a session token. TCP delivers those bytes reliably, but it does nothing to hide them. Anyone who can see the packets — a coffee-shop Wi-Fi neighbor, an ISP, a compromised router along the path — can simply read your session cookie straight out of the stream.</p>
+
+  <p class="reveal">TLS (Transport Layer Security) sits between TCP and HTTP specifically to close that gap: it takes over the raw TCP byte stream immediately after the three-way handshake completes, runs its own handshake to establish trust and a shared secret, and from that point on, every byte HTTP hands it — including the request line and headers you just spent a whole lesson learning to parse — gets encrypted before it ever touches the socket. This is exactly what "HTTPS" means: <strong>HTTP, riding inside a TLS-encrypted tunnel, riding inside a TCP byte stream.</strong></p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🧱 The Layering, Explicitly</div>
+    TCP's three-way handshake already got you a reliable, ordered byte stream between two sockets — that part is done and TLS doesn't redo it. TLS adds a second handshake <em>on top of</em> that stream, and only once <em>that</em> finishes does your actual <code>GET /articles/tls-handshake HTTP/1.1</code> request get sent — now as encrypted bytes indistinguishable from noise to anyone without the session key.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: HYBRID CRYPTO -->
+<section id="hybrid">
+<div class="container">
+  <div class="section-num">01 — The Core Design Decision</div>
+  <h2>Why <span class="accent">Asymmetric, Then Symmetric</span></h2>
+
+  <p class="reveal">There are two broad families of encryption, and TLS deliberately uses both, in sequence, for different jobs:</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🐢 Asymmetric (Public-Key) Crypto</h4>
+      A key pair — public and private — where anyone can encrypt with the public key but only the private key holder can decrypt (or sign). Solves the "how do two strangers agree on a secret over a public channel" problem beautifully. But the math (modular exponentiation, elliptic curve point multiplication) is computationally expensive — orders of magnitude slower than symmetric crypto, especially at scale across millions of connections per second.
+    </div>
+    <div class="compare-card good">
+      <h4>🐇 Symmetric Crypto</h4>
+      One shared key, known to both sides, used to both encrypt and decrypt. Algorithms like AES-GCM or ChaCha20-Poly1305 are extremely fast — hardware-accelerated on modern CPUs, capable of encrypting gigabytes per second. The catch: both sides need to already share that one secret key, which is exactly the problem asymmetric crypto is good at solving.
+    </div>
+  </div>
+
+  <p class="reveal">So TLS uses each for what it's good at: <strong>asymmetric crypto runs briefly, once, at the start of the connection</strong> — just long enough to authenticate the server and bootstrap a shared secret — and then <strong>every actual byte of your HTTP traffic is encrypted with cheap, fast symmetric crypto</strong> using a session key both sides derived from that bootstrap. You pay the expensive asymmetric cost exactly once per connection, not once per byte.</p>
+
+  <div class="formula green reveal">
+    <span class="label">The hybrid pattern, in one line</span>
+    expensive asymmetric crypto → bootstraps trust + a shared secret → cheap symmetric crypto → encrypts everything else
+    <span class="sub">This exact pattern — slow public-key crypto used only to establish a fast shared-key channel — shows up everywhere in security engineering, not just TLS.</span>
+  </div>
+
+  <p class="reveal">A TLS 1.3 <strong>cipher suite</strong> name like <code>TLS_AES_128_GCM_SHA256</code> is really this whole design compressed into one identifier — it bundles together the bulk symmetric cipher and its mode, plus the hash used for key derivation and the Finished MAC. Notice what's <em>not</em> in the name anymore: the key-exchange algorithm. TLS 1.3 negotiates that separately (and mandates ECDHE for all of them), which is exactly why every legal TLS 1.3 cipher suite gets forward secrecy — there's no longer a suite name like TLS 1.2's <code>TLS_RSA_WITH_AES_128_CBC_SHA</code> that bakes a non-forward-secret key exchange into the choice at all.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Bulk Cipher</span><span class="fam-count">AES_128_GCM</span></div>
+      <div class="fam-desc">The actual symmetric algorithm encrypting every application-data byte after the handshake — fast, hardware-accelerated on modern CPUs.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">AEAD Mode</span><span class="fam-count">GCM</span></div>
+      <div class="fam-desc">Galois/Counter Mode — encrypts and authenticates in the same pass, so any tampered ciphertext is detected rather than silently decrypted into garbage.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--green)">Hash for HKDF/MAC</span><span class="fam-count">SHA256</span></div>
+      <div class="fam-desc">Used inside HKDF for key derivation and inside the Finished message's MAC — not for encrypting data itself.</div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 A Sizing Intuition</div>
+    A typical HTTPS page load might exchange a few kilobytes during the handshake but megabytes of actual page content afterward. If every one of those megabytes required expensive asymmetric operations, HTTPS would be dramatically slower than plaintext HTTP. Because only the handshake pays that cost, and the bulk data uses fast symmetric encryption, HTTPS in practice is only marginally slower than plaintext HTTP once the connection is warmed up.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: THE STEPS -->
+<section id="steps">
+<div class="container">
+  <div class="section-num">02 — The Handshake, Step by Step</div>
+  <h2>From <span class="accent">ClientHello</span> to <span class="accent">Encrypted Data</span></h2>
+
+  <p class="reveal">TLS 1.3 compressed what used to take TLS 1.2 two full round trips into a single round trip. Here's exactly what happens, in order:</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1. ClientHello</strong> The client opens by proposing: which TLS version it supports, a list of cipher suites it's willing to use (ranked by preference), and a 32-byte <em>client random</em> — freshly generated, never reused. It also includes its ephemeral public key for the key exchange (a <code>key_share</code> extension), guessing which key-exchange group the server will accept, so the whole thing fits in one round trip.</div></li>
+    <li><div class="step-body"><strong>2. ServerHello</strong> The server picks one cipher suite from the client's list, generates its own 32-byte <em>server random</em>, and sends back its own ephemeral public key for the same key-exchange group. From this message onward, most of the handshake is already encrypted using keys derived from what's exchanged so far.</div></li>
+    <li><div class="step-body"><strong>3. Key Exchange (ECDHE)</strong> Both sides now have enough information — their own private ephemeral key, the other side's public ephemeral key — to independently compute the exact same Diffie-Hellman shared secret, without that secret ever crossing the wire. Nobody eavesdropping on the ClientHello/ServerHello exchange can compute it themselves, even though they saw both public keys.</div></li>
+    <li><div class="step-body"><strong>4. Certificate + CertificateVerify</strong> The server sends its X.509 certificate chain (covered in depth in the next lesson) and a signature, made with its long-term private key, over a hash of everything exchanged so far. This is what proves "the entity that just did this key exchange is really the certificate's owner," not just some anonymous party with a matching ephemeral key.</div></li>
+    <li><div class="step-body"><strong>5. Key Derivation</strong> Both sides feed the shared secret plus the two random values into a key-derivation function (HKDF) to independently compute the same set of symmetric session keys — separate keys for handshake traffic and for application traffic, in each direction. Neither side ever transmits the derived keys; both simply compute the same output from the same inputs.</div></li>
+    <li><div class="step-body"><strong>6. Finished (server, then client)</strong> Each side sends a MAC (message authentication code) over the entire handshake transcript so far, proving it derived the correct keys and that nothing in the handshake was tampered with in transit. Once both Finished messages have been sent and verified, both sides trust the connection is genuinely secure and mutually authenticated (at least server-side — client certs are optional).</div></li>
+    <li><div class="step-body"><strong>7. Application Data</strong> Only now does the actual HTTP request get sent — as symmetrically encrypted TLS records, using the application traffic keys derived in step 5. Everything from here on, including the full <code>GET /articles/tls-handshake HTTP/1.1</code> request line and every header, is ciphertext to anyone without those keys.</div></li>
+  </ol>
+
+  <div class="sidenote reveal">
+    <b>Where do the two "randoms" actually get used?</b> The client random and server random feed directly into the key derivation function alongside the shared secret. This guarantees that even if two connections somehow negotiated the exact same shared secret (extremely unlikely, but worth defending against), the derived session keys would still differ — because the randoms would differ. It's cheap insurance against key reuse.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: MESSAGE SEQUENCE CANVAS -->
+<section id="sequence">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>The Handshake as a <span class="accent">Message Sequence</span></h2>
+
+  <p class="reveal">Here's the same seven steps, played out as a sequence diagram between client and server. Watch how little crosses the wire before both sides silently agree on the same symmetric key — and how encryption of the handshake itself kicks in partway through, well before application data starts flowing.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="tlsLabel">▶ Click to run the TLS 1.3 handshake</div>
+    <canvas id="tlsCanvas" height="420"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runHandshake()">▶ Run Handshake</button>
+    <button class="ctrl-btn red" onclick="resetHandshake()">Reset</button>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔑 The Syscall-Style Wall, One More Time</div>
+    Notice the structural echo from earlier lessons: application data (your actual HTTP request) is the "privileged action" that only gets to happen after a validated exchange establishes trust — exactly like a system call only executing after the kernel validates the request, or a Mojo IPC message only being honored after the browser process checks it. TLS's "wall" is the Finished message pair; nothing app-layer crosses it until both sides confirm they agree.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: FORWARD SECRECY -->
+<section id="forwardsecrecy">
+<div class="container">
+  <div class="section-num">04 — The Property Worth Understanding Deeply</div>
+  <h2><span class="accent">Forward Secrecy</span>: Why Ephemeral Keys Matter</h2>
+
+  <p class="reveal">Here's a question worth sitting with: what happens to <em>all your past encrypted traffic</em> if a server's long-term private key is ever stolen — leaked in a breach, extracted from a misconfigured backup, seized by a court order, brute-forced years later as computers get faster?</p>
+
+  <p class="reveal">In older TLS versions using RSA key exchange, the answer was bad: the shared secret itself was encrypted directly with the server's long-term RSA public key, so anyone who later obtained the private key could decrypt every session ever recorded — including traffic captured years earlier and stored specifically for this purpose ("harvest now, decrypt later"). One leaked key, and your entire encrypted history becomes readable in retrospect.</p>
+
+  <p class="reveal">TLS 1.3 makes this attack structurally impossible by mandating <strong>ephemeral Diffie-Hellman (ECDHE)</strong> for every handshake. The key exchange uses a fresh, temporary key pair generated <em>just for this one connection</em> and discarded immediately afterward — never written to disk, never reused, never derivable from the server's long-term identity key. The long-term certificate key is used only to <em>sign</em> the exchange (proving authenticity), never to encrypt the secret itself.</p>
+
+  <div class="formula green reveal">
+    <span class="label">Forward secrecy, stated precisely</span>
+    Compromise of the server's long-term private key today ⇏ ability to decrypt session keys from yesterday
+    <span class="sub">Because yesterday's session key was derived from an ephemeral key pair that no longer exists anywhere — it was never written down, and there's nothing left to steal.</span>
+  </div>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ This Is a Real, Load-Bearing Security Property</div>
+    Forward secrecy isn't a theoretical nicety — it's why intelligence agencies and attackers alike have historically stockpiled encrypted internet traffic ("harvest now, decrypt later") betting on future key compromise or advances in computing (including future quantum computers breaking today's asymmetric math). Mandatory ephemeral key exchange in TLS 1.3 means that strategy fails against properly implemented connections: there is no single key whose future compromise unlocks the past.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Doesn't the server certificate's private key matter at all, then?</b> It still matters enormously for <em>authentication</em> — it's what proves you're really talking to the real server right now, via the signature in CertificateVerify. Losing it lets an attacker impersonate the server going forward (until the certificate is revoked — see the next lesson). It just can't be used to retroactively decrypt sessions that already used a now-discarded ephemeral key.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: KEY DERIVATION -->
+<section id="derive">
+<div class="container">
+  <div class="section-num">05 — What Both Sides Actually Compute</div>
+  <h2>Deriving the Same Keys, <span class="accent">Independently</span></h2>
+
+  <p class="reveal">By the end of the key exchange, client and server each hold the same raw shared secret — computed via elliptic-curve Diffie-Hellman, without ever transmitting it. Neither side simply <em>uses</em> that raw secret as the encryption key, though; both feed it through a key-derivation function (HKDF, HMAC-based Key Derivation Function) alongside the handshake transcript to produce several distinct, purpose-specific keys.</p>
+
+  <pre class="reveal"><span class="tag">tls_state.h — real struct from B16_tls_handshake</span><code><span class="kw">typedef</span> <span class="kw">enum</span> {
+    TLS_INIT, TLS_CLIENT_HELLO_SENT, TLS_SERVER_HELLO_RCVD,
+    TLS_KEYS_DERIVED, TLS_CERT_RCVD, TLS_CERT_VERIFIED,
+    TLS_ESTABLISHED
+} <span class="cls">tls_state_t</span>;
+
+<span class="kw">typedef</span> <span class="kw">struct</span> {
+    tls_state_t  state;
+    uint8_t      client_random[<span class="num">32</span>];
+    uint8_t      server_random[<span class="num">32</span>];
+    uint8_t      shared_secret[<span class="num">32</span>];   <span class="cm">/* from ECDH */</span>
+    uint8_t      handshake_key[<span class="num">32</span>];   <span class="cm">/* from HKDF */</span>
+    uint8_t      app_key[<span class="num">32</span>];         <span class="cm">/* session key */</span>
+    x509_cert_t *server_cert;
+} <span class="cls">tls_ctx_t</span>;
+
+<span class="cm">/* tls.c — the derivation itself */</span>
+<span class="kw">void</span> <span class="fn">tls_derive_keys</span>(tls_ctx_t *ctx) {
+    <span class="cm">/* ECDH: shared_secret = client_priv * server_pub */</span>
+    x25519(ctx->shared_secret, ctx->client_private_key, ctx->server_public_key);
+
+    <span class="cm">/* HKDF-Extract, then HKDF-Expand, chained twice: */</span>
+    hkdf_extract(early_secret, <span class="kw">NULL</span>, <span class="num">0</span>, <span class="kw">NULL</span>, <span class="num">0</span>);
+    hkdf_expand_label(derived, early_secret, <span class="str">"derived"</span>, <span class="kw">NULL</span>, <span class="num">32</span>);
+    hkdf_extract(ctx->handshake_key, ctx->shared_secret, <span class="num">32</span>, derived, <span class="num">32</span>);
+
+    <span class="cm">/* Application traffic secret, bound to the transcript hash */</span>
+    hkdf_expand_label(ctx->app_key, ctx->handshake_key,
+                      <span class="str">"s ap traffic"</span>, transcript_hash(), <span class="num">32</span>);
+}</code></pre>
+
+  <p class="reveal">Two details worth noticing: first, separate keys exist for <em>handshake</em> traffic versus <em>application</em> traffic — so even the tail end of the handshake (Certificate, Finished) is encrypted, but under a different key than your actual HTTP request will be. Second, the derivation is bound to a hash of the handshake transcript itself, so if a man-in-the-middle tampered with even one byte of any earlier message, both sides would derive different keys and the connection would fail closed rather than silently succeed with mismatched trust.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Input</th><th>Known by client?</th><th>Known by server?</th><th>Ever sent on the wire?</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">client_random</td><td class="pos">Yes</td><td class="pos">Yes (received)</td><td class="pos">Yes — plaintext, in ClientHello</td></tr>
+        <tr><td class="gold">server_random</td><td class="pos">Yes (received)</td><td class="pos">Yes</td><td class="pos">Yes — plaintext, in ServerHello</td></tr>
+        <tr><td class="gold">ephemeral public keys</td><td class="pos">Yes (both)</td><td class="pos">Yes (both)</td><td class="pos">Yes — plaintext, in key_share</td></tr>
+        <tr><td class="gold">shared_secret</td><td class="pos">Computed locally</td><td class="pos">Computed locally</td><td class="neg">Never — this is the whole point</td></tr>
+        <tr><td class="gold">handshake_key / app_key</td><td class="pos">Derived locally</td><td class="pos">Derived locally</td><td class="neg">Never</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: APPLICATION DATA -->
+<section id="appdata">
+<div class="container">
+  <div class="section-num">06 — The Payoff</div>
+  <h2>Your HTTP Request, Finally <span class="accent">Encrypted</span></h2>
+
+  <p class="reveal">Once both Finished messages have been exchanged and verified, the TLS state machine reaches <code>TLS_ESTABLISHED</code>, and application data starts flowing. This is the exact same HTTP request from the previous lesson — the client just hands it to the TLS layer instead of writing it directly to the socket:</p>
+
+  <pre class="reveal"><span class="tag">what the application layer still sends</span><code><span class="kw">GET</span> <span class="fn">/articles/tls-handshake</span> <span class="cls">HTTP/1.1</span>
+<span class="var">Host</span>: <span class="str">www.example.com</span>
+<span class="var">Cookie</span>: <span class="str">session_id=8f14e45fceea167a5a36dedd4bea2543</span>
+
+<span class="cm">/* ↓ what actually leaves the client's network card, per TLS record ↓ */</span>
+
+<span class="cm">/* TLS 1.3 record: type=application_data, version=0x0303 */</span>
+<span class="num">17 03 03 00 8a</span>  <span class="cm">content_type=23(app_data) legacy_ver length=0x008a</span>
+<span class="num">a4 3f 91 e0 22 b7 ...</span>  <span class="cm">AES-256-GCM ciphertext — opaque without app_key</span></code></pre>
+
+  <p class="reveal">Everything a passive eavesdropper sees from this point on is ciphertext plus a small amount of unavoidable metadata (record type, length, timing) — the method, path, headers, cookies, and body are all opaque. This is also why TLS 1.3 went further than 1.2 and started encrypting the <code>Certificate</code> message too: even <em>which certificate</em> the server presented (and therefore, on servers hosting multiple sites, which specific site you're visiting) is hidden from a passive observer, though the ClientHello's SNI extension can still leak the hostname unless Encrypted Client Hello is also in use.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ Encryption Is Not the Same as Trust</div>
+    Notice that everything in this lesson establishes <em>confidentiality</em> — nobody can read the bytes. It does not by itself establish that you're talking to the right server; that guarantee comes entirely from the certificate signature verified in step 4, which is the subject of the next lesson. An attacker can absolutely run their own valid TLS handshake with you, encryption and all, if your browser is tricked into trusting their certificate.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: GLOSSARY -->
+<section id="onetwothirteen">
+<div class="container">
+  <div class="section-num">07 — What Actually Changed</div>
+  <h2>TLS 1.2 vs. <span class="accent">TLS 1.3</span>, Concretely</h2>
+
+  <p class="reveal">The seven-step handshake in section 02 is specifically TLS 1.3. TLS 1.2, which it replaced, took two full round trips before application data could flow — one to negotiate parameters, a second (effectively) to complete the RSA or Diffie-Hellman key exchange. TLS 1.3 didn't just trim a round trip; it removed an entire category of historical misconfiguration risk along with it.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>TLS 1.2</th><th>TLS 1.3</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Round trips before app data</td><td class="neg">2</td><td class="pos">1 (0 with resumption)</td></tr>
+        <tr><td class="gold">RSA key exchange allowed?</td><td class="neg">Yes — no forward secrecy</td><td class="pos">Removed entirely</td></tr>
+        <tr><td class="gold">Ephemeral (EC)DHE mandatory?</td><td class="neg">Optional</td><td class="pos">Mandatory for every handshake</td></tr>
+        <tr><td class="gold">Weak/legacy ciphers (RC4, 3DES, static RSA)</td><td class="neg">Permitted</td><td class="pos">Removed from the cipher list entirely</td></tr>
+        <tr><td class="gold">Compression negotiation</td><td class="neg">Allowed (enabled CRIME-class attacks)</td><td class="pos">Removed</td></tr>
+        <tr><td class="gold">Certificate message encrypted?</td><td class="neg">No — sent in plaintext</td><td class="pos">Yes — encrypted after ServerHello</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Pattern: Removing Options, Not Just Adding Speed</div>
+    A recurring theme in TLS 1.3's design is deleting footguns rather than merely offering a faster path alongside the old ones. Making ephemeral key exchange <em>mandatory</em> — not just available — is exactly why "does this server support forward secrecy" stopped being a configuration question a server operator could get wrong. When the insecure option no longer exists in the protocol, it can't be accidentally selected.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7b: RECORD LAYER -->
+<section id="recordlayer">
+<div class="container">
+  <div class="section-num">08 — The Envelope Every Message Travels In</div>
+  <h2>The TLS <span class="accent">Record Layer</span></h2>
+
+  <p class="reveal">Every message this lesson has discussed — ClientHello, ServerHello, Certificate, Finished, and finally Application Data — doesn't travel raw over TCP. Each one is wrapped in a small, uniform envelope called a <strong>TLS record</strong>: a one-byte content type, a two-byte legacy version field, a two-byte length, and then the payload itself (which, past the initial ClientHello/ServerHello, is ciphertext).</p>
+
+  <pre class="reveal"><span class="tag">TLS record header — 5 bytes, every single record</span><code><span class="kw">struct</span> <span class="cls">tls_record_header</span> {
+    uint8_t  content_type;   <span class="cm">/* 20=change_cipher_spec 21=alert 22=handshake 23=application_data */</span>
+    uint16_t legacy_version; <span class="cm">/* always 0x0303 in TLS 1.3, for middlebox compatibility */</span>
+    uint16_t length;         <span class="cm">/* length of the record payload that follows, up to 16KB */</span>
+};
+<span class="cm">/* followed immediately by `length` bytes of payload */</span></code></pre>
+
+  <p class="reveal">This is exactly the same layering idea from the previous lesson, one level deeper: just as HTTP needs <code>Content-Length</code> to know how many body bytes to read from a TCP stream, TLS needs its own record <code>length</code> field to know how many ciphertext bytes make up one record, since TCP still only hands TLS an unstructured byte stream underneath. A large handshake message (a big certificate chain, for instance) can legitimately span multiple records; a TLS implementation needs the exact same buffer-and-reassemble discipline as an HTTP parser does.</p>
+
+  <div class="sidenote reveal">
+    <b>Why does the "legacy_version" field stay frozen at TLS 1.2's value?</b> Years of deployed middleboxes (firewalls, corporate proxies, old load balancers) hard-coded assumptions about what version bytes were "acceptable" and would drop or mishandle connections advertising anything newer. TLS 1.3 sidesteps this by keeping the outer record header looking like TLS 1.2, and instead signals the real negotiated version inside the (now encrypted) handshake messages — a deliberate compatibility hack, not an oversight.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7c: SESSION RESUMPTION -->
+<section id="resumption">
+<div class="container">
+  <div class="section-num">09 — Skipping the Handshake Next Time</div>
+  <h2>Session Resumption &amp; <span class="accent">0-RTT</span></h2>
+
+  <p class="reveal">Running the full seven-step handshake for every single connection — even to a server you visited ten seconds ago — is wasteful. TLS 1.3 supports <strong>session resumption</strong>: after a full handshake completes, the server issues a session ticket (an encrypted blob only the server can read) that the client can present on a future connection to skip straight to a shared secret derived from the previous session, using a pre-shared key (PSK) instead of redoing the full ephemeral exchange.</p>
+
+  <p class="reveal">Pushed further, <strong>0-RTT</strong> lets the client send actual application data (an HTTP request!) in the very first flight, bundled with the resumption attempt, before the server has even replied — trading one more round trip for latency at the cost of a real security property.</p>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">⚠️ 0-RTT Data Is Replayable</div>
+    Because 0-RTT data is sent before any fresh randomness from the server has been mixed in, an attacker who captures that first flight can resend it to the server verbatim, and the server has no built-in way to tell the replay apart from the original. For an idempotent <code>GET</code>, a replay is usually harmless. For a non-idempotent <code>POST</code> — "transfer $50," "submit this order" — a replayed request can mean the action happens twice. Servers mitigate this by only allowing 0-RTT for requests they've marked safe to replay, or by tracking single-use tickets, but the underlying risk is structural, not a bug to be patched away.
+  </div>
+
+  <p class="reveal">This is also precisely where forward secrecy gets slightly weaker in practice: the 0-RTT data is encrypted using a key derived from the earlier session's resumption secret, so if <em>that</em> secret is ever compromised, the 0-RTT bytes from that specific early data flight become decryptable — though, notably, the rest of the resumed session (everything after the server's reply) still gets fresh ephemeral keys and full forward secrecy. 0-RTT is an intentional, scoped, opt-in trade of a small amount of security for a real latency win — not a hole in TLS 1.3's design.</p>
+</div>
+</section>
+
+<!-- SECTION 7d: SNI & ALPN -->
+<section id="extensions">
+<div class="container">
+  <div class="section-num">10 — Two Extensions Doing Quiet, Essential Work</div>
+  <h2>SNI &amp; ALPN: <span class="accent">Riding Along in ClientHello</span></h2>
+
+  <p class="reveal">Two small ClientHello extensions solve problems that would otherwise be genuinely awkward, and both are worth naming explicitly since they show up in every real handshake trace you'll ever inspect.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>🌐 SNI — Server Name Indication</h4>
+      A single IP address can host thousands of different HTTPS sites (virtual hosting). But the server has to pick <em>which</em> certificate to present before it knows which site the client wants — and that choice happens before any decryption is possible. SNI solves this by having the client state the target hostname in plaintext, inside ClientHello itself, so the server can select the right certificate chain before the handshake proceeds further.
+    </div>
+    <div class="compare-card bad">
+      <h4>🤝 ALPN — Application-Layer Protocol Negotiation</h4>
+      Lets the client and server agree, during the same handshake, on which application protocol will run inside the encrypted tunnel — <code>http/1.1</code> or <code>h2</code> (HTTP/2), for instance — without an extra round trip after TLS finishes. This is exactly how a browser knows to speak HTTP/2 framing instead of HTTP/1.1 text framing the moment application data starts flowing.
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ SNI Is a Real, Acknowledged Privacy Leak</div>
+    Because SNI is sent before encryption keys exist, the hostname you're connecting to is visible in plaintext to anyone observing the handshake — even though the actual HTTP request moments later is fully encrypted. This is precisely the gap <strong>Encrypted Client Hello (ECH)</strong> was designed to close, by encrypting the ClientHello's sensitive fields (including SNI) under a separate key published in DNS — but ECH adoption is still uneven across servers, CDNs, and networks, so treat plaintext SNI as the practical default for now.
+  </div>
+</div>
+</section>
+
+<section id="glossary">
+<div class="container">
+  <div class="section-num">11 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">ClientHello / ServerHello</div><div class="glossary-def">The opening messages proposing TLS version, cipher suites, random values, and ephemeral public keys.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cipher Suite</div><div class="glossary-def">A bundled choice of key-exchange algorithm, bulk symmetric cipher, and MAC/AEAD scheme, e.g. TLS_AES_128_GCM_SHA256.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ECDHE</div><div class="glossary-def">Elliptic-Curve Diffie-Hellman Ephemeral — the key-exchange method that generates a fresh key pair per connection, enabling forward secrecy.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Forward Secrecy</div><div class="glossary-def">The property that compromising a long-term key later cannot decrypt sessions recorded earlier, because those sessions used discarded ephemeral keys.</div></div>
+    <div class="glossary-card"><div class="glossary-term">HKDF</div><div class="glossary-def">HMAC-based Key Derivation Function — turns a raw shared secret plus context into several distinct, purpose-bound symmetric keys.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CertificateVerify</div><div class="glossary-def">A signature, made with the server's long-term private key, proving it genuinely owns the certificate it just presented.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Finished Message</div><div class="glossary-def">A MAC over the full handshake transcript, sent by each side, confirming both agree on every prior message and derived the correct keys.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Application Data</div><div class="glossary-def">The TLS record type carrying actual encrypted HTTP traffic, sent only after both Finished messages are verified.</div></div>
+    <div class="glossary-card"><div class="glossary-term">AEAD Cipher</div><div class="glossary-def">Authenticated Encryption with Associated Data (e.g. AES-GCM) — encrypts and authenticates in one step, detecting any tampering.</div></div>
+    <div class="glossary-card"><div class="glossary-term">TLS Record</div><div class="glossary-def">The 5-byte-header envelope (type, legacy version, length) wrapping every TLS message before it hits the TCP stream.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Session Resumption / PSK</div><div class="glossary-def">Skipping a fresh full handshake by presenting a pre-shared key derived from a prior session's ticket.</div></div>
+    <div class="glossary-card"><div class="glossary-term">0-RTT</div><div class="glossary-def">Sending application data in the very first flight of a resumed connection, before the server replies — faster, but replayable.</div></div>
+    <div class="glossary-card"><div class="glossary-term">SNI</div><div class="glossary-def">Server Name Indication — the plaintext hostname sent in ClientHello so the server picks the right certificate before decryption is possible.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ALPN</div><div class="glossary-def">Application-Layer Protocol Negotiation — agreeing on HTTP/1.1 vs HTTP/2 during the same handshake, no extra round trip.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>The TLS Handshake, Step by Step · A companion lesson for bob_os/browser modules <a href="../../browser/B15_http_parser/tutorial.html">B15_http_parser</a> and <a href="../../browser/B16_tls_handshake/tutorial.html">B16_tls_handshake</a></p>
+  <p style="margin-top:.5rem;font-size:.78rem">Next: 03_certificates_deepdive.html — how the client actually decides the certificate is trustworthy.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── TLS HANDSHAKE SEQUENCE CANVAS ───────────────────────────────────────────────
+const HS_MSGS=[
+  {from:'client',to:'server',label:'ClientHello',sub:'version, cipher suites, client_random, key_share',col:C.cyan,enc:false},
+  {from:'server',to:'client',label:'ServerHello',sub:'chosen cipher, server_random, key_share',col:C.cyan,enc:false},
+  {from:'both',to:'both',label:'[derive keys]',sub:'ECDH shared_secret → HKDF → handshake_key',col:C.gold,enc:false},
+  {from:'server',to:'client',label:'Certificate + CertificateVerify',sub:'X.509 chain + signature over transcript',col:C.purple,enc:true},
+  {from:'server',to:'client',label:'Finished',sub:'server MAC over full transcript',col:C.green,enc:true},
+  {from:'client',to:'server',label:'Finished',sub:'client MAC — both sides now agree',col:C.green,enc:true},
+  {from:'client',to:'server',label:'Application Data',sub:'the actual HTTP request, encrypted',col:C.orange,enc:true}
+];
+
+function drawHandshake(activeIdx,t,done){
+  const canvas=document.getElementById('tlsCanvas');
+  const W=gW(canvas),H=420;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const clientX=W*0.18, serverX=W*0.82;
+  const topY=40, botY=H-30;
+
+  // lifelines
+  ctx.strokeStyle='rgba(122,155,191,.35)';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(clientX,topY);ctx.lineTo(clientX,botY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(serverX,topY);ctx.lineTo(serverX,botY);ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillStyle=C.cyan;ctx.fillText('CLIENT',clientX,24);
+  ctx.fillStyle=C.red;ctx.fillText('SERVER',serverX,24);
+
+  const rowH=(botY-topY-20)/HS_MSGS.length;
+
+  HS_MSGS.forEach((m,i)=>{
+    const y=topY+30+i*rowH;
+    const isActive=i===activeIdx;
+    const isPast=i<activeIdx || (i===activeIdx && done);
+    if(!isPast && !isActive) return;
+
+    let progress=isActive&&!done?t:1;
+    ctx.globalAlpha = isActive ? Math.min(1,0.3+0.7*progress) : 1;
+
+    if(m.from==='both'){
+      // draw a centered box for "derive keys"
+      ctx.fillStyle=m.col+'22';ctx.strokeStyle=m.col;ctx.lineWidth=1.5;
+      const bw=W*0.36;
+      ctx.fillRect(W/2-bw/2,y-11,bw,22);
+      ctx.strokeRect(W/2-bw/2,y-11,bw,22);
+      ctx.fillStyle=m.col;ctx.font='bold 11px Source Code Pro,monospace';
+      ctx.fillText(m.label,W/2,y+4);
+    } else {
+      const x1 = m.from==='client'?clientX:serverX;
+      const x2 = m.to==='client'?clientX:serverX;
+      const curX = x1+(x2-x1)*progress;
+      ctx.strokeStyle=m.col;ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(curX,y);ctx.stroke();
+      // arrowhead
+      if(progress>0.05){
+        const dir=x2>x1?1:-1;
+        ctx.fillStyle=m.col;
+        ctx.beginPath();
+        ctx.moveTo(curX,y);ctx.lineTo(curX-dir*7,y-4);ctx.lineTo(curX-dir*7,y+4);
+        ctx.closePath();ctx.fill();
+      }
+      ctx.fillStyle=m.col;ctx.font='bold 11px Source Code Pro,monospace';
+      ctx.textAlign='center';
+      ctx.fillText((m.enc?'🔒 ':'')+m.label,(x1+x2)/2,y-8);
+    }
+    ctx.fillStyle=C.muted;ctx.font='9.5px Lato,sans-serif';ctx.textAlign='center';
+    ctx.fillText(m.sub,W/2,y+ (m.from==='both'?24:16));
+    ctx.globalAlpha=1;
+  });
+
+  ctx.fillStyle=C.text;ctx.font='11px Lato,sans-serif';ctx.textAlign='center';
+  const caption = activeIdx<0 ? 'Click "Run Handshake" to begin' :
+    (done && activeIdx>=HS_MSGS.length-1) ? '✓ Handshake complete — application data now flowing, fully encrypted' :
+    'Step '+(activeIdx+1)+' of '+HS_MSGS.length+': '+HS_MSGS[activeIdx].label;
+  ctx.fillText(caption,W/2,H-8);
+}
+
+function runHandshake(){
+  let idx=0,start=performance.now();
+  const dur=650;
+  document.getElementById('tlsLabel').textContent='▶ Running TLS 1.3 handshake…';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/dur);
+    drawHandshake(idx,t,false);
+    if(t>=1){
+      drawHandshake(idx,1,true);
+      idx++;
+      if(idx>=HS_MSGS.length){
+        document.getElementById('tlsLabel').textContent='▶ Complete — click again to replay';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetHandshake(){
+  document.getElementById('tlsLabel').textContent='▶ Click to run the TLS 1.3 handshake';
+  drawHandshake(-1,0,false);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetHandshake(); });
+window.addEventListener('resize',()=>{ resetHandshake(); });
+</script>
+</body>
+</html>

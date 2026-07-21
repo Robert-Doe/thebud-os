@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory-Mapped I/O vs Port-Mapped I/O — Two Ways x86 Talks to Hardware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.o{color:var(--orange)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+
+/* address-map bar */
+.addrmap{display:flex;height:52px;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin:1.6rem 0;font-family:'Source Code Pro',monospace;font-size:.72rem;}
+.addrmap .seg{display:flex;align-items:center;justify-content:center;color:#08111f;font-weight:700;letter-spacing:.03em;padding:0 .4rem;text-align:center;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#pmio" title="Port-Mapped I/O"></a>
+  <a class="toc-dot" href="#mmio" title="Memory-Mapped I/O"></a>
+  <a class="toc-dot" href="#sidebyside" title="Side by Side"></a>
+  <a class="toc-dot" href="#compare" title="Head to Head"></a>
+  <a class="toc-dot" href="#why" title="Why MMIO Won"></a>
+  <a class="toc-dot" href="#pcie" title="PCIe & BARs"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">I/O Addressing · MMIO vs PMIO · bob_os Module 16</div>
+    <h1>Two Ways x86<br><span>Talks to Hardware</span></h1>
+    <p class="hero-sub">Every driver eventually has to read or write a device register. On x86 there are two entirely separate ways to do that: dedicated <code>IN</code>/<code>OUT</code> instructions reaching into a completely separate 64KB I/O address space, or ordinary loads and stores reaching into the same physical address space RAM lives in. bob_os uses <em>both</em>, in different drivers, and the choice was never arbitrary.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">64KB</div><div class="lbl">Size of x86's Separate I/O Address Space</div></div>
+      <div class="hero-stat"><div class="num">0xB8000</div><div class="lbl">VGA Text Buffer — a Real MMIO Address</div></div>
+      <div class="hero-stat"><div class="num">0x1F0</div><div class="lbl">ATA Disk DATA Port — a Real PMIO Port</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Dedicated Instructions PMIO Needs: IN, OUT</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>You've Been Using <span class="accent">Both</span>, All Along</h2>
+  <p class="reveal">Go back through the drivers you've already written and you'll find both addressing models sitting right next to each other, unremarked. <code>vga.c</code> writes characters by storing directly into a pointer at <code>0xB8000</code> — an ordinary C write, no special instruction. <code>pic.c</code>, <code>keyboard.c</code>, and <code>disk.c</code> all call <code>outb()</code>/<code>inb()</code> — wrappers around the x86 <code>OUT</code>/<code>IN</code> instructions — targeting ports like <code>0x20</code>, <code>0x60</code>, and <code>0x1F0</code>. Same CPU, same kernel, two fundamentally different ways of reaching hardware. This lesson is about what that difference actually is, and why x86 ended up with both instead of just one.</p>
+</div>
+</section>
+
+<!-- PMIO -->
+<section id="pmio">
+<div class="container">
+  <div class="section-num">01 — A Separate Universe of Addresses</div>
+  <h2>Port-Mapped I/O: x86's <span class="accent">Dedicated</span> Instructions</h2>
+
+  <p class="reveal">x86 CPUs have always had a second, completely separate address space just for talking to hardware — 65,536 numbered "ports," accessed only through two dedicated instructions, <code>IN</code> and <code>OUT</code>. Critically, port number <code>0x60</code> and memory address <code>0x60</code> are not the same location at all — they live on entirely different buses, and an ordinary load/store instruction can never reach a port no matter what address you compute.</p>
+
+  <pre><code>/* io.h — bob_os's I/O port helpers, real code */
+static inline void outb(uint16_t port, uint8_t val) {
+    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+static inline uint8_t inb(uint16_t port) {
+    uint8_t ret;
+    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}</code></pre>
+
+  <p class="reveal">Three real drivers already in this project depend on exactly this mechanism:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Driver</th><th>Ports Used</th><th>What Lives There</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">8259A PIC</td><td class="gold">0x20 / 0x21 (master)<br>0xA0 / 0xA1 (slave)</td><td>Command/data registers used to remap IRQ vectors and send end-of-interrupt signals</td></tr>
+        <tr><td class="hl">PS/2 Keyboard</td><td class="gold">0x60 (data)<br>0x64 (command/status)</td><td>0x60 yields the next scancode; 0x64 controls and reports on the PS/2 controller itself</td></tr>
+        <tr><td class="hl">ATA Disk (PIO)</td><td class="gold">0x1F0 – 0x1F7</td><td>Data, error/features, sector count, LBA low/mid/high, drive/head, status/command — eight registers, one bus</td></tr>
+        <tr><td class="hl">VGA CRTC</td><td class="gold">0x3D4 (index)<br>0x3D5 (data)</td><td>A two-port index/data pair used to select and then read or write a specific CRT controller register — e.g. the hardware text-mode cursor position</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 Why an Index/Data Pair? (0x3D4 / 0x3D5)</div>
+    The VGA CRTC has far more internal registers than it has I/O ports allocated to it, so it uses a common trick: write the register number you want to <em>0x3D4</em> (the index port), then read or write the actual value through <em>0x3D5</em> (the data port). Two physical ports end up addressing dozens of logical registers — a workaround born entirely from PMIO's scarce, fixed 64KB space. MMIO devices, with the whole physical address space to spread out in, rarely need this trick at all.
+  </div>
+
+  <p class="reveal">Port I/O also has its own instruction-level rule that ordinary memory access doesn't: <code>IN</code>/<code>OUT</code> are inherently ordered and uncacheable — the CPU never reorders or caches a port access the way it might a regular memory load, because doing so would silently break hardware that expects register reads and writes to happen exactly once, in exactly the order issued.</p>
+</div>
+</section>
+
+<!-- MMIO -->
+<section id="mmio">
+<div class="container">
+  <div class="section-num">02 — Hardware Registers, Disguised as RAM</div>
+  <h2>Memory-Mapped I/O: <span class="accent">Ordinary</span> Loads and Stores</h2>
+
+  <p class="reveal">MMIO takes the opposite approach: instead of a separate address space, the device's registers are mapped directly into the same physical address range that RAM occupies. From the CPU's point of view there is no special instruction at all — a plain load or store, the same one you'd use to read an <code>int</code> off the stack, is all it takes.</p>
+
+  <p class="reveal">You've already used this. The VGA text buffer at <code>0xB8000</code> isn't RAM — physical addresses in that range are wired by the PC's memory controller straight to the VGA card, which watches for writes and updates the screen accordingly. But nothing about the C code that touches it looks any different from touching an array:</p>
+
+  <pre><code>/* This is genuinely how vga.c writes to the screen — plain pointer writes */
+volatile unsigned char *vga = (volatile unsigned char *)0xB8000;
+vga[0] = 'A';      /* character cell 0 */
+vga[1] = 0x0F;     /* its attribute byte -- black bg, white fg */</code></pre>
+
+  <p class="reveal">No <code>outb()</code>, no port number, no dedicated instruction — just a pointer. The <code>volatile</code> qualifier matters enormously here for a reason specific to MMIO: it tells the compiler this memory can change or have side effects the compiler can't see, so it must never optimize away, reorder, or cache these reads/writes the way it freely would for a normal variable.</p>
+
+  <div class="addrmap reveal">
+    <div class="seg" style="width:38%;background:#4ade80;">0x00000 – 0x9FFFF — Conventional RAM</div>
+    <div class="seg" style="width:14%;background:#38bdf8;">0xA0000 – 0xBFFFF — Video Memory (0xB8000 = VGA text)</div>
+    <div class="seg" style="width:48%;background:#a78bfa;">0xC0000 and up — ROM / More RAM / Extended Memory</div>
+  </div>
+  <p class="reveal" style="font-size:.85rem;color:var(--muted);margin-top:-1rem;">A slice of the classic x86 physical memory map. Note that 0xB8000 sits <em>inside</em> ordinary physical address space, sandwiched between conventional RAM below and more RAM above it — that's the entire point of MMIO: the device didn't get its own address space, it got a reserved slice of the normal one.</p>
+
+  <div class="sidenote reveal">
+    <b>Side note —</b> this is also why the paging lesson matters here. Once paging is enabled, <code>0xB8000</code> stops meaning "physical address 0xB8000" for any code running through the page tables — it means "whatever <em>physical</em> frame is currently mapped to that <em>virtual</em> address." bob_os identity-maps the low 4MB precisely so that <code>0xB8000</code> keeps pointing at the real VGA hardware even after paging comes online. MMIO devices always live at a fixed <em>physical</em> address; it's the driver's (and the page table's) job to make sure a virtual address actually resolves there.
+  </div>
+</div>
+</section>
+
+<!-- SIDE BY SIDE CANVAS -->
+<section id="sidebyside">
+<div class="container">
+  <div class="section-num">03 — Watch the Instructions Diverge</div>
+  <h2>An <span class="accent">IN</span> Instruction vs a <span class="accent">Load</span></h2>
+
+  <p class="reveal">Same CPU, same goal — get one byte from a device — two completely different paths through the hardware. Run each and watch which bus the request actually travels on.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="busLabel">▶ Choose an access type</div>
+    <canvas id="busCanvas" height="330"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn gold" onclick="runBus('pmio')">▶ inb(0x60) — port-mapped read</button>
+    <button class="ctrl-btn" onclick="runBus('mmio')">▶ vga[0] — memory-mapped read</button>
+    <button class="ctrl-btn red" onclick="resetBus()">Reset</button>
+  </div>
+
+  <p class="reveal">The PMIO path needs a dedicated instruction (<code>IN</code>) that the CPU recognizes as "route this to the I/O address space, not the memory bus." The MMIO path needs nothing special at all — the CPU can't even tell, at the instruction level, that <code>vga[0]</code> isn't a completely ordinary RAM access. The distinction is made once, upstream, by how the motherboard's address decoding is wired — not by the instruction itself.</p>
+</div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">04 — Head to Head</div>
+  <h2>PMIO vs MMIO, <span class="accent">Precisely</span></h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th class="hl">Port-Mapped I/O (PMIO)</th><th class="hl">Memory-Mapped I/O (MMIO)</th></tr></thead>
+      <tbody>
+        <tr><td>Address space</td><td>Separate, 64KB, x86-only</td><td>Same physical space as RAM</td></tr>
+        <tr><td>Instructions needed</td><td class="neg">Dedicated: IN, OUT</td><td class="pos">None — ordinary load/store</td></tr>
+        <tr><td>Compiler-friendliness</td><td class="neg">Needs inline asm or intrinsics</td><td class="pos">Just pointer dereferences</td></tr>
+        <tr><td>Pointer arithmetic on registers</td><td class="neg">Not possible — ports aren't addresses</td><td class="pos">Trivial — it's just an array</td></tr>
+        <tr><td>Caching / reordering risk</td><td class="pos">None — IN/OUT are never cached</td><td class="neg">Must mark memory uncacheable, or CPU/compiler may reorder or cache stale values</td></tr>
+        <tr><td>Address space size available per device</td><td class="neg">Tiny slice of a shared 64KB</td><td class="pos">Can claim megabytes — real for GPUs</td></tr>
+        <tr><td>Portability beyond x86</td><td class="neg">x86/x86-64 concept only</td><td class="pos">Universal — ARM, RISC-V have no separate I/O space at all</td></tr>
+        <tr><td>Real bob_os example</td><td class="hl">disk.c, keyboard.c, pic.c</td><td class="hl">vga.c (0xB8000 framebuffer)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Sharp Edge of MMIO: Caching</div>
+    Ordinary RAM benefits enormously from CPU caches — read the same address twice, get the cached value instantly. That is exactly the wrong behaviour for a hardware register: if a device updates a status bit and the CPU keeps serving a stale cached copy, the driver can spin forever waiting for a change it will never observe. This is why MMIO regions must be mapped as <em>uncacheable</em> (via page table attributes) and touched only through <code>volatile</code> pointers — two separate safeguards against two separate optimizers (the CPU's cache and the compiler) that would otherwise "helpfully" break device access.
+  </div>
+</div>
+</section>
+
+<!-- WHY MMIO WON -->
+<section id="why">
+<div class="container">
+  <div class="section-num">05 — The Industry's Answer</div>
+  <h2>Why Modern Hardware <span class="accent">Prefers</span> MMIO</h2>
+
+  <p class="reveal">If both models work, why does virtually every modern peripheral — GPUs, NVMe drives, network cards — lean almost entirely on MMIO, using PMIO for at most a few legacy compatibility registers?</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ MMIO's advantages compound</h4>
+      One uniform addressing model for both RAM and devices means the compiler needs no special support, ordinary pointers and structs can describe register layouts, and a device can claim as much address space as it needs — a modern GPU maps hundreds of megabytes of registers and framebuffer this way. It's also the <em>only</em> option on architectures (ARM, RISC-V) that never had a separate I/O space to begin with, so MMIO is the addressing model every architecture agrees on.
+    </div>
+    <div class="compare-card bad">
+      <h4>📜 PMIO survives mostly as legacy</h4>
+      x86's I/O ports date to the 8-bit era, when a dedicated, narrow, fast bus for device access made real sense next to a small memory space. Decades of backward compatibility mean the PC platform's oldest devices — the PIC, PS/2 controller, legacy ATA — still answer on the same ports they always did. New designs almost never choose PMIO on purpose anymore; it persists because replacing it would break things that still depend on it.
+    </div>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">The one-line summary</span>
+    MMIO won because "just a pointer" beats "a whole separate instruction set" almost everywhere it's tried.
+    <span class="sub">Uniform addressing, ordinary compiler support, and unlimited-by-comparison address space made MMIO the default; PMIO survives on x86 as the address space the very oldest, simplest devices never left.</span>
+  </div>
+</div>
+</section>
+
+<!-- PCIE & BARS -->
+<section id="pcie">
+<div class="container">
+  <div class="section-num">06 — One Step Further</div>
+  <h2>How <span class="accent">PCIe</span> Devices Choose Their Address</h2>
+
+  <p class="reveal">Modern PCIe devices don't get a hardwired address the way the VGA card's <code>0xB8000</code> is fixed by decades of convention. Instead, each PCIe device advertises, through its configuration space, how much address space it needs via up to six <strong>Base Address Registers (BARs)</strong> — and the BIOS/firmware or OS assigns each BAR an actual base address at boot, mapping the device's registers into whichever free physical range happens to be available.</p>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>Device declares its needs</strong>Each BAR reports how large a region the device wants (e.g. "I need 16MB, memory-mapped, prefetchable") and whether it wants memory space or, on x86, legacy I/O space.</div></li>
+    <li><div class="step-body"><strong>Firmware assigns real addresses</strong>At boot, the BIOS/UEFI (or the OS's PCI enumeration code) walks the PCI bus, reads every device's BAR requests, and programs each BAR with an actual, non-conflicting physical base address.</div></li>
+    <li><div class="step-body"><strong>The driver reads the assigned BAR to find its device</strong>A driver never hardcodes "my registers are at 0xFEB00000" the way bob_os's VGA driver hardcodes <code>0xB8000</code> — it reads the BAR value the firmware assigned, at runtime, and maps its registers from there.</div></li>
+    <li><div class="step-body"><strong>Almost all of it is MMIO</strong>The overwhelming majority of PCIe BARs request memory-mapped space; a legacy I/O BAR is rare and mostly exists for compatibility with software that still expects old-style ports.</div></li>
+  </ol>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Tying It Back to bob_os</div>
+    bob_os's drivers are simpler than this on purpose — <code>0xB8000</code>, <code>0x1F0</code>, and friends are all hardcoded, fixed-forever addresses baked into the PC platform's ancient conventions, with no negotiation required. A real PCIe NIC or NVMe driver would instead read its BAR at <code>probe()</code> time to discover <em>where</em> its MMIO registers landed this boot, then map that region before touching a single register. Same driver_ops shape from the first lesson in this module — <code>probe/read/write/ioctl</code> — just with one more step at the very top of <code>probe()</code>.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Port-Mapped I/O (PMIO)</div><div class="glossary-def">x86's separate 64KB address space for hardware, accessed only via the dedicated IN and OUT instructions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Memory-Mapped I/O (MMIO)</div><div class="glossary-def">Device registers mapped into the same physical address space as RAM, accessed with ordinary load/store instructions.</div></div>
+    <div class="glossary-card"><div class="glossary-term">I/O Port</div><div class="glossary-def">A numbered address (0–65535) in x86's PMIO space, e.g. 0x60 for the keyboard data register.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IN / OUT</div><div class="glossary-def">The x86 instructions that read from and write to I/O ports — the only way to reach PMIO space.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Index/Data Port Pair</div><div class="glossary-def">A pattern (e.g. VGA CRTC's 0x3D4/0x3D5) where one port selects a register number and a second port reads or writes its value, used to address more registers than available ports.</div></div>
+    <div class="glossary-card"><div class="glossary-term">volatile</div><div class="glossary-def">A C qualifier telling the compiler a memory location can change outside its control, disabling caching/reordering optimizations that would otherwise break MMIO access.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Uncacheable Memory</div><div class="glossary-def">A page-table attribute forcing the CPU to skip its cache for a memory region — required for MMIO so register reads always see live hardware state.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Base Address Register (BAR)</div><div class="glossary-def">A PCI/PCIe configuration-space register through which a device requests address space, later assigned a real base address by firmware or the OS.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Framebuffer</div><div class="glossary-def">A block of MMIO memory a display device reads continuously to produce its output — bob_os's VGA text buffer at 0xB8000 is one.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Address Decoding</div><div class="glossary-def">The motherboard-level logic that routes a given physical address (or port number) to the correct chip — RAM, VGA, or another device — invisible to the CPU instruction itself.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>Memory-Mapped I/O vs Port-Mapped I/O &middot; Companion lesson for bob_os module 27_drivers</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Same CPU, two doors — one built into the instruction set, one built into the address bus.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── PMIO VS MMIO BUS CANVAS ──────────────────────────────────────────────
+function drawBusScene(t,phase,mode){
+  const canvas=document.getElementById('busCanvas');
+  const W=gW(canvas),H=330;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const cpuX=W*0.06, cpuW=W*0.16, cpuY=H*0.4, cpuH=90;
+  ctx.fillStyle='rgba(245,200,66,.08)';ctx.fillRect(cpuX,cpuY,cpuW,cpuH);
+  ctx.strokeStyle=C.gold;ctx.lineWidth=1.5;ctx.strokeRect(cpuX,cpuY,cpuW,cpuH);
+  ctx.fillStyle=C.gold;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('CPU',cpuX+cpuW/2,cpuY+cpuH/2);
+  ctx.font='9px Source Code Pro,monospace';
+  ctx.fillText(mode==='pmio'?'executes: IN AL,0x60':'executes: MOV AL,[0xB8000]',cpuX+cpuW/2,cpuY-14);
+
+  // two paths: upper = I/O bus (PMIO), lower = memory bus (MMIO)
+  const ioY=H*0.14, memY=H*0.68;
+  const pathX0=cpuX+cpuW, pathX1=W*0.62;
+
+  ctx.strokeStyle=mode==='pmio'?C.orange:'rgba(122,155,191,.25)';
+  ctx.lineWidth=mode==='pmio'?3:1.5;
+  ctx.beginPath();ctx.moveTo(pathX0,cpuY+cpuH*0.25);ctx.lineTo(pathX1,ioY+20);ctx.stroke();
+  ctx.fillStyle=mode==='pmio'?C.orange:C.muted;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('separate I/O bus (64KB port space)',pathX0+6,ioY+8);
+
+  ctx.strokeStyle=mode==='mmio'?C.cyan:'rgba(122,155,191,.25)';
+  ctx.lineWidth=mode==='mmio'?3:1.5;
+  ctx.beginPath();ctx.moveTo(pathX0,cpuY+cpuH*0.75);ctx.lineTo(pathX1,memY+20);ctx.stroke();
+  ctx.fillStyle=mode==='mmio'?C.cyan:C.muted;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('shared memory/address bus',pathX0+6,memY+8);
+
+  // destination boxes
+  const destX=pathX1, destW=W*0.30;
+  ctx.fillStyle='rgba(251,146,60,.08)';ctx.fillRect(destX,ioY,destW,60);
+  ctx.strokeStyle=C.orange;ctx.lineWidth=1;ctx.strokeRect(destX,ioY,destW,60);
+  ctx.fillStyle=C.orange;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Port 0x60',destX+destW/2,ioY+22);
+  ctx.fillText('PS/2 keyboard data reg',destX+destW/2,ioY+38);
+
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(destX,memY,destW,60);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1;ctx.strokeRect(destX,memY,destW,60);
+  ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';
+  ctx.fillText('0xB8000',destX+destW/2,memY+22);
+  ctx.fillText('VGA framebuffer cell',destX+destW/2,memY+38);
+
+  // RAM box below memory path to show it's the SAME bus
+  const ramX=destX+destW+20, ramW=W-ramX-20;
+  if(ramW>60){
+    ctx.fillStyle='rgba(74,222,128,.06)';ctx.fillRect(ramX,memY,ramW,60);
+    ctx.strokeStyle=C.green;ctx.setLineDash([3,3]);ctx.strokeRect(ramX,memY,ramW,60);
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.green;ctx.font='9px Source Code Pro,monospace';
+    ctx.fillText('ordinary RAM',ramX+ramW/2,memY+22);
+    ctx.fillText('lives right next door',ramX+ramW/2,memY+38);
+  }
+
+  const capt={
+    idle:'Choose an access type above',
+    issue:mode==='pmio'?'CPU decodes IN — routes request onto the DEDICATED I/O bus':'CPU decodes MOV — routes request onto the ORDINARY memory bus',
+    travel:mode==='pmio'?'Request travels a bus RAM never uses at all':'Request travels the exact same bus a stack variable would use',
+    arrive:mode==='pmio'?'Port 0x60 answers — one byte, the next scancode':'0xB8000 answers — one byte, a character cell',
+    done:mode==='pmio'?'No pointer was ever involved — ports are not addresses':'No special instruction was ever involved — it is JUST a pointer'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(capt[phase]||'',W/2,H-14);
+
+  // traveling dot
+  if(phase==='issue'||phase==='travel'||phase==='arrive'){
+    const targetY = mode==='pmio' ? ioY+20 : memY+20;
+    const startX=cpuX+cpuW, startY = mode==='pmio'?cpuY+cpuH*0.25:cpuY+cpuH*0.75;
+    let dx=startX,dy=startY;
+    if(phase==='issue'){dx=startX+(pathX1-startX)*0.15*t;dy=startY+(targetY-startY)*0.15*t;}
+    else if(phase==='travel'){dx=startX+(pathX1-startX)*(0.15+0.7*t);dy=startY+(targetY-startY)*(0.15+0.7*t);}
+    else if(phase==='arrive'){dx=pathX1+(destX+destW/2-pathX1)*t;dy=targetY;}
+    ctx.beginPath();ctx.arc(dx,dy,7,0,Math.PI*2);
+    ctx.fillStyle=mode==='pmio'?C.orange:C.cyan;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+}
+
+function runBus(mode){
+  const phases=['issue','travel','arrive','done'];
+  const durations=[400,500,450,600];
+  let idx=0,start=performance.now();
+  document.getElementById('busLabel').textContent = mode==='pmio'
+    ? '▶ Port-mapped: a dedicated instruction, a dedicated bus'
+    : '▶ Memory-mapped: an ordinary load, the ordinary bus';
+  function step(now){
+    const t=Math.min(1,(now-start)/durations[idx]);
+    drawBusScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('busLabel').textContent='▶ Done — try the other access type, or reset';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetBus(){
+  document.getElementById('busLabel').textContent='▶ Choose an access type';
+  drawBusScene(0,'idle','pmio');
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetBus(); });
+window.addEventListener('resize',()=>{ resetBus(); });
+</script>
+</body>
+</html>

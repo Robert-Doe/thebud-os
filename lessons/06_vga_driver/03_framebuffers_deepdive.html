@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>From Text-Mode Cells to Framebuffers — How Modern Graphics Took Over</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.4rem,5.6vw,4.6rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:740px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.green{border-color:var(--green);color:var(--green)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;color:#c4deff;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-list.red li::before{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.pipeline{display:flex;align-items:stretch;gap:.6rem;margin:1.8rem 0;overflow-x:auto;padding-bottom:.5rem;}
+.pipe-stage{flex:1;min-width:130px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem .9rem;text-align:center;position:relative;}
+.pipe-stage .pipe-icon{font-size:1.5rem;margin-bottom:.4rem;}
+.pipe-stage .pipe-name{font-family:'Source Code Pro',monospace;font-size:.78rem;color:var(--cyan);letter-spacing:.05em;margin-bottom:.3rem;}
+.pipe-stage .pipe-desc{font-size:.76rem;color:var(--muted);line-height:1.4;}
+.pipe-arrow{display:flex;align-items:center;color:var(--muted);font-size:1.2rem;flex-shrink:0;}
+@media(max-width:760px){.pipeline{flex-direction:column}.pipe-arrow{transform:rotate(90deg);justify-content:center;padding:.2rem 0;}}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#limitation" title="Text Mode's Ceiling"></a>
+  <a class="toc-dot" href="#mode13h" title="Mode 13h"></a>
+  <a class="toc-dot" href="#canvasdemo" title="Draw a Pixel"></a>
+  <a class="toc-dot" href="#linearfb" title="Linear Framebuffers"></a>
+  <a class="toc-dot" href="#gpus" title="GPUs Take Over"></a>
+  <a class="toc-dot" href="#browsertie" title="Browser Tie-In"></a>
+  <a class="toc-dot" href="#pitfalls" title="Pitfalls"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Bare-Metal Graphics · Framebuffers · GPU Command Buffers</div>
+    <h1>From Text Cells<br>to <span>Framebuffers</span></h1>
+    <p class="hero-sub">Everything so far has been characters in an 80×25 grid, painted by an ASCII code and a 4-bit color nibble. That's not a limitation of the trick you learned — memory-mapped I/O — it's a limitation of <em>text mode specifically</em>. The exact same trick, scaled up, is how every pixel on every modern display gets there too: one flat array of memory the CPU (or GPU) writes into directly, all the way from a single 2-byte cell to a 1080p framebuffer of eight million bytes.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">320×200</div><div class="lbl">Mode 13h resolution</div></div>
+      <div class="hero-stat"><div class="num">1 byte</div><div class="lbl">Per pixel in Mode 13h</div></div>
+      <div class="hero-stat"><div class="num">GOP</div><div class="lbl">UEFI's modern framebuffer handoff</div></div>
+      <div class="hero-stat"><div class="num">~8 MB</div><div class="lbl">1920×1080, 32-bit color framebuffer</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Same Trick, Bigger <span class="accent p">Canvas</span></h2>
+  <p class="reveal">Two lessons ago you learned the whole idea in miniature: the VGA card maps its display memory into your address space at <code>0xB8000</code>, and writing bytes there paints characters on screen. One lesson ago you learned that a second subsystem, the CRTC, controls things the character buffer can't — cursor position, and which slice of a larger buffer is currently visible.</p>
+  <p class="reveal">Both of those lessons were entirely about <strong>text mode</strong>: a grid of fixed-size character cells, each one either "blank" or "one of 256 glyphs from a built-in font, in one of 16 colors." That's an enormously useful mode for a kernel's early debug output — and also a real ceiling. This lesson is about what's on the other side of that ceiling, and why the underlying trick never actually changes.</p>
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Throughline for This Whole Module</div>
+    From a single 2-byte character cell at <code>0xB8000</code>, to a 320×200 byte-per-pixel canvas, to a full HD linear framebuffer, to a modern GPU's command buffer — it is <strong>memory-mapped I/O, over and over, at increasing scale and increasing indirection</strong>. Nothing about the core idea changes. What changes is how much the CPU is trusted to touch directly, and how much gets handed off to smarter hardware in between.
+  </div>
+</div>
+</section>
+
+<!-- TEXT MODE'S LIMITATION -->
+<section id="limitation">
+<div class="container">
+  <div class="section-num">01 — The Ceiling</div>
+  <h2>What Text Mode <span class="accent p">Can't</span> Do</h2>
+
+  <p class="reveal">Text mode's entire vocabulary is: pick one of 256 pre-drawn glyphs from a fixed hardware font, place it in one of 2,000 grid cells, color it with one of 16 foreground and 16 background colors. That's it. There is no way to light up an individual pixel that isn't part of a character shape. You cannot draw a diagonal line, a circle, a photograph, or even a smoothly curved font — the glyphs are whatever shapes the VGA card's built-in font ROM happens to contain, typically an 8×16 pixel grid per character, and you don't get to touch those pixels directly.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>🔤 Text Mode</h4>
+      Addressable unit: <strong>a character cell</strong>. You choose <em>which</em> pre-drawn glyph appears, not what shape it is. Perfect for a terminal. Structurally incapable of arbitrary art, photos, or smooth graphics.
+    </div>
+    <div class="compare-card good">
+      <h4>🖼️ Graphics Mode</h4>
+      Addressable unit: <strong>a single pixel</strong>. You choose the color of every individual dot on the display. Strictly more powerful — and, as you're about to see, in some ways strictly <em>simpler</em> to program against.
+    </div>
+  </div>
+
+  <p class="reveal">So the historical next step — for VGA hardware in the 1980s, and conceptually for every graphics system built since — was to stop addressing the screen in terms of "which glyph" and start addressing it in terms of "which pixel, what color." That's a <strong>graphics mode</strong>, and VGA shipped with several. The most famous one, for very good pedagogical reasons, is Mode 13h.</p>
+</div>
+</section>
+
+<!-- MODE 13H -->
+<section id="mode13h">
+<div class="container">
+  <div class="section-num">02 — VGA's Graphics Mode</div>
+  <h2>Mode 13h: <span class="accent p">320×200</span>, One Byte, One Pixel</h2>
+
+  <p class="reveal">Mode 13h (set via BIOS interrupt <code>int 0x10</code> with <code>AH=0x00, AL=0x13</code>, back when BIOS calls were still available in Real Mode) switches the VGA card into a <strong>320×200 pixel, 256-color</strong> linear framebuffer, still mapped at the very same physical base address you already know: <code>0xA0000</code> this time, rather than <code>0xB8000</code>.</p>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">0xA0000</div><div class="lbl">Mode 13h buffer address</div></div>
+    <div class="stat-card"><div class="val">320×200</div><div class="lbl">Pixels</div></div>
+    <div class="stat-card"><div class="val">64,000</div><div class="lbl">Total bytes (one per pixel)</div></div>
+    <div class="stat-card"><div class="val">256</div><div class="lbl">Colors, via a palette lookup</div></div>
+  </div>
+
+  <p class="reveal">Here's what makes Mode 13h a beloved teaching tool even forty years later: it is, in a real sense, <em>simpler</em> to program than text mode. There's no two-byte cell, no attribute nibble math, no font ROM standing between you and the screen. Every single byte in the buffer <strong>is</strong> one pixel — its value (0–255) is an index into a 256-entry color palette table, and that's the whole model.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">Mode 13h's Entire Addressing Formula</span>
+    offset = y × 320 + x
+    <span class="sub">No "× 2" at the end this time — one byte per pixel means the cell index and the byte offset are the exact same number.</span>
+  </div>
+
+  <pre><code>unsigned char *vram = (unsigned char *)0xA0000;
+
+/* set pixel (x, y) to palette color 4 (bright red, by default palette) */
+vram[y * 320 + x] = 4;
+
+/* a filled rectangle is now just a nested loop, no glyphs involved */
+for (int py = y0; py &lt; y1; py++)
+    for (int px = x0; px &lt; x1; px++)
+        vram[py * 320 + px] = color;</code></pre>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Genuinely Simpler, Not Just Different</div>
+    Compare this one-line pixel-set to the text-mode cell write from Lesson 1, which needed a character byte, a separate attribute byte, and a font ROM's cooperation to actually render anything recognizable. Mode 13h needs none of that — draw a line, draw a circle, blit a sprite, all with nothing but array indexing. This is a big reason retro game developers and OS-dev tutorials both gravitate toward Mode 13h: maximum visual capability for minimum conceptual overhead.
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Where does the color actually come from?</b> Each of the 256 possible byte values (0–255) is looked up in VGA's <strong>DAC palette</strong> — a small, separately-programmable table mapping index → actual RGB value. Change the palette table and the same stored pixel bytes instantly display completely different colors, without touching a single byte of the 64,000-byte framebuffer itself. It's the same "extra layer of indirection" idea you'll see again with GPU command buffers later in this lesson.
+  </div>
+</div>
+</section>
+
+<!-- CANVAS DEMO -->
+<section id="canvasdemo">
+<div class="container">
+  <div class="section-num">03 — See It Happen</div>
+  <h2>Setting a Pixel in <span class="accent p">Mode 13h</span>, Live</h2>
+
+  <p class="reveal">Same pattern as the character-cell demo from Lesson 1 — but watch how much shorter the path from "byte write" to "visible result" has become. There's no attribute byte, no font lookup, no second write at all.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="pixelLabel">▶ Choose a pixel to set</div>
+    <canvas id="pixelCanvas" height="320"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runPixel(60,40,'#f87171','4 (red)')">▶ Set pixel (60, 40) to palette index 4 — red</button>
+    <button class="ctrl-btn cyan" onclick="runPixel(200,120,'#38bdf8','9 (light blue)')">▶ Set pixel (200, 120) to palette index 9 — light blue</button>
+    <button class="ctrl-btn red" onclick="resetPixel()">Reset</button>
+  </div>
+
+  <ol class="step-list reveal">
+    <li><div class="step-body"><strong>1 — Compute the offset</strong><code>offset = y * 320 + x</code>. One multiply, one add — no ×2, because a byte and a pixel are now the same size.</div></li>
+    <li><div class="step-body"><strong>2 — One single store</strong><code>vram[offset] = palette_index</code>. That's the entire write. No second byte, no font, no attribute nibble.</div></li>
+    <li><div class="step-body"><strong>3 — DAC palette lookup, in hardware</strong>The VGA DAC translates the stored index into an actual RGB triple using its currently-loaded palette table — a lookup that happens continuously, in hardware, every time that byte is scanned out.</div></li>
+    <li><div class="step-body"><strong>4 — The pixel appears</strong>Exactly one dot on the 320×200 grid lights up in the resolved color. Do this 64,000 times (once per byte) and you've drawn an entire frame.</div></li>
+  </ol>
+</div>
+</section>
+
+<!-- LINEAR FRAMEBUFFERS -->
+<section id="linearfb">
+<div class="container">
+  <div class="section-num">04 — The Real Modern Picture</div>
+  <h2>Linear Framebuffers: <span class="accent p">VESA, GOP</span>, and Beyond</h2>
+
+  <p class="reveal">Mode 13h is real, historically important, and still runs in QEMU today — but 320×200 with 256 colors is a museum piece next to a modern 1920×1080 (or 4K) full-color display. The idea scales up perfectly cleanly, though: a <strong>linear framebuffer</strong> is exactly the same concept — one flat array, one memory address per pixel — just at a resolution and color depth firmware is willing to hand you today.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Era / Standard</th><th>Who Hands You the Framebuffer</th><th>Typical Format</th></tr></thead>
+      <tbody>
+        <tr><td>VGA Mode 13h</td><td>BIOS <code>int 0x10</code></td><td>320×200, 1 byte/pixel, palette-indexed</td></tr>
+        <tr><td class="hl">VESA VBE (historical)</td><td>Legacy BIOS, via VBE calls</td><td>Up to ~1600×1200, 3–4 bytes/pixel, direct RGB</td></tr>
+        <tr><td class="hl">UEFI GOP (Graphics Output Protocol)</td><td>UEFI firmware, before OS boot</td><td>Native panel resolution, 4 bytes/pixel (typically 0xAARRGGBB or 0xAABBGGRR)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">The mechanism is conceptually identical to what you already know, just with a crucial handoff step added: instead of a hardwired legacy address like <code>0xB8000</code>, the <strong>bootloader or firmware queries the graphics hardware</strong>, sets up a framebuffer of a resolution and format it chooses (or negotiates with your kernel), and then tells your kernel <em>where that framebuffer lives in physical memory</em> — because on modern hardware, that address isn't fixed or predictable in advance the way legacy VGA's was.</p>
+
+  <div class="formula cyan reveal">
+    <span class="label">The Same Offset Formula, Scaled Up</span>
+    offset = (y × width + x) × bytes_per_pixel
+    <span class="sub">Identical shape to the text-mode formula from Lesson 1 — only the constants changed. 80 became "width" (often 1920). 2 bytes/cell became 4 bytes/pixel (one byte each for red, green, blue, and often alpha/padding).</span>
+  </div>
+
+  <pre><code>/* A GOP-style 32bpp linear framebuffer, handed to the kernel by
+   the bootloader as a base address + width + height + pitch. */
+struct framebuffer {
+    uint32_t *pixels;   /* base address, e.g. from a UEFI GOP query */
+    uint32_t  width;    /* e.g. 1920 */
+    uint32_t  height;   /* e.g. 1080 */
+    uint32_t  pitch;    /* bytes per row — may exceed width*4! */
+};
+
+void fb_set_pixel(struct framebuffer *fb, int x, int y, uint32_t rgb) {
+    uint32_t *row = (uint32_t *)((uint8_t *)fb-&gt;pixels + y * fb-&gt;pitch);
+    row[x] = rgb;
+}</code></pre>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Why "Pitch" and Not Just width × 4?</div>
+    Real hardware often pads each row to a convenient alignment boundary for performance reasons, so a row can occupy more bytes than the visible pixels strictly need. The <strong>pitch</strong> (also called "stride") is the real per-row byte size, and a kernel that assumes <code>pitch == width * bytes_per_pixel</code> will draw a subtly slanted, corrupted image on hardware where that assumption is false. Always use the pitch firmware actually reports.
+  </div>
+
+  <p class="reveal">It's worth pausing to feel just how far the "same idea" has scaled, in raw bytes, across the eras covered in this lesson:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Buffer</th><th>Resolution</th><th>Bytes/Pixel</th><th>Total Size</th></tr></thead>
+      <tbody>
+        <tr><td>VGA text mode</td><td>80×25 cells</td><td>2 (char+attr)</td><td class="hl">4,000 B</td></tr>
+        <tr><td>Mode 13h</td><td>320×200</td><td>1 (palette idx)</td><td class="hl">64,000 B (~63 KB)</td></tr>
+        <tr><td>VESA VBE, 1024×768</td><td>1024×768</td><td>3 (RGB)</td><td class="hl">~2.36 MB</td></tr>
+        <tr><td>UEFI GOP, 1920×1080</td><td>1920×1080</td><td>4 (RGBA/BGRA)</td><td class="gold">~8.29 MB</td></tr>
+        <tr><td>UEFI GOP, 4K UHD</td><td>3840×2160</td><td>4 (RGBA/BGRA)</td><td class="gold">~33.18 MB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Nearly a ten-thousand-fold jump in buffer size from a text-mode kernel console to a 4K framebuffer — and the addressing formula from Lesson 1, <code>(row × width + col) × bytes_per_cell</code>, still describes every single one of them without modification.</p>
+
+  <div class="sidenote reveal">
+    <b>Why did VESA VBE give way to UEFI GOP?</b> VESA VBE calls were still routed through legacy BIOS interrupt conventions — 16-bit real-mode-style calls, awkward to invoke from a 32/64-bit Protected/Long Mode kernel without dropping back to real mode or emulating it. UEFI's GOP is a native, modern, callable-from-64-bit-code protocol that firmware exposes directly during boot, before your bootloader even calls <code>ExitBootServices()</code> — no real-mode gymnastics required. It's the direct modern descendant of the same idea, just with the legacy friction removed.
+  </div>
+</div>
+</section>
+
+<!-- GPUS -->
+<section id="gpus">
+<div class="container">
+  <div class="section-num">05 — Where It All Leads</div>
+  <h2>Modern GPUs: Abstracting the <span class="accent p">Framebuffer</span> Away</h2>
+
+  <p class="reveal">Everything so far — text cells, Mode 13h pixels, linear framebuffers — has one thing in common: the CPU itself computes every pixel and writes it with an ordinary store instruction. That's exactly how a kernel's early boot splash screen or a simple bootloader logo still works today. But it is <em>not</em> how a modern desktop, game, or web browser puts pixels on screen — that path goes through a GPU, and the CPU barely touches individual pixels at all anymore.</p>
+
+  <p class="reveal">A modern GPU doesn't want the CPU writing one pixel at a time — that would be catastrophically slow for millions of pixels, sixty-plus times a second. Instead, the CPU writes a much smaller, much higher-level stream of <strong>drawing commands</strong> — "draw this triangle list with this texture and this shader" — into a region of memory called a <strong>command buffer</strong>, and the GPU itself reads that stream and does the actual pixel-by-pixel work, in parallel, across thousands of tiny cores.</p>
+
+  <div class="pipeline reveal">
+    <div class="pipe-stage"><div class="pipe-icon">🖊️</div><div class="pipe-name">CPU</div><div class="pipe-desc">Builds a list of draw commands + vertex/texture data</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">📋</div><div class="pipe-name">Command Buffer</div><div class="pipe-desc">Shared memory region the GPU reads commands from</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">⚙️</div><div class="pipe-name">GPU Driver</div><div class="pipe-desc">Translates commands into the GPU's native instruction stream</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🧮</div><div class="pipe-name">GPU Cores</div><div class="pipe-desc">Thousands of parallel units rasterize triangles into pixels</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-stage"><div class="pipe-icon">🖥️</div><div class="pipe-name">Framebuffer</div><div class="pipe-desc">GPU writes final pixels here — still, underneath it all, an MMIO buffer</div></div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 The Layer Changed. The Trick Didn't.</div>
+    Even at the very bottom of a modern GPU pipeline, after every shader and every triangle has been rasterized, the <em>final</em> step is still exactly the trick this entire lesson set has been teaching: a flat array of pixel memory that the display hardware scans out to your monitor. The GPU just moved the "who computes each pixel" job away from the CPU and onto thousands of specialized cores — the destination is still, fundamentally, a framebuffer.
+  </div>
+
+  <p class="reveal">This is also precisely why command buffers are so often built on <strong>shared memory</strong> rather than passed message-by-message: the CPU (in a userspace driver or the kernel's GPU driver) and the GPU need to read and write the same command stream without paying a syscall or IPC round-trip per draw call, the exact same shared-memory trade-off you may have already met when two OS processes need to exchange large, frequent data.</p>
+</div>
+</section>
+
+<!-- BROWSER TIE-IN -->
+<section id="browsertie">
+<div class="container">
+  <div class="section-num">06 — Tying It Back</div>
+  <h2>This Is Exactly What Your <span class="accent p">Browser's GPU Process</span> Does</h2>
+
+  <p class="reveal">If you've traced through how Chromium renders a page, this should feel familiar rather than new: the renderer process doesn't draw pixels itself. It builds a display list of drawing commands — "paint this rectangle, draw this text run, composite this layer" — and hands that list to the browser's dedicated <strong>GPU process</strong> through a shared command buffer, exactly the pattern from the pipeline diagram above, just one layer higher up the stack.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Same Idea, Every Layer of the Stack</div>
+    Your kernel writes a character byte into <code>0xB8000</code>. A DOS game writes a palette-index byte into <code>0xA0000</code>. A modern OS driver writes RGBA pixels into a UEFI GOP framebuffer. A browser's GPU process issues draw commands that eventually rasterize into a framebuffer the display scans out. Four completely different eras of technology, one repeated idea: <strong>expose a chunk of memory, let someone write into it, and something downstream turns those bytes into light</strong>.
+  </div>
+
+  <p class="reveal">The layers of indirection have grown enormously — from "the CPU directly touches video RAM" to "the CPU asks a GPU, through a driver, through a command buffer, to eventually touch video RAM" — but the foundational primitive at the very bottom of every one of those stacks has never actually gone away. It's the same idea you started this module with: memory-mapped I/O, so ubiquitous it disappears into the plumbing of everything built on top of it.</p>
+</div>
+</section>
+
+<!-- PITFALLS -->
+<section id="pitfalls">
+<div class="container">
+  <div class="section-num">07 — Common Pitfalls</div>
+  <h2>Things That Bite Everyone <span class="accent p">Once</span></h2>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Assuming 0xA0000 and 0xB8000 Coexist</div>
+    Text mode and Mode 13h are <em>different VGA modes</em>, not two buffers you can write simultaneously. Switching into Mode 13h reprograms the CRTC and DAC away from the text-mode configuration entirely — writes to <code>0xB8000</code> stop producing readable text the moment you switch modes. A kernel that wants both a graphical splash screen and a text console has to explicitly switch modes back and forth, or commit to graphics mode and draw its own text by hand-blitting a font (which is exactly what real GUI-era OSes eventually do).</div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">🐢 Byte-at-a-Time Pixel Loops Get Slow, Fast</div>
+    64,000 individual byte stores for one Mode 13h frame is trivial for a CPU. But a 1080p, 32-bit linear framebuffer is roughly <strong>8 million bytes per frame</strong> — filling or clearing it one pixel at a time in a naive loop is measurably slower than a bulk operation. Real drivers lean on wide stores (writing 4 or 8 bytes at once), <code>memset</code>-style fills, or — once you have one — offload the work to the GPU entirely rather than touching every byte from the CPU.</div>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Pixel Format Is Not Universal</div>
+    "32-bit color" doesn't pin down byte order. UEFI GOP can hand you <code>0xXXRRGGBB</code> or <code>0xXXBBGGRR</code> depending on the mode the firmware chose, and a kernel that assumes one when the hardware provides the other draws images with red and blue channels swapped — a subtle bug that looks like a color-calibration issue rather than a logic error. Always read the firmware-reported pixel format struct; never hardcode it.</div>
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">08 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent p">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Graphics Mode</div><div class="glossary-def">Any video mode where the addressable unit is an individual pixel rather than a pre-drawn character cell — Mode 13h being VGA's classic example.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Mode 13h</div><div class="glossary-def">VGA's 320×200, 256-color, one-byte-per-pixel graphics mode, mapped at physical address 0xA0000 and set via BIOS int 0x10.</div></div>
+    <div class="glossary-card"><div class="glossary-term">DAC Palette</div><div class="glossary-def">A small, separately programmable lookup table mapping each stored pixel-index byte to an actual RGB color, used by palette-indexed modes like Mode 13h.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Linear Framebuffer</div><div class="glossary-def">A flat, contiguous block of memory where each pixel's color is stored directly (not palette-indexed), addressed by a simple row/column/pitch formula.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Pitch / Stride</div><div class="glossary-def">The real number of bytes per row in a framebuffer, which may exceed width × bytes-per-pixel due to hardware row alignment padding.</div></div>
+    <div class="glossary-card"><div class="glossary-term">VESA VBE</div><div class="glossary-def">A historical BIOS extension standard for querying and setting high-resolution linear framebuffer video modes from legacy real-mode-style BIOS calls.</div></div>
+    <div class="glossary-card"><div class="glossary-term">UEFI GOP</div><div class="glossary-def">Graphics Output Protocol — the modern UEFI firmware service that hands a kernel or bootloader a linear framebuffer address, resolution, and pixel format, without legacy BIOS calls.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Command Buffer</div><div class="glossary-def">A shared-memory region where a CPU writes high-level drawing commands for a GPU to read and execute, avoiding per-draw-call syscall or IPC overhead.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Rasterization</div><div class="glossary-def">The GPU process of converting geometric shapes (like triangles) into actual colored pixels in a framebuffer.</div></div>
+    <div class="glossary-card"><div class="glossary-term">GPU Process (Browser)</div><div class="glossary-def">Chromium's dedicated process for turning renderer-issued draw commands into actual pixels via the GPU, using the same command-buffer / shared-memory pattern as native graphics drivers.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>From Text-Mode Cells to Framebuffers: How Modern Graphics Took Over · Companion lesson for bob_os module 03_vga_driver</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Memory-mapped I/O, all the way down.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── MODE 13H PIXEL WRITE CANVAS ──────────────────────────────────────────────
+let lastPixel={x:60,y:40,color:'#f87171',idx:'4 (red)'};
+
+function drawPixelScene(t,phase,target){
+  const canvas=document.getElementById('pixelCanvas');
+  const W=gW(canvas),H=320;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const off = target.y*320+target.x;
+
+  // top: single-byte memory strip
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('RAM near 0x'+(0xA0000+off).toString(16).toUpperCase()+'  (Mode 13h framebuffer, 1 byte = 1 pixel)',12,24);
+
+  const stripY=40, boxW=48, boxH=40, gap=5, n=9, startX=(W-(n*(boxW+gap)-gap))/2;
+  for(let i=0;i<n;i++){
+    const bx=startX+i*(boxW+gap);
+    const isTarget = i===4;
+    let fill='rgba(255,255,255,.03)', stroke=C.border, label='··';
+    if(isTarget){
+      label = (phase==='write'||phase==='dac'||phase==='render') ? target.idx.split(' ')[0] : '??';
+      if(phase==='write' && t<1){ fill='rgba(167,139,250,'+(0.15+0.3*t)+')'; stroke=C.purple; }
+      else if(phase==='dac'||phase==='render'){ fill='rgba(167,139,250,.2)'; stroke=C.purple; }
+    }
+    ctx.fillStyle=fill;ctx.fillRect(bx,stripY,boxW,boxH);
+    ctx.strokeStyle=stroke;ctx.lineWidth=1.3;ctx.strokeRect(bx,stripY,boxW,boxH);
+    ctx.fillStyle= isTarget?C.purple:C.muted;
+    ctx.font='12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(label,bx+boxW/2,stripY+boxH/2+4);
+  }
+
+  // middle: offset math + DAC lookup
+  const mathY=118;
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('offset = y × 320 + x',12,mathY);
+  ctx.fillStyle= phase==='compute'? C.gold : C.text;
+  ctx.font='13px Source Code Pro,monospace';
+  ctx.fillText('= '+target.y+' × 320 + '+target.x+' = '+off+'  →  0xA0000 + 0x'+off.toString(16).toUpperCase()+' = 0x'+(0xA0000+off).toString(16).toUpperCase(),12,mathY+22);
+
+  if(phase==='dac'||phase==='render'){
+    ctx.fillStyle=C.purple;ctx.font='bold 11px Source Code Pro,monospace';
+    ctx.fillText('DAC palette lookup:  index '+target.idx+'  →  RGB '+target.color,12,mathY+46);
+  }
+
+  // bottom: mini pixel grid
+  const gridY=200, cellSize=Math.min(16,(W-40)/32), cols=32, rows=6;
+  const gx0=(W-cols*cellSize)/2;
+  ctx.fillStyle=C.muted;ctx.font='bold 11px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('320×200 canvas (cropped view)',12,gridY-10);
+  const tr = Math.min(Math.floor(target.y/8), rows-1);
+  const tc = Math.min(Math.floor(target.x/8), cols-1);
+  for(let r=0;r<rows;r++){
+    for(let cIdx=0;cIdx<cols;cIdx++){
+      const cx=gx0+cIdx*cellSize, cy=gridY+r*cellSize;
+      let fill='rgba(255,255,255,.02)';
+      ctx.strokeStyle='rgba(255,255,255,.04)';
+      if(r===tr && cIdx===tc && phase==='render'){
+        fill = target.color;
+        ctx.globalAlpha = 0.35+0.65*t;
+      } else {
+        ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle=fill;ctx.fillRect(cx,cy,cellSize-1,cellSize-1);
+      ctx.globalAlpha=1;
+      ctx.strokeRect(cx,cy,cellSize-1,cellSize-1);
+    }
+  }
+
+  const captions={
+    idle:'Pick a pixel above to begin',
+    compute:'Step 1 — computing offset = y × 320 + x',
+    write:'Step 2 — one single store: vram[offset] = palette_index',
+    dac:'Step 3 — VGA DAC hardware resolves the index to an RGB color',
+    render:'Step 4 — the pixel appears on the 320×200 canvas'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-10);
+}
+
+function runPixel(x,y,color,idx){
+  lastPixel={x,y,color,idx};
+  const phases=['compute','write','dac','render'];
+  const durations=[500,500,550,650];
+  let idxI=0,start=performance.now();
+  document.getElementById('pixelLabel').textContent='▶ Setting pixel ('+x+', '+y+') to palette index '+idx;
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idxI]);
+    drawPixelScene(t,phases[idxI],lastPixel);
+    if(t>=1){
+      idxI++;
+      if(idxI>=phases.length){
+        document.getElementById('pixelLabel').textContent='▶ Done — one byte, one pixel, no font involved. Try the other pixel, or Reset.';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetPixel(){
+  document.getElementById('pixelLabel').textContent='▶ Choose a pixel to set';
+  drawPixelScene(0,'idle',lastPixel);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetPixel(); });
+window.addEventListener('resize',()=>{ resetPixel(); });
+</script>
+</body>
+</html>

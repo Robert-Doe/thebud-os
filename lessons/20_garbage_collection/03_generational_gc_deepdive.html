@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generational GC and Write Barriers — Why Most Objects Die Young</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(167,139,250,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--purple);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--purple)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:700px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--purple);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--purple);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--purple)}
+h2 .accent.c{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.r{color:var(--red)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--purple);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--purple);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--purple)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--purple);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(167,139,250,.15);border:1.5px solid var(--purple);color:var(--purple);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(167,139,250,.1);border:1.5px solid var(--purple);color:var(--purple);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(167,139,250,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:var(--purple);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+.compare-card.purple h4{color:var(--purple)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--purple);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;align-items:center;padding:.8rem 1rem;font-family:'Source Code Pro',monospace;font-size:.72rem;color:var(--muted);border-top:1px solid var(--border);}
+.legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:.4rem;vertical-align:middle;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Where We Left Off"></a>
+  <a class="toc-dot" href="#hypothesis" title="The Hypothesis"></a>
+  <a class="toc-dot" href="#split" title="Splitting the Heap"></a>
+  <a class="toc-dot" href="#promotion" title="Promotion"></a>
+  <a class="toc-dot" href="#problem" title="The Tricky Problem"></a>
+  <a class="toc-dot" href="#writebarrier" title="Write Barriers"></a>
+  <a class="toc-dot" href="#live" title="See It Run"></a>
+  <a class="toc-dot" href="#v8" title="V8 Uses This"></a>
+  <a class="toc-dot" href="#compare" title="Minor vs Major"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Garbage Collection Theory · Engine-Agnostic Foundations · bob_os Lesson 20</div>
+    <h1>Generational GC<br><span>and Write Barriers</span></h1>
+    <p class="hero-sub">Mark-and-sweep works, but a naive version does the same amount of work on every single collection: scan the whole live set, walk the whole heap. Real programs have a wildly lopsided pattern hiding in their allocations — one so consistent across languages and decades that GC designers built an entire architecture around exploiting it. That architecture creates one genuinely subtle correctness problem of its own, and a small, elegant piece of bookkeeping that solves it.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">~98%</div><div class="lbl">Typical Objects That Die Young</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Heap Regions: Young &amp; Old</div></div>
+      <div class="hero-stat"><div class="num">1984</div><div class="lbl">Year Ungar Formalized Generation Scavenging</div></div>
+      <div class="hero-stat"><div class="num">1</div><div class="lbl">Line of Bookkeeping Per Pointer Write</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 0: RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>Two Strategies Down, <span class="accent">One Optimization to Go</span></h2>
+
+  <p class="reveal">Two lessons ago: mark-and-sweep, the baseline tracing algorithm — flood outward from roots, mark what's reachable, sweep away what isn't. One lesson ago: reference counting, a completely different strategy with its own fatal blind spot around cycles. This lesson stays inside the tracing-GC family from lesson one, but asks a different question entirely: mark-and-sweep is <em>correct</em>, but is it <em>efficient</em>? Specifically — does it do more work than it needs to, every single time it runs?</p>
+
+  <p class="reveal">The answer is yes, dramatically so, and the fix is one of the most impactful ideas in the whole history of automatic memory management: <strong>generational garbage collection</strong>. This lesson builds it from first principles, the same way the mark-and-sweep lesson built that algorithm from the bare reachability definition. If you've already read the V8 deep-dive in the Browser X-Ray series, the shape of this is going to look familiar — that's not a coincidence, and we'll come back to exactly why near the end.</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">📦 What This Lesson Deliberately Skips</div>
+    This is the general, engine-agnostic theory — true of generational collectors going back to 1980s Lisp and Smalltalk systems, long before any of today's JavaScript engines existed. For V8's <em>specific</em> implementation — the Scavenger, semi-space copying, the Orinoco concurrent/incremental work — see <code>02_browser_xray/03_v8_deepdive.html</code>. Read this lesson first; that one is this lesson applied to one real engine's specific numbers and code names.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 1: HYPOTHESIS -->
+<section id="hypothesis">
+<div class="container">
+  <div class="section-num">01 — The Empirical Observation</div>
+  <h2>The <span class="accent">Generational Hypothesis</span></h2>
+
+  <p class="reveal">Think about what a typical running program actually allocates, moment to moment. A loop that builds up a result computes several small intermediate values per iteration — almost all of them discarded the instant the next iteration starts. A function call allocates a stack frame's worth of local objects that exist only for the duration of that call. A request handler builds up temporary parsing structures that are irrelevant the microsecond the response is sent. Meanwhile, a much smaller category of objects — a cache, a piece of long-lived application state, a data structure built once at startup — sticks around for the entire life of the program.</p>
+
+  <div class="formula purple reveal">
+    <span class="label">The generational hypothesis, stated plainly</span>
+    In most real programs, the overwhelming majority of allocated objects become garbage almost immediately.
+    <br>A small minority survive for a very long time.
+    <span class="sub">This was first formalized and exploited by David Ungar's 1984 "generation scavenging" work on Smalltalk-80 — and it has held up remarkably consistently across languages, workloads, and four decades of software since.</span>
+  </div>
+
+  <p class="reveal">This isn't a guess or a rule of thumb pulled from nowhere — it's been measured, repeatedly, across an enormous range of real programs, and it holds up with striking consistency: allocate a huge number of objects, and the large majority of them are already dead by the time you'd get around to checking again a fraction of a second later. That skew is the single fact the entire architecture in this lesson is built to exploit.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">💡 Why a Naive Collector Wastes This Fact</div>
+    Recall from the mark-and-sweep lesson: sweep cost is proportional to the <em>total</em> number of objects in the heap, live or dead, because it has to visit every single one to check its mark bit. If 98% of your heap's objects are already garbage on any given collection, a naive full-heap sweep is spending the overwhelming majority of its time confirming, one object at a time, something the generational hypothesis already told you was overwhelmingly likely: yes, this one's dead too.
+  </div>
+
+  <pre class="reveal"><span class="tag">Where the skew actually comes from</span><code><span class="kw">function</span> <span class="fn">sumOfSquares</span>(numbers) {
+  <span class="kw">let</span> total = <span class="num">0</span>;
+  <span class="kw">for</span> (<span class="kw">const</span> n <span class="kw">of</span> numbers) {
+    <span class="kw">const</span> <span class="var">squared</span> = { value: n * n };   <span class="cm">// allocated fresh, every single iteration</span>
+    total += squared.value;
+    <span class="cm">// `squared` becomes unreachable the INSTANT this iteration ends —</span>
+    <span class="cm">// nothing outside the loop body ever sees it. It was garbage before</span>
+    <span class="cm">// the loop even finished running.</span>
+  }
+  <span class="kw">return</span> total;                        <span class="cm">// `total` is the one value that actually escapes the loop</span>
+}
+
+<span class="cm">// One loop over 100,000 numbers: 100,000 short-lived allocations,</span>
+<span class="cm">// exactly ONE value (`total`) that has any chance of surviving past the</span>
+<span class="cm">// function returning. This ratio — a torrent of throwaway intermediate</span>
+<span class="cm">// objects around a trickle of things that actually matter later — is</span>
+<span class="cm">// completely ordinary code, not a contrived worst case.</span></code></pre>
+</div>
+</section>
+
+<!-- SECTION 2: SPLIT -->
+<section id="split">
+<div class="container">
+  <div class="section-num">02 — The Architecture This Motivates</div>
+  <h2>Split the Heap: <span class="accent">Young</span> and <span class="accent c">Old</span></h2>
+
+  <p class="reveal">If most objects die almost immediately, the fix writes itself: don't scan the whole heap every time. Carve out a small region — the <strong>young generation</strong> (sometimes called the <strong>nursery</strong>) — where every new object is born, and collect <em>only that small region</em>, extremely frequently. Because it's small, each of these <strong>minor collections</strong> is fast — you're only ever scanning a slice of the heap, not the whole thing.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Young Generation</span><span class="fam-count">small, frequent</span></div>
+      <div class="fam-desc">Where every new object is allocated. Collected very often — because it's small, each collection is cheap, and because the generational hypothesis says most of what's in here is already dead, most of the work is reclaiming, not preserving.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25)">minor GC</span><span class="feat-pill" style="background:rgba(167,139,250,.1);color:var(--purple);border:1px solid rgba(167,139,250,.25)">nursery</span></div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Old Generation</span><span class="fam-count">large, infrequent</span></div>
+      <div class="fam-desc">Where objects that have proven they're long-lived end up. Collected rarely, with a full, thorough pass — because it's large, each collection here is expensive, so the whole design is built around minimizing how often it has to happen.</div>
+      <div class="feat-list"><span class="feat-pill" style="background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25)">major GC</span><span class="feat-pill" style="background:rgba(56,189,248,.1);color:var(--cyan);border:1px solid rgba(56,189,248,.25)">tenured space</span></div>
+    </div>
+  </div>
+
+  <div class="formula cyan reveal">
+    <span class="label">Why this beats one uniform collector</span>
+    Naive full-heap collection cost ∝ total heap size, on <em>every single</em> collection
+    <br>Generational collection cost ≈ (small nursery scan, very often) + (large full scan, very rarely)
+    <span class="sub">You do the cheap thing constantly and the expensive thing as infrequently as you can get away with — instead of always paying the expensive thing's price.</span>
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: PROMOTION -->
+<section id="promotion">
+<div class="container">
+  <div class="section-num">03 — Earning Your Way Out of the Nursery</div>
+  <h2><span class="accent">Promotion</span>: Proving You're a Survivor</h2>
+
+  <p class="reveal">The young generation can't just grow forever — it has to stay small to stay cheap to collect. So what happens to the minority of young objects that keep surviving collection after collection instead of dying quickly like the hypothesis predicts? They get <strong>promoted</strong> (also called <strong>tenured</strong>) — moved out of the young generation and into the old generation, typically after surviving some small number of minor collections (a common threshold is something like two or three survivals, though the exact number is a tuning knob, not a law of nature).</p>
+
+  <div class="step-list reveal">
+    <li><div class="step-body"><strong>Object is allocated in the young generation.</strong> Like almost everything else, it starts here — allocation is fast and always goes into the nursery first.</div></li>
+    <li><div class="step-body"><strong>A minor collection runs.</strong> If the object is still reachable, it survives this pass — the collector notes it lived through one collection.</div></li>
+    <li><div class="step-body"><strong>It survives a second (or third) minor collection.</strong> Repeated survival is treated as evidence the object doesn't fit the "dies young" pattern — it's behaving like the minority the hypothesis said would stick around.</div></li>
+    <li><div class="step-body"><strong>It gets promoted into the old generation.</strong> From here on, it's only examined during the much rarer, more thorough old-generation collection — the young generation stops paying any attention to it at all on future minor collections.</div></li>
+  </div>
+
+  <p class="reveal">This is a bet, not a proof — the collector is speculating, based on observed survival, that an object which has lived this long is likely to keep living, so it's worth moving somewhere that gets scanned less often. Like most bets in GC design (recall TurboFan's type speculation, if you've read the V8 lesson), it's cheap to be wrong about occasionally and enormously valuable to be right about most of the time.</p>
+
+  <h3>When the Bet Goes Wrong: Premature Promotion</h3>
+
+  <p class="reveal">Sometimes the bet is wrong, and it's worth naming the failure mode because it's a well-known, recurring headache in generational collector design. An object can survive two or three minor collections purely by unlucky timing — it happened to be allocated right before a collection ran, rather than because it's genuinely long-lived — and get promoted into the old generation anyway. This is called <strong>premature promotion</strong>, and it has a cost beyond just "one wrong guess": once an object is in the old generation, it's only reclaimed by the rare, expensive major collection, even if it actually becomes garbage moments later. Worse, an object that gets promoted early can drag other objects it references along with it — a phenomenon sometimes called the <strong>nepotism problem</strong>, where a genuinely short-lived object survives an extra collection or two purely because something else, prematurely promoted, happens to be holding a reference to it.</p>
+
+  <div class="sidenote reveal">
+    <b>Why not just make the young generation bigger, to reduce these mistakes?</b> That trades one problem for another. A bigger nursery does mean more time for genuinely short-lived objects to die before a minor collection ever has to judge them — fewer premature promotions. But it also means each minor collection takes longer (more memory to scan for survivors) and nurseries fill up more slowly, so you collect less often — eroding exactly the "small and frequent" property that made minor collections cheap in the first place. Real collectors tune the nursery size and promotion threshold as a deliberate, measured trade-off, not a "bigger is always better" knob.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 4: THE PROBLEM -->
+<section id="problem">
+<div class="container">
+  <div class="section-num">04 — The Genuinely Tricky Part</div>
+  <h2>The Problem Splitting the Heap <span class="accent r">Creates</span></h2>
+
+  <p class="reveal">Here's the catch, and it's a real correctness problem, not just a performance nuance. A minor collection is fast specifically <em>because</em> it only scans the young generation — it doesn't want to pay the cost of walking the entire old generation just to find roots, every single time it runs (that would defeat the whole point of splitting the heap in the first place).</p>
+
+  <p class="reveal">But reachability doesn't respect the boundary you just drew. Consider this sequence: an object <code>Old</code> has already been promoted, and now sits happily in the old generation. Later, ordinary program execution creates a brand-new object, <code>Young</code>, in the nursery — and then does something completely mundane: <code>Old.field = Young</code>. Now <code>Old</code>, sitting in the old generation, holds the <em>only</em> reference to <code>Young</code>, sitting in the young generation.</p>
+
+  <div class="formula red reveal">
+    <span class="label">The scenario that breaks a naive minor collection</span>
+    Young is reachable — via Old.field — but Old lives in the region the minor collector doesn't scan.
+    <span class="sub">If the minor collector's root set is only "globals, stack, registers, and nothing else," it will never discover the Old → Young edge, conclude Young is unreachable, and free an object that is very much still in use.</span>
+  </div>
+
+  <p class="reveal">That's not a slowdown — that's a correctness bug indistinguishable, from the running program's point of view, from the use-after-free bugs the whole point of automatic GC was supposed to eliminate. The young generation's scan is fast precisely because it ignores the old generation — but ignoring the old generation completely means missing exactly the references that originate there and point back into the young generation.</p>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ Why You Can't Just "Also Scan the Old Generation"</div>
+    That's the obvious fix, and it's exactly the thing generational GC exists to avoid — if every minor collection has to fully scan the (large, slow) old generation for cross-generational pointers, you've just recreated the cost of a full-heap collection on every minor collection, and gained nothing over the naive single-generation collector from two lessons ago. The fix has to find old-to-young references <em>without</em> re-scanning the entire old generation each time.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: WRITE BARRIER -->
+<section id="writebarrier">
+<div class="container">
+  <div class="section-num">05 — The Fix</div>
+  <h2><span class="accent">Write Barriers</span>: Catching the Moment It Happens</h2>
+
+  <p class="reveal">The insight that solves this: you don't need to go looking for old-to-young references by scanning — you just need to notice the <em>exact instant</em> one is created, and jot it down. That reference was created by one specific action: a pointer write, somewhere in the running program's code, that just stored a young-generation address into an old-generation object's field. If the runtime intercepts <em>every</em> pointer write and checks "did this just make an old object point at a young one?", it can catch every single case, cheaply, as it happens — instead of re-deriving the same information later by brute-force scanning.</p>
+
+  <p class="reveal">That interception is called a <strong>write barrier</strong>: a small piece of bookkeeping code the compiler or runtime inserts around every pointer-field assignment, everywhere in the program, without exception.</p>
+
+  <pre class="reveal"><span class="tag">Pseudocode</span><code><span class="kw">function</span> <span class="fn">setField</span>(obj, fieldName, newValue) {
+  obj[fieldName] = newValue;               <span class="cm">// the ordinary pointer write itself</span>
+
+  <span class="cm">// ── THE WRITE BARRIER — inserted on EVERY pointer write, no exceptions ──</span>
+  <span class="kw">if</span> (obj.generation == OLD <span class="kw">and</span> newValue.generation == YOUNG) {
+    rememberedSet.add(obj);                <span class="cm">// record: "obj now points into the young generation"</span>
+  }
+}
+
+<span class="kw">function</span> <span class="fn">minorCollection</span>() {
+  <span class="kw">const</span> roots = globals.concat(stackAndRegisters);
+  roots = roots.concat(rememberedSet);     <span class="cm">// old objects that point young count as EXTRA roots</span>
+  <span class="fn">markPhase</span>(roots, youngGenerationOnly=<span class="kw">true</span>);
+  <span class="fn">sweepPhase</span>(youngGenerationOnly=<span class="kw">true</span>);
+}</code></pre>
+
+  <p class="reveal">The set of old-generation objects flagged this way is usually called the <strong>remembered set</strong> (some real implementations track it at a coarser granularity — dividing old-gen memory into fixed-size "cards" and marking a whole card dirty rather than tracking individual objects, an optimization called <strong>card marking</strong> — but the core idea is identical). On every minor collection, the young-generation collector treats the remembered set as <em>additional roots</em>, on top of the usual globals/stack/registers. It never has to scan the old generation to build this list — the write barrier already built it incrementally, one cheap check at a time, exactly when each cross-generational pointer was created.</p>
+
+  <div class="callout green reveal">
+    <div class="callout-title">✅ Why This Is Cheap Enough to Do on Every Write</div>
+    The write barrier's check is small and constant-time: "is the object I just wrote into old, and is the value I just wrote young?" — two field reads and a comparison, nowhere near as expensive as a scan. Paying that tiny, constant cost on every single pointer write is a genuinely good trade for never having to scan the entire old generation on every minor collection — which is exactly the trade that makes generational GC's core promise (fast, frequent young-gen collections) actually deliver on its promise, correctly.
+  </div>
+
+  <h3>Card Marking: The Coarser, Cheaper Real-World Version</h3>
+
+  <p class="reveal">Tracking a precise remembered set of "exactly which objects contain a young pointer" adds a set data structure that itself has to be maintained, resized, and scanned. Many real collectors trade a little precision for a lot of simplicity using <strong>card marking</strong>: divide the entire old generation into small, fixed-size chunks called <strong>cards</strong> (a common size is a few hundred bytes to a few kilobytes), and keep one dirty bit per card in a flat array — the <strong>card table</strong>.</p>
+
+  <pre class="reveal"><span class="tag">Pseudocode — card-marking write barrier</span><code><span class="kw">function</span> <span class="fn">setField</span>(obj, fieldName, newValue) {
+  obj[fieldName] = newValue;
+
+  <span class="kw">if</span> (obj.generation == OLD <span class="kw">and</span> newValue.generation == YOUNG) {
+    <span class="kw">const</span> cardIndex = <span class="fn">addressToCard</span>(obj);   <span class="cm">// which card does obj's address fall inside?</span>
+    cardTable[cardIndex] = DIRTY;             <span class="cm">// mark the WHOLE card, not just this one object</span>
+  }
+}
+
+<span class="kw">function</span> <span class="fn">minorCollection</span>() {
+  <span class="kw">const</span> roots = globals.concat(stackAndRegisters);
+  <span class="kw">for</span> (card <span class="kw">of</span> cardTable) {
+    <span class="kw">if</span> (card == DIRTY) {
+      roots = roots.concat(<span class="fn">objectsInCard</span>(card));  <span class="cm">// scan just this card's contents, not the whole old gen</span>
+    }
+  }
+  <span class="fn">markPhase</span>(roots, youngGenerationOnly=<span class="kw">true</span>);
+  <span class="fn">sweepPhase</span>(youngGenerationOnly=<span class="kw">true</span>);
+}</code></pre>
+
+  <p class="reveal">The trade is explicit: card marking is less precise (a minor collection now has to re-scan every object inside a dirty card, not just the exact object that wrote a young reference — some of that re-scanning turns out to be unnecessary) but far cheaper to maintain (a single bit flip per write, into a flat array with excellent cache behavior, instead of inserting into a general-purpose set). For most real workloads, that trade comes out favorably enough that card marking, in some form, is the more common real-world write barrier implementation.</p>
+</div>
+</section>
+
+<!-- SECTION 6: LIVE CANVAS -->
+<section id="live">
+<div class="container">
+  <div class="section-num">06 — See It Run</div>
+  <h2>An Old Object Reaches Into the <span class="accent">Nursery</span></h2>
+
+  <p class="reveal">Watch the exact scenario from a few sections ago play out: an already-promoted old-generation object writes a reference to a fresh young object, the write barrier catches it, and the next minor collection correctly keeps the young object alive using the remembered set as an extra root. Then compare what would happen without the barrier.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="wbLabel">▶ Click to run Old.field = Young, then a minor collection</div>
+    <canvas id="wbCanvas" height="380"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--gold)"></span>Root</span>
+      <span><span class="dot" style="background:var(--cyan)"></span>Old Generation</span>
+      <span><span class="dot" style="background:var(--purple)"></span>Young Generation</span>
+      <span><span class="dot" style="background:var(--green)"></span>Kept Alive Correctly</span>
+      <span><span class="dot" style="background:var(--red)"></span>Wrongly Freed (no barrier)</span>
+    </div>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runWB(true)">▶ Run WITH Write Barrier</button>
+    <button class="ctrl-btn red" onclick="runWB(false)">▶ Run WITHOUT Write Barrier (buggy)</button>
+    <button class="ctrl-btn cyan" onclick="resetWB()">Reset</button>
+  </div>
+
+  <p class="reveal">With the barrier: the moment <code>Old.field = Young</code> executes, the barrier fires and adds <code>Old</code> to the remembered set. When the minor collection runs, it scans the ordinary roots <em>plus</em> the remembered set, finds the path Old → Young, and correctly keeps Young alive. Without the barrier: the minor collection only scans the ordinary roots, never discovers the Old → Young edge because Old itself is never scanned, and frees Young — even though a live, promoted object still holds a perfectly valid pointer to it. That's a self-inflicted dangling pointer, created entirely by the optimization meant to make collection faster.</p>
+</div>
+</section>
+
+<!-- SECTION 7: V8 TIE-IN -->
+<section id="v8">
+<div class="container">
+  <div class="section-num">07 — Same Idea, One Layer Down</div>
+  <h2>This Is <span class="accent">Exactly</span> What V8 Does</h2>
+
+  <p class="reveal">Everything in this lesson — the young/old split, promotion after surviving a couple of collections, and a write-barrier-fed remembered set catching old-to-young references — is not a simplified toy version of what real engines do. It's the literal architecture used by V8, the JavaScript engine covered in <code>02_browser_xray/03_v8_deepdive.html</code>. That lesson names V8's specific pieces: the <strong>Scavenger</strong> as the young-generation collector (implemented as a copying collector between two semi-spaces, a specific technique for <em>how</em> to reclaim the young generation that this lesson didn't need in order to explain <em>why</em> the split exists at all), and a mark-sweep-compact pass for the old generation, with V8's Orinoco project spending years making that expensive old-generation pass run incrementally and concurrently so it blocks the main thread less.</p>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🔁 What Changed Between the Two Lessons, and What Didn't</div>
+    The V8 lesson describes <em>this exact strategy</em>, with V8's real names, real thresholds, and real engineering trade-offs bolted on. Nothing about the underlying reasoning is different — the generational hypothesis, the young/old split, promotion, and the write-barrier fix for cross-generational references are the general theory this whole architecture is built from, in any language, in any era. V8 is simply one very well-engineered, very real instance of applying it.
+  </div>
+
+  <p class="reveal">This is a useful pattern to notice in general: a huge fraction of what looks like "V8-specific cleverness" in a real engine turns out to be a well-known general GC technique, applied carefully. Learning the general theory first — like you just did — means the next real engine's GC section of documentation reads as "oh, that's generational collection" rather than as an unfamiliar wall of proper nouns.</p>
+</div>
+</section>
+
+<!-- SECTION 8: COMPARE -->
+<section id="compare">
+<div class="container">
+  <div class="section-num">08 — Side by Side</div>
+  <h2>Minor Collection <span class="accent">vs.</span> Major Collection</h2>
+
+  <p class="reveal">Worth having the two collection types side by side — the entire architecture exists to make you pay the row on the right as rarely as possible.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Property</th><th>Minor Collection (Young Gen)</th><th>Major Collection (Old Gen)</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Region scanned</td><td class="hl">Small nursery only</td><td>Entire old generation — large</td></tr>
+        <tr><td class="gold">Frequency</td><td class="hl">Very often — nursery fills fast</td><td>Rare — old gen fills slowly</td></tr>
+        <tr><td class="gold">Typical pause length</td><td class="pos">Short</td><td class="neg">Longer, unless incremental/concurrent</td></tr>
+        <tr><td class="gold">Root set used</td><td>Globals + stack/registers + remembered set</td><td>Globals + stack/registers (full scan anyway)</td></tr>
+        <tr><td class="gold">Needs write barrier data?</td><td class="hl">Yes — to catch old→young references</td><td>No — it scans everything directly anyway</td></tr>
+        <tr><td class="gold">What survives moves to</td><td>Stays young, or gets promoted to old gen</td><td>Stays in old gen (may be compacted in place)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card good">
+      <h4>✅ What Generational GC Buys You</h4>
+      Collection cost tracks the (small) amount of work actually needed most of the time, instead of the (large) total heap size every single time — because the generational hypothesis says most heap objects don't need re-checking on every pass in the first place.
+    </div>
+    <div class="compare-card bad">
+      <h4>⚠️ What It Costs You</h4>
+      A small, constant per-write overhead everywhere in the program (the write barrier check), extra bookkeeping memory for the remembered set, and real implementation complexity — getting the barrier wrong is a correctness bug, not just a slowdown, exactly as shown above.
+    </div>
+  </div>
+
+  <div class="stat-grid reveal">
+    <div class="stat-card"><div class="val">🌱</div><div class="lbl">Nursery collections are cheap and constant</div></div>
+    <div class="stat-card"><div class="val">🏛️</div><div class="lbl">Old-gen collections are rare and expensive</div></div>
+    <div class="stat-card"><div class="val">✍️</div><div class="lbl">Every pointer write pays one small barrier check</div></div>
+    <div class="stat-card"><div class="val">🎯</div><div class="lbl">Correctness depends on the barrier catching every case</div></div>
+  </div>
+
+  <p class="reveal">None of this is free architecture — it's a deliberate, load-bearing trade, engineered specifically around one empirical fact about how real programs allocate memory. Change that fact (a workload that allocates almost nothing short-lived, for instance) and the whole justification for splitting the heap this way weakens considerably. Generational GC isn't universally correct engineering — it's extremely good engineering for the specific, extremely common shape of allocation behavior the hypothesis describes.</p>
+</div>
+</section>
+
+<!-- SECTION 9: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">09 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">Generational Hypothesis</div><div class="glossary-def">The empirical observation that most allocated objects die almost immediately, while a small minority survive a long time — the premise this entire architecture is built to exploit.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Young Generation (Nursery)</div><div class="glossary-def">The small heap region where every new object is allocated, collected frequently because it's cheap to scan.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Old Generation (Tenured Space)</div><div class="glossary-def">The larger heap region holding objects that have proven long-lived, collected rarely with a thorough full pass.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Promotion (Tenuring)</div><div class="glossary-def">Moving an object from the young generation into the old generation after it survives some number of minor collections.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Minor GC</div><div class="glossary-def">A collection that scans only the young generation (plus the remembered set as extra roots) — fast, frequent.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Major GC</div><div class="glossary-def">A full collection of the old generation — slow, infrequent, and the reason generational splitting exists in the first place.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Write Barrier</div><div class="glossary-def">Bookkeeping code inserted on every pointer write that detects when an old-generation object starts referencing a young-generation object.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Remembered Set</div><div class="glossary-def">The set of old-generation objects (or memory regions) flagged by the write barrier as containing a reference into the young generation — used as extra roots during minor GC.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cross-Generational Reference</div><div class="glossary-def">A pointer from an object in one generation into another — specifically old-to-young references are the ones a minor collection would otherwise miss.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Card Marking</div><div class="glossary-def">A common optimization of the remembered set: dividing old-gen memory into fixed-size "cards" and marking a whole card dirty on a write, instead of tracking individual objects.</div></div>
+  </div>
+
+  <div class="callout gold reveal" style="margin-top:2rem">
+    <div class="callout-title">🎯 The One-Sentence Summary</div>
+    <strong>Because most objects die almost immediately, splitting the heap into a small, frequently-collected young generation and a large, rarely-collected old generation makes the common case cheap — but doing that safely requires a write barrier to catch the one case a young-only scan would otherwise miss: an old object that has just started pointing at a young one.</strong>
+  </div>
+
+  <p class="reveal" style="margin-top:1.5rem;color:var(--muted);font-size:.95rem">Across this three-lesson arc: mark-and-sweep gave you the correctness rule (reachability), reference counting showed you a different, locally-computed approximation of that same rule and exactly where it breaks (cycles), and generational GC showed you how to make the correct rule fast in practice without sacrificing correctness — provided you're careful about exactly where the boundary you drew can be silently violated. That's the whole shape of garbage collector design: pick a rule, then earn back the performance the naive version of that rule leaves on the table.</p>
+</div>
+</section>
+
+<footer>
+  <p>Generational GC and Write Barriers · bob_os Lesson 20 · Garbage Collection Theory</p>
+  <p style="margin-top:.5rem;font-size:.78rem">A companion lesson for <a href="../../browser/B09_garbage_collector/tutorial.html">bob_os/browser module B09_garbage_collector</a>.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── WRITE BARRIER CANVAS ────────────────────────────────────────────────────
+function drawWBScene(state){
+  const canvas=document.getElementById('wbCanvas');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  // region boxes
+  const oldX=W*0.06, oldW=W*0.4, youngX=W*0.58, youngW=W*0.36, boxY=H*0.14, boxH=H*0.62;
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.setLineDash([]);
+  ctx.strokeRect(oldX,boxY,oldW,boxH);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('OLD GENERATION',oldX+oldW/2,boxY-10);
+
+  ctx.strokeStyle=C.purple;
+  ctx.strokeRect(youngX,boxY,youngW,boxH);
+  ctx.fillStyle=C.purple;
+  ctx.fillText('YOUNG GENERATION',youngX+youngW/2,boxY-10);
+
+  const rootX=W*0.5, rootY=H*0.06;
+  const oldObjX=oldX+oldW*0.5, oldObjY=boxY+boxH*0.45;
+  const youngObjX=youngX+youngW*0.5, youngObjY=boxY+boxH*0.45;
+
+  // root -> old edge
+  ctx.strokeStyle='rgba(245,200,66,.6)';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(rootX,rootY+10);ctx.lineTo(oldObjX,oldObjY-30);ctx.stroke();
+
+  // Old -> Young edge (only after the write happens)
+  if(state.edgeExists){
+    ctx.strokeStyle= state.remembered ? C.green : 'rgba(122,155,191,.5)';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(oldObjX+28,oldObjY);ctx.lineTo(youngObjX-28,youngObjY);ctx.stroke();
+  }
+
+  // root box
+  ctx.strokeStyle=C.gold;ctx.lineWidth=2;
+  ctx.strokeRect(rootX-30,rootY-14,60,26);
+  ctx.fillStyle='rgba(245,200,66,.15)';ctx.fillRect(rootX-30,rootY-14,60,26);
+  ctx.fillStyle=C.gold;ctx.font='bold 10px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('ROOT',rootX,rootY+4);
+
+  // Old object node
+  ctx.beginPath();ctx.arc(oldObjX,oldObjY,30,0,Math.PI*2);
+  ctx.fillStyle='rgba(56,189,248,.15)';ctx.fill();
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Old',oldObjX,oldObjY+4);
+
+  // remembered-set flag near Old
+  if(state.remembered){
+    ctx.fillStyle=C.green;ctx.font='bold 9px Source Code Pro,monospace';
+    ctx.fillText('IN REMEMBERED SET',oldObjX,oldObjY+48);
+  }
+
+  // Young object node
+  let yCol=C.purple, yFill='rgba(167,139,250,.15)';
+  if(state.youngFreed){ yCol=C.red; yFill='rgba(248,113,113,.15)'; }
+  else if(state.youngKept){ yCol=C.green; yFill='rgba(74,222,128,.15)'; }
+  const scale = state.youngFreed && state.freeFade!=null ? (1-state.freeFade*0.6) : 1;
+  const alpha = state.youngFreed && state.freeFade!=null ? (1-state.freeFade) : 1;
+  ctx.globalAlpha=alpha;
+  ctx.beginPath();ctx.arc(youngObjX,youngObjY,28*scale,0,Math.PI*2);
+  ctx.fillStyle=yFill;ctx.fill();
+  ctx.strokeStyle=yCol;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle=yCol;ctx.font='bold 12px Source Code Pro,monospace';
+  ctx.fillText('Young',youngObjX,youngObjY+4);
+  ctx.globalAlpha=1;
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(state.caption||'',W/2,H-14);
+  ctx.fillStyle=C.muted;ctx.font='11px Lato,sans-serif';
+  ctx.fillText(state.subcaption||'',W/2,H-34);
+}
+
+function runWB(withBarrier){
+  const label=document.getElementById('wbLabel');
+  const phases=withBarrier ? [
+    {dur:600,fn:s=>{s.caption='Old (already promoted) allocates a fresh reference: Old.field = Young';s.subcaption='';}},
+    {dur:600,fn:s=>{s.edgeExists=true;s.caption='Write barrier fires: old-gen object just started pointing into young gen';s.subcaption='';}},
+    {dur:600,fn:s=>{s.remembered=true;s.caption='Old added to the remembered set';s.subcaption='No old-generation scan was needed to know this — the barrier caught it inline.';}},
+    {dur:700,fn:s=>{s.caption='Minor collection runs: roots = globals/stack/registers + remembered set';s.subcaption='';}},
+    {dur:700,fn:s=>{s.youngKept=true;s.caption='Young found reachable via Old (from remembered set) → correctly kept alive';s.subcaption='';}},
+  ] : [
+    {dur:600,fn:s=>{s.caption='Old (already promoted) allocates a fresh reference: Old.field = Young';s.subcaption='';}},
+    {dur:600,fn:s=>{s.edgeExists=true;s.caption='(No write barrier — nothing records this reference anywhere)';s.subcaption='';}},
+    {dur:700,fn:s=>{s.caption='Minor collection runs: roots = globals/stack/registers only';s.subcaption='The old generation is never scanned — that\'s the whole point of a minor GC being fast.';}},
+    {dur:800,fn:s=>{s.youngFreed=true;s.freeFade=0;s.caption='Young is unreachable BY THIS SCAN\'S LOGIC → incorrectly freed';s.subcaption='Old still holds a pointer to it. This is a self-inflicted dangling pointer.';}},
+  ];
+
+  const state={edgeExists:false,remembered:false,youngKept:false,youngFreed:false,freeFade:null,caption:'',subcaption:''};
+  let idx=0,start=performance.now();
+  label.textContent = withBarrier ? '▶ Running with write barrier…' : '▶ Running WITHOUT write barrier (buggy)…';
+  function step(now){
+    const ph=phases[idx];
+    const t=Math.min(1,(now-start)/ph.dur);
+    ph.fn(state);
+    if(state.youngFreed) state.freeFade=t;
+    drawWBScene(state);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        label.textContent = withBarrier
+          ? '▶ Correct: Young survives, exactly as it should — click Reset to try the buggy version'
+          : '▶ Bug reproduced: Young was freed while still referenced — click Reset to try the safe version';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function resetWB(){
+  document.getElementById('wbLabel').textContent='▶ Click to run Old.field = Young, then a minor collection';
+  drawWBScene({edgeExists:false,remembered:false,youngKept:false,youngFreed:false,freeFade:null,caption:'Old is already promoted. Young was just allocated in the nursery.',subcaption:''});
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetWB(); });
+window.addEventListener('resize',()=>{ resetWB(); });
+</script>
+</body>
+</html>

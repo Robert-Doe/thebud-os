@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORS — A Deliberate, Server-Controlled Hole in the Same-Origin Policy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(56,189,248,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);color:var(--cyan);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--cyan)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--cyan);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--cyan);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--cyan)}
+h2 .accent.g{color:var(--green)}
+h2 .accent.o{color:var(--orange)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.cyan{border-color:var(--cyan);color:var(--cyan)}
+.formula.purple{border-color:var(--purple);color:var(--purple)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre .tag{position:absolute;top:.6rem;right:1rem;font-family:'Source Code Pro',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--bg3);padding:.2rem .6rem;border-radius:4px;}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;line-height:1.9;}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cm{color:#546e7a;font-style:italic}.cls{color:#ffcb6b}.var{color:var(--cyan)}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.87rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red)} td.gold{color:var(--gold)}
+td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(56,189,248,.15);border:1.5px solid var(--cyan);color:var(--cyan);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(56,189,248,.1);border:1.5px solid var(--cyan);color:var(--cyan);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(56,189,248,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.red{border-color:var(--red);color:var(--red);background:rgba(248,113,113,.08);}
+.ctrl-btn.red:hover{background:rgba(248,113,113,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+.ctrl-btn.purple{border-color:var(--purple);color:var(--purple);background:rgba(167,139,250,.08);}
+.ctrl-btn.purple:hover{background:rgba(167,139,250,.18);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:1.8rem 0;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem;text-align:center;}
+.stat-card .val{font-family:'Source Code Pro',monospace;font-size:1.7rem;font-weight:700;color:var(--cyan);margin-bottom:.3rem;}
+.stat-card .lbl{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.75rem;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--cyan);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;margin-bottom:.8rem;}
+.feat-list{display:flex;flex-wrap:wrap;gap:.4rem;}
+.feat-pill{font-family:'Source Code Pro',monospace;font-size:.72rem;padding:.2rem .55rem;border-radius:3px;white-space:nowrap;}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+footer a{color:var(--cyan);text-decoration:none;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+.header-row{display:flex;gap:.8rem;align-items:baseline;font-family:'Source Code Pro',monospace;font-size:.85rem;padding:.4rem 0;border-bottom:1px dashed var(--border);}
+.header-row:last-child{border-bottom:none}
+.header-name{color:var(--cyan);min-width:280px;flex-shrink:0;}
+.header-val{color:var(--muted)}
+.header-block{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.5rem;margin:1.5rem 0;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#whyneeded" title="Why Cross-Origin Is Normal"></a>
+  <a class="toc-dot" href="#howcors" title="How CORS Works"></a>
+  <a class="toc-dot" href="#simple" title="Simple Requests"></a>
+  <a class="toc-dot" href="#preflight" title="Preflighted Requests"></a>
+  <a class="toc-dot" href="#sim" title="Preflight Simulation"></a>
+  <a class="toc-dot" href="#headers" title="Header Reference"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">Web Platform Security · Cross-Origin Resource Sharing · bob_os Lesson 18.2</div>
+    <h1>CORS: A Deliberate Hole<br><span>In The Wall</span></h1>
+    <p class="hero-sub">The Same-Origin Policy locks the door by default — but plenty of legitimate web apps genuinely need <code>app.example.com</code> to talk to <code>api.example.com</code>. Someone had to build a doorbell. That's CORS: a set of response headers that let a <strong>server</strong>, not the browser, decide which other origins are allowed to read its responses. And here's the part almost everyone gets wrong at first: the request usually still fires. CORS doesn't stop the server from being asked — it stops the browser from handing the answer back to the script that asked.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">ACAO</div><div class="lbl">Access-Control-Allow-Origin</div></div>
+      <div class="hero-stat"><div class="num">OPTIONS</div><div class="lbl">The Preflight Method</div></div>
+      <div class="hero-stat"><div class="num">Server</div><div class="lbl">Decides, Not Browser</div></div>
+      <div class="hero-stat"><div class="num">2</div><div class="lbl">Request Kinds: Simple / Preflighted</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- SECTION 1: WHY NEEDED -->
+<section id="whyneeded">
+<div class="container">
+  <div class="section-num">01 — The Legitimate Need</div>
+  <h2>Cross-Origin Requests Are <span class="accent">Completely Normal</span></h2>
+
+  <p class="reveal">Lesson 18.1 covered the threat SOP defends against — but modern web architecture routinely, deliberately, splits itself across origins for perfectly good engineering reasons, and SOP's default "block everything" stance would break all of it if there were no escape hatch.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--cyan)">Frontend / API Split</span><span class="fam-count">most common</span></div>
+      <div class="fam-desc"><code>app.example.com</code> serves the React/Vue frontend from a CDN or static host; <code>api.example.com</code> runs the actual backend on entirely different infrastructure. Different origins, same product.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--teal)">Third-Party APIs</span><span class="fam-count">common</span></div>
+      <div class="fam-desc">A weather widget on your site calling <code>api.weatherco.com</code> directly from browser JavaScript, rather than proxying through your own backend.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--purple)">Microservice Frontends</span><span class="fam-count">growing</span></div>
+      <div class="fam-desc">Large products split into independently deployed sub-apps on different subdomains, each calling several shared internal APIs from the browser.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name" style="color:var(--gold)">Local Dev Tooling</span><span class="fam-count">everyday</span></div>
+      <div class="fam-desc">A frontend dev server on <code>localhost:3000</code> calling a backend on <code>localhost:8080</code> — technically cross-origin the instant the ports differ.</div>
+    </div>
+  </div>
+
+  <p class="reveal">Every one of these is a case where the request is completely legitimate and expected — the server <em>wants</em> to serve that other origin's JavaScript. SOP has no way to know that on its own; by default it just sees "different origin" and blocks the read. CORS exists to let the server say, explicitly, in its own response: "this one's fine, let it through."</p>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 Head First Moment</div>
+    Think of SOP as a locked door with no doorbell — by default, nobody outside gets in, no matter who they are. CORS installs a doorbell and an intercom on that same door. The server (whoever's inside) still decides who gets buzzed in, on a visitor-by-visitor basis, by checking a name against a list. The door doesn't unlock itself; the resident does, deliberately, every time.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 2: HOW CORS WORKS -->
+<section id="howcors">
+<div class="container">
+  <div class="section-num">02 — The Core Mechanism</div>
+  <h2>Who Actually Checks <span class="accent">The Header?</span></h2>
+
+  <p class="reveal">This is the single most important — and most misunderstood — fact about CORS: <strong>the browser enforces it, not the server.</strong> The server's only job is to include (or not include) a response header. What happens next is entirely up to the browser reading that header.</p>
+
+  <div class="step-list reveal">
+    <li>
+      <div class="step-body">
+        <strong>1. JavaScript on app.example.com calls fetch("https://api.example.com/data")</strong>
+        The browser sees this is cross-origin (different host from the calling page) and flags the request for a CORS check.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>2. The browser sends the request — often for real, over the network</strong>
+        For "simple" requests (defined next section), the browser does not wait for permission first. It just sends the request, with an added <code>Origin: https://app.example.com</code> header identifying the caller.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>3. api.example.com's server processes the request completely normally</strong>
+        The server has no idea, and doesn't need to know, whether the requester is "allowed" — it just does its job and sends a response, optionally including CORS headers like <code>Access-Control-Allow-Origin: https://app.example.com</code>.
+      </div>
+    </li>
+    <li>
+      <div class="step-body">
+        <strong>4. The browser inspects the response headers before handing anything to JavaScript</strong>
+        It compares the calling page's origin against whatever <code>Access-Control-Allow-Origin</code> says. Match → the response is handed to the calling script. No match, or header missing entirely → the response is thrown away, and the JavaScript's <code>fetch()</code> promise rejects with a CORS error.
+      </div>
+    </li>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ The Server Already Did The Work</div>
+    Notice something uncomfortable in step 3: for a "simple" GET request, the server has already fully processed it — read a database, maybe even written to one — by the time the browser gets around to deciding whether JavaScript is allowed to see the result. CORS is not a request firewall. If a request has a side effect (like triggering an action on GET, which is bad practice but exists in the wild), that side effect already happened, headers or no headers. CORS only ever protects the <em>read</em> of the response, exactly like SOP.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 3: SIMPLE REQUESTS -->
+<section id="simple">
+<div class="container">
+  <div class="section-num">03 — The Easy Case</div>
+  <h2><span class="accent g">Simple</span> Requests</h2>
+
+  <p class="reveal">Not every cross-origin request gets the full preflight treatment. The CORS spec carves out a category of "simple requests" — ones that look enough like what an HTML <code>&lt;form&gt;</code> could already do before <code>fetch()</code> even existed — and lets those go straight through with just the after-the-fact header check described above. No extra round trip.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Condition</th><th>Requirement To Stay "Simple"</th></tr></thead>
+      <tbody>
+        <tr><td class="gold">Method</td><td><code>GET</code>, <code>HEAD</code>, or <code>POST</code> only</td></tr>
+        <tr><td class="gold">Content-Type</td><td>Only <code>application/x-www-form-urlencoded</code>, <code>multipart/form-data</code>, or <code>text/plain</code></td></tr>
+        <tr><td class="gold">Custom headers</td><td>None — no <code>Authorization</code>, no custom <code>X-*</code> headers, nothing beyond a small browser-managed allowlist</td></tr>
+        <tr><td class="gold">No ReadableStream body, no manual upload progress listeners</td><td>Otherwise disqualified automatically</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="header-block reveal">
+    <div class="header-row"><span class="header-name">→ Request</span><span class="header-val">GET /api/public-prices HTTP/1.1</span></div>
+    <div class="header-row"><span class="header-name">Host</span><span class="header-val">api.example.com</span></div>
+    <div class="header-row"><span class="header-name">Origin</span><span class="header-val">https://app.example.com</span></div>
+    <div class="header-row"><span class="header-name">← Response</span><span class="header-val">200 OK</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Allow-Origin</span><span class="header-val">https://app.example.com</span></div>
+    <div class="header-row"><span class="header-name">Content-Type</span><span class="header-val">application/json</span></div>
+  </div>
+
+  <p class="reveal">One request, one response, one header check on the way back in. The browser sent the <code>Origin</code> header automatically (JavaScript can't set or override this itself), the server echoed an allowlisted origin back in <code>Access-Control-Allow-Origin</code>, they matched, and the promise resolves with real data.</p>
+</div>
+</section>
+
+<!-- SECTION 4: PREFLIGHT -->
+<section id="preflight">
+<div class="container">
+  <div class="section-num">04 — The Careful Case</div>
+  <h2><span class="accent o">Preflighted</span> Requests</h2>
+
+  <p class="reveal">Anything that doesn't qualify as "simple" — a <code>PUT</code> or <code>DELETE</code>, a JSON body with <code>Content-Type: application/json</code>, an <code>Authorization</code> header carrying a bearer token — triggers a completely different flow. Before the browser sends the real request at all, it fires off a separate, automatic <strong>preflight request</strong> using the <code>OPTIONS</code> HTTP method, purely to ask permission.</p>
+
+  <div class="header-block reveal">
+    <div class="header-row"><span class="header-name">→ Preflight</span><span class="header-val">OPTIONS /api/orders/42 HTTP/1.1</span></div>
+    <div class="header-row"><span class="header-name">Host</span><span class="header-val">api.example.com</span></div>
+    <div class="header-row"><span class="header-name">Origin</span><span class="header-val">https://app.example.com</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Request-Method</span><span class="header-val">DELETE</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Request-Headers</span><span class="header-val">authorization, content-type</span></div>
+    <div class="header-row"><span class="header-name">← Preflight Response</span><span class="header-val">204 No Content</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Allow-Origin</span><span class="header-val">https://app.example.com</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Allow-Methods</span><span class="header-val">GET, POST, PUT, DELETE</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Allow-Headers</span><span class="header-val">authorization, content-type</span></div>
+    <div class="header-row"><span class="header-name">Access-Control-Max-Age</span><span class="header-val">600</span></div>
+  </div>
+
+  <p class="reveal">Only <em>after</em> the browser sees a preflight response that authorizes the exact method and exact headers it's about to use does it fire the real <code>DELETE /api/orders/42</code> request. If the preflight response is missing, doesn't list <code>DELETE</code> in <code>Access-Control-Allow-Methods</code>, or doesn't list <code>authorization</code> in <code>Access-Control-Allow-Headers</code> — the real request is <strong>never sent at all</strong>. This is the one case where CORS does stop the network call itself, not just the read, because the preflight is a distinct, side-effect-free <code>OPTIONS</code> request that the browser controls end to end.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">🔑 Access-Control-Max-Age Exists To Avoid Doing This Twice</div>
+    Sending a full extra round trip before every single state-changing request would be slow. <code>Access-Control-Max-Age: 600</code> tells the browser it can cache this exact preflight's answer (for this origin, method, and header combination) for 600 seconds, skipping the <code>OPTIONS</code> call entirely for follow-up requests within that window.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 5: SIMULATION -->
+<section id="sim">
+<div class="container">
+  <div class="section-num">05 — Watch It Happen</div>
+  <h2>Simple vs. Preflight, <span class="accent">Side by Side</span></h2>
+
+  <p class="reveal">Run each scenario below and watch exactly what crosses the network, and when the browser makes its decision. Notice which one involves two full round trips before any real work happens.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="corsLabel">▶ Choose a request type to simulate</div>
+    <canvas id="corsCanvas" height="360"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn green" onclick="runCORS('simple-ok')">▶ Simple GET — Header Present</button>
+    <button class="ctrl-btn red" onclick="runCORS('simple-blocked')">▶ Simple GET — Header Missing</button>
+    <button class="ctrl-btn cyan" onclick="runCORS('preflight-ok')">▶ PUT — Preflight Passes</button>
+    <button class="ctrl-btn purple" onclick="runCORS('preflight-blocked')">▶ DELETE — Preflight Fails</button>
+    <button class="ctrl-btn" onclick="resetCORS()">Reset</button>
+  </div>
+
+  <div class="sidenote reveal">
+    <b>Why doesn't a missing-header "simple" request also get pre-checked?</b> Because a bare GET/POST with a simple body is something a plain HTML <code>&lt;form&gt;</code> could always have sent, with or without JavaScript, since before CORS existed. Blocking it outright would have broken the entire pre-existing web. So the spec's compromise: let it fire, but withhold the response if the server didn't explicitly authorize the read.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 6: HEADER REFERENCE -->
+<section id="headers">
+<div class="container">
+  <div class="section-num">06 — Reference</div>
+  <h2>The CORS Header <span class="accent">Vocabulary</span></h2>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Header</th><th>Sent By</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Origin</td><td>Browser</td><td>Identifies the calling page's origin. Automatically attached; JavaScript cannot forge or override it.</td></tr>
+        <tr><td class="hl">Access-Control-Allow-Origin</td><td>Server</td><td>The single origin (or literal <code>*</code>) whose scripts are allowed to read this response.</td></tr>
+        <tr><td class="hl">Access-Control-Allow-Methods</td><td>Server (preflight response)</td><td>Which HTTP methods are authorized for the real request.</td></tr>
+        <tr><td class="hl">Access-Control-Allow-Headers</td><td>Server (preflight response)</td><td>Which non-simple request headers are authorized.</td></tr>
+        <tr><td class="hl">Access-Control-Allow-Credentials</td><td>Server</td><td>Must be exactly <code>true</code> for the browser to expose a response to a request sent with cookies/credentials. Cannot be paired with a wildcard ACAO.</td></tr>
+        <tr><td class="hl">Access-Control-Expose-Headers</td><td>Server</td><td>By default JS can only read a small safelist of response headers; this widens what <code>fetch()</code>'s <code>Response.headers</code> can see.</td></tr>
+        <tr><td class="hl">Access-Control-Max-Age</td><td>Server (preflight response)</td><td>How long, in seconds, the browser may cache this preflight result before re-asking.</td></tr>
+        <tr><td class="hl">Access-Control-Request-Method</td><td>Browser (preflight request)</td><td>The method the real request intends to use — what's being asked for permission.</td></tr>
+        <tr><td class="hl">Vary: Origin</td><td>Server</td><td>Not CORS-specific, but critical when ACAO reflects the request's Origin — tells shared caches/CDNs not to serve one origin's cached allowance to a different origin.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">⚠️ A Wildcard Plus Credentials Is Explicitly Forbidden</div>
+    <code>Access-Control-Allow-Origin: *</code> together with <code>Access-Control-Allow-Credentials: true</code> is invalid by spec, and modern browsers refuse to honor it — because "any origin in the world may read this, including your logged-in cookies" is precisely the hole SOP was built to prevent. A server that wants both credentialed requests and multiple allowed origins must dynamically echo back one specific origin per request (from a real allowlist) rather than using a blanket wildcard — and must add <code>Vary: Origin</code> when doing so.
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 Worth Remembering</div>
+    CORS headers only ever <em>relax</em> SOP — they cannot make a page more restrictive than SOP's default. There's no header a server can send to further lock down same-origin JavaScript; that's not what this mechanism is for. CORS is purely additive permission, granted per-response, checked fresh by the browser every time.
+  </div>
+</div>
+</section>
+
+<!-- SECTION 7: GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">CORS</div><div class="glossary-def">Cross-Origin Resource Sharing — a set of response headers that let a server opt in to letting specific other origins' JavaScript read its responses.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Simple Request</div><div class="glossary-def">A cross-origin request narrow enough (GET/HEAD/POST, simple content type, no custom headers) to be sent immediately, checked only via response headers after the fact.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Preflight</div><div class="glossary-def">An automatic OPTIONS request the browser sends before a non-simple cross-origin request, asking the server to explicitly authorize the method and headers about to be used.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Access-Control-Allow-Origin (ACAO)</div><div class="glossary-def">The core CORS response header naming which origin's scripts may read this response.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Access-Control-Allow-Credentials</div><div class="glossary-def">Must be explicitly "true" for a browser to expose a response to a script that sent the request with cookies or HTTP auth attached.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Access-Control-Max-Age</div><div class="glossary-def">How long the browser may cache a given preflight's result, avoiding a repeat OPTIONS round trip.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Vary: Origin</div><div class="glossary-def">A caching header servers must add when reflecting the Origin header in ACAO, so CDNs don't serve one origin's authorization to another.</div></div>
+    <div class="glossary-card"><div class="glossary-term">CORB</div><div class="glossary-def">Cross-Origin Read Blocking — a separate, automatic browser defense that blocks cross-origin HTML/JSON/XML reads from non-fetch tags (like &lt;img&gt; or &lt;script&gt;), regardless of CORS headers.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>bob_os · Lesson 18.2 — CORS: A Deliberate, Server-Controlled Hole in the Same-Origin Policy</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Companion lesson for bob_os/browser modules <a href="../../browser/B03_same_origin_policy/tutorial.html">B03_same_origin_policy</a> and <a href="../../browser/B14_cors/tutorial.html">B14_cors</a>.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',bg2:'#0b0f1a',bg3:'#1a2235',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',teal:'#0d9488',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0'};
+
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+const SCENARIOS = {
+  'simple-ok': {
+    title:'Simple GET — Access-Control-Allow-Origin present',
+    phases:[
+      {name:'send', caption:'Browser sends GET /data immediately — Origin: https://app.example.com attached'},
+      {name:'process', caption:'api.example.com processes the request and responds'},
+      {name:'check', caption:'Browser checks: Access-Control-Allow-Origin: https://app.example.com — MATCH'},
+      {name:'result', caption:'Response handed to JavaScript. fetch() resolves normally.', ok:true}
+    ]
+  },
+  'simple-blocked': {
+    title:'Simple GET — no CORS header in response',
+    phases:[
+      {name:'send', caption:'Browser sends GET /data immediately — request still fires, same as always'},
+      {name:'process', caption:'api.example.com processes the request fully and responds (no ACAO header set)'},
+      {name:'check', caption:'Browser checks for Access-Control-Allow-Origin — HEADER MISSING'},
+      {name:'result', caption:'Response discarded. fetch() promise rejects with a CORS error — server did the work for nothing.', ok:false}
+    ]
+  },
+  'preflight-ok': {
+    title:'PUT with JSON body — preflight authorized',
+    phases:[
+      {name:'preflight-send', caption:'Browser sends OPTIONS first — Access-Control-Request-Method: PUT'},
+      {name:'preflight-resp', caption:'Server responds: Allow-Methods: PUT, Allow-Headers: content-type — AUTHORIZED'},
+      {name:'send', caption:'Only now does the browser send the real PUT /orders/42 request'},
+      {name:'result', caption:'Real response comes back, ACAO matches — fetch() resolves. Two round trips total.', ok:true}
+    ]
+  },
+  'preflight-blocked': {
+    title:'DELETE from an unlisted origin — preflight rejected',
+    phases:[
+      {name:'preflight-send', caption:'Browser sends OPTIONS — Access-Control-Request-Method: DELETE'},
+      {name:'preflight-resp', caption:'Server responds with Allow-Methods: GET, POST only — DELETE not listed'},
+      {name:'blocked', caption:'Preflight failed — the real DELETE request is NEVER SENT', ok:false},
+      {name:'result', caption:'fetch() rejects immediately. Server never even saw the real request.', ok:false}
+    ]
+  }
+};
+
+function drawScene(t, phase, scenario, label){
+  const canvas=document.getElementById('corsCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const leftX=W*0.04, leftW=W*0.42, rightX=W*0.54, rightW=W*0.42;
+  ctx.fillStyle='rgba(56,189,248,.08)';ctx.fillRect(leftX,26,leftW,H-92);
+  ctx.strokeStyle=C.cyan;ctx.lineWidth=1.5;ctx.strokeRect(leftX,26,leftW,H-92);
+  ctx.fillStyle=C.cyan;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Browser (app.example.com)',leftX+leftW/2,46);
+
+  ctx.fillStyle='rgba(74,222,128,.08)';ctx.fillRect(rightX,26,rightW,H-92);
+  ctx.strokeStyle=C.green;ctx.lineWidth=1.5;ctx.strokeRect(rightX,26,rightW,H-92);
+  ctx.fillStyle=C.green;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('Server (api.example.com)',rightX+rightW/2,46);
+
+  ctx.fillStyle=C.text;ctx.font='bold 13px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText(scenario.title,W/2,18);
+
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  wrapText(ctx, label, W/2, H-38, W-60, 16);
+
+  const midY=H/2-10;
+  let dotX=leftX+leftW*0.5, dotY=midY, dotCol=C.cyan;
+
+  if(phase==='preflight-send'){
+    dotX=leftX+leftW*0.3+(rightX-(leftX+leftW*0.3))*t; dotY=midY-30; dotCol=C.orange;
+    ctx.fillStyle=C.orange;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('OPTIONS',leftX+leftW*0.3+(rightX-(leftX+leftW*0.3))*0.5,midY-42);
+  } else if(phase==='preflight-resp'){
+    dotX=rightX+rightW*0.15+((leftX+leftW*0.85)-(rightX+rightW*0.15))*t; dotY=midY-30; dotCol=C.gold;
+  } else if(phase==='send'){
+    dotX=leftX+leftW*0.3+(rightX-(leftX+leftW*0.3))*t; dotY=midY+15; dotCol=C.cyan;
+    ctx.fillStyle=C.cyan;ctx.font='10px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(scenario.title.includes('PUT')?'PUT':'GET',leftX+leftW*0.3+(rightX-(leftX+leftW*0.3))*0.5,midY+3);
+  } else if(phase==='process'){
+    dotX=rightX+rightW*0.5; dotY=midY+15; dotCol=C.green;
+  } else if(phase==='check'){
+    dotX=rightX+rightW*0.15+((leftX+leftW*0.85)-(rightX+rightW*0.15))*t; dotY=midY+15; dotCol=C.gold;
+  } else if(phase==='blocked'){
+    dotX=leftX+leftW*0.75; dotY=midY+15;
+    ctx.save();ctx.translate(leftX+leftW*0.75,midY+15);ctx.strokeStyle=C.red;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(-14,-14);ctx.lineTo(14,14);ctx.moveTo(14,-14);ctx.lineTo(-14,14);ctx.stroke();ctx.restore();
+    ctx.fillStyle=C.red;ctx.font='bold 12px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText('REQUEST NEVER SENT',leftX+leftW*0.75,midY+45);
+    return;
+  } else if(phase==='result'){
+    const ok=scenario.phases[scenario.phases.length-1].ok;
+    ctx.fillStyle= ok? C.green : C.red;
+    ctx.font='bold 20px Source Code Pro,monospace';ctx.textAlign='center';
+    ctx.fillText(ok?'✓ ALLOWED':'✗ BLOCKED', W/2, midY+15);
+    return;
+  }
+
+  ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+}
+
+function wrapText(ctx,text,x,y,maxWidth,lineHeight){
+  const words=text.split(' ');
+  let line='', lines=[];
+  for(let n=0;n<words.length;n++){
+    const test=line+words[n]+' ';
+    if(ctx.measureText(test).width>maxWidth && n>0){lines.push(line);line=words[n]+' ';}
+    else line=test;
+  }
+  lines.push(line);
+  const startY = y - (lines.length-1)*lineHeight/2;
+  lines.forEach((l,i)=>ctx.fillText(l.trim(), x, startY + i*lineHeight));
+}
+
+let currentRun=0;
+function runCORS(key){
+  const myRun = ++currentRun;
+  const scenario = SCENARIOS[key];
+  document.getElementById('corsLabel').textContent='▶ Running: '+scenario.title;
+  const durations = scenario.phases.map(p=> p.name==='result'||p.name==='blocked' ? 900 : 650);
+  let idx=0,start=performance.now();
+  function step(now){
+    if(myRun!==currentRun) return;
+    const elapsed=now-start;
+    const dur=durations[idx];
+    const t=Math.min(1,elapsed/dur);
+    drawScene(t, scenario.phases[idx].name, scenario, scenario.phases[idx].caption);
+    if(t>=1){
+      idx++;
+      if(idx>=scenario.phases.length){
+        document.getElementById('corsLabel').textContent='▶ Complete — choose a scenario to run again';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetCORS(){
+  currentRun++;
+  document.getElementById('corsLabel').textContent='▶ Choose a request type to simulate';
+  const canvas=document.getElementById('corsCanvas');
+  const W=gW(canvas),H=360;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=C.muted;ctx.font='13px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Click a button below to simulate a CORS scenario',W/2,H/2);
+}
+
+// ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',resetCORS);
+window.addEventListener('resize',resetCORS);
+</script>
+</body>
+</html>

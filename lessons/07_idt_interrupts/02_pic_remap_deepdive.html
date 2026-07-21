@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIC Remapping: Fixing a Collision Intel Built Into the Hardware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+  --border:#1e3a5f; --gold:#f5c842; --gold2:#c9a227;
+  --cyan:#38bdf8; --teal:#0d9488; --red:#f87171;
+  --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+  --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Lato',sans-serif;font-size:17px;line-height:1.8;}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;overflow:hidden;padding:3rem 2rem;}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.4;animation:gridPulse 8s ease-in-out infinite alternate;}
+@keyframes gridPulse{from{opacity:.25}to{opacity:.5}}
+.hero-glow{position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(248,113,113,.15) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glow 6s ease-in-out infinite alternate;}
+@keyframes glow{from{transform:translate(-50%,-50%) scale(1)}to{transform:translate(-50%,-50%) scale(1.15)}}
+.hero-content{position:relative;z-index:2;max-width:950px}
+.hero-tag{display:inline-block;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;padding:.4rem 1.2rem;border-radius:2rem;margin-bottom:2rem;}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(2.6rem,6vw,5rem);font-weight:900;line-height:1.1;color:#fff;margin-bottom:1.5rem;}
+.hero h1 span{color:var(--red)}
+.hero-sub{font-size:1.1rem;color:var(--muted);max-width:720px;margin:0 auto 2.5rem;}
+.hero-stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-top:1rem;}
+.hero-stat .num{font-family:'Source Code Pro',monospace;font-size:2rem;font-weight:700;color:var(--red);}
+.hero-stat .lbl{font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);max-width:160px;}
+.hero-scroll{display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.85rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3rem;}
+.scroll-line{width:40px;height:1px;background:var(--muted)}
+
+.toc{position:fixed;right:1.5rem;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;}
+.toc-dot{width:8px;height:8px;border-radius:50%;background:var(--border);border:none;cursor:pointer;transition:all .3s;text-decoration:none;display:block;}
+.toc-dot:hover,.toc-dot.active{background:var(--red);transform:scale(1.4);}
+@media(max-width:900px){.toc{display:none}}
+
+.container{max-width:1020px;margin:0 auto;padding:0 2rem}
+section{padding:5rem 0}
+section:nth-child(even){background:var(--bg2)}
+.section-num{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--teal);letter-spacing:.2em;text-transform:uppercase;margin-bottom:.5rem;}
+h2{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,4vw,2.6rem);color:#fff;margin-bottom:1.2rem;line-height:1.2;}
+h2 .accent{color:var(--red)} h2 .accent.c{color:var(--cyan)} h2 .accent.g{color:var(--green)} h2 .accent.gold{color:var(--gold)} h2 .accent.p{color:var(--purple)}
+h3{font-family:'Playfair Display',serif;font-size:1.3rem;color:var(--cyan);margin:2rem 0 .8rem;}
+p{margin-bottom:1.2rem;color:var(--text)}
+strong{color:var(--gold);font-weight:700}
+em{color:var(--cyan);font-style:normal}
+ul,ol{padding-left:1.5rem;margin-bottom:1.2rem;}
+li{margin-bottom:.4rem;color:var(--text);}
+code{font-family:'Source Code Pro',monospace;font-size:.87rem;background:rgba(248,113,113,.1);padding:.1rem .4rem;border-radius:4px;color:var(--red);}
+
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .55s ease,transform .55s ease;}
+.reveal.visible{opacity:1;transform:none}
+
+.callout{border-left:4px solid var(--gold);background:rgba(245,200,66,.06);padding:1.2rem 1.5rem;border-radius:0 8px 8px 0;margin:1.8rem 0;}
+.callout code{background:rgba(0,0,0,.25)}
+.callout.cyan{border-color:var(--cyan);background:rgba(56,189,248,.06)}
+.callout.green{border-color:var(--green);background:rgba(74,222,128,.06)}
+.callout.red{border-color:var(--red);background:rgba(248,113,113,.06)}
+.callout.purple{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.callout.orange{border-color:var(--orange);background:rgba(251,146,60,.06)}
+.callout-title{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.6rem}
+.callout.gold .callout-title,.callout-title.gold{color:var(--gold)}
+.callout.cyan .callout-title{color:var(--cyan)}
+.callout.green .callout-title{color:var(--green)}
+.callout.red .callout-title{color:var(--red)}
+.callout.purple .callout-title{color:var(--purple)}
+.callout.orange .callout-title{color:var(--orange)}
+
+.formula{background:var(--code-bg);border:1.5px solid var(--gold2);border-radius:10px;padding:1.4rem 2rem;text-align:center;margin:1.8rem 0;font-family:'Source Code Pro',monospace;font-size:1.1rem;color:var(--gold);letter-spacing:.04em;}
+.formula .label{display:block;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-family:'Lato',sans-serif;}
+.formula .sub{display:block;font-size:.82rem;color:var(--muted);margin-top:.6rem;font-family:'Lato',sans-serif;letter-spacing:0;}
+.formula.red{border-color:var(--red);color:var(--red)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1.6rem 1.8rem;overflow-x:auto;margin:1.5rem 0;position:relative;}
+pre code{background:none;padding:0;color:#c4deff;font-size:.85rem;line-height:1.85;}
+
+.data-table-wrap{overflow-x:auto;margin:1.8rem 0}
+table{border-collapse:collapse;width:100%;font-family:'Source Code Pro',monospace;font-size:.86rem;}
+th{background:var(--bg3);color:var(--gold);padding:.7rem 1.1rem;border:1px solid var(--border);text-align:left;letter-spacing:.06em;font-weight:600;}
+td{padding:.55rem 1.1rem;border:1px solid var(--border);color:var(--text);background:var(--card);}
+tr:hover td{background:var(--bg3)}
+td.hl{color:var(--cyan);font-weight:600} td.pos{color:var(--green)} td.neg{color:var(--red);font-weight:600} td.gold{color:var(--gold)} td.center{text-align:center}
+
+.step-list{list-style:none;padding:0;counter-reset:steps;margin:1.8rem 0;}
+.step-list li{counter-increment:steps;display:flex;gap:1.2rem;margin-bottom:1.8rem;align-items:flex-start;}
+.step-list li::before{content:counter(steps);flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(248,113,113,.15);border:1.5px solid var(--red);color:var(--red);font-family:'Source Code Pro',monospace;font-size:.85rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.step-body strong{display:block;color:#fff;margin-bottom:.3rem;}
+
+.canvas-wrap{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1.8rem 0;}
+.canvas-label{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);padding:.6rem 1rem;border-bottom:1px solid var(--border);}
+canvas{display:block;width:100%;}
+
+.controls{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0;align-items:center;}
+.ctrl-btn{background:rgba(248,113,113,.1);border:1.5px solid var(--red);color:var(--red);padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-family:'Source Code Pro',monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;transition:all .2s;}
+.ctrl-btn:hover{background:rgba(248,113,113,.22);}
+.ctrl-btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(245,200,66,.08);}
+.ctrl-btn.gold:hover{background:rgba(245,200,66,.18);}
+.ctrl-btn.green{border-color:var(--green);color:var(--green);background:rgba(74,222,128,.08);}
+.ctrl-btn.green:hover{background:rgba(74,222,128,.18);}
+.ctrl-btn.cyan{border-color:var(--cyan);color:var(--cyan);background:rgba(56,189,248,.08);}
+.ctrl-btn.cyan:hover{background:rgba(56,189,248,.18);}
+
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.8rem 0;}
+@media(max-width:640px){.compare-grid{grid-template-columns:1fr}}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.compare-card h4{font-family:'Source Code Pro',monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:.8rem;}
+.compare-card.good h4{color:var(--green)} .compare-card.bad h4{color:var(--red)}
+
+.family-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin:1.8rem 0;}
+.family-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.2rem;}
+.family-card .fam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;}
+.family-card .fam-name{font-family:'Source Code Pro',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;}
+.family-card .fam-count{font-family:'Source Code Pro',monospace;font-size:.68rem;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:var(--red);padding:.15rem .55rem;border-radius:3px;}
+.family-card .fam-desc{font-size:.88rem;color:var(--muted);line-height:1.5;}
+.family-card.hot{border-color:var(--gold2)}
+.family-card.hot .fam-count{background:rgba(245,200,66,.1);border-color:rgba(245,200,66,.3);color:var(--gold)}
+
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem;margin-top:1.5rem;}
+.glossary-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.1rem 1.3rem;}
+.glossary-term{font-family:'Source Code Pro',monospace;font-size:.8rem;color:var(--gold);letter-spacing:.07em;margin-bottom:.35rem;text-transform:uppercase;}
+.glossary-def{font-size:.9rem;color:var(--muted);line-height:1.6;}
+
+footer{padding:3rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;}
+
+.sidenote{background:var(--card);border:1px dashed var(--muted);border-radius:10px;padding:1.1rem 1.4rem;margin:1.8rem 0;font-size:.92rem;color:var(--muted);}
+.sidenote b{color:var(--gold)}
+
+/* bespoke: ICW anatomy strip, one card per Initialisation Command Word */
+.icw-anatomy{display:flex;flex-wrap:wrap;border:1.5px solid var(--red);border-radius:10px;overflow:hidden;margin:1.8rem 0;background:var(--code-bg);}
+.icw-field{flex:1;min-width:150px;padding:1rem .9rem;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+.icw-field:last-child{border-right:none}
+.icw-field .if-name{font-family:'Source Code Pro',monospace;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--red);margin-bottom:.4rem;}
+.icw-field .if-val{font-family:'Source Code Pro',monospace;font-size:.88rem;color:var(--gold);margin-bottom:.35rem;}
+.icw-field .if-desc{font-size:.76rem;color:var(--muted);line-height:1.5;}
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <a class="toc-dot" href="#hero" title="Intro"></a>
+  <a class="toc-dot" href="#recap" title="Recap"></a>
+  <a class="toc-dot" href="#default" title="The Factory Default"></a>
+  <a class="toc-dot" href="#collision" title="Why It's a Real Problem"></a>
+  <a class="toc-dot" href="#seeit" title="Watch the Collision"></a>
+  <a class="toc-dot" href="#icw" title="ICW Walkthrough"></a>
+  <a class="toc-dot" href="#code" title="The Fix in Code"></a>
+  <a class="toc-dot" href="#masks" title="Masks &amp; EOI"></a>
+  <a class="toc-dot" href="#glossary" title="Glossary"></a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-tag">The 8259 PIC · Companion to ISRs and IRQs</div>
+    <h1>Fixing a Collision<br><span>Intel Built Into the Hardware</span></h1>
+    <p class="hero-sub">Plug a 1981-vintage interrupt controller straight into a CPU whose architects, years later, reserved vectors 0–31 for their own use, and you get exactly what you'd expect: a head-on numbering collision, wired at the factory, present on every PC-compatible machine that's ever booted. Nearly every x86 OS-dev tutorial in existence performs the same fix in the first hour. Here's exactly why it's needed and exactly what those bytes mean.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num">8–15</div><div class="lbl">Where IRQ0–7 Land by Factory Default</div></div>
+      <div class="hero-stat"><div class="num">0–31</div><div class="lbl">Vectors Intel Later Reserved</div></div>
+      <div class="hero-stat"><div class="num">4</div><div class="lbl">ICW Writes, Per PIC Chip</div></div>
+      <div class="hero-stat"><div class="num">32–47</div><div class="lbl">Where bob_os Remaps Them To</div></div>
+    </div>
+    <div class="hero-scroll"><div class="scroll-line"></div>Scroll to explore<div class="scroll-line"></div></div>
+  </div>
+</section>
+
+<!-- RECAP -->
+<section id="recap">
+<div class="container">
+  <div class="section-num">00 — Where We Left Off</div>
+  <h2>A Sidenote That Deserves <span class="accent">Its Own Page</span></h2>
+  <p class="reveal">The ISRs-and-IRQs lesson showed you the second half of every hardware interrupt handler's contract: send an EOI, or the PIC never delivers that line again. It also mentioned, almost in passing, that bob_os's handlers see IRQ0 (the timer) arrive as <strong>vector 32</strong> and IRQ1 (the keyboard) as <strong>vector 33</strong> — numbers that look arbitrary until you know where they came from. They aren't arbitrary. They're the result of a deliberate fix, applied at boot, before interrupts are ever turned on. This page is entirely about that fix: why it's necessary, and exactly what it does, byte by byte.</p>
+
+  <div class="callout cyan reveal">
+    <div class="callout-title">📎 One Fact to Keep Handy</div>
+    From the IDT lesson: vectors <strong>0–31</strong> are permanently reserved by Intel for CPU-defined exceptions — divide error, page fault, general protection fault, and so on — the same on every x86 chip, not configurable by the OS. Keep that number in your other hand. It's the entire reason this page exists.
+  </div>
+</div>
+</section>
+
+<!-- DEFAULT MAPPING -->
+<section id="default">
+<div class="container">
+  <div class="section-num">01 — What the Chip Does Out of the Box</div>
+  <h2>The 8259's <span class="accent">Factory Default</span></h2>
+  <p class="reveal">The Intel 8259A Programmable Interrupt Controller predates protected-mode x86 by a long margin — it was designed in 1976 for the 8085, then carried forward, unchanged in this respect, into every PC-compatible chipset since. Its job has always been simple: watch up to eight physical IRQ lines, and when one is asserted, tell the CPU which interrupt vector to raise for it.</p>
+  <p class="reveal">A real PC has <em>two</em> 8259 chips, cascaded together, to get 15 usable lines instead of 8 (one line on the master is sacrificed to carry the slave's output). Left at their power-on defaults, with no software ever touching them, the mapping looks like this:</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>IRQ Line</th><th>Chip</th><th>Default Vector</th><th>Typical Device</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">IRQ0</td><td>Master</td><td class="neg">8</td><td>Programmable Interval Timer</td></tr>
+        <tr><td class="hl">IRQ1</td><td>Master</td><td class="neg">9</td><td>Keyboard controller</td></tr>
+        <tr><td class="hl">IRQ2</td><td>Master</td><td class="neg">10</td><td>Cascade line to the slave PIC</td></tr>
+        <tr><td class="hl">IRQ3</td><td>Master</td><td class="neg">11</td><td>COM2 serial</td></tr>
+        <tr><td class="hl">IRQ4</td><td>Master</td><td class="neg">12</td><td>COM1 serial</td></tr>
+        <tr><td class="hl">IRQ5</td><td>Master</td><td class="neg">13</td><td>LPT2 / sound (varies)</td></tr>
+        <tr><td class="hl">IRQ6</td><td>Master</td><td class="neg">14</td><td>Floppy disk controller</td></tr>
+        <tr><td class="hl">IRQ7</td><td>Master</td><td class="neg">15</td><td>LPT1 / spurious interrupts</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Notice the pattern: every single one of those default vectors — 8 through 15 — falls squarely inside the range 0–31. On the original 8086/8088, running in real mode with no concept of reserved exception vectors at all, this was completely harmless; the Interrupt Vector Table's first 32 slots weren't reserved for anything special yet. It's only once Intel introduced protected mode and formally carved out 0–31 for CPU exceptions that this same, unchanged default mapping turned into a landmine sitting in every PC's firmware.</p>
+
+  <div class="sidenote reveal">
+    <b>Why didn't Intel just move the default?</b> Backward compatibility. Millions of deployed 8259 chips, motherboards, and BIOSes already assumed IRQ0 meant vector 8. Changing the chip's power-on behavior would have broken every piece of real-mode DOS software relying on it. Instead, the fix was pushed onto every protected-mode OS: reprogram the chip yourself, at boot, before you ever enable interrupts.
+  </div>
+</div>
+</section>
+
+<!-- COLLISION -->
+<section id="collision">
+<div class="container">
+  <div class="section-num">02 — Why This Is a Genuine Problem</div>
+  <h2>What Actually <span class="accent">Breaks</span> If You Skip This</h2>
+  <p class="reveal">It's tempting to assume this is a tidiness issue — "vectors 8-15 are used for two different things, how confusing" — but it's worse than confusing. Once the IDT is loaded and interrupts are enabled, the CPU cannot tell the difference between a hardware IRQ arriving on an unremapped vector and a genuine CPU exception with that same number. Both dispatch through the exact same gate. Both look, from the IDT's perspective, identical.</p>
+
+  <div class="compare-grid reveal">
+    <div class="compare-card bad">
+      <h4>💥 The Direct Collision — IRQ0 vs #DF</h4>
+      Default IRQ0 (the timer) lands on vector 8. Vector 8 is also <strong>#DF, the Double Fault exception</strong> — the CPU's own mechanism for reporting "a fault occurred while I was already handling another fault." Left unremapped, a routine timer tick and a genuinely catastrophic double-fault condition dispatch through the <em>identical</em> gate descriptor. Your handler has no reliable way to know which one just happened.
+    </div>
+    <div class="compare-card bad">
+      <h4>💥 The Ambiguous Case — IRQ7 vs Vector 15</h4>
+      Default IRQ7 (historically LPT1, and also the PIC's own "spurious interrupt" line) lands on vector 15 — a vector Intel marks <strong>reserved</strong>. A spurious IRQ7 (the PIC's own noise-suppression mechanism, not a real device event) becomes indistinguishable from whatever a future Intel chip might someday define vector 15 to mean.
+    </div>
+  </div>
+
+  <div class="callout red reveal">
+    <div class="callout-title">⚠️ It Gets Worse: Corrupted Exception Handling</div>
+    Picture your kernel's divide-by-zero handler (vector 0, <code>#DE</code>) and, separately, the timer interrupt left at its unremapped default of vector 8. Now picture a genuine divide-by-zero happening in user code at the exact moment the timer also fires. Depending on timing and priority resolution inside the PIC, you can end up with a hardware timer tick landing on a vector range your kernel's exception-handling logic was written to treat as fatal-and-halt — or, just as bad, a real CPU exception landing on a vector your kernel's IRQ dispatch logic treats as "just service the device and EOI." Either mismatch means your kernel is now running the <strong>wrong handler logic entirely</strong> for what actually happened, silently, with no indication anything went wrong until the machine misbehaves in a way that's nearly impossible to trace back to its cause.
+  </div>
+
+  <p class="reveal">This is exactly why remapping the PIC is one of the very first things almost every x86 hobby kernel does, performed <em>before</em> <code>sti</code> ever runs — there is no safe window during which an unremapped PIC and a protected-mode IDT can coexist.</p>
+</div>
+</section>
+
+<!-- SEE IT -->
+<section id="seeit">
+<div class="container">
+  <div class="section-num">03 — Watch It Happen</div>
+  <h2>The Same IRQ0, <span class="accent">Two Different Outcomes</span></h2>
+  <p class="reveal">Fire the timer's IRQ0 twice — once against an unremapped PIC still sitting at its factory default, and once against a PIC that's been through the ICW sequence you're about to see in detail.</p>
+
+  <div class="canvas-wrap reveal">
+    <div class="canvas-label" id="remapLabel">▶ Choose a PIC configuration</div>
+    <canvas id="remapCanvas" height="380"></canvas>
+  </div>
+  <div class="controls reveal">
+    <button class="ctrl-btn" onclick="runRemap('unmapped')">▶ Fire IRQ0 — PIC at factory default</button>
+    <button class="ctrl-btn green" onclick="runRemap('remapped')">▶ Fire IRQ0 — PIC remapped (bob_os config)</button>
+    <button class="ctrl-btn gold" onclick="resetRemap()">Reset</button>
+  </div>
+</div>
+</section>
+
+<!-- ICW WALKTHROUGH -->
+<section id="icw">
+<div class="container">
+  <div class="section-num">04 — The Actual Fix</div>
+  <h2>Reprogramming the PIC With <span class="accent">ICWs</span></h2>
+  <p class="reveal">The 8259 accepts a fixed sequence of four <strong>Initialisation Command Words (ICW1–ICW4)</strong>, written to two I/O ports per chip — a <em>command</em> port and a <em>data</em> port. Write the command byte that starts initialization to the command port, then feed the remaining three words to the data port, one at a time, in order. Skip a step or write to the wrong port and the chip ends up in an undefined, often silently broken state.</p>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>Chip</th><th>Command Port</th><th>Data Port</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">Master PIC</td><td class="gold">0x20</td><td class="gold">0x21</td></tr>
+        <tr><td class="hl">Slave PIC</td><td class="gold">0xA0</td><td class="gold">0xA1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="reveal">Here's the full sequence, with the exact byte values bob_os writes to each port — you've already seen the vector-offset numbers matter; now see where they're actually delivered.</p>
+
+  <div class="icw-anatomy reveal">
+    <div class="icw-field">
+      <div class="if-name">ICW1 — Start Init</div>
+      <div class="if-val">0x11 → 0x20 &amp; 0xA0</div>
+      <div class="if-desc">Written to <em>both command ports</em>. Bit 4 (0x10) is the "this is an initialization sequence" flag; bit 0 (0x01) says "I will send you an ICW4." This single write resets both chips into their 4-word init sequence.</div>
+    </div>
+    <div class="icw-field">
+      <div class="if-name">ICW2 — Vector Offset</div>
+      <div class="if-val">0x20 → 0x21, 0x28 → 0xA1</div>
+      <div class="if-desc">Written to each chip's <em>data</em> port. This is the whole fix in one number: the master's IRQ0 now maps to vector <strong>0x20 (32)</strong> instead of 8; the slave's IRQ8 now maps to vector <strong>0x28 (40)</strong> instead of 70 (its own prior default).</div>
+    </div>
+    <div class="icw-field">
+      <div class="if-name">ICW3 — Cascade Wiring</div>
+      <div class="if-val">0x04 → 0x21, 0x02 → 0xA1</div>
+      <div class="if-desc">Tells the master "the slave is physically wired to my IRQ2 line" (bit 2 set = 0x04) and tells the slave "my own cascade identity is line 2" (value 0x02). This is board wiring, not a vector — every PC-compatible uses this exact pair.</div>
+    </div>
+    <div class="icw-field">
+      <div class="if-name">ICW4 — Mode</div>
+      <div class="if-val">0x01 → 0x21 &amp; 0xA1</div>
+      <div class="if-desc">Selects 8086/8088 mode rather than the ancient MCS-80/85 mode. Without this, the chip stays in a compatibility mode that doesn't correctly acknowledge EOI — meaning the exact bug the previous lesson warned about would happen on <em>every</em> interrupt, unconditionally.</div>
+    </div>
+  </div>
+
+  <div class="callout gold reveal">
+    <div class="callout-title">💡 The Aha Moment</div>
+    ICW2 is the only word in the entire sequence that actually changes <em>which vector number</em> an IRQ line produces. ICW1, ICW3, and ICW4 are all mechanical setup — starting the sequence, describing how the two chips are physically wired together, and choosing an operating mode. If you remember nothing else from this page: <strong>the vector offset lives in ICW2, written to each chip's data port, right after ICW1 starts the sequence.</strong>
+  </div>
+</div>
+</section>
+
+<!-- CODE -->
+<section id="code">
+<div class="container">
+  <div class="section-num">05 — The Fix, In Real Code</div>
+  <h2>Same Sequence, <span class="accent">As bob_os Writes It</span></h2>
+  <p class="reveal">Here's the complete <code>pic_init()</code> from bob_os's <code>pic.c</code>, with each write annotated against the ICW it corresponds to. Note the <code>io_wait()</code> calls after each write — some real 8259 hardware needs a brief settling delay between consecutive I/O port writes, a holdover from an era when the CPU could easily outrun the chip.</p>
+
+  <pre><code>#define ICW1_ICW4   0x01   /* will send ICW4                 */
+#define ICW1_INIT   0x10   /* initialisation bit -- must be 1 */
+#define ICW4_8086   0x01   /* 8086/8088 mode                 */
+
+void pic_init(void) {
+    /* ICW1 -- start initialisation sequence on both chips */
+    outb(PIC1_CMD, ICW1_INIT | ICW1_ICW4);   io_wait();   /* -> 0x20 */
+    outb(PIC2_CMD, ICW1_INIT | ICW1_ICW4);   io_wait();   /* -> 0xA0 */
+
+    /* ICW2 -- vector offsets: THIS is the actual remap */
+    outb(PIC1_DATA, PIC1_OFFSET);   io_wait();  /* 0x21 <- 32 (0x20) */
+    outb(PIC2_DATA, PIC2_OFFSET);   io_wait();  /* 0xA1 <- 40 (0x28) */
+
+    /* ICW3 -- cascade wiring between the two chips */
+    outb(PIC1_DATA, 0x04);   io_wait();   /* master: slave lives on IRQ2 */
+    outb(PIC2_DATA, 0x02);   io_wait();   /* slave: my cascade id is 2   */
+
+    /* ICW4 -- 8086 mode */
+    outb(PIC1_DATA, ICW4_8086);   io_wait();
+    outb(PIC2_DATA, ICW4_8086);   io_wait();
+
+    /* Start with every IRQ line unmasked */
+    outb(PIC1_DATA, 0x00);
+    outb(PIC2_DATA, 0x00);
+}</code></pre>
+
+  <p class="reveal">And the offsets that made ICW2 write what it wrote — plain constants, not magic numbers:</p>
+
+  <pre><code>/* pic.h */
+#define PIC1_OFFSET  32    /* master: IRQ0-7  -> vectors 32-39 */
+#define PIC2_OFFSET  40    /* slave:  IRQ8-15 -> vectors 40-47 */</code></pre>
+
+  <div class="data-table-wrap reveal">
+    <table>
+      <thead><tr><th>IRQ Line</th><th>Default Vector</th><th>Remapped Vector</th><th>Collision Avoided</th></tr></thead>
+      <tbody>
+        <tr><td class="hl">IRQ0 — Timer</td><td class="neg">8</td><td class="pos">32</td><td>#DF Double Fault</td></tr>
+        <tr><td class="hl">IRQ1 — Keyboard</td><td class="neg">9</td><td class="pos">33</td><td>Reserved</td></tr>
+        <tr><td class="hl">IRQ6 — Floppy</td><td class="neg">14</td><td class="pos">38</td><td>#PF Page Fault</td></tr>
+        <tr><td class="hl">IRQ7 — LPT1 / spurious</td><td class="neg">15</td><td class="pos">39</td><td>Reserved</td></tr>
+        <tr><td class="hl">IRQ8 — RTC</td><td class="neg">70</td><td class="pos">40</td><td>(outside 0-31 either way, but now contiguous with the master)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout purple reveal">
+    <div class="callout-title">🧠 Why 32 Specifically, and Not, Say, 48?</div>
+    Any value at or above 32 avoids the reserved range equally well — the choice of exactly 32 is convention, not requirement. It happens to be the smallest legal offset (since 0-31 is off-limits) and it's what nearly every OS-dev tutorial and reference OS uses, which is precisely why bob_os uses it too: vector 32 for IRQ0 is such a strong convention across the hobby-OS world that deviating from it would only make your code harder for others — and future you — to read.
+  </div>
+</div>
+</section>
+
+<!-- MASKS -->
+<section id="masks">
+<div class="container">
+  <div class="section-num">06 — Two Things Remapping Does <em>Not</em> Do</div>
+  <h2>Remapping Isn't <span class="accent">Masking</span>, and Isn't <span class="accent">EOI</span></h2>
+  <p class="reveal">It's worth being precise about what <code>pic_init()</code> accomplishes and what it deliberately leaves for later, because conflating "remapped" with "enabled" is a common next mistake.</p>
+
+  <div class="family-grid reveal">
+    <div class="family-card hot">
+      <div class="fam-header"><span class="fam-name">Remapping (this page)</span><span class="fam-count">ICW1-4, once, at boot</span></div>
+      <div class="fam-desc">Changes <em>which vector number</em> each IRQ line produces. A one-time setup step. Does not enable or disable any specific line, and has nothing to do with acknowledging interrupts after they're handled.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">Masking</span><span class="fam-count">IMR, ongoing</span></div>
+      <div class="fam-desc">Each PIC has an Interrupt Mask Register — one bit per line — read and written on the same data ports used for ICW2/3/4 after initialization finishes. A set bit means that line is disabled, remapped or not. bob_os starts with everything unmasked (<code>0x00</code> written to both data ports at the end of <code>pic_init()</code>), then drivers can selectively mask lines they don't yet support.</div>
+    </div>
+    <div class="family-card">
+      <div class="fam-header"><span class="fam-name">EOI</span><span class="fam-count">command port, per interrupt</span></div>
+      <div class="fam-desc">Sent once per handled interrupt, to the same command ports (0x20 / 0xA0) used for ICW1 — but with value <code>0x20</code>, the End-Of-Interrupt command, not an initialization byte. Covered in full in the ISRs-and-IRQs lesson; remapping and EOI use overlapping ports but are entirely separate operations.</div>
+    </div>
+  </div>
+
+  <div class="callout orange reveal">
+    <div class="callout-title">📌 The Full Boot-Time Order, Stated Plainly</div>
+    <strong>1.</strong> Remap the PIC with ICW1-4 (this page) — so IRQ vectors land at 32-47, clear of the reserved range. <strong>2.</strong> Populate the IDT with gate descriptors for vectors 0-47 (covered in the IDT companion lesson) — so the CPU knows where to jump for each one. <strong>3.</strong> Selectively unmask only the IRQ lines you have handlers ready for. <strong>4.</strong> Only now execute <code>sti</code> to actually let interrupts fire. Reordering these steps — enabling interrupts before the IDT is populated, or before the PIC is remapped — is asking for an immediate crash or, worse, a silent vector collision like the one this page exists to prevent.
+  </div>
+</div>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<div class="container">
+  <div class="section-num">07 — Quick Reference</div>
+  <h2>Glossary &amp; <span class="accent">Key Terms</span></h2>
+  <div class="glossary-grid reveal">
+    <div class="glossary-card"><div class="glossary-term">8259 PIC</div><div class="glossary-def">The Programmable Interrupt Controller chip (two, cascaded, on a PC) that routes up to 15 hardware IRQ lines to CPU interrupt vectors.</div></div>
+    <div class="glossary-card"><div class="glossary-term">ICW (Initialisation Command Word)</div><div class="glossary-def">One of four fixed-order bytes (ICW1-ICW4) written to a PIC's command/data ports to configure it — including, in ICW2, its vector offset.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Vector Offset</div><div class="glossary-def">The value written in ICW2 that sets the vector number IRQ0 (or IRQ8, for the slave) maps to — 32 and 40 in bob_os's configuration.</div></div>
+    <div class="glossary-card"><div class="glossary-term">PIC Remapping</div><div class="glossary-def">The act of reprogramming both PIC chips' vector offsets away from their colliding factory default (8-15) to a safe range (typically 32-47).</div></div>
+    <div class="glossary-card"><div class="glossary-term">Cascade</div><div class="glossary-def">The wiring scheme connecting a slave PIC's output to the master's IRQ2 input, configured via ICW3, giving 15 usable lines from two 8-line chips.</div></div>
+    <div class="glossary-card"><div class="glossary-term">IMR (Interrupt Mask Register)</div><div class="glossary-def">A per-PIC register, one bit per IRQ line, controlling which lines the chip is currently willing to deliver — independent of vector offset.</div></div>
+    <div class="glossary-card"><div class="glossary-term">EOI (End-Of-Interrupt)</div><div class="glossary-def">The command byte (0x20) written to a PIC's command port after handling an interrupt, telling it to resume delivering that line.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Double Fault (#DF, vector 8)</div><div class="glossary-def">The CPU exception colliding directly with an unremapped IRQ0's default vector — the sharpest example of why remapping matters.</div></div>
+    <div class="glossary-card"><div class="glossary-term">Spurious Interrupt</div><div class="glossary-def">A PIC-generated IRQ7 (or IRQ15) with no real device behind it, used by the chip itself for noise suppression — ambiguous with reserved vector 15 if unremapped.</div></div>
+  </div>
+</div>
+</section>
+
+<footer>
+  <p>PIC Remapping · Companion lesson for bob_os module 05_idt_interrupts</p>
+  <p style="margin-top:.5rem;font-size:.78rem">Four bytes per chip, and the collision is gone for good.</p>
+</footer>
+
+<script>
+const C={bg:'#060d1a',border:'#1e3a5f',gold:'#f5c842',cyan:'#38bdf8',red:'#f87171',green:'#4ade80',purple:'#a78bfa',muted:'#7a9bbf',orange:'#fb923c',text:'#e2e8f0',teal:'#0d9488'};
+function dpr(canvas,w,h){const d=window.devicePixelRatio||1;canvas.width=w*d;canvas.height=h*d;canvas.style.width=w+'px';canvas.style.height=h+'px';const ctx=canvas.getContext('2d');ctx.scale(d,d);return ctx;}
+function gW(c){return c.parentElement.getBoundingClientRect().width;}
+
+// ── VECTOR COLLISION VISUALIZER ──────────────────────────────────────────
+// A number line 0-47. 0-31 shaded as "reserved for CPU exceptions".
+// Fire IRQ0: dot travels from a "Timer" box to its landing vector.
+function drawVectorLine(ctx,x0,x1,y,vMax){
+  ctx.strokeStyle=C.border;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();
+  // reserved band 0-31
+  const resX1 = x0 + (x1-x0)*(31/vMax);
+  ctx.fillStyle='rgba(248,113,113,.10)';
+  ctx.fillRect(x0,y-22,resX1-x0,44);
+  ctx.strokeStyle='rgba(248,113,113,.4)';ctx.strokeRect(x0,y-22,resX1-x0,44);
+  ctx.fillStyle=C.red;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='left';
+  ctx.fillText('0–31 reserved for CPU exceptions',x0+4,y-28);
+
+  ctx.fillStyle=C.muted;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  [0,8,15,32,47].forEach(v=>{
+    const x=x0+(x1-x0)*(v/vMax);
+    ctx.strokeStyle=C.border;ctx.beginPath();ctx.moveTo(x,y-4);ctx.lineTo(x,y+4);ctx.stroke();
+    ctx.fillText(String(v),x,y+18);
+  });
+}
+function vToX(v,x0,x1,vMax){return x0+(x1-x0)*(v/vMax);}
+
+function drawRemapScene(t,phase,mode){
+  const canvas=document.getElementById('remapCanvas');
+  const W=gW(canvas),H=380;
+  const ctx=dpr(canvas,W,H);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,H);
+
+  const x0=30,x1=W-30,lineY=210,vMax=47;
+  drawVectorLine(ctx,x0,x1,lineY,vMax);
+
+  // marker at vector 8 (#DF) always shown
+  const v8x=vToX(8,x0,x1,vMax);
+  ctx.fillStyle=C.orange;ctx.font='9px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('#DF (8)',v8x,lineY+34);
+  ctx.beginPath();ctx.arc(v8x,lineY,4,0,Math.PI*2);ctx.strokeStyle=C.orange;ctx.lineWidth=1.4;ctx.stroke();
+
+  // timer device box
+  const devX=x0+10, devY=60, devW=110, devH=48;
+  ctx.fillStyle='rgba(255,255,255,.03)';ctx.strokeStyle=C.muted;ctx.lineWidth=1.2;
+  ctx.beginPath(); if(ctx.roundRect){ctx.roundRect(devX,devY,devW,devH,6);}else{ctx.rect(devX,devY,devW,devH);}
+  ctx.fill();ctx.stroke();
+  ctx.fillStyle=C.text;ctx.font='11px Source Code Pro,monospace';ctx.textAlign='center';
+  ctx.fillText('TIMER (IRQ0)',devX+devW/2,devY+devH/2+4);
+
+  const targetV = mode==='unmapped' ? 8 : 32;
+  const targetX = vToX(targetV,x0,x1,vMax);
+
+  const dotPhases={fire:0,pic:0.4,land:1};
+  let dotX=devX+devW/2, dotY=devY+devH, dotCol=C.cyan;
+  if(phase==='fire'){ dotY = devY+devH + (lineY-70-(devY+devH))*t; }
+  else if(phase==='pic'){ dotY=lineY-70; dotX = devX+devW/2 + (targetX-(devX+devW/2))*t; }
+  else if(phase==='land'){ dotX=targetX; dotY=lineY-70+70*t; dotCol = mode==='unmapped'?C.red:C.green; }
+
+  if(phase!=='idle'){
+    ctx.beginPath();ctx.arc(dotX,dotY,7,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.stroke();
+  }
+
+  if(phase==='land'){
+    ctx.strokeStyle= mode==='unmapped'?C.red:C.green; ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(targetX,lineY,10+3*Math.sin(t*Math.PI),0,Math.PI*2);ctx.stroke();
+  }
+
+  const captions={
+    idle:'Choose a PIC configuration above',
+    fire: mode==='unmapped' ? '⚡ Timer asserts IRQ0 — PIC still at its 1981 factory default' : '⚡ Timer asserts IRQ0 — PIC was remapped at boot via ICW1-4',
+    pic: mode==='unmapped' ? 'Unremapped PIC raises... vector 8' : 'Remapped PIC raises vector 32 — clear of reserved territory',
+    land: mode==='unmapped' ? 'COLLISION: vector 8 is also #DF, Double Fault. The IDT gate is shared. Ambiguous.' : 'CLEAN: vector 32 was never claimed by Intel. The timer owns this gate alone.'
+  };
+  ctx.fillStyle=C.text;ctx.font='12px Lato,sans-serif';ctx.textAlign='center';
+  ctx.fillText(captions[phase]||'',W/2,H-16);
+}
+
+function runRemap(mode){
+  const phases=['fire','pic','land'];
+  const durations=[420,480,600];
+  let idx=0,start=performance.now();
+  document.getElementById('remapLabel').textContent = mode==='unmapped' ? '▶ Unremapped PIC — IRQ0 lands on vector 8' : '▶ Remapped PIC — IRQ0 lands safely on vector 32';
+  function step(now){
+    const elapsed=now-start;
+    const t=Math.min(1,elapsed/durations[idx]);
+    drawRemapScene(t,phases[idx],mode);
+    if(t>=1){
+      idx++;
+      if(idx>=phases.length){
+        document.getElementById('remapLabel').textContent='▶ Done — try the other configuration';
+        return;
+      }
+      start=now;
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function resetRemap(){
+  document.getElementById('remapLabel').textContent='▶ Choose a PIC configuration';
+  drawRemapScene(0,'idle','');
+}
+
+// ── SCROLL REVEAL ────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible');});},{threshold:.07});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+const secs=document.querySelectorAll('section[id]');
+const dots=document.querySelectorAll('.toc-dot');
+const tocObs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dots.forEach(d=>d.classList.remove('active'));const d=document.querySelector(`.toc-dot[href="#${e.target.id}"]`);if(d)d.classList.add('active');}});},{threshold:.4});
+secs.forEach(s=>tocObs.observe(s));
+
+window.addEventListener('load',()=>{ resetRemap(); });
+window.addEventListener('resize',()=>{ resetRemap(); });
+</script>
+</body>
+</html>
