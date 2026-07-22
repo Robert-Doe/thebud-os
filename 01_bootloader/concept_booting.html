@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept: Booting | BobOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(56,189,248,0.07) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--gold); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2.1rem,4.8vw,3.2rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--gold); }
+  .hero .tagline { font-size:1.12rem; color:var(--muted); max-width:680px; margin:0 auto 28px; }
+  .hero-grid { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+  .hero-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 28px; text-align:center; }
+  .hero-stat .num { font-family:'Playfair Display',serif; font-size:1.8rem; color:var(--cyan); font-weight:700; }
+  .hero-stat .label { font-size:13px; color:var(--muted); margin-top:2px; }
+  .container { max-width:860px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.7rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.15rem; color:var(--cyan); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+  ul { padding-left:20px; margin-bottom:14px; }
+  li { margin-bottom:6px; }
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold  { background:rgba(245,200,66,0.07); border-color:var(--gold); }
+  .callout.cyan  { background:rgba(56,189,248,0.07); border-color:var(--cyan); }
+  .callout.green { background:rgba(74,222,128,0.07); border-color:var(--green); }
+  .callout.red   { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple{ background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.teal{ background:rgba(13,148,136,0.07); border-color:var(--teal); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold  .label { color:var(--gold); }
+  .callout.cyan  .label { color:var(--cyan); }
+  .callout.green .label { color:var(--green); }
+  .callout.red   .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.teal .label { color:var(--teal); }
+  .callout p:last-child { margin-bottom:0; }
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:20px 22px; overflow-x:auto; margin:20px 0; }
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  table { width:100%; border-collapse:collapse; margin:20px 0; font-size:14px; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--gold); font-family:'Source Code Pro',monospace; font-size:12px; letter-spacing:0.5px; text-transform:uppercase; }
+  td.mono { font-family:'Source Code Pro',monospace; color:var(--cyan); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .tablewrap { overflow-x:auto; }
+  .compare { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin:24px 0; }
+  .compare-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .compare-box h4 { font-size:13px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; color:var(--cyan); }
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+  .brain { background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(56,189,248,0.08)); border:1px solid rgba(245,200,66,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--gold); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  .steps { list-style:none; counter-reset:step; margin:20px 0; }
+  .steps li { counter-increment:step; display:flex; gap:16px; margin-bottom:16px; align-items:flex-start; }
+  .steps li::before { content:counter(step); background:var(--cyan); color:#0b0f1a; font-weight:700; font-size:13px; min-width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .word-web { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:24px 0; }
+  .word-web a { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:8px 18px; font-family:'Source Code Pro',monospace; font-size:13px; color:var(--cyan); text-decoration:none; }
+  .word-web a:hover { border-color:var(--cyan); }
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+  @media (max-width: 700px) { .compare { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">CONCEPT 1 OF 4 — BOOTING</div>
+  <h1>What Even <em>Is</em> <span>Booting</span>?</h1>
+  <p class="tagline">You say "just reboot it" a dozen times a week. But "booting" names one of the strangest problems in all of computing: how does a machine with a completely empty head — no OS, no program, nothing in RAM — ever get its first instruction running?</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">0</div><div class="label">bytes in RAM at power-on</div></div>
+    <div class="hero-stat"><div class="num">5+</div><div class="label">handoffs before a login prompt</div></div>
+    <div class="hero-stat"><div class="num">1958</div><div class="label">"boot" enters computing jargon</div></div>
+    <div class="hero-stat"><div class="num">1</div><div class="label">hardwired first address, always</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine waking up with total amnesia, in a pitch-black room, with no memory of who you are, where you are, or what to do next — but taped to your own hand is a single sticky note with one instruction on it: <em>"Stand up, then read the note taped to the wall."</em> That note gets you to a slightly bigger note, which gets you to a full instruction manual, which finally gets you to "here's your name, your house, your life — go live it."</p>
+      <p>That's booting. The CPU wakes up with total amnesia every single time power is applied. It doesn't remember yesterday. It doesn't know an operating system exists. All it has is one hardwired reflex: "go read the byte at this exact address, and do whatever it says." Everything else — your desktop, your browser, this very document — is the end of a long chain of notes, each one leading to the next.</p>
+    </div>
+    <p><strong>Booting</strong> is the umbrella word for that <em>entire chain</em>, start to finish: from the instant electricity reaches the CPU to the moment you see a login screen, a shell prompt, or a desktop. It is not one program. It is not one component. It is a <em>process</em> — a relay race with several different runners, each handing a baton to the next.</p>
+  </section>
+
+  <section>
+    <h2>02 — Cold Boot vs. Warm Boot vs. Sleep/Resume</h2>
+    <p>Not every "starting up" is the same kind of starting up. This trips people up constantly, so let's separate the three you actually encounter:</p>
+    <div class="compare">
+      <div class="compare-box">
+        <h4>Cold Boot</h4>
+        <p style="margin-bottom:0;">Power was fully off. RAM has lost all state (RAM is <em>volatile</em> — no power, no data). The <strong>entire</strong> chain in §03 below runs from scratch: BIOS/UEFI does full POST, full device re-detection, everything.</p>
+      </div>
+      <div class="compare-box">
+        <h4>Warm Boot (Reboot)</h4>
+        <p style="margin-bottom:0;">Power technically never dropped — the OS asked the firmware to restart execution. Some hardware self-tests are shortened, but the software chain (firmware → bootloader → kernel) still runs in full. This is what <code>Ctrl+Alt+Del</code> historically triggered.</p>
+      </div>
+      <div class="compare-box">
+        <h4>Sleep / Resume</h4>
+        <p style="margin-bottom:0;"><strong>Not a boot at all.</strong> RAM stays powered (S3 sleep) or its contents are dumped to disk first (hibernate/S4). On resume, the CPU jumps back into a running OS that was frozen mid-thought — none of the chain in §03 re-executes.</p>
+      </div>
+    </div>
+    <div class="callout orange">
+      <div class="label">Why this distinction matters for BobOS</div>
+      <p>Everything you're building in this repo — <code>01_bootloader</code> onward — only exists because of <strong>cold boot</strong>. QEMU launching fresh each time you type <code>make run</code> is simulating the full amnesia-to-awareness chain, every single time, on purpose. That repetition is the entire point: it's the one part of the whole OS you get to watch happen from absolute zero.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — The Anatomy of a Boot, Mapped Onto This Repo</h2>
+    <p>Strip away vendor-specific detail and every modern x86 boot — Windows, Linux, BobOS — follows the same shape. Here's the generic sequence lined up against the actual folders in this project, so the abstract idea has a concrete home:</p>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Stage</th><th>What happens</th><th>Where it lives in BobOS</th></tr>
+      <tr><td>1. Power-on reset</td><td>CPU resets internal state, jumps to a hardwired address baked into the silicon — no software has run yet.</td><td>Not a file — this is the CPU itself (see <a href="concept_bios.html">concept_bios.html</a>)</td></tr>
+      <tr><td>2. Firmware (BIOS/UEFI)</td><td>POST, hardware enumeration, scans disks for a bootable signature.</td><td>SeaBIOS, bundled inside QEMU — see <a href="concept_bios.html">concept_bios.html</a></td></tr>
+      <tr><td>3. Bootloader (stage 1)</td><td>The first 512 bytes of disk, loaded to <code>0x7C00</code>, given control.</td><td><code>01_bootloader/boot.asm</code> — see <a href="concept_bootloader.html">concept_bootloader.html</a></td></tr>
+      <tr><td>4. Kernel entry / mode switch</td><td>Exit 16-bit Real Mode, enter 32-bit Protected Mode, hand off to C.</td><td><code>02_kernel_entry</code>, <code>04_gdt</code></td></tr>
+      <tr><td>5. Core subsystems init</td><td>Interrupts, memory management, drivers come online.</td><td><code>05_idt_interrupts</code> → <code>09_keyboard</code></td></tr>
+      <tr><td>6. Process/user space</td><td>Processes, syscalls, a filesystem, and finally an interactive shell.</td><td><code>10_processes</code> → <code>13_shell</code></td></tr>
+    </table>
+    </div>
+    <p>"Booting" is the name for <em>all six rows at once</em>. Nobody says "I BIOS'd my computer" or "I bootloadered my computer" — those are components. You "boot" the whole stack.</p>
+  </section>
+
+  <section>
+    <h2>04 — Where the Word Came From (Short Version)</h2>
+    <p><code>boot</code> is short for <code>bootstrap</code> — and that word carries a genuinely interesting engineering idea buried inside an old, physically-impossible idiom. It deserves its own full treatment rather than a rushed paragraph here — that's exactly what <a href="concept_bootstrapping.html">concept_bootstrapping.html</a> is for. The short version: computer engineers in the 1950s borrowed the phrase "pull yourself up by your own bootstraps" (meaning: to succeed using only your own resources, with no outside help) to describe a machine starting itself with no operator-loaded program — because that's exactly how impossible it originally sounded.</p>
+  </section>
+
+  <section>
+    <h2>05 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Before reading on:</strong> if RAM loses everything the instant power drops, and the CPU has no built-in operating system, how does it know to look at address <code>0xFFFFFFF0</code> specifically, rather than any other address? Is that a <em>software</em> decision anyone could have made differently, or something else entirely?</p>
+      <p style="margin-top:14px; color:var(--muted);">Hint: nothing has executed yet at that point — so the answer can't be "a program decided this." Think about what's true of a circuit before any instruction has ever run.</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Is "boot" just short for "bootstrap," or is there more to it?</div>
+      <div class="a">Both are true at once. It's literally an abbreviation — but the abbreviation stuck specifically because "bootstrapping" describes the actual mechanism (tiny thing loads bigger thing, over and over), not just a cute nickname. See <a href="concept_bootstrapping.html">concept_bootstrapping.html</a>.</div>
+      <div class="q">Q: Is the BIOS "the boot"?</div>
+      <div class="a">No — the BIOS is one <em>participant</em> in booting, specifically the firmware that runs first. "Booting" is the whole trip; BIOS is the first leg of it. Full breakdown in <a href="concept_bios.html">concept_bios.html</a>.</div>
+      <div class="q">Q: Why does a cold boot take longer than resuming from sleep?</div>
+      <div class="a">Because sleep skips the entire chain in §03 — RAM already holds a fully-initialized OS. A cold boot has to rebuild that state from nothing, running every stage in order.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — How This Connects to the Other Three Concepts</h2>
+    <div class="callout purple">
+      <div class="label">The Short Version</div>
+      <p><strong>Booting</strong> is the whole event. <strong>Bootstrapping</strong> is the underlying principle that explains why booting needs multiple stages at all. <strong>BIOS</strong> is the firmware that runs the first stage. <strong>Bootloader</strong> is the program — the one you write — that BIOS loads and hands control to next.</p>
+    </div>
+    <p>For the full map with a visual chain diagram and a "commonly confused" table, see the hub page:</p>
+    <div class="word-web">
+      <a href="concept_how_they_connect.html">concept_how_they_connect.html →</a>
+      <a href="concept_bootstrapping.html">concept_bootstrapping.html</a>
+      <a href="concept_bios.html">concept_bios.html</a>
+      <a href="concept_bootloader.html">concept_bootloader.html</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Keep Going</div>
+      <p>Now that "booting" has a precise definition instead of a vague one, the natural next question is <em>why</em> it has to happen in stages instead of all at once. That's the whole subject of <a href="concept_bootstrapping.html">concept_bootstrapping.html</a>.</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  BobOS — 01_bootloader concept series (1 of 4) &nbsp;|&nbsp; <a href="concept_how_they_connect.html">See how they all connect →</a>
+</footer>
+
+</body>
+</html>

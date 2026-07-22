@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 01 — Bootloader | BobOS Tutorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+
+  /* HERO */
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(56,189,248,0.07) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--gold); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2.2rem,5vw,3.4rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--gold); }
+  .hero .tagline { font-size:1.15rem; color:var(--muted); max-width:620px; margin:0 auto 28px; }
+  .hero-grid { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+  .hero-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 28px; text-align:center; }
+  .hero-stat .num { font-family:'Playfair Display',serif; font-size:2rem; color:var(--cyan); font-weight:700; }
+  .hero-stat .label { font-size:13px; color:var(--muted); margin-top:2px; }
+
+  /* LAYOUT */
+  .container { max-width:820px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.75rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.2rem; color:var(--cyan); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+
+  /* CALLOUTS */
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold  { background:rgba(245,200,66,0.07); border-color:var(--gold); }
+  .callout.cyan  { background:rgba(56,189,248,0.07); border-color:var(--cyan); }
+  .callout.green { background:rgba(74,222,128,0.07); border-color:var(--green); }
+  .callout.red   { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple{ background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.orange{ background:rgba(251,146,60,0.07); border-color:var(--orange); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold  .label { color:var(--gold); }
+  .callout.cyan  .label { color:var(--cyan); }
+  .callout.green .label { color:var(--green); }
+  .callout.red   .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.orange .label { color:var(--orange); }
+  .callout p { margin-bottom:0; }
+
+  /* CODE */
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:20px 22px; overflow-x:auto; margin:20px 0; }
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  pre code { color:#c4deff; }
+  .cmd { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:16px 22px; margin:20px 0; }
+  .cmd .prompt { color:var(--green); font-family:'Source Code Pro',monospace; font-size:13px; user-select:none; }
+  .cmd .line { font-family:'Source Code Pro',monospace; font-size:14px; color:#e2e8f0; margin:2px 0; }
+  .cmd .comment { color:var(--muted); font-style:italic; }
+
+  /* STEP LIST */
+  .steps { list-style:none; counter-reset:step; margin:20px 0; }
+  .steps li { counter-increment:step; display:flex; gap:16px; margin-bottom:20px; align-items:flex-start; }
+  .steps li::before { content:counter(step); background:var(--cyan); color:#0b0f1a; font-weight:700; font-size:13px; min-width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+
+  /* COMPARE */
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+  .compare-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .compare-box h4 { font-size:13px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; }
+  .compare-box.bad h4 { color:var(--red); }
+  .compare-box.good h4 { color:var(--green); }
+
+  /* QA */
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+
+  /* BRAIN */
+  .brain { background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(56,189,248,0.08)); border:1px solid rgba(245,200,66,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--gold); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+
+  /* MAP */
+  .map-row { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--card); border:1px solid var(--border); border-radius:8px; margin:6px 0; font-size:15px; }
+  .map-row .addr { font-family:'Source Code Pro',monospace; font-size:13px; color:var(--cyan); min-width:100px; }
+  .map-row .what { color:var(--text); }
+  .map-row .note { color:var(--muted); font-size:13px; margin-left:auto; }
+
+  /* WINDOWS BOX */
+  .win-box { background:var(--code-bg); border:2px solid var(--teal); border-radius:10px; padding:22px 24px; margin:24px 0; }
+  .win-box h4 { color:var(--teal); font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .win-box .step { margin-bottom:12px; }
+  .win-box .step .desc { color:var(--muted); font-size:13px; margin-bottom:4px; }
+  .win-box pre { margin:0; background:transparent; border:1px solid rgba(13,148,136,0.3); padding:10px 14px; }
+
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+  /* PREREQ */
+  .prereq-bar { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .prereq-tag { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .prereq-tag:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">MODULE 01 — PHASE 1</div>
+  <h1>The <span>Bootloader</span></h1>
+  <p class="tagline">The first 512 bytes the CPU ever runs. Before your OS, before C, before anything — this tiny assembly program is what wakes the machine up.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">512</div><div class="label">bytes, max</div></div>
+    <div class="hero-stat"><div class="num">0x7C00</div><div class="label">where BIOS loads it</div></div>
+    <div class="hero-stat"><div class="num">0x55AA</div><div class="label">magic boot signature</div></div>
+    <div class="hero-stat"><div class="num">16-bit</div><div class="label">real mode CPU</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>00 — Before You Start</h2>
+    <div class="callout cyan">
+      <div class="label">Prerequisites — read these sections in <a href="../prerequisite.html" style="color:var(--cyan);text-decoration:underline">prerequisite.html</a> first</div>
+      <div class="prereq-bar">
+      <a class="prereq-tag" href="../prerequisite.html#sec-tools">Tools &amp; QEMU</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-numbers">Number Systems</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-cpu">The CPU</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-registers">Registers</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-asm">Assembly</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-memory">Memory Addresses</a>
+      <a class="prereq-tag" href="../prerequisite.html#sec-build">Build Pipeline</a>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Imagine your computer is a hotel. When the power turns on, a sleepy security guard wakes up — that's the <strong>BIOS</strong>. He has one job: find the first disk, read the first 512 bytes off it, check that the last two bytes say <code>0x55AA</code> (the universal "yep, this is bootable" stamp), and dump them into RAM at address <code>0x7C00</code>. Then he goes back to sleep. <em>Everything after that is your code's problem.</em></p>
+    </div>
+    <p>Your bootloader is that first drop of code. It runs in <strong>16-bit Real Mode</strong> — the same mode the 8086 from 1978 used. No protection, no paging, no C runtime. Just you, the CPU registers, and BIOS interrupt calls.</p>
+    <p>Its one job: load the kernel from disk into RAM, then jump to it.</p>
+  </section>
+
+  <section>
+    <h2>02 — What Happens at Power-On</h2>
+    <ol class="steps">
+      <li><strong>Power on.</strong> CPU resets to address <code>0xFFFFFFF0</code>. The BIOS ROM is mapped there.</li>
+      <li><strong>POST.</strong> BIOS checks RAM, keyboard, disk. It prints that annoying startup screen.</li>
+      <li><strong>Boot device scan.</strong> BIOS looks for a disk whose first sector ends in <code>0x55 0xAA</code>.</li>
+      <li><strong>Load MBR.</strong> BIOS reads sector 0 (512 bytes) into RAM at address <code>0x7C00</code>.</li>
+      <li><strong>Jump.</strong> BIOS executes <code>jmp 0x7C00</code>. Your code is now running.</li>
+      <li><strong>Load kernel.</strong> Your bootloader reads the next N sectors (the kernel) into RAM at <code>0x1000</code>.</li>
+      <li><strong>Jump to kernel.</strong> <code>jmp 0x1000</code>. Bootloader's job is done.</li>
+    </ol>
+
+    <div class="callout cyan">
+      <div class="label">Why 0x7C00?</div>
+      <p>IBM PC designers in 1981 put it there so the bootloader sits at the top of the original 32KB DOS memory area, leaving low addresses free for the OS. It's pure historical accident — and every PC BIOS since 1981 has honored it.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 — Memory Map at Boot</h2>
+    <p>Before your kernel runs, the RAM layout looks like this:</p>
+    <div class="map-row"><div class="addr">0x0000</div><div class="what">BIOS interrupt vector table</div><div class="note">1KB, read-only</div></div>
+    <div class="map-row"><div class="addr">0x0400</div><div class="what">BIOS Data Area</div><div class="note">256 bytes</div></div>
+    <div class="map-row"><div class="addr">0x1000</div><div class="what">Your kernel lands here</div><div class="note">← bootloader writes this</div></div>
+    <div class="map-row"><div class="addr">0x7C00</div><div class="what">Your bootloader (this file)</div><div class="note">512 bytes</div></div>
+    <div class="map-row"><div class="addr">0x7E00</div><div class="what">Free RAM</div><div class="note">safe to use as scratch</div></div>
+    <div class="map-row"><div class="addr">0xA0000</div><div class="what">VGA framebuffer / ROM</div><div class="note">hardware-mapped</div></div>
+  </section>
+
+  <section>
+    <h2>04 — The Code, Explained</h2>
+    <p>Open <code>boot.asm</code>. The key pieces:</p>
+
+    <h3>BIOS disk read (INT 0x13)</h3>
+    <pre><code>mov ah, 0x02       ; BIOS "read sectors" function
+mov al, 16         ; how many sectors to read (8KB of kernel)
+mov ch, 0          ; cylinder 0
+mov cl, 2          ; start at sector 2 (sector 1 is us)
+mov dh, 0          ; head 0
+mov bx, 0x1000     ; destination address in RAM
+int 0x13           ; call BIOS — it DMA's the sectors for us
+jc disk_error      ; CF set = error</code></pre>
+
+    <h3>The boot signature</h3>
+    <pre><code>times 510 - ($ - $$) db 0   ; pad to 510 bytes
+dw 0xAA55                   ; boot signature at bytes 511-512
+                             ; (x86 is little-endian: 0x55 then 0xAA)</code></pre>
+
+    <div class="callout orange">
+      <div class="label">Gotcha</div>
+      <p>BIOS reads <code>0x55</code> at offset 510 and <code>0xAA</code> at offset 511. Because x86 is little-endian, you write the 16-bit value as <code>0xAA55</code> in NASM. Getting this backwards = the disk is not bootable. QEMU will just hang at a blank screen.</p>
+    </div>
+
+    <h3>Jumping to the kernel</h3>
+    <pre><code>jmp 0x0000:0x1000  ; far jump: sets CS=0x0000, IP=0x1000
+                   ; now execution continues in kernel_entry.asm</code></pre>
+  </section>
+
+  <section>
+    <h2>05 — The Limits of 512 Bytes</h2>
+    <div class="compare">
+      <div class="compare-box bad">
+        <h4>What you cannot do in 512 bytes</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text);">
+          <li>Parse a filesystem</li>
+          <li>Handle errors gracefully</li>
+          <li>Load more than one kernel file</li>
+          <li>Switch to Protected Mode (that's Module 2)</li>
+          <li>Print more than a simple string</li>
+        </ul>
+      </div>
+      <div class="compare-box good">
+        <h4>What this bootloader does</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text);">
+          <li>Prints "BobOS Bootloader..."</li>
+          <li>Reads 16 raw sectors from disk</li>
+          <li>Drops them at 0x1000</li>
+          <li>Jumps there</li>
+          <li>Fits in exactly 512 bytes</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout green">
+      <div class="label">Why not GRUB?</div>
+      <p>GRUB abstracts all of this. But if you use GRUB you never learn that your kernel is just raw bytes in RAM, that the CPU starts in 16-bit mode, or that the BIOS is the reason you can't have more than 640KB of "conventional memory." Writing your own bootloader burns these facts into your brain permanently.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — Run It on Windows</h2>
+    <div class="callout purple">
+      <div class="label">Prerequisites (one-time setup)</div>
+      <p>You need three tools installed:</p>
+      <ul style="padding-left:18px; margin-top:8px;">
+        <li><strong>NASM</strong> — Windows native installer from nasm.us. Add it to your PATH so you can run <code>nasm</code> from any terminal.</li>
+        <li><strong>WSL 2 + Ubuntu</strong> — Run <code>wsl --install</code> in PowerShell as Administrator. Inside WSL: <code>sudo apt install gcc-multilib binutils</code>.</li>
+        <li><strong>QEMU</strong> — Windows installer from qemu.weilnetz.de. Add the install folder (e.g. <code>C:\Program Files\qemu</code>) to your PATH.</li>
+      </ul>
+    </div>
+
+    <div class="win-box">
+      <h4>Run Module 01 — Bootloader</h4>
+      <div class="step">
+        <div class="desc">Open a Command Prompt or PowerShell in the module folder:</div>
+        <pre><code>cd C:\Users\bobcumulus\Desktop\bob_os\01_bootloader</code></pre>
+      </div>
+      <div class="step">
+        <div class="desc">Build the disk image (first time only — creates disk.img):</div>
+        <pre><code>make disk.img</code></pre>
+      </div>
+      <div class="step">
+        <div class="desc">Build and run in QEMU:</div>
+        <pre><code>make run</code></pre>
+      </div>
+      <div class="step">
+        <div class="desc">What you should see in the QEMU window:</div>
+        <pre><code>BobOS Bootloader...
+Loading kernel from disk...
+[BobOS] Kernel reached — Protected Mode active!</code></pre>
+      </div>
+    </div>
+
+    <div class="callout red">
+      <div class="label">If QEMU shows a blank screen</div>
+      <p>The boot signature is wrong or the kernel didn't load. Run <code>make clean</code> then <code>make run</code> again. If it persists, check that NASM is in your PATH: open a new terminal and type <code>nasm --version</code>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Question:</strong> The bootloader loads 16 sectors (8KB) of kernel. What happens if your kernel grows past 8KB? Where in <code>boot.asm</code> do you change the limit — and what's the hard ceiling?</p>
+      <p style="margin-top:14px; color:var(--muted);">Think: BIOS INT 0x13 in CHS mode has a sector count limit. What is it? (Hint: the register <code>AL</code> is 8 bits.)</p>
+    </div>
+
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Why is the bootloader in assembly, not C?</div>
+      <div class="a">C requires a stack, a <code>main()</code>, and a startup routine. None of those exist yet. The first instruction the CPU runs has to be raw machine code, so NASM is the only option. Module 2 sets up the C environment — after that, everything is C.</div>
+      <div class="q">Q: What's "Real Mode"?</div>
+      <div class="a">The 8086-compatible mode the CPU boots in. 16-bit registers, 20-bit addresses (max 1MB), no memory protection, no paging. The BIOS lives here. Module 2 exits Real Mode and enters 32-bit Protected Mode permanently.</div>
+      <div class="q">Q: Could I brick my real computer doing this?</div>
+      <div class="a">Only if you write the disk image to your real hard drive (e.g. with <code>dd if=os.img of=/dev/sda</code> — which we absolutely do not do). QEMU uses a file (<code>os.img</code>) as a virtual floppy disk. Your real disks are untouched.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — What's Next</h2>
+    <div class="callout teal" style="border-color:var(--teal); background:rgba(13,148,136,0.07);">
+      <div class="label" style="color:var(--teal);">Up Next: Module 02 — Kernel Entry</div>
+      <p>The bootloader jumped to <code>0x1000</code>. Now the kernel's first assembly file takes over. It exits Real Mode, sets up a stack, zeroes the BSS segment, and calls <code>kernel_main()</code> — which is C. From Module 2 onward, you never write assembly again (almost).</p>
+    </div>
+    <p style="color:var(--muted); font-size:15px;">Key files in this module: <code>boot.asm</code> · <code>Makefile</code></p>
+  </section>
+
+</div>
+
+<footer>
+  BobOS Tutorial — Module 01 of 42 &nbsp;|&nbsp; <a href="../02_kernel_entry/tutorial.html">Next: Module 02 →</a>
+</footer>
+
+</body>
+</html>

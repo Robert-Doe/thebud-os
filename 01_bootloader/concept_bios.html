@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept: BIOS | BobOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(74,222,128,0.08) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--green); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2.1rem,4.8vw,3.2rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--green); }
+  .hero .tagline { font-size:1.12rem; color:var(--muted); max-width:680px; margin:0 auto 28px; }
+  .hero-grid { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+  .hero-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 28px; text-align:center; }
+  .hero-stat .num { font-family:'Playfair Display',serif; font-size:1.8rem; color:var(--green); font-weight:700; }
+  .hero-stat .label { font-size:13px; color:var(--muted); margin-top:2px; }
+  .container { max-width:880px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.7rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.15rem; color:var(--green); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+  ul { padding-left:20px; margin-bottom:14px; }
+  li { margin-bottom:6px; }
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold  { background:rgba(245,200,66,0.07); border-color:var(--gold); }
+  .callout.cyan  { background:rgba(56,189,248,0.07); border-color:var(--cyan); }
+  .callout.green { background:rgba(74,222,128,0.07); border-color:var(--green); }
+  .callout.red   { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple{ background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.teal{ background:rgba(13,148,136,0.07); border-color:var(--teal); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold  .label { color:var(--gold); }
+  .callout.cyan  .label { color:var(--cyan); }
+  .callout.green .label { color:var(--green); }
+  .callout.red   .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.teal .label { color:var(--teal); }
+  .callout p:last-child { margin-bottom:0; }
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:20px 22px; overflow-x:auto; margin:20px 0; }
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  table { width:100%; border-collapse:collapse; margin:20px 0; font-size:14px; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--gold); font-family:'Source Code Pro',monospace; font-size:12px; letter-spacing:0.5px; text-transform:uppercase; }
+  td.mono { font-family:'Source Code Pro',monospace; color:var(--cyan); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .tablewrap { overflow-x:auto; }
+  .steps { list-style:none; counter-reset:step; margin:20px 0; }
+  .steps li { counter-increment:step; display:flex; gap:16px; margin-bottom:16px; align-items:flex-start; }
+  .steps li::before { content:counter(step); background:var(--green); color:#0b0f1a; font-weight:700; font-size:13px; min-width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+  .compare-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .compare-box h4 { font-size:13px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; }
+  .compare-box.old h4 { color:var(--orange); }
+  .compare-box.new h4 { color:var(--green); }
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+  .brain { background:linear-gradient(135deg, rgba(74,222,128,0.1), rgba(56,189,248,0.08)); border:1px solid rgba(74,222,128,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--green); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  .word-web { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:24px 0; }
+  .word-web a { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:8px 18px; font-family:'Source Code Pro',monospace; font-size:13px; color:var(--cyan); text-decoration:none; }
+  .word-web a:hover { border-color:var(--cyan); }
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+  @media (max-width: 700px) { .compare { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">CONCEPT 3 OF 4 — BIOS</div>
+  <h1>The <span>BIOS</span>: Your Motherboard's Tiny, Ancient Butler</h1>
+  <p class="tagline">Decades before your operating system existed, a small, permanent program was already living on your motherboard — silently testing hardware, waking up devices, and knowing exactly one address to hand control to. Meet the first piece of software that ever runs on your machine.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">1975</div><div class="label">term "BIOS" coined</div></div>
+    <div class="hero-stat"><div class="num">1981</div><div class="label">IBM PC BIOS standardizes it</div></div>
+    <div class="hero-stat"><div class="num">~20+</div><div class="label">INT 0x10 video sub-functions</div></div>
+    <div class="hero-stat"><div class="num">0</div><div class="label">disks it can read a filesystem from</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Picture a hotel that's been closed for the night. A single night-shift security guard is on duty. When someone finally arrives, the guard doesn't know who they are, what they want, or what room they're headed to — but the guard knows the building cold: where the light switches are, where the fire exits are, which elevators work. The guard turns on the lobby lights, checks that the elevators respond, glances at the register for who's expected, and then walks the guest to the door of their room and says <em>"you're on your own from here."</em> Then the guard's job for that arrival is completely done.</p>
+      <p>That guard is the BIOS. It doesn't know what operating system you're running, what your bootloader does, or what your OS looks like once it's up. It just knows the raw physical building — RAM, keyboard, screen, disk controllers — well enough to wake them up and hand off to whatever shows up asking.</p>
+    </div>
+    <p><strong>BIOS</strong> stands for <strong>Basic Input/Output System</strong>. It is <em>firmware</em> — software permanently stored on a chip on the motherboard, not on your hard drive, so it survives even a completely empty disk. It exists so that no operating system ever has to know, from scratch, how to talk to every possible brand and model of keyboard controller, disk controller, or display adapter — the BIOS abstracts that away with a small, standardized menu of services.</p>
+  </section>
+
+  <section>
+    <h2>02 — A Short, Surprisingly Specific History</h2>
+    <div class="callout cyan">
+      <div class="label">Where the Word Actually First Appeared</div>
+      <p>The term "BIOS" wasn't coined by IBM — it was coined by <strong>Gary Kildall</strong> in 1975 for <strong>CP/M</strong>, an early microcomputer operating system. CP/M split into two parts: a portable core (the "BDOS") and a small, hardware-specific layer called the <strong>BIOS</strong>, whose entire job was to isolate the parts of the OS that had to know about specific hardware. When IBM built the original IBM PC in 1981, they adopted both the concept and the name for their own ROM firmware — and because the IBM PC became the dominant hardware standard, "BIOS" became the universal term, even on machines with no CP/M lineage at all.</p>
+    </div>
+    <p>The BIOS lives on a ROM (or, on modern boards, flash memory that behaves like ROM until you deliberately reflash it) — physically soldered to the motherboard, independent of any hard drive. This is precisely why a totally blank hard drive still shows you <em>something</em> on screen when you power on: the BIOS runs and displays its own messages before it ever tries to touch a disk.</p>
+  </section>
+
+  <section>
+    <h2>03 — What the BIOS Actually Does, Step by Step</h2>
+    <ol class="steps">
+      <li><strong>POST — Power-On Self Test.</strong> Before anything else, the BIOS runs a battery of sanity checks: is RAM responding correctly, is the CPU functional, are basic devices present. This is why a machine with faulty RAM often beeps in a specific pattern instead of booting — that's the BIOS reporting a POST failure through the only output device it can guarantee works (the speaker) before video is even confirmed functional.</li>
+      <li><strong>Hardware initialization.</strong> Sets up the keyboard controller, brings up basic video output, and detects what storage devices are physically connected.</li>
+      <li><strong>Boot device scan.</strong> Walks through a configured list of devices (floppy, hard disk, USB, network) in order, and for each one, reads the first 512-byte sector and checks whether the last two bytes are <code>0x55</code>, <code>0xAA</code> — the "magic number" signature that means "this sector is executable code, not just data."</li>
+      <li><strong>Load and jump.</strong> The moment it finds a sector ending in that signature, it copies all 512 bytes into RAM at address <code>0x7C00</code> and jumps the CPU there. From this exact instant, the BIOS's involvement in booting is over — although, importantly, its <em>services</em> (see §04) remain callable for as long as the CPU stays in Real Mode.</li>
+    </ol>
+    <div class="callout orange">
+      <div class="label">A Detail Worth Sitting With</div>
+      <p>The BIOS does not know or care what's <em>inside</em> those 512 bytes. It doesn't parse a filesystem, doesn't check for a valid program, doesn't verify anything beyond two magic bytes at a fixed offset. This is exactly why a bootloader bug that corrupts the signature produces total silence rather than an error message — as far as the BIOS is concerned, a disk either has the magic bytes or it simply isn't bootable, full stop.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — The BIOS's "API": Interrupt Services</h2>
+    <p>Once your bootloader is running, it's not alone — it can still call back into the BIOS for help, the same way an app calls into an operating system's API. The mechanism is <strong>software interrupts</strong>: your code loads specific values into specific registers, then executes <code>int</code> with a specific number, and the CPU looks up that number in the <strong>Interrupt Vector Table</strong> (a list of addresses sitting at the very start of memory, placed there by the BIOS itself) to find and jump to the right BIOS routine.</p>
+    <div class="tablewrap">
+    <table>
+      <tr><th class="mono">Interrupt</th><th>Service Category</th><th>Example use in this project</th></tr>
+      <tr><td class="mono">INT 0x10</td><td>Video services</td><td><code>AH=0x0E</code> "teletype output" — used by <code>boot.asm</code>'s <code>print_string</code> to print <code>"BobOS Booting..."</code></td></tr>
+      <tr><td class="mono">INT 0x13</td><td>Disk services</td><td><code>AH=0x02</code> "read sectors" — reads raw sectors off disk into RAM; this is how a real bootloader loads a kernel too big for 512 bytes</td></tr>
+      <tr><td class="mono">INT 0x16</td><td>Keyboard services</td><td>Reading raw keypresses before your own keyboard driver exists</td></tr>
+      <tr><td class="mono">INT 0x15</td><td>System services</td><td>Querying the BIOS for a memory map — essential once you need to know how much RAM is safe to use before writing a memory manager</td></tr>
+    </table>
+    </div>
+    <p>The pattern is always the same: put a function number in <code>AH</code>, put whatever arguments that function needs in other registers, fire the interrupt, and the BIOS's own code — running at whatever address the Interrupt Vector Table points to — does the work and returns results in registers (often signaling success/failure via the Carry Flag). This entire calling convention is documented in community references like <strong>Ralf Brown's Interrupt List</strong>, which catalogs essentially every BIOS/DOS interrupt function ever documented, vendor quirks included.</p>
+  </section>
+
+  <section>
+    <h2>05 — BIOS vs. UEFI</h2>
+    <p>Every machine made since roughly the mid-2010s ships with <strong>UEFI</strong> (Unified Extensible Firmware Interface) instead of classic BIOS — but nearly all UEFI implementations include a <strong>CSM (Compatibility Support Module)</strong> or "legacy boot" mode that behaves exactly like classic BIOS, which is precisely the mode this project targets.</p>
+    <div class="compare">
+      <div class="compare-box old">
+        <h4>Classic BIOS (what BobOS targets)</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text);">
+          <li>16-bit real mode only</li>
+          <li>Boots via MBR: first 512 bytes, <code>0x55AA</code> signature</li>
+          <li>No native filesystem awareness — raw sector reads only</li>
+          <li>~1MB addressable during boot</li>
+          <li>Simple, small, and — crucially for this project — simple enough to write by hand</li>
+        </ul>
+      </div>
+      <div class="compare-box new">
+        <h4>UEFI (modern default)</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text);">
+          <li>Runs in 32/64-bit mode from the start</li>
+          <li>Boots via GPT partition table + a FAT32 "EFI System Partition"</li>
+          <li>Understands FAT32 filesystems and loads <code>.efi</code> executables (a PE format, like Windows <code>.exe</code>) directly</li>
+          <li>Can address far more memory, supports networking, graphics, even a mouse-driven setup menu</li>
+          <li>Far larger and more complex — not something you hand-assemble in 512 bytes</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout purple">
+      <div class="label">Why This Project Deliberately Chooses Legacy BIOS</div>
+      <p>UEFI would require producing a FAT32-formatted disk image and a PE-format executable before you've written a single line of OS logic — real complexity that has nothing to do with learning how operating systems work. Legacy BIOS lets the entire "get code running on bare metal" problem collapse down to 512 bytes and one magic number, which is exactly the right amount of complexity for Module 1.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — The BIOS in This Project, Specifically: SeaBIOS</h2>
+    <p>When you run <code>qemu-system-i386 -fda boot.img</code>, QEMU doesn't invent its own boot behavior — it boots <strong>SeaBIOS</strong>, an open-source, legacy-BIOS-compatible firmware implementation bundled with QEMU. Every fact in §03 and §04 above is exactly what SeaBIOS implements, because SeaBIOS's entire purpose is to faithfully reproduce the same documented behavior real 1981-lineage PC BIOSes provide. Its source code is public, so if you ever want ground truth for exactly what <code>INT 0x10</code> AH=0x0E does, you can read the actual implementation rather than trust a summary.</p>
+    <p>This is also the direct answer to a question that comes up naturally once you start writing boot code: <em>how do I know this will work in QEMU if I've never run QEMU before?</em> Because QEMU isn't a mystery box with its own private rules — it's a faithful implementer of a documented spec (the x86 ISA plus the BIOS interrupt contract) that you have independent access to. The full version of this argument lives in <a href="boot_asm_deepdive.html">boot_asm_deepdive.html</a> §03.</p>
+  </section>
+
+  <section>
+    <h2>07 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Before reading on:</strong> the BIOS checks for the <code>0x55 0xAA</code> signature but never checks whether the 510 bytes before it are actually <em>valid, sensible</em> code. What could you put in those 510 bytes that's technically "bootable" by the BIOS's definition, but obviously not a real bootloader? What does that tell you about where responsibility for correctness actually sits in this whole chain?</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: Is the BIOS "the bootloader"?</div>
+      <div class="a">No — this is the most common conflation of all four terms. The BIOS is firmware that <em>finds and loads</em> the bootloader; it never <em>is</em> the bootloader. The bootloader is separate code, written by you (or GRUB, or Windows), sitting on the disk. Full distinction in <a href="concept_bootloader.html">concept_bootloader.html</a>.</div>
+      <div class="q">Q: Can the BIOS be updated?</div>
+      <div class="a">Yes — modern BIOS/UEFI firmware lives on flash memory, not true read-only ROM, specifically so manufacturers can patch bugs and add hardware support ("flashing the BIOS"). It's still firmware in the sense that it persists without a working OS or hard drive, which is the property that matters for booting.</div>
+      <div class="q">Q: Why does BIOS video output look so crude compared to a modern OS?</div>
+      <div class="a">Because <code>INT 0x10</code>'s teletype function is decades old and was designed for the simplest possible text output on hardware from the early 1980s. It gets the job done for a boot message, but nobody would build a modern GUI on top of it — which is exactly why Module 3 of this project (<code>03_vga_driver</code>) exists: to replace BIOS video calls with direct hardware access once you're past Real Mode.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — How This Connects to the Other Three Concepts</h2>
+    <div class="callout purple">
+      <div class="label">The Short Version</div>
+      <p><strong>BIOS</strong> is the firmware rung of the bootstrapping staircase — the first thing that runs, and the thing that finds and loads the <strong>bootloader</strong>. Both are participants inside the larger event called <strong>booting</strong>. The reason this whole layered arrangement exists at all is <strong>bootstrapping</strong>.</p>
+    </div>
+    <div class="word-web">
+      <a href="concept_how_they_connect.html">concept_how_they_connect.html →</a>
+      <a href="concept_booting.html">concept_booting.html</a>
+      <a href="concept_bootstrapping.html">concept_bootstrapping.html</a>
+      <a href="concept_bootloader.html">concept_bootloader.html</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>09 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Keep Going</div>
+      <p>You now know what hands control to <code>0x7C00</code> and why. Next: what actually lives at <code>0x7C00</code> — the bootloader itself, what makes it different from firmware, and how real-world bootloaders like GRUB compare to the 512-byte version in this repo. Head to <a href="concept_bootloader.html">concept_bootloader.html</a>.</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  BobOS — 01_bootloader concept series (3 of 4) &nbsp;|&nbsp; <a href="concept_how_they_connect.html">See how they all connect →</a>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>boot.asm Deep Dive — Registers, boot.img, and How You'd Know | BobOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(56,189,248,0.07) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--gold); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2rem,4.6vw,3.1rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--gold); }
+  .hero .tagline { font-size:1.1rem; color:var(--muted); max-width:680px; margin:0 auto 28px; }
+  .hero-grid { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+  .hero-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 28px; text-align:center; }
+  .hero-stat .num { font-family:'Playfair Display',serif; font-size:1.8rem; color:var(--cyan); font-weight:700; }
+  .hero-stat .label { font-size:13px; color:var(--muted); margin-top:2px; }
+
+  .container { max-width:880px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.7rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.15rem; color:var(--cyan); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+  ul, ol.plain { padding-left:20px; margin-bottom:14px; }
+  li { margin-bottom:6px; }
+
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold  { background:rgba(245,200,66,0.07); border-color:var(--gold); }
+  .callout.cyan  { background:rgba(56,189,248,0.07); border-color:var(--cyan); }
+  .callout.green { background:rgba(74,222,128,0.07); border-color:var(--green); }
+  .callout.red   { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple{ background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.orange{ background:rgba(251,146,60,0.07); border-color:var(--orange); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold  .label { color:var(--gold); }
+  .callout.cyan  .label { color:var(--cyan); }
+  .callout.green .label { color:var(--green); }
+  .callout.red   .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.orange .label { color:var(--orange); }
+  .callout p:last-child { margin-bottom:0; }
+
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:20px 22px; overflow-x:auto; margin:20px 0; }
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  pre code { color:#c4deff; }
+
+  table { width:100%; border-collapse:collapse; margin:20px 0; font-size:14px; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--gold); font-family:'Source Code Pro',monospace; font-size:12px; letter-spacing:0.5px; text-transform:uppercase; }
+  td.mono, th.mono { font-family:'Source Code Pro',monospace; }
+  td.mono { color:var(--cyan); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .tablewrap { overflow-x:auto; }
+
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+
+  .brain { background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(56,189,248,0.08)); border:1px solid rgba(245,200,66,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--gold); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+
+  .chain { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:20px 0; }
+  .chain .link { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 16px; font-size:14px; }
+  .chain .arrow { color:var(--muted); font-size:20px; }
+
+  .hexcol { color:var(--cyan); }
+  .asccol { color:var(--green); }
+
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+
+  .toc { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .toc a { display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan); font-family:'Source Code Pro',monospace; font-size:13px; padding:5px 14px; border-radius:20px; text-decoration:none; transition:border-color .2s; }
+  .toc a:hover { border-color:var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">01_BOOTLOADER — COMPANION DOC</div>
+  <h1>boot.asm, Deep <span>Dive</span></h1>
+  <p class="tagline">Not "what does this code do" — that's in <code>DECISIONS.md</code>. This is <strong>why these exact register choices</strong>, <strong>how the 512 bytes of boot.img actually came from these lines</strong>, and <strong>how you can trust code you've never run before you've ever touched QEMU.</strong></p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">10</div><div class="label">registers touched</div></div>
+    <div class="hero-stat"><div class="num">54</div><div class="label">bytes of real code+data</div></div>
+    <div class="hero-stat"><div class="num">456</div><div class="label">zero-padding bytes</div></div>
+    <div class="hero-stat"><div class="num">2</div><div class="label">signature bytes</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>00 — How This Fits With the Other Files Here</h2>
+    <p>This folder now has three explainer documents plus the real source. They answer different questions on purpose — don't read them as duplicates:</p>
+    <div class="tablewrap">
+    <table>
+      <tr><th>File</th><th>Question it answers</th></tr>
+      <tr><td class="mono">DECISIONS.md</td><td>What does each line of the <em>current</em> boot.asm do, and what historical accidents (0x7C00, 512 bytes, 0x55AA) does it depend on?</td></tr>
+      <tr><td class="mono">tutorial.html</td><td>A walkthrough with a disk-read (<code>INT 0x13</code>) and a jump to a loaded kernel — this describes a <strong>later planned version</strong> of boot.asm, not what's on disk today. Treat it as a preview of where Module 2 is headed.</td></tr>
+      <tr><td class="mono">boot_asm_deepdive.html <em>(this file)</em></td><td>Given the code that's <strong>actually here right now</strong> (print a banner, halt — no disk I/O yet): why these specific register choices, how the literal bytes of <code>boot.img</code> map back to these lines, and the epistemics of OS-dev — how do you know any of this will work before you've run it?</td></tr>
+    </table>
+    </div>
+    <div class="callout orange">
+      <div class="label">Heads up — a discrepancy worth knowing about</div>
+      <p><code>tutorial.html</code>'s "04 — The Code, Explained" section shows <code>INT 0x13</code> disk reads and a far jump to <code>0x1000</code>. Your actual <code>boot.asm</code> does not have that code yet — it prints <code>"BobOS Booting..."</code> and executes <code>cli</code> / <code>hlt</code>. That's not a bug, it's just two documents at different points in the project's timeline. This deep-dive describes the code that exists today.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>01 — Why Each Register Got the Value It Got</h2>
+    <p>The most useful mental model for register choices in a bootloader: every register value in <code>boot.asm</code> falls into exactly one of three categories. Knowing which category a line belongs to tells you whether it's negotiable, and where the rule that constrains it actually lives.</p>
+
+    <div class="tablewrap">
+    <table>
+      <tr><th>Category</th><th>Meaning</th><th>Examples in boot.asm</th></tr>
+      <tr><td><strong>Hardwired by the instruction itself</strong></td><td>The CPU's silicon only lets this instruction address this register/segment pair. Not a convention — a physical constraint of the 8086 design.</td><td><code>lodsb</code> always reads from <code>DS:SI</code>. You cannot make it read from <code>DS:DI</code> — that encoding doesn't exist.</td></tr>
+      <tr><td><strong>Mandated by an external contract</strong></td><td>A spec you didn't write (BIOS, the boot process, a calling convention) demands this exact register/value or it silently does the wrong thing.</td><td><code>AH=0x0E</code> before <code>INT 0x10</code> — that's BIOS's "teletype output" function number, documented behavior of firmware you didn't author.</td></tr>
+      <tr><td><strong>Your own convention, self-imposed for safety</strong></td><td>Nothing forces this specific value; you picked it because leaving it undefined is dangerous. Any consistent alternative would also work.</td><td>Zeroing <code>DS</code>/<code>ES</code>/<code>SS</code> to 0 and setting <code>SP=0x7C00</code>.</td></tr>
+    </table>
+    </div>
+
+    <h3>Segment registers: DS, ES, SS ← 0 (self-imposed convention)</h3>
+    <pre><code>xor ax, ax
+mov ds, ax      ; Data Segment = 0
+mov es, ax      ; Extra Segment = 0
+mov ss, ax      ; Stack Segment = 0</code></pre>
+    <p>Nothing in the BIOS spec demands DS=ES=SS=0. Real Mode addresses are computed as <code>segment × 16 + offset</code>, so any consistent segment value works as long as every address you compute agrees with it. The reason to pick <strong>0</strong> specifically:</p>
+    <ul>
+      <li>The BIOS is <em>documented</em> to hand off control with segment registers in an <strong>undefined state</strong> — different BIOS implementations (AMI, Award, SeaBIOS in QEMU) leave different garbage in them. If you don't set them yourself, your addressing math is only correct by accident.</li>
+      <li>0x7C00 already sits exactly on a paragraph boundary that makes "flat" 0-based addressing convenient: with <code>DS=0</code>, the byte at linear address 0x7C00 is simply offset <code>0x7C00</code> — no mental multiplication needed anywhere else in the file.</li>
+      <li><code>xor ax, ax</code> then broadcasting AX into three segment registers is the idiomatic way to do this because x86 <strong>forbids loading a segment register directly from an immediate value</strong> (<code>mov ds, 0</code> is not a legal encoding — check the instruction table below). You must go through a general-purpose register.</li>
+    </ul>
+
+    <h3>SP ← 0x7C00 (self-imposed convention, but not arbitrary)</h3>
+    <pre><code>mov sp, 0x7C00</code></pre>
+    <p>The stack on x86 grows <em>downward</em> — each <code>push</code> decrements SP before writing. Your bootloader's own code occupies bytes <code>0x7C00</code>–<code>0x7DFF</code>. Pointing SP at <strong>the same address your code starts at</strong> is deliberate: the stack grows down into the free, unused RAM below 0x7C00, and can never collide with your code growing up from 0x7C00. Any address ≥ 0x7C00 and below your code's own instructions would technically work, but 0x7C00 exactly is the simplest value to reason about and is the value nearly every bootloader tutorial and OS in existence uses — so much so it's a de facto convention, not just a personal choice.</p>
+    <div class="callout red">
+      <div class="label">What happens if you skip this</div>
+      <p>Without setting SP, it holds whatever garbage the BIOS left in it — possibly 0, possibly overlapping your own code. The moment <code>call print_string</code> executes, the CPU pushes a 2-byte return address at <code>[SS:SP]</code>. If SP happens to be small or already inside your code region, that push corrupts your own instructions or wraps around and corrupts other memory. <code>ret</code> then reads garbage back into IP and jumps to a effectively random address. This is one of the single most common real-mode bootloader bugs, and it's exactly why line 1 of nearly every bootloader ever written sets up DS/ES/SS/SP before doing anything else.</p>
+    </div>
+
+    <h3>SI ← msg_boot, AH/BH/BL — the BIOS's calling convention (external contract)</h3>
+    <pre><code>mov si, msg_boot    ; SI = pointer to our string
+call print_string
+...
+mov ah, 0x0E        ; BIOS video function: teletype output
+mov bh, 0x00        ; Page number 0
+mov bl, 0x07        ; Text color (foreground/background)</code></pre>
+    <table>
+      <tr><th class="mono">Register</th><th>Why this one, and not another</th></tr>
+      <tr><td class="mono">SI</td><td><code>lodsb</code> is hardwired by the CPU to always read <code>[DS:SI]</code>. SI isn't "the string register" by convention — it's <em>physically incapable of being any other register</em> for that instruction. This is category 1: hardwired.</td></tr>
+      <tr><td class="mono">AH</td><td>BIOS's <code>INT 0x10</code> handler is a dispatcher: it reads AH first to decide which of ~20 different video sub-functions you're asking for. AH=0x0E specifically means "teletype output." This value comes from IBM's original BIOS documentation (1981) — it's an external contract you have no control over. Get AH wrong (say, AH=0x02, "set cursor position") and INT 0x10 does something completely different with the same AL/BH/BL values.</td></tr>
+      <tr><td class="mono">BH</td><td>Function 0x0E additionally reads BH as the video page number. Multiple "pages" of text video memory exist for buffering; page 0 is the one actually displayed by default. This is again BIOS's contract, not a free choice — some other function number would interpret BH completely differently (or ignore it).</td></tr>
+      <tr><td class="mono">BL</td><td>For 0x0E specifically, BL (foreground color) is <strong>only honored in graphics modes</strong> — in the default text mode QEMU boots into, it's ignored by real BIOS/SeaBIOS. It's set here defensively/for documentation clarity, matching the documented calling convention even though it has no visible effect in this exact context.</td></tr>
+    </table>
+
+    <h3>AL — dual-purpose, contract from two different sources</h3>
+    <p>AL is loaded by <code>lodsb</code> (hardwired destination for that instruction) and then read by <code>int 0x10</code> function 0x0E, which is documented to expect "the character to print" in AL. Two different hardwired/contractual rules both happen to converge on the same register — which is precisely why <code>lodsb</code> → <code>int 0x10</code> is such a clean idiom for printing strings char-by-char in real mode: no register shuffling needed between the two steps.</p>
+  </section>
+
+  <section>
+    <h2>02 — From Source Text to boot.img: The Literal Byte-by-Byte Translation</h2>
+    <p>This is not a simulated example — these are the <strong>actual bytes</strong> currently sitting in <code>boot.img</code> in this folder, read with a hex dump. Each row shows exactly which source line produced which bytes, so you can see NASM's job with zero abstraction left in the middle.</p>
+
+    <div class="callout cyan">
+      <div class="label">What "assembling" actually is</div>
+      <p>NASM's job for a flat binary (<code>-f bin</code>) is almost embarrassingly literal: for each instruction, look up its numeric opcode in the Intel encoding tables, glue on the operand bytes, and write the raw bytes to the file in order — no headers, no symbol table, no metadata. What you see below <em>is</em> the entire file.</p>
+    </div>
+
+    <div class="tablewrap">
+    <table>
+      <tr><th class="mono">Offset</th><th class="mono">Bytes</th><th>Source line</th></tr>
+      <tr><td class="mono">0x00</td><td class="mono hexcol">31 c0</td><td><code>xor ax, ax</code></td></tr>
+      <tr><td class="mono">0x02</td><td class="mono hexcol">8e d8</td><td><code>mov ds, ax</code></td></tr>
+      <tr><td class="mono">0x04</td><td class="mono hexcol">8e c0</td><td><code>mov es, ax</code></td></tr>
+      <tr><td class="mono">0x06</td><td class="mono hexcol">8e d0</td><td><code>mov ss, ax</code></td></tr>
+      <tr><td class="mono">0x08</td><td class="mono hexcol">bc 00 7c</td><td><code>mov sp, 0x7C00</code> — note the immediate is stored little-endian: bytes <code>00 7c</code> mean 0x7C00</td></tr>
+      <tr><td class="mono">0x0b</td><td class="mono hexcol">be 23 7c</td><td><code>mov si, msg_boot</code> — NASM resolved the label to the absolute address <strong>0x7C23</strong> (because of <code>[ORG 0x7C00]</code>, and msg_boot sits 0x23 bytes into the file)</td></tr>
+      <tr><td class="mono">0x0e</td><td class="mono hexcol">e8 02 00</td><td><code>call print_string</code> — encoded as a relative call: "jump 2 bytes forward from the instruction after this one" (0x11 + 2 = 0x13, exactly where <code>print_string:</code> begins)</td></tr>
+      <tr><td class="mono">0x11</td><td class="mono hexcol">fa</td><td><code>cli</code></td></tr>
+      <tr><td class="mono">0x12</td><td class="mono hexcol">f4</td><td><code>hlt</code></td></tr>
+      <tr><td class="mono">0x13</td><td class="mono hexcol">b4 0e</td><td><code>mov ah, 0x0E</code> — <em>print_string:</em> starts here</td></tr>
+      <tr><td class="mono">0x15</td><td class="mono hexcol">b7 00</td><td><code>mov bh, 0x00</code></td></tr>
+      <tr><td class="mono">0x17</td><td class="mono hexcol">b3 07</td><td><code>mov bl, 0x07</code></td></tr>
+      <tr><td class="mono">0x19</td><td class="mono hexcol">ac</td><td><code>lodsb</code> — <em>.loop:</em> starts here</td></tr>
+      <tr><td class="mono">0x1a</td><td class="mono hexcol">84 c0</td><td><code>test al, al</code></td></tr>
+      <tr><td class="mono">0x1c</td><td class="mono hexcol">74 04</td><td><code>jz .done</code> — relative jump, +4 bytes from 0x1e lands exactly on 0x22</td></tr>
+      <tr><td class="mono">0x1e</td><td class="mono hexcol">cd 10</td><td><code>int 0x10</code></td></tr>
+      <tr><td class="mono">0x20</td><td class="mono hexcol">eb f7</td><td><code>jmp .loop</code> — relative jump, -9 bytes from 0x22 lands exactly on 0x19</td></tr>
+      <tr><td class="mono">0x22</td><td class="mono hexcol">c3</td><td><code>ret</code> — <em>.done:</em> starts here</td></tr>
+      <tr><td class="mono">0x23</td><td class="mono hexcol asccol">42 6f 62 4f 53 20 42 6f 6f 74 69 6e 67 2e 2e 2e 0d 0a 00</td><td><code>msg_boot db 'BobOS Booting...', 0x0D, 0x0A, 0</code> — 19 bytes, the literal ASCII text plus CR, LF, and the null terminator</td></tr>
+      <tr><td class="mono">0x36 – 0x1FD</td><td class="mono hexcol">00 00 00 … (456 bytes)</td><td><code>times 510 - ($ - $$) db 0</code> — NASM computed <code>510 - 0x36 = 456</code> and emitted that many zero bytes automatically</td></tr>
+      <tr><td class="mono">0x1FE – 0x1FF</td><td class="mono hexcol">55 aa</td><td><code>dw 0xAA55</code> — stored little-endian, so the byte order in the file is <code>55, AA</code></td></tr>
+    </table>
+    </div>
+
+    <p>Two things worth pointing at directly, because they show <code>[ORG 0x7C00]</code> is not decorative:</p>
+    <ul>
+      <li><strong>The <code>mov si, msg_boot</code> encoding (bytes <code>be 23 7c</code>)</strong> hard-codes the absolute address 0x7C23. If this file were assembled with a different <code>ORG</code>, or loaded at a different address at runtime, this exact byte sequence would point at the wrong place in memory and the string would print garbage. NASM computed 0x7C23 at assembly time by adding the label's offset within the file (0x23) to the <code>ORG</code> value (0x7C00) — it has no way to know that unless you tell it via <code>[ORG 0x7C00]</code>, which is also why that value must match where the BIOS actually loads the sector.</li>
+      <li><strong>The relative jumps (<code>e8 02 00</code>, <code>74 04</code>, <code>eb f7</code>)</strong> are computed relative to the next instruction's address, not the current one — a detail that's easy to get backwards by hand but that NASM handles for you from the label names. Decoding them above and confirming they land exactly on <code>print_string</code>, <code>.done</code>, and <code>.loop</code> is a direct proof that the assembler did its job correctly for this specific build.</li>
+    </ul>
+
+    <h3>The Makefile step that produced this file</h3>
+    <pre><code>boot.img: boot.asm
+	nasm -f bin boot.asm -o boot.img</code></pre>
+    <p><code>-f bin</code> is the operative flag. NASM can target many output formats (<code>elf</code>, <code>win32</code>, <code>macho</code>, …) that wrap your code in headers a loader/linker understands. <code>bin</code> means "don't wrap anything — write exactly the bytes the instructions encode to, in file order, with no header." That's mandatory here: the BIOS is not a linker. It doesn't parse ELF headers or resolve symbols. It reads 512 raw bytes off disk into RAM and starts executing at byte 0. Any format other than flat binary would hand the BIOS a file it can't execute.</p>
+  </section>
+
+  <section>
+    <h2>03 — The Core Question: How Would You Know This Works Before You've Ever Run QEMU?</h2>
+    <p>This is really a question about <strong>where confidence comes from when you can't just try things and see</strong> — or more precisely, about what lets you predict the result of running something <em>before</em> you run it. The honest answer has three separate pieces, and conflating them is where most of the mystery comes from.</p>
+
+    <h3>Piece 1 — the CPU's behavior is a published, decades-stable specification</h3>
+    <p>Unlike an application API that might change between versions, the 8086 real-mode instruction set has been <strong>frozen since 1978</strong> for backward compatibility — every x86 CPU made since then, including the one in your machine right now, still understands it identically. That behavior is written down, exhaustively, in Intel's and AMD's own architecture manuals (the "Intel 64 and IA-32 Architectures Software Developer's Manuals"). Every instruction in <code>boot.asm</code> — <code>xor</code>, <code>mov</code>, <code>lodsb</code>, <code>int</code>, <code>cli</code>, <code>hlt</code> — has a formal, unambiguous definition of exactly what registers/flags/memory it touches and how. You're not guessing what <code>lodsb</code> does; you're reading a spec that has had 45+ years and billions of CPUs to be wrong in and wasn't.</p>
+
+    <h3>Piece 2 — BIOS interrupts are also a documented (if informally standardized) contract</h3>
+    <p>The BIOS functions accessed via <code>int 0x10</code>, <code>int 0x13</code>, etc. aren't something you'd have to reverse-engineer. They were documented by IBM originally and have been cataloged exhaustively by the community — the canonical reference is <strong>Ralf Brown's Interrupt List</strong>, a free document listing essentially every BIOS/DOS interrupt function, what registers it reads, what it returns, and its known quirks across BIOS vendors. When you write <code>mov ah, 0x0E</code> before <code>int 0x10</code>, you're not hoping it prints a character — you're invoking a function whose behavior is specified in a document you can go read right now, the same way you'd read a library's API docs.</p>
+
+    <h3>Piece 3 — QEMU is not a separate thing you also have to learn by trial and error</h3>
+    <p>This is the piece that resolves the "but I've never used QEMU" worry directly: <strong>QEMU doesn't invent its own rules.</strong> Its entire job is to faithfully emulate the same CPU (the x86 ISA from Piece 1) and boot with the same firmware contract (SeaBIOS, an open-source BIOS implementation, for Piece 2). It is not a mysterious black box whose behavior you must discover experimentally — it is, by design, a program that implements a specification you already have independent access to. If you know what real 1981 IBM-PC-compatible hardware is documented to do, you already know what QEMU will do, because faithfully reproducing that documented behavior is QEMU's entire reason to exist. (You can even go read SeaBIOS's own source code — it's open source — for exactly what its <code>int 0x10</code> handler does, byte for byte.)</p>
+
+    <div class="chain">
+      <div class="link">Intel/AMD ISA manual<br><span style="color:var(--muted);font-size:12px;">defines what <code>lodsb</code>/<code>mov</code>/<code>int</code> do</span></div>
+      <div class="arrow">→</div>
+      <div class="link">Ralf Brown's Interrupt List<br><span style="color:var(--muted);font-size:12px;">defines what INT 0x10 AH=0x0E does</span></div>
+      <div class="arrow">→</div>
+      <div class="link">NASM manual<br><span style="color:var(--muted);font-size:12px;">defines how source text becomes those exact opcodes</span></div>
+      <div class="arrow">→</div>
+      <div class="link">QEMU + SeaBIOS<br><span style="color:var(--muted);font-size:12px;">implements the above specs faithfully, nothing more</span></div>
+      <div class="arrow">→</div>
+      <div class="link" style="border-color:var(--green);">Predictable result<br><span style="color:var(--muted);font-size:12px;">no first-hand QEMU experience required</span></div>
+    </div>
+
+    <h3>What's left over — and it's real, not hand-waved away</h3>
+    <p>Specs get you <em>predicted</em> correctness, not <em>verified</em> correctness. There's still exactly one thing you can only find out by running the code:</p>
+    <ul>
+      <li><strong>Whether you personally transcribed the spec correctly.</strong> Did you actually set AH before calling INT 0x10, in the right order, with no typo in the immediate value? That's a mistake in your code, not a gap in your knowledge of the spec.</li>
+      <li><strong>Undocumented or vendor-specific quirks.</strong> Real BIOS vendors occasionally deviated slightly from IBM's original documented behavior — this is precisely why community-maintained references like Ralf Brown's list exist and are constantly annotated with "works on X, not on Y."</li>
+      <li><strong>Whether the assembler emitted what you expected.</strong> Section 02 above is exactly this check — decoding the real output bytes and confirming they match the spec's prediction is what closes the loop.</li>
+    </ul>
+    <p>So the actual workflow experienced OS developers use, and the one implicit in this project's structure (write code → assemble → run in QEMU → observe), is: <strong>read the spec to form a hypothesis about what should happen, then run it to confirm the hypothesis, not to discover the behavior from scratch.</strong> QEMU's role in that loop is fast, free, disposable confirmation — not a mystery box you're exploring blind. That's also exactly why QEMU is preferred over real hardware for this stage: an emulator boots in under a second and resets instantly, so the "confirm the hypothesis" step costs almost nothing, and you can afford to do it after every single change instead of batching up guesses.</p>
+
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: So if I'd never opened QEMU before writing this, was I just lucky it worked?</div>
+      <div class="a">No — you were relying on published, stable specs (the CPU ISA and the BIOS interrupt contract) that QEMU is built to reproduce exactly. "Never used QEMU" and "don't know what the code will do" are different states. You can know the second without the first, because QEMU isn't where the ground truth lives — the ISA manual and the BIOS interrupt documentation are.</div>
+      <div class="q">Q: What if there were no documentation at all — how would anyone have figured out INT 0x10 AH=0x0E in the first place?</div>
+      <div class="a">Someone at IBM wrote it and specified it as part of the original PC BIOS in 1981, and it's stayed compatible ever since for the same backward-compatibility reason 0x7C00 stuck around. The very first person to write it wasn't guessing either — they were the ones defining the contract that everyone since has been reading.</div>
+      <div class="q">Q: Does this mean assembly/bootloader code can be written "correct by construction," with no testing?</div>
+      <div class="a">In principle, for a program this size, remarkably close — which is exactly what Section 02's byte-by-byte decode demonstrates after the fact. In practice you still test, because typos and misreadings of the spec are real, and because it's nearly free to do so. The point isn't "skip testing," it's that testing here is <em>confirmation</em> of a prediction, not <em>exploration</em> of the unknown.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Quick Reference: Every Register Touched in boot.asm</h2>
+    <div class="tablewrap">
+    <table>
+      <tr><th class="mono">Register</th><th>Role here</th><th>Category (§01)</th></tr>
+      <tr><td class="mono">AX / AL / AH</td><td>Zeroing source for segments; then AH = BIOS function selector; AL = character from <code>lodsb</code>, consumed by <code>int 0x10</code></td><td>Self-convention (zeroing) / External contract (AH, AL)</td></tr>
+      <tr><td class="mono">BX / BH / BL</td><td>BH = video page, BL = foreground color for <code>int 0x10</code> AH=0x0E</td><td>External contract</td></tr>
+      <tr><td class="mono">SI</td><td>String pointer, auto-incremented by <code>lodsb</code></td><td>Hardwired by instruction</td></tr>
+      <tr><td class="mono">SP</td><td>Top of stack, set to 0x7C00</td><td>Self-convention</td></tr>
+      <tr><td class="mono">DS / ES / SS</td><td>Zeroed for simple flat addressing from a known-clean state</td><td>Self-convention</td></tr>
+      <tr><td class="mono">FLAGS (via cli / test / jz)</td><td>Interrupt flag cleared before <code>hlt</code>; Zero flag read after <code>test al,al</code></td><td>Hardwired by instruction</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — What Comes Next</h2>
+    <p>Right now boot.asm proves the chain BIOS → 0x7C00 → your code → BIOS video interrupt works. <code>tutorial.html</code>'s disk-read/kernel-jump section is the next real step for this file: adding <code>int 0x13</code> to load sectors from disk and a far jump to hand off to <code>kernel_entry.asm</code>. When you get there, the same three-category register analysis in §01 and the same byte-decode technique in §02 apply directly — <code>int 0x13</code>'s AH/AL/CH/CL/DH/BX are exactly the same kind of "external contract" as <code>int 0x10</code>'s, just documented in a different section of Ralf Brown's list.</p>
+    <p style="color:var(--muted); font-size:15px;">Related files: <code>boot.asm</code> · <code>Makefile</code> · <code>DECISIONS.md</code> · <code>tutorial.html</code></p>
+  </section>
+
+</div>
+
+<footer>
+  BobOS — 01_bootloader companion doc &nbsp;|&nbsp; <a href="tutorial.html">tutorial.html</a> &nbsp;|&nbsp; <a href="DECISIONS.md">DECISIONS.md</a>
+</footer>
+
+</body>
+</html>

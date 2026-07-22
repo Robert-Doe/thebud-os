@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concept: Bootloader | BobOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 80% 60% at 50% 0%, rgba(251,146,60,0.08) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--orange); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(2.1rem,4.8vw,3.2rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--orange); }
+  .hero .tagline { font-size:1.12rem; color:var(--muted); max-width:680px; margin:0 auto 28px; }
+  .hero-grid { display:flex; gap:24px; justify-content:center; flex-wrap:wrap; margin-top:36px; }
+  .hero-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 28px; text-align:center; }
+  .hero-stat .num { font-family:'Playfair Display',serif; font-size:1.8rem; color:var(--orange); font-weight:700; }
+  .hero-stat .label { font-size:13px; color:var(--muted); margin-top:2px; }
+  .container { max-width:880px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.7rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.15rem; color:var(--orange); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+  ul { padding-left:20px; margin-bottom:14px; }
+  li { margin-bottom:6px; }
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold  { background:rgba(245,200,66,0.07); border-color:var(--gold); }
+  .callout.cyan  { background:rgba(56,189,248,0.07); border-color:var(--cyan); }
+  .callout.green { background:rgba(74,222,128,0.07); border-color:var(--green); }
+  .callout.red   { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple{ background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.teal{ background:rgba(13,148,136,0.07); border-color:var(--teal); }
+  .callout.orange{ background:rgba(251,146,60,0.07); border-color:var(--orange); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold  .label { color:var(--gold); }
+  .callout.cyan  .label { color:var(--cyan); }
+  .callout.green .label { color:var(--green); }
+  .callout.red   .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.teal .label { color:var(--teal); }
+  .callout.orange .label { color:var(--orange); }
+  .callout p:last-child { margin-bottom:0; }
+  pre { background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:20px 22px; overflow-x:auto; margin:20px 0; }
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  table { width:100%; border-collapse:collapse; margin:20px 0; font-size:14px; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--gold); font-family:'Source Code Pro',monospace; font-size:12px; letter-spacing:0.5px; text-transform:uppercase; }
+  td.mono { font-family:'Source Code Pro',monospace; color:var(--cyan); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .tablewrap { overflow-x:auto; }
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+  .compare-box { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+  .compare-box h4 { font-size:13px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; }
+  .compare-box.bad h4 { color:var(--red); }
+  .compare-box.good h4 { color:var(--green); }
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+  .brain { background:linear-gradient(135deg, rgba(251,146,60,0.1), rgba(56,189,248,0.08)); border:1px solid rgba(251,146,60,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--orange); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+  .word-web { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:24px 0; }
+  .word-web a { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:8px 18px; font-family:'Source Code Pro',monospace; font-size:13px; color:var(--cyan); text-decoration:none; }
+  .word-web a:hover { border-color:var(--cyan); }
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+  @media (max-width: 700px) { .compare { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">CONCEPT 4 OF 4 — BOOTLOADER</div>
+  <h1>The <span>Bootloader</span>: A Program, Not Firmware</h1>
+  <p class="tagline">The BIOS is baked into the motherboard, permanent, vendor-written. The bootloader is the exact opposite: ordinary code sitting in an ordinary disk sector — and in this project, code that you wrote yourself, line by line.</p>
+  <div class="hero-grid">
+    <div class="hero-stat"><div class="num">512B</div><div class="label">stage-1 hard ceiling</div></div>
+    <div class="hero-stat"><div class="num">1</div><div class="label">job: find + hand off</div></div>
+    <div class="hero-stat"><div class="num">3+</div><div class="label">well-known real-world bootloaders</div></div>
+    <div class="hero-stat"><div class="num">100%</div><div class="label">of it is code you can read</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>01 — The Big Analogy</h2>
+    <div class="callout gold">
+      <div class="label">Head First Moment</div>
+      <p>Think of a relay race. The BIOS is the starting gun <em>and</em> the very first runner — it's already standing on the track before the race even begins, because it's built into the stadium itself. The moment the gun fires, that first runner sprints exactly one leg of the race and then does something specific: hands a baton to the <em>second</em> runner, who was waiting at a known, fixed spot on the track. That second runner is the bootloader. Unlike the first runner, the second runner isn't part of the stadium's permanent fixtures — they're a competitor, someone who showed up and trained for this, and in this project, that someone is you.</p>
+    </div>
+    <p>A <strong>bootloader</strong> is a small program whose entire purpose is to locate the next stage of the boot process — a bigger bootloader, or the kernel itself — load it into memory, and transfer CPU control to it. It runs with fewer guarantees and fewer tools than almost anything else in the entire OS: no filesystem support (usually), no C runtime, no dynamic memory, often not even reliable error reporting. It exists in the gap between "firmware trusts you exist" and "the kernel has taken over."</p>
+  </section>
+
+  <section>
+    <h2>02 — The One Sentence That Untangles Every Confusion</h2>
+    <div class="callout purple">
+      <div class="label">Memorize This Line</div>
+      <p><strong>The BIOS is firmware that finds and runs the bootloader. The bootloader is software that finds and runs the kernel.</strong> Same shape, one level apart. Neither one <em>is</em> the other.</p>
+    </div>
+    <p>Firmware is permanent, vendor-supplied, and lives independent of any disk. A bootloader is ordinary, replaceable, disk-resident code — the same category of thing as any other program, just running under much harsher constraints (no OS beneath it yet) than a normal app ever has to. You can delete, overwrite, or completely rewrite a bootloader (that's what installing GRUB or a new Windows boot manager does); you generally cannot casually rewrite your BIOS without deliberately reflashing your motherboard's firmware.</p>
+  </section>
+
+  <section>
+    <h2>03 — Why One Stage Usually Isn't Enough: Stage 1 vs. Stage 2</h2>
+    <p>512 bytes is a brutal budget. It's enough to zero some registers, print a short message, and read a handful of disk sectors using BIOS calls — it is nowhere near enough to parse a real filesystem (FAT32, ext2, NTFS), handle a menu of OS choices, or load a multi-megabyte kernel with any sophistication. Real-world bootloaders solve this by <strong>chaining stages</strong>, each one less constrained than the last — the exact same staircase idea from <a href="concept_bootstrapping.html">concept_bootstrapping.html</a>, applied specifically inside the bootloader itself:</p>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Stage</th><th>Size budget</th><th>What it's capable of</th></tr>
+      <tr><td><strong>Stage 1 (MBR)</strong></td><td>Exactly 512 bytes, minus the 2-byte signature</td><td>Just enough logic to read a few more raw sectors off disk and jump there. No filesystem understanding — it typically knows only "read sectors N through M."</td></tr>
+      <tr><td><strong>Stage 1.5</strong> <span style="color:var(--muted);font-size:12px;">(GRUB specifically)</span></td><td>A handful of KB, stored in the small gap between the MBR and the first disk partition</td><td>Enough code to understand basic filesystem structures — so it can find files by name instead of hardcoded sector numbers.</td></tr>
+      <tr><td><strong>Stage 2</strong></td><td>Effectively unlimited (its own file on disk)</td><td>A real filesystem driver, a boot menu, configuration file parsing, the ability to load a kernel by filename rather than by raw disk position.</td></tr>
+    </table>
+    </div>
+    <div class="callout cyan">
+      <div class="label">Where boot.asm Sits Today</div>
+      <p>Right now, <code>boot.asm</code> in this repo is a Stage 1 that doesn't yet load a Stage 2 or a kernel — it proves the handoff from BIOS works (prints a message, halts) but stops there. <code>tutorial.html</code> in this folder previews the next version, which adds an <code>INT 0x13</code> disk read and a far jump to a loaded kernel — i.e., turning this Stage 1 into a real, if minimal, loader. For the exact current bytes and registers, see <a href="boot_asm_deepdive.html">boot_asm_deepdive.html</a>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Real-World Bootloaders, Compared</h2>
+    <p>Seeing a few real examples side-by-side makes the abstract definition concrete — and shows that "bootloader" covers a much wider range of software than just the MBR sector:</p>
+    <div class="tablewrap">
+    <table>
+      <tr><th>Bootloader</th><th>Used by</th><th>What makes it distinctive</th></tr>
+      <tr><td class="mono">boot.asm</td><td>BobOS (this project)</td><td>Stage 1 only, hand-written, currently prints a banner and halts — the minimum viable proof that the BIOS → 0x7C00 handoff works</td></tr>
+      <tr><td class="mono">GRUB2</td><td>Most Linux distributions</td><td>Multi-stage as described above; understands many filesystems and OS types; presents a configurable boot menu; can chainload other bootloaders (including Windows')</td></tr>
+      <tr><td class="mono">Windows Boot Manager (bootmgr)</td><td>Windows</td><td>UEFI-native on modern installs; reads its configuration from the Boot Configuration Data (BCD) store rather than a plain-text file</td></tr>
+      <tr><td class="mono">U-Boot</td><td>Embedded / ARM devices (routers, Raspberry Pi, etc.)</td><td>Designed for wildly diverse, non-PC hardware with no standardized BIOS-equivalent at all — U-Boot itself often has to do more hardware bring-up than a PC bootloader ever needs to</td></tr>
+    </table>
+    </div>
+    <p>Every single one of these — no matter how sophisticated — still reduces to the same one-sentence definition from §02: find the next stage, load it, hand off control. GRUB just does an enormous amount of extra convenience work around that core job; <code>boot.asm</code> does the bare minimum.</p>
+  </section>
+
+  <section>
+    <h2>05 — What a Bootloader Can and Cannot Assume</h2>
+    <div class="compare">
+      <div class="compare-box bad">
+        <h4>Cannot assume exists yet</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text);">
+          <li>A C runtime, or C itself</li>
+          <li>A heap / dynamic memory allocator</li>
+          <li>A filesystem driver (Stage 1 only)</li>
+          <li>Memory protection — a bug can silently corrupt anything</li>
+          <li>More than 1MB of usable, simply-addressable RAM (Real Mode)</li>
+        </ul>
+      </div>
+      <div class="compare-box good">
+        <h4>Can rely on (because BIOS proved it)</h4>
+        <ul style="padding-left:16px; margin-top:6px; color:var(--text);">
+          <li>The CPU executing 16-bit Real Mode instructions correctly</li>
+          <li>BIOS interrupt services (video, disk, keyboard — see <a href="concept_bios.html">concept_bios.html</a>)</li>
+          <li>Being loaded at exactly <code>0x7C00</code>, every time</li>
+          <li>A stack, once it sets one up itself</li>
+        </ul>
+      </div>
+    </div>
+    <p>This "cannot assume / can rely on" split is precisely why bootloader code looks so different from every other file in an OS project — it's the one place in the entire codebase deliberately written as if none of the conveniences of modern programming exist yet, because for this one file, they genuinely don't.</p>
+  </section>
+
+  <section>
+    <h2>06 — Brain Exercise</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil</div>
+      <p><strong>Before reading on:</strong> if a bootloader has no filesystem understanding in Stage 1, how does it know <em>where on disk</em> the kernel actually sits, so it can tell BIOS which sectors to read? (Hint: think about what information could be baked in at <em>build time</em>, when you already know exactly how big your kernel binary is and where you're placing it on the disk image, versus what has to be figured out at <em>run time</em>.)</p>
+    </div>
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: If GRUB is so much more capable, why would anyone write their own bootloader like this project does?</div>
+      <div class="a">Because GRUB hides every fact this whole concept series is trying to teach. Writing your own Stage 1 is the only way to directly experience that the CPU starts in 16-bit mode, that "the kernel" is just raw bytes with no inherent structure, and that BIOS video output is a documented interrupt call rather than magic. Once those facts are burned in, using GRUB later is a convenience, not a mystery.</div>
+      <div class="q">Q: Is a bootloader part of the operating system, or separate from it?</div>
+      <div class="a">Genuinely blurry, and reasonable people draw the line differently. The practical answer: it's the earliest possible OS-authored code, but it usually isn't distributed or versioned as part of "the OS" in the way the kernel is — GRUB, for instance, is its own separate project used by many different Linux distributions.</div>
+      <div class="q">Q: Could the BIOS itself just load the kernel directly, skipping the bootloader entirely?</div>
+      <div class="a">Only if the kernel happened to fit in 512 bytes and needed nothing beyond what BIOS interrupts provide — which no real kernel does. The bootloader exists specifically to bridge the gap between "512 bytes, BIOS calls only" and "however large and sophisticated the kernel actually needs to be."</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>07 — How This Connects to the Other Three Concepts</h2>
+    <div class="callout purple">
+      <div class="label">The Short Version</div>
+      <p>The <strong>bootloader</strong> is the second rung of the <strong>bootstrapping</strong> staircase — the first one written by an OS developer instead of a firmware vendor. It's loaded and launched by the <strong>BIOS</strong>. Both are stages inside the single larger event called <strong>booting</strong>.</p>
+    </div>
+    <div class="word-web">
+      <a href="concept_how_they_connect.html">concept_how_they_connect.html →</a>
+      <a href="concept_booting.html">concept_booting.html</a>
+      <a href="concept_bootstrapping.html">concept_bootstrapping.html</a>
+      <a href="concept_bios.html">concept_bios.html</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Keep Going</div>
+      <p>All four terms now have precise, separate definitions. The last step is seeing them side by side in a single diagram, with the confusions people commonly make between them called out explicitly. Head to <a href="concept_how_they_connect.html">concept_how_they_connect.html</a> — the hub page for this whole series.</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  BobOS — 01_bootloader concept series (4 of 4) &nbsp;|&nbsp; <a href="concept_how_they_connect.html">See how they all connect →</a>
+</footer>
+
+</body>
+</html>

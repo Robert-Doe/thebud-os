@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Booting, Bootstrapping, BIOS &amp; Bootloader Connect | BobOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Code+Pro:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0f1a; --bg2:#111827; --bg3:#1a2235; --card:#141c2e;
+    --border:#1e3a5f; --gold:#f5c842; --cyan:#38bdf8; --teal:#0d9488;
+    --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
+    --text:#e2e8f0; --muted:#7a9bbf; --code-bg:#060d1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Lato',sans-serif; font-size:17px; line-height:1.75; }
+  .hero { background:var(--bg2); border-bottom:1px solid var(--border); padding:70px 40px 60px; text-align:center; position:relative; overflow:hidden; }
+  .hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse 90% 60% at 50% 0%, rgba(245,200,66,0.08) 0%, transparent 70%); pointer-events:none; }
+  .module-badge { display:inline-block; background:var(--gold); color:#0b0f1a; font-family:'Source Code Pro',monospace; font-weight:600; font-size:13px; padding:4px 14px; border-radius:20px; letter-spacing:1px; margin-bottom:20px; }
+  .hero h1 { font-family:'Playfair Display',serif; font-size:clamp(1.9rem,4.4vw,3rem); font-weight:900; color:#fff; margin-bottom:16px; }
+  .hero h1 span { color:var(--gold); }
+  .hero .tagline { font-size:1.12rem; color:var(--muted); max-width:700px; margin:0 auto 28px; }
+  .term-badges { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:30px; }
+  .term-badge { font-family:'Source Code Pro',monospace; font-size:13px; padding:8px 18px; border-radius:20px; border:1px solid; }
+  .term-badge.b1 { color:var(--cyan); border-color:var(--cyan); background:rgba(56,189,248,0.08); }
+  .term-badge.b2 { color:var(--purple); border-color:var(--purple); background:rgba(167,139,250,0.08); }
+  .term-badge.b3 { color:var(--green); border-color:var(--green); background:rgba(74,222,128,0.08); }
+  .term-badge.b4 { color:var(--orange); border-color:var(--orange); background:rgba(251,146,60,0.08); }
+
+  .container { max-width:900px; margin:0 auto; padding:0 28px 80px; }
+  section { margin-top:64px; }
+  h2 { font-family:'Playfair Display',serif; font-size:1.7rem; color:#fff; margin-bottom:18px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { font-family:'Playfair Display',serif; font-size:1.15rem; color:var(--gold); margin:28px 0 10px; }
+  p { margin-bottom:14px; }
+  ul { padding-left:20px; margin-bottom:14px; }
+  li { margin-bottom:6px; }
+
+  .callout { border-radius:10px; padding:20px 24px; margin:24px 0; border-left:4px solid; }
+  .callout.gold  { background:rgba(245,200,66,0.07); border-color:var(--gold); }
+  .callout.cyan  { background:rgba(56,189,248,0.07); border-color:var(--cyan); }
+  .callout.green { background:rgba(74,222,128,0.07); border-color:var(--green); }
+  .callout.red   { background:rgba(248,113,113,0.07); border-color:var(--red); }
+  .callout.purple{ background:rgba(167,139,250,0.07); border-color:var(--purple); }
+  .callout.teal{ background:rgba(13,148,136,0.07); border-color:var(--teal); }
+  .callout.orange{ background:rgba(251,146,60,0.07); border-color:var(--orange); }
+  .callout .label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+  .callout.gold  .label { color:var(--gold); }
+  .callout.cyan  .label { color:var(--cyan); }
+  .callout.green .label { color:var(--green); }
+  .callout.red   .label { color:var(--red); }
+  .callout.purple .label { color:var(--purple); }
+  .callout.teal .label { color:var(--teal); }
+  .callout.orange .label { color:var(--orange); }
+  .callout p:last-child { margin-bottom:0; }
+
+  code { font-family:'Source Code Pro',monospace; font-size:14px; color:#93c5fd; }
+  table { width:100%; border-collapse:collapse; margin:20px 0; font-size:14px; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--gold); font-family:'Source Code Pro',monospace; font-size:12px; letter-spacing:0.5px; text-transform:uppercase; }
+  td.mono { font-family:'Source Code Pro',monospace; color:var(--cyan); white-space:nowrap; }
+  tr:last-child td { border-bottom:none; }
+  .tablewrap { overflow-x:auto; }
+
+  /* DEFINITION CARDS */
+  .defgrid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:24px 0; }
+  .defcard { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:22px 24px; border-top:4px solid; }
+  .defcard.c1 { border-top-color:var(--cyan); }
+  .defcard.c2 { border-top-color:var(--purple); }
+  .defcard.c3 { border-top-color:var(--green); }
+  .defcard.c4 { border-top-color:var(--orange); }
+  .defcard h4 { font-family:'Playfair Display',serif; font-size:1.15rem; margin-bottom:8px; }
+  .defcard.c1 h4 { color:var(--cyan); }
+  .defcard.c2 h4 { color:var(--purple); }
+  .defcard.c3 h4 { color:var(--green); }
+  .defcard.c4 h4 { color:var(--orange); }
+  .defcard .kind { font-family:'Source Code Pro',monospace; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:10px; }
+  .defcard p { font-size:14.5px; margin-bottom:8px; }
+  .defcard a { font-size:13px; }
+
+  /* CHAIN DIAGRAM */
+  .chain-diagram { background:var(--code-bg); border:1px solid var(--border); border-radius:14px; padding:36px 28px; margin:28px 0; }
+  .chain-node { display:flex; align-items:stretch; gap:0; margin-bottom:4px; }
+  .chain-box { flex:1; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 18px; }
+  .chain-box .who { font-family:'Source Code Pro',monospace; font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+  .chain-box .what { font-size:14.5px; color:var(--text); }
+  .chain-box.bios { border-left:4px solid var(--green); }
+  .chain-box.bios .who { color:var(--green); }
+  .chain-box.loader { border-left:4px solid var(--orange); }
+  .chain-box.loader .who { color:var(--orange); }
+  .chain-box.kernel { border-left:4px solid var(--cyan); }
+  .chain-box.kernel .who { color:var(--cyan); }
+  .chain-box.hw { border-left:4px solid var(--muted); }
+  .chain-box.hw .who { color:var(--muted); }
+  .chain-arrow-row { text-align:center; color:var(--muted); font-size:20px; padding:4px 0; }
+  .bracket-row { display:flex; gap:10px; margin-top:22px; }
+  .bracket { flex:1; text-align:center; border-top:2px dashed; padding-top:10px; font-family:'Source Code Pro',monospace; font-size:12px; letter-spacing:0.5px; }
+  .bracket.boot-span { border-color:var(--gold); color:var(--gold); }
+  .bracket.bootstrap-span { border-color:var(--purple); color:var(--purple); }
+
+  .qa { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:22px 26px; margin:28px 0; }
+  .qa h4 { color:var(--gold); font-size:13px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:14px; }
+  .qa .q { color:var(--cyan); font-weight:700; margin-bottom:4px; }
+  .qa .a { color:var(--text); margin-bottom:16px; padding-left:12px; border-left:2px solid var(--border); }
+  .qa .a:last-child { margin-bottom:0; }
+
+  .brain { background:linear-gradient(135deg, rgba(245,200,66,0.08), rgba(56,189,248,0.08)); border:1px solid rgba(245,200,66,0.3); border-radius:12px; padding:22px 26px; margin:28px 0; }
+  .brain .brain-label { font-size:13px; color:var(--gold); font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+
+  .quiz { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin:14px 0; }
+  .quiz .scenario { font-size:15px; margin-bottom:10px; }
+  .quiz .options { display:flex; gap:10px; flex-wrap:wrap; }
+  .quiz .opt { font-family:'Source Code Pro',monospace; font-size:12px; padding:5px 12px; border-radius:16px; border:1px solid var(--border); color:var(--muted); }
+  .quiz .answer { margin-top:10px; font-size:13.5px; color:var(--green); display:none; }
+
+  .word-web { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin:24px 0; }
+  .word-web a { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:8px 18px; font-family:'Source Code Pro',monospace; font-size:13px; color:var(--cyan); text-decoration:none; }
+  .word-web a:hover { border-color:var(--cyan); }
+
+  footer { text-align:center; padding:40px 20px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); margin-top:80px; }
+  footer a { color:var(--cyan); text-decoration:none; }
+
+  @media (max-width: 700px) { .defgrid { grid-template-columns:1fr; } .bracket-row { flex-direction:column; } }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="module-badge">THE HUB PAGE — HOW IT ALL FITS</div>
+  <h1>Booting, Bootstrapping, BIOS, Bootloader — <span>How They Actually Connect</span></h1>
+  <p class="tagline">Four words, used almost interchangeably in casual conversation, that name four genuinely different things: one event, one principle, and two separate pieces of software. This page is the map.</p>
+  <div class="term-badges">
+    <span class="term-badge b1">BOOTING — an event</span>
+    <span class="term-badge b2">BOOTSTRAPPING — a principle</span>
+    <span class="term-badge b3">BIOS — firmware</span>
+    <span class="term-badge b4">BOOTLOADER — a program</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>01 — Four Definitions, Side by Side</h2>
+    <p>Read these four cards as a set. Each one deliberately points at how it differs from its neighbors — that's the part most explanations skip.</p>
+    <div class="defgrid">
+      <div class="defcard c1">
+        <h4>Booting</h4>
+        <div class="kind">the event</div>
+        <p>The <strong>entire journey</strong> from power-on to a usable system. Not a program, not a component — a name for everything that happens across all the other three combined, plus the kernel and user-space init after them.</p>
+        <a href="concept_booting.html">Full deep dive →</a>
+      </div>
+      <div class="defcard c2">
+        <h4>Bootstrapping</h4>
+        <div class="kind">the principle</div>
+        <p>The underlying engineering idea that <strong>explains why</strong> booting needs multiple separate stages at all: a tiny, hardware-anchored seed loads a slightly bigger thing, which loads a bigger thing still — because nothing can load itself from nothing in one step.</p>
+        <a href="concept_bootstrapping.html">Full deep dive →</a>
+      </div>
+      <div class="defcard c3">
+        <h4>BIOS</h4>
+        <div class="kind">a specific piece of firmware</div>
+        <p>The <strong>first participant</strong> in booting: a small, permanent program in motherboard ROM that tests hardware, then finds and loads whatever the bootloader is. One concrete implementation of "the first rung" in the bootstrapping principle.</p>
+        <a href="concept_bios.html">Full deep dive →</a>
+      </div>
+      <div class="defcard c4">
+        <h4>Bootloader</h4>
+        <div class="kind">a specific piece of software</div>
+        <p>The <strong>second participant</strong>: ordinary, replaceable, disk-resident code — loaded and launched by the BIOS — whose job is to load the kernel (directly, or via further stages). One concrete implementation of "the second rung."</p>
+        <a href="concept_bootloader.html">Full deep dive →</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 — The Chain, Drawn Out</h2>
+    <p>This is the same six-stage sequence from <a href="concept_booting.html">concept_booting.html</a> §03, but now annotated with which of the four concepts each box belongs to, and where the two abstract "umbrella" terms actually span:</p>
+
+    <div class="chain-diagram">
+      <div class="chain-node">
+        <div class="chain-box hw"><div class="who">Hardware — not software</div><div class="what">CPU reset circuitry. Hardwired to fetch from a fixed address. Nothing has run yet.</div></div>
+      </div>
+      <div class="chain-arrow-row">↓</div>
+      <div class="chain-node">
+        <div class="chain-box bios"><div class="who">BIOS (firmware)</div><div class="what">POST, hardware init, scans disks for the <code>0x55 0xAA</code> signature, loads 512 bytes to <code>0x7C00</code>.</div></div>
+      </div>
+      <div class="chain-arrow-row">↓ jumps to 0x7C00</div>
+      <div class="chain-node">
+        <div class="chain-box loader"><div class="who">Bootloader (boot.asm)</div><div class="what">Sets up segments/stack, prints a message. (Future: reads more sectors, jumps to kernel.)</div></div>
+      </div>
+      <div class="chain-arrow-row">↓ far jump (future)</div>
+      <div class="chain-node">
+        <div class="chain-box kernel"><div class="who">Kernel entry → full kernel → user space</div><div class="what">Protected Mode, C runtime, drivers, processes, shell. (<code>02_kernel_entry</code> onward)</div></div>
+      </div>
+
+      <div class="bracket-row">
+        <div class="bracket bootstrap-span">← BOOTSTRAPPING is the principle that explains why every arrow above exists at all →</div>
+      </div>
+      <div class="bracket-row">
+        <div class="bracket boot-span">← BOOTING is the name for the entire diagram, top to bottom →</div>
+      </div>
+    </div>
+
+    <p>Two concepts live <em>above</em> the diagram, describing it as a whole (booting) or explaining its shape (bootstrapping). Two concepts live <em>inside</em> the diagram, as specific labeled boxes (BIOS, bootloader). That's the entire relationship, in one image.</p>
+  </section>
+
+  <section>
+    <h2>03 — Commonly Confused Pairs, Untangled</h2>
+    <div class="tablewrap">
+    <table>
+      <tr><th>People often say...</th><th>What's actually true</th></tr>
+      <tr><td>"The BIOS boots the computer."</td><td>Loosely fine as a sentence, but precisely: the BIOS performs <em>one stage</em> of booting. It doesn't complete the process — it hands off to the bootloader and its job ends.</td></tr>
+      <tr><td>"The BIOS is the bootloader."</td><td>No. The BIOS is firmware that <em>launches</em> the bootloader. They are two different pieces of software, written by different people, stored in different places (motherboard ROM vs. disk sector), with different jobs.</td></tr>
+      <tr><td>"Booting and bootstrapping are the same word for the same thing."</td><td>They share an origin, but "booting" names the concrete, repeatable <em>event</em>, while "bootstrapping" names the abstract <em>reason multi-stage loading has to exist</em>. You could explain bootstrapping using a compiler example that has nothing to do with booting a computer at all (see <a href="concept_bootstrapping.html">concept_bootstrapping.html</a> §03).</td></tr>
+      <tr><td>"My bootloader is broken, must be a BIOS bug."</td><td>Almost always false, and worth knowing precisely why: the BIOS's job (find the <code>0x55AA</code> signature, load 512 bytes, jump) is extremely small and extremely stable across decades of hardware. Bugs in "the boot process" are overwhelmingly in the bootloader — the part a human actually wrote — not in firmware that's been tested by the entire PC industry since 1981.</td></tr>
+      <tr><td>"GRUB is a BIOS replacement."</td><td>No — GRUB is a (very sophisticated, multi-stage) bootloader. It still needs to be found and launched by firmware (BIOS or UEFI) exactly like <code>boot.asm</code> does; it doesn't replace that firmware layer, it sits on top of it.</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>04 — Brain Exercise: Match the Scenario</h2>
+    <div class="brain">
+      <div class="brain-label">Sharpen Your Pencil — Quiz Yourself</div>
+      <p>For each scenario below, decide which single concept it's really describing: <strong>Booting</strong>, <strong>Bootstrapping</strong>, <strong>BIOS</strong>, or <strong>Bootloader</strong>. Answers are collapsed under each one — commit to an answer before revealing it.</p>
+    </div>
+
+    <div class="quiz">
+      <div class="scenario"><strong>1.</strong> "You press the power button and 40 seconds later you're looking at your desktop."</div>
+      <div class="answer" style="display:block;">→ <strong>Booting.</strong> This describes the entire end-to-end event, not any single component.</div>
+    </div>
+    <div class="quiz">
+      <div class="scenario"><strong>2.</strong> "A tiny piece of ROM code checks that RAM works and then looks for a disk with a magic 2-byte signature."</div>
+      <div class="answer" style="display:block;">→ <strong>BIOS.</strong> POST and the boot-device signature scan are specifically BIOS's job (see <a href="concept_bios.html">concept_bios.html</a> §03).</div>
+    </div>
+    <div class="quiz">
+      <div class="scenario"><strong>3.</strong> "A 512-byte program that reads more sectors off disk and jumps to whatever it finds."</div>
+      <div class="answer" style="display:block;">→ <strong>Bootloader.</strong> Specifically a Stage 1 bootloader (see <a href="concept_bootloader.html">concept_bootloader.html</a> §03).</div>
+    </div>
+    <div class="quiz">
+      <div class="scenario"><strong>4.</strong> "The general reason a brand-new programming language's first compiler has to be written in a completely different, already-existing language."</div>
+      <div class="answer" style="display:block;">→ <strong>Bootstrapping.</strong> Same staircase principle as OS booting, wearing a compiler costume (see <a href="concept_bootstrapping.html">concept_bootstrapping.html</a> §03).</div>
+    </div>
+
+    <div class="qa">
+      <h4>There Are No Dumb Questions</h4>
+      <div class="q">Q: If I only remember one thing from this whole four-page series, what should it be?</div>
+      <div class="a">The one-sentence rule from <a href="concept_bootloader.html">concept_bootloader.html</a> §02: <em>the BIOS is firmware that finds and runs the bootloader; the bootloader is software that finds and runs the kernel.</em> Everything else in this series is elaboration on that single relationship, plus the umbrella words (booting, bootstrapping) that describe it from above.</div>
+      <div class="q">Q: Does this four-way split apply to non-x86 systems too — phones, Raspberry Pis, game consoles?</div>
+      <div class="a">The concepts transfer even when the implementations don't. Every one of those devices still has some hardware-anchored first stage (playing the role BIOS plays here, even if it's called something else — a Boot ROM, a "First Stage Boot Loader," etc.), still has a bootstrapping-shaped staircase of increasingly capable stages, and still has a moment where control passes to a kernel. The vocabulary is PC-specific; the pattern is universal.</div>
+      <div class="q">Q: Now that I understand the theory, where should I go to see it in actual bytes?</div>
+      <div class="a"><a href="boot_asm_deepdive.html">boot_asm_deepdive.html</a> — it hex-dumps the real <code>boot.img</code> in this folder and maps every byte back to a source line, plus tackles the "how would I know this works without ever running QEMU before" question directly.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>05 — All the Files in This Folder, and What Each One Is For</h2>
+    <div class="tablewrap">
+    <table>
+      <tr><th>File</th><th>Purpose</th></tr>
+      <tr><td class="mono">concept_booting.html</td><td>Deep dive on the umbrella event — cold/warm boot, the six-stage anatomy mapped onto this repo's module folders</td></tr>
+      <tr><td class="mono">concept_bootstrapping.html</td><td>Deep dive on the underlying principle — idiom origin, the staircase pattern, the compiler self-hosting sibling example</td></tr>
+      <tr><td class="mono">concept_bios.html</td><td>Deep dive on the firmware — history, POST, the BIOS's interrupt "API," BIOS vs. UEFI, SeaBIOS specifically</td></tr>
+      <tr><td class="mono">concept_bootloader.html</td><td>Deep dive on the software — Stage1/Stage2, real-world bootloader comparison, what it can/can't assume</td></tr>
+      <tr><td class="mono">concept_how_they_connect.html <em>(this file)</em></td><td>The synthesis: definitions side-by-side, the full chain diagram, and a confusion-busting table</td></tr>
+      <tr><td class="mono">boot_asm_deepdive.html</td><td>The concrete, byte-level companion — actual hex dump of <code>boot.img</code>, register-by-register rationale, and the "how do you know it'll work in QEMU" epistemology question</td></tr>
+      <tr><td class="mono">DECISIONS.md</td><td>Line-by-line explanation of the <em>current</em> <code>boot.asm</code>, plus the architecture decisions made for this module</td></tr>
+      <tr><td class="mono">tutorial.html</td><td>Module walkthrough — includes a preview of the <em>next</em> version of <code>boot.asm</code> (disk read + kernel jump), not yet on disk</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 — What's Next</h2>
+    <div class="callout teal">
+      <div class="label">Where To Go From Here</div>
+      <p>If you haven't yet, read the four individual concept pages in order — <a href="concept_booting.html">Booting</a> → <a href="concept_bootstrapping.html">Bootstrapping</a> → <a href="concept_bios.html">BIOS</a> → <a href="concept_bootloader.html">Bootloader</a> — each one ends by linking to the next. Then, for the concrete byte-level payoff of all this vocabulary, go to <a href="boot_asm_deepdive.html">boot_asm_deepdive.html</a>, which puts every one of these ideas to work on the actual file sitting in this folder.</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  BobOS — 01_bootloader concept series (hub) &nbsp;|&nbsp; <a href="boot_asm_deepdive.html">boot_asm_deepdive.html →</a>
+</footer>
+
+</body>
+</html>
