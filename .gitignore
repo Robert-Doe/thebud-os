@@ -20,3 +20,7 @@ bin/
 .DS_Store
 Thumbs.db
 *.swp
+
+# webapp demo (Vite + TypeScript)
+webapp/node_modules/
+webapp/dist/
