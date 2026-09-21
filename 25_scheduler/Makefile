@@ -6,7 +6,7 @@ QEMU = qemu-system-i386
 WSL     = wsl -d Ubuntu --
 WSL_GCC = $(WSL) gcc
 WSL_LD  = $(WSL) ld
-WSL_DIR = /mnt/c/Users/bobcumulus/Desktop/bob_os/25_scheduler
+WSL_DIR := $(shell wsl wslpath -a "$(CURDIR)")
 
 GCC_FLAGS      = -m32 -ffreestanding -fno-pie -c -O0
 GCC_USER_FLAGS = -m32 -ffreestanding -fno-pie -c -O0 -nostdlib

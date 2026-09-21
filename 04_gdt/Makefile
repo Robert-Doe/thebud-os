@@ -7,7 +7,7 @@ QEMU = qemu-system-i386
 WSL     = wsl -d Ubuntu --
 WSL_GCC = $(WSL) gcc
 WSL_LD  = $(WSL) ld
-WSL_DIR = /mnt/c/Users/bobcumulus/Desktop/bob_os/04_gdt
+WSL_DIR := $(shell wsl wslpath -a "$(CURDIR)")
 
 GCC_FLAGS = -m32 -ffreestanding -fno-pie -c -O0
 LD_FLAGS  = -m elf_i386 -T linker.ld --oformat binary

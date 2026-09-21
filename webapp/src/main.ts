@@ -10,12 +10,23 @@ import {
   bin,
 } from './gdt';
 import { VgaBuffer, VGA_PALETTE, VGA_COLOR_NAMES, vgaColorByte, VGA_COLS, VGA_ROWS } from './vga';
+import { renderModuleLibrary } from './library/render';
+import { renderRunItYourself } from './run-guide';
 
 const app = document.getElementById('app')!;
 
 // ---------------------------------------------------------------------------
-// Shell: topbar, hero, stepper skeleton, footer
+// Shell: topbar, hero, view tabs, footer
 // ---------------------------------------------------------------------------
+
+type View = 'boot' | 'library' | 'run';
+let activeView: View = 'boot';
+
+const VIEW_TABS: { id: View; label: string }[] = [
+  { id: 'boot', label: 'Boot Simulator' },
+  { id: 'library', label: 'Module Library' },
+  { id: 'run', label: 'Run It Yourself' },
+];
 
 app.innerHTML = `
   <div class="topbar">
@@ -26,28 +37,55 @@ app.innerHTML = `
     </div>
   </div>
   <div class="hero">
-    <h1>Boot Sequence Simulator</h1>
+    <h1>theBud OS &mdash; Interactive Course</h1>
     <p class="tagline">
-      A byte-accurate port of theBud OS's real boot path &mdash; from BIOS handoff
-      at <code>0x7C00</code> through a hand-toggleable GDT to a live
-      <code>0xB8000</code> VGA text buffer &mdash; not a diagram, an actual
-      re-implementation of the mechanics in TypeScript.
+      An x86 operating system built by hand, register by register &mdash;
+      bootloader to a POSIX-flavored kernel, plus a browser built on top of it.
+      Step through a byte-accurate boot simulator, browse the full 46-module
+      course library, or set up the real toolchain and boot it yourself.
     </p>
   </div>
-  <main>
-    <div class="demo-grid">
-      <nav class="stepper" id="stepper"></nav>
-      <div id="stage-content"></div>
-    </div>
-  </main>
+  <div class="view-tabs" id="view-tabs">
+    ${VIEW_TABS.map((t) => `<button class="view-tab ${t.id === activeView ? 'active' : ''}" data-view="${t.id}">${t.label}</button>`).join('')}
+  </div>
+  <main id="view-main"></main>
   <footer>
     Ported from <a href="https://github.com/Robert-Doe/thebud-os" target="_blank" rel="noopener">Robert-Doe/thebud-os</a>
     &mdash; real addresses, real structs, real bytes.
   </footer>
 `;
 
-const stepperEl = document.getElementById('stepper')!;
-const stageEl = document.getElementById('stage-content')!;
+const viewMain = document.getElementById('view-main')!;
+
+function renderView(): void {
+  document.querySelectorAll<HTMLButtonElement>('.view-tab').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === activeView);
+  });
+
+  if (activeView === 'boot') {
+    viewMain.innerHTML = `
+      <div class="demo-grid">
+        <nav class="stepper" id="stepper"></nav>
+        <div id="stage-content"></div>
+      </div>
+    `;
+    renderAll();
+  } else if (activeView === 'library') {
+    viewMain.innerHTML = `<div class="lib-root" id="lib-root"></div>`;
+    void renderModuleLibrary(document.getElementById('lib-root')!);
+  } else {
+    viewMain.innerHTML = `<div id="run-root"></div>`;
+    renderRunItYourself(document.getElementById('run-root')!);
+  }
+}
+
+document.getElementById('view-tabs')!.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.view-tab');
+  if (!btn) return;
+  activeView = btn.dataset.view as View;
+  renderView();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // ---------------------------------------------------------------------------
 // Stage definitions
@@ -237,6 +275,8 @@ const stages: Stage[] = [
 let activeStage = 0;
 
 function renderStepper(): void {
+  const stepperEl = document.getElementById('stepper');
+  if (!stepperEl) return; // boot view not mounted (a different tab is active)
   stepperEl.innerHTML = stages
     .map(
       (s, i) => `
@@ -256,6 +296,8 @@ function renderStepper(): void {
 }
 
 function renderStage(): void {
+  const stageEl = document.getElementById('stage-content');
+  if (!stageEl) return; // boot view not mounted (a different tab is active)
   const stage = stages[activeStage];
   stageEl.innerHTML = stage.render();
   stageEl.insertAdjacentHTML(
@@ -279,8 +321,6 @@ function renderAll(): void {
   renderStage();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-
-renderAll();
 
 // ---------------------------------------------------------------------------
 // GDT explorer
@@ -593,3 +633,9 @@ function mountVga(): void {
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// Deferred until every view's render function (renderAll, the Module
+// Library, the Run guide) is defined above — calling this any earlier
+// would hit `stages` and friends before their `const`/`function`
+// initializers have run.
+renderView();

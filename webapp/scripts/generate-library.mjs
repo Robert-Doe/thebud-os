@@ -1,0 +1,261 @@
+#!/usr/bin/env node
+/**
+ * Generates webapp/src/library/library.generated.ts from the real course
+ * repo: 28 OS kernel modules, 18 browser-security modules, ~26 cross-cutting
+ * deep-dive lesson clusters, and the prerequisites. Real source files,
+ * tutorial.html, and DECISIONS.md are read directly, never hand-transcribed.
+ * Doc links come from docs-by-group.mjs (shared per phase, spot-verified
+ * live during authoring). Run with: node scripts/generate-library.mjs
+ */
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { join, extname, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { OS_MODULES, BROWSER_MODULES, LESSON_CLUSTERS, PREREQUISITES, groupForPhase } from './module-index.mjs';
+import { DOCS_BY_GROUP } from './docs-by-group.mjs';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const webappRoot = join(__dirname, '..');
+const courseRoot = join(webappRoot, '..');
+
+const CODE_EXT = new Set(['.c', '.h', '.asm']);
+const BUILD_NAMES = new Set(['Makefile', 'linker.ld', 'user_linker.ld']);
+// Files that conventionally act as the "front door" of a module — surfaced
+// first in the code tab instead of buried alphabetically among 30+ files.
+const ENTRY_PRIORITY = ['boot.asm', 'boot2.asm', 'kernel_entry.asm', 'kernel.c', 'main.c'];
+
+function langFor(name) {
+  const ext = extname(name);
+  if (ext === '.c' || ext === '.h') return 'c';
+  if (ext === '.asm') return 'x86asm';
+  if (name === 'Makefile') return 'makefile';
+  if (ext === '.ld') return 'text';
+  return 'text';
+}
+
+function collectFiles(dirAbs) {
+  const out = [];
+  for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const ext = extname(entry.name);
+    if (!CODE_EXT.has(ext) && !BUILD_NAMES.has(entry.name)) continue;
+    out.push({ name: entry.name, code: readFileSync(join(dirAbs, entry.name), 'utf8') });
+  }
+  out.sort((a, b) => {
+    const pa = ENTRY_PRIORITY.indexOf(a.name);
+    const pb = ENTRY_PRIORITY.indexOf(b.name);
+    if (pa !== -1 || pb !== -1) return (pa === -1 ? 999 : pa) - (pb === -1 ? 999 : pb);
+    return a.name.localeCompare(b.name);
+  });
+  return out;
+}
+
+/**
+ * Every OS module directory is the FULL, independently-buildable kernel up
+ * to that point — module 28 carries all files from module 1 onward. Rather
+ * than show ~40 identical files at every stage, each file is tagged against
+ * a running map of "what did this filename look like last": new (never
+ * seen before), modified (seen, content differs), or unchanged (seen,
+ * byte-identical) — and which module introduced/last changed it. This is
+ * what actually answers "what's new in this module?" instead of a wall of
+ * undifferentiated source.
+ */
+function collectOsFilesWithHistory(modules) {
+  const history = new Map(); // filename -> { code, originNum }
+  const result = new Map(); // num -> files[]
+  for (const m of modules) {
+    const dirAbs = join(courseRoot, m.dir);
+    const files = collectFiles(dirAbs).map((f) => {
+      const prev = history.get(f.name);
+      let status, originNum;
+      if (!prev) {
+        status = 'new';
+        originNum = m.num;
+      } else if (prev.code !== f.code) {
+        status = 'modified';
+        originNum = m.num;
+      } else {
+        status = 'unchanged';
+        originNum = prev.originNum;
+      }
+      history.set(f.name, { code: f.code, originNum });
+      return { name: f.name, lang: langFor(f.name), code: f.code, status, originNum };
+    });
+    result.set(m.num, files);
+  }
+  return result;
+}
+
+function parseDeepDive(dirAbs) {
+  const path = join(dirAbs, 'DECISIONS.md');
+  if (!existsSync(path)) return [];
+  const text = readFileSync(path, 'utf8');
+  const lines = text.split('\n');
+  const blocks = [];
+  let current = null;
+  for (const line of lines) {
+    const m = line.match(/^## (.+)$/);
+    if (m) {
+      if (current) blocks.push(current);
+      current = { title: m[1].trim().replace(/^\d+\.\s*/, ''), bodyLines: [] };
+    } else if (current) {
+      current.bodyLines.push(line);
+    } else if (/^# /.test(line)) {
+      // top-level "# Component N: ... — Deep Dive" title line, skip
+    }
+  }
+  if (current) blocks.push(current);
+  return blocks.map((b) => ({ title: b.title, body: b.bodyLines.join('\n').trim() }));
+}
+
+function extractTitle(html) {
+  const m = html.match(/<title>([\s\S]*?)<\/title>/i);
+  if (!m) return null;
+  return m[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/\s*\|\s*BobOS Tutorial\s*$/i, '').trim();
+}
+
+function readHtmlDoc(pathAbs) {
+  if (!existsSync(pathAbs)) return '';
+  return readFileSync(pathAbs, 'utf8');
+}
+
+function tsString(s) {
+  return JSON.stringify(s);
+}
+
+// ---------------------------------------------------------------------------
+// OS modules
+// ---------------------------------------------------------------------------
+
+const osFileHistory = collectOsFilesWithHistory(OS_MODULES);
+
+let out = '';
+out += '// AUTO-GENERATED by scripts/generate-library.mjs — do not hand-edit.\n';
+out += '// Source of truth: the real thebud-os course directories.\n\n';
+out += 'export interface LibFile { name: string; lang: string; code: string; status: \'new\' | \'modified\' | \'unchanged\'; originNum: number }\n';
+out += 'export interface LibSection { title: string; body: string }\n';
+out += 'export interface LibDoc { title: string; description: string; url: string }\n';
+out += 'export interface LibPage { id: string; title: string; html: string }\n';
+out += 'export interface LibOsModule { num: number; id: string; title: string; proves: string; dir: string; phase: string; hasLive: boolean; files: LibFile[]; deepDive: LibSection[]; docs: LibDoc[]; tutorial: string; concepts: LibPage[] }\n';
+out += 'export interface LibBrowserModule { num: number; id: string; title: string; proves: string; dir: string; phase: string; osConnection: number[]; dependsBrowser: number[]; files: LibFile[]; deepDive: LibSection[]; docs: LibDoc[]; tutorial: string }\n';
+out += 'export interface LibCluster { id: string; title: string; relatesToOS: number[]; relatesToBrowser: number[]; pages: LibPage[] }\n';
+out += 'export interface LibPrereqTopic { id: string; title: string; html: string }\n\n';
+
+out += 'export const LIBRARY_OS_MODULES: LibOsModule[] = [\n';
+for (const m of OS_MODULES) {
+  const dirAbs = join(courseRoot, m.dir);
+  const files = osFileHistory.get(m.num);
+  const deepDive = parseDeepDive(dirAbs);
+  const docs = DOCS_BY_GROUP[groupForPhase(m.phase)] ?? [];
+  const tutorial = readHtmlDoc(join(dirAbs, 'tutorial.html'));
+
+  const concepts = [];
+  if (m.hasConcepts) {
+    for (const entry of readdirSync(dirAbs, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      if (entry.name === 'tutorial.html') continue;
+      if (!/^concept_.*\.html$|_deepdive\.html$/.test(entry.name)) continue;
+      const html = readHtmlDoc(join(dirAbs, entry.name));
+      concepts.push({ id: entry.name.replace(/\.html$/, ''), title: extractTitle(html) ?? entry.name, html });
+    }
+    concepts.sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  out += `  {\n`;
+  out += `    num: ${m.num}, id: ${tsString(m.id)}, title: ${tsString(m.title)}, proves: ${tsString(m.proves)},\n`;
+  out += `    dir: ${tsString(m.dir)}, phase: ${tsString(m.phase)}, hasLive: ${m.hasLive ? 'true' : 'false'},\n`;
+  out += `    tutorial: ${tsString(tutorial)},\n`;
+  out += `    files: [\n`;
+  // Unchanged files carry no `code` of their own — this module's cumulative
+  // directory is byte-identical to it at originNum, so the UI looks the
+  // content up there instead of this file storing the same bytes again for
+  // every one of the (often 15+) later modules that also carry it forward.
+  for (const f of files) out += `      { name: ${tsString(f.name)}, lang: ${tsString(f.lang)}, code: ${f.status === 'unchanged' ? tsString('') : tsString(f.code)}, status: ${tsString(f.status)}, originNum: ${f.originNum} },\n`;
+  out += `    ],\n`;
+  out += `    deepDive: [\n`;
+  for (const d of deepDive) out += `      { title: ${tsString(d.title)}, body: ${tsString(d.body)} },\n`;
+  out += `    ],\n`;
+  out += `    docs: [\n`;
+  for (const d of docs) out += `      { title: ${tsString(d.title)}, description: ${tsString(d.description)}, url: ${tsString(d.url)} },\n`;
+  out += `    ],\n`;
+  out += `    concepts: [\n`;
+  for (const c of concepts) out += `      { id: ${tsString(c.id)}, title: ${tsString(c.title)}, html: ${tsString(c.html)} },\n`;
+  out += `    ],\n`;
+  out += `  },\n`;
+}
+out += '];\n\n';
+
+// ---------------------------------------------------------------------------
+// Browser modules
+// ---------------------------------------------------------------------------
+
+out += 'export const LIBRARY_BROWSER_MODULES: LibBrowserModule[] = [\n';
+for (const m of BROWSER_MODULES) {
+  const dirAbs = join(courseRoot, m.dir);
+  const files = collectFiles(dirAbs).map((f) => ({ name: f.name, lang: langFor(f.name), code: f.code, status: 'new', originNum: m.num }));
+  const deepDive = parseDeepDive(dirAbs);
+  const docs = DOCS_BY_GROUP[groupForPhase(m.phase)] ?? [];
+  const tutorial = readHtmlDoc(join(dirAbs, 'tutorial.html'));
+
+  out += `  {\n`;
+  out += `    num: ${m.num}, id: ${tsString(m.id)}, title: ${tsString(m.title)}, proves: ${tsString(m.proves)},\n`;
+  out += `    dir: ${tsString(m.dir)}, phase: ${tsString(m.phase)},\n`;
+  out += `    osConnection: ${JSON.stringify(m.osConnection ?? [])}, dependsBrowser: ${JSON.stringify(m.dependsBrowser ?? [])},\n`;
+  out += `    tutorial: ${tsString(tutorial)},\n`;
+  out += `    files: [\n`;
+  for (const f of files) out += `      { name: ${tsString(f.name)}, lang: ${tsString(f.lang)}, code: ${tsString(f.code)}, status: ${tsString(f.status)}, originNum: ${f.originNum} },\n`;
+  out += `    ],\n`;
+  out += `    deepDive: [\n`;
+  for (const d of deepDive) out += `      { title: ${tsString(d.title)}, body: ${tsString(d.body)} },\n`;
+  out += `    ],\n`;
+  out += `    docs: [\n`;
+  for (const d of docs) out += `      { title: ${tsString(d.title)}, description: ${tsString(d.description)}, url: ${tsString(d.url)} },\n`;
+  out += `    ],\n`;
+  out += `  },\n`;
+}
+out += '];\n\n';
+
+// ---------------------------------------------------------------------------
+// Lesson clusters (auto-discovered pages, hand-curated relations)
+// ---------------------------------------------------------------------------
+
+out += 'export const LIBRARY_CLUSTERS: LibCluster[] = [\n';
+for (const c of LESSON_CLUSTERS) {
+  const dirAbs = join(courseRoot, c.dir);
+  if (!existsSync(dirAbs)) { console.warn(`Skipping missing cluster dir: ${c.dir}`); continue; }
+  const pages = [];
+  for (const entry of readdirSync(dirAbs, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || extname(entry.name) !== '.html') continue;
+    const html = readHtmlDoc(join(dirAbs, entry.name));
+    pages.push({ id: entry.name.replace(/\.html$/, ''), title: extractTitle(html) ?? entry.name, html });
+  }
+  const clusterTitle = pages.length ? pages[0].title.replace(/\s*[—-]\s*.*$/, '').trim() || pages[0].title : c.id;
+  out += `  { id: ${tsString(c.id)}, title: ${tsString(clusterTitle)}, relatesToOS: ${JSON.stringify(c.relatesToOS ?? [])}, relatesToBrowser: ${JSON.stringify(c.relatesToBrowser ?? [])}, pages: [\n`;
+  for (const p of pages) out += `    { id: ${tsString(p.id)}, title: ${tsString(p.title)}, html: ${tsString(p.html)} },\n`;
+  out += `  ] },\n`;
+}
+out += '];\n\n';
+
+// ---------------------------------------------------------------------------
+// Prerequisites: the single cross-linked prerequisite.html, plus the 5
+// expanded topic-by-topic pages in custom_lessons_bobos_prerequisites/.
+// ---------------------------------------------------------------------------
+
+out += `export const PREREQUISITE_MAIN: string = ${tsString(readHtmlDoc(join(courseRoot, 'prerequisite.html')))};\n\n`;
+
+out += 'export const PREREQUISITE_TOPICS: LibPrereqTopic[] = [\n';
+for (const p of PREREQUISITES) {
+  const html = readHtmlDoc(join(courseRoot, 'custom_lessons_bobos_prerequisites', p.file));
+  out += `  { id: ${tsString(p.id)}, title: ${tsString(p.title)}, html: ${tsString(html)} },\n`;
+}
+out += '];\n';
+
+writeFileSync(join(webappRoot, 'src', 'library', 'library.generated.ts'), out, 'utf8');
+
+const totalOsFiles = OS_MODULES.reduce((n, m) => n + osFileHistory.get(m.num).length, 0);
+const totalBrowserFiles = BROWSER_MODULES.reduce((n, m) => n + collectFiles(join(courseRoot, m.dir)).length, 0);
+const totalClusterPages = LESSON_CLUSTERS.reduce((n, c) => {
+  const dirAbs = join(courseRoot, c.dir);
+  if (!existsSync(dirAbs)) return n;
+  return n + readdirSync(dirAbs).filter((f) => extname(f) === '.html').length;
+}, 0);
+console.log(`Wrote src/library/library.generated.ts: ${OS_MODULES.length} OS modules (${totalOsFiles} files), ${BROWSER_MODULES.length} browser modules (${totalBrowserFiles} files), ${LESSON_CLUSTERS.length} lesson clusters (${totalClusterPages} pages), ${PREREQUISITES.length} prerequisite topics.`);
