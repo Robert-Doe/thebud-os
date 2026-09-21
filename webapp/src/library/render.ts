@@ -32,11 +32,13 @@ let DATA: LibraryData | null = null;
  * through a variable, so they need an explicit, higher-specificity
  * override instead of a variable redefinition. Appended as the LAST
  * <style> in <body>, so it wins the cascade regardless of source order. */
+const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');`;
+
 const THEME_OVERRIDE_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap');
+  ${FONT_IMPORT}
   :root {
     --bg:#0b0b0d; --bg2:#141416; --bg3:#18181b; --card:#18181b;
-    --border:#2a2a2e; --gold:#d4a017; --cyan:#38bdf8; --teal:#2dd4bf;
+    --border:#2a2a2e; --gold:#d4a017; --gold2:#b8860f; --cyan:#38bdf8; --teal:#2dd4bf;
     --red:#f87171; --green:#4ade80; --purple:#a78bfa; --orange:#fb923c;
     --text:#eeece6; --muted:#9a9992; --code-bg:#101012;
   }
@@ -47,13 +49,41 @@ const THEME_OVERRIDE_CSS = `
   }
 `;
 
+/** The 5 custom_lessons_bobos_prerequisites pages were authored from a
+ * completely different template than every other page in the course —
+ * fingerprinted by `--panel:` in their :root — with its own variable
+ * vocabulary (--panel/--line/--blue/--soft/--shadow/--radius instead of
+ * --card/--border/--gold/--muted) AND a body background hardcoded as a
+ * literal blue-tinted radial-gradient rather than routed through --bg, so
+ * redefining variables alone would leave the page visibly blue. Both are
+ * covered here: the variables are remapped (--blue/--blue-2, the role
+ * this template uses for links/headings/accents, onto this app's gold),
+ * and the literal gradients are overridden directly with !important. */
+const THEME_OVERRIDE_CSS_ALT = `
+  ${FONT_IMPORT}
+  :root {
+    --bg:#0b0b0d; --panel:#18181b; --panel-2:#141416; --line:#2a2a2e;
+    --text:#eeece6; --muted:#9a9992; --soft:#9a9992;
+    --blue:#d4a017; --blue-2:#b8860f; --green:#4ade80; --red:#f87171;
+    --amber:#d9a441; --purple:#a78bfa; --cyan:#38bdf8; --pink:#f472b6;
+  }
+  html, body { background: #0b0b0d !important; }
+  .hero, .hero::after { background: radial-gradient(circle, rgba(212,160,23,0.16), transparent 65%) !important; }
+  body, p, li, td, th, dd, dt { font-family: 'Inter', -apple-system, sans-serif !important; }
+  h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif !important; }
+  .formula, .byte, .regbox, .bitfield { font-family: 'JetBrains Mono', ui-monospace, monospace !important; }
+`;
+
 /** Wraps a real, full tutorial/concept/lesson HTML document (own <head>,
  * own inline <style>) with the theme override injected right before
  * </body>, so it renders exactly as authored inside a sandboxed iframe —
  * the actual content, restyled to this app's theme instead of the course's
- * native per-page palette. */
+ * native per-page palette. Two source templates exist in this course (see
+ * THEME_OVERRIDE_CSS_ALT); which one a page uses is detected from its own
+ * :root block rather than tracked per-page in the generated data. */
 function buildThemedDoc(html: string): string {
-  const styleTag = `<style>${THEME_OVERRIDE_CSS}</style>`;
+  const override = /--panel\s*:/.test(html) ? THEME_OVERRIDE_CSS_ALT : THEME_OVERRIDE_CSS;
+  const styleTag = `<style>${override}</style>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${styleTag}</body>`);
   return html + styleTag;
 }
