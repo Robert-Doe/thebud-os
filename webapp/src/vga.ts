@@ -1,5 +1,5 @@
 /**
- * vga.ts — a byte-accurate port of thebud-os/03_vga_driver/vga.c + vga.h.
+ * vga.ts, a byte-accurate port of thebud-os/03_vga_driver/vga.c + vga.h.
  *
  * Real hardware fact being modeled: the VGA text-mode framebuffer lives at
  * physical address 0xB8000. It is a flat array of 80*25 = 2000 CELLS, each
@@ -10,7 +10,7 @@
  *   #define VGA_COLOR(bg, fg) (((unsigned char)(bg) << 4) | (unsigned char)(fg))
  *
  * This module stores the buffer as a real Uint16Array of length COLS*ROWS,
- * one 16-bit word per cell — low byte = char code, high byte = attribute —
+ * one 16-bit word per cell, low byte = char code, high byte = attribute,
  * exactly mirroring how the CPU/video hardware sees memory at 0xB8000.
  */
 
@@ -43,7 +43,7 @@ export class VgaBuffer {
   readonly buf = new Uint16Array(VGA_COLS * VGA_ROWS);
   cursorRow = 0;
   cursorCol = 0;
-  color = vgaColorByte(0x0, 0xf); // black bg, white fg — vga_init() default
+  color = vgaColorByte(0x0, 0xf); // black bg, white fg, vga_init() default
 
   constructor() {
     this.clear();

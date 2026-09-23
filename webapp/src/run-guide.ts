@@ -1,5 +1,5 @@
 /**
- * "Run It Yourself" — a from-scratch explanation of the real toolchain
+ * "Run It Yourself", a from-scratch explanation of the real toolchain
  * (QEMU, NASM, a freestanding cross-compiler) needed to actually build and
  * boot any module in this repo, written for someone who has never set any
  * of this up before. Static content + a Windows/macOS/Linux platform
@@ -45,7 +45,7 @@ const WINDOWS_STEPS: { title: string; body: string; cmds?: Cmd[] }[] = [
     body: `Here's the part that trips people up: Windows doesn't ship a compiler that produces <em>freestanding</em>, 32-bit, flat binary code the way this kernel needs (no C runtime, no OS underneath it to call into). Rather than fight MinGW's defaults, this course compiles every <code>.c</code> file through Ubuntu's real <code>gcc</code>/<code>ld</code> running inside WSL (Windows Subsystem for Linux) &mdash; a genuine Linux kernel running alongside Windows, not a VM you have to babysit.`,
     cmds: [
       { cmd: 'wsl --install -d Ubuntu', label: 'One-time install (reboot if prompted, then set a Linux username/password on first launch)' },
-      { cmd: 'sudo apt update && sudo apt install -y build-essential', label: 'Inside the new Ubuntu terminal — installs gcc, ld, make' },
+      { cmd: 'sudo apt update && sudo apt install -y build-essential', label: 'Inside the new Ubuntu terminal, installs gcc, ld, make' },
     ],
   },
   {

@@ -1,5 +1,5 @@
 /**
- * gdt.ts — a byte-accurate port of thebud-os/04_gdt/gdt.c + gdt.h.
+ * gdt.ts, a byte-accurate port of thebud-os/04_gdt/gdt.c + gdt.h.
  *
  * Real struct being modeled (gdt.h):
  *

@@ -635,7 +635,7 @@ function escapeHtml(s: string): string {
 }
 
 // Deferred until every view's render function (renderAll, the Module
-// Library, the Run guide) is defined above — calling this any earlier
+// Library, the Run guide) is defined above, calling this any earlier
 // would hit `stages` and friends before their `const`/`function`
 // initializers have run.
 renderView();
