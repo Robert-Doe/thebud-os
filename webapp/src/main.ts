@@ -39,10 +39,10 @@ app.innerHTML = `
   <div class="hero">
     <h1>theBud OS &mdash; Interactive Course</h1>
     <p class="tagline">
-      An x86 operating system built by hand, register by register &mdash;
-      bootloader to a POSIX-flavored kernel, plus a browser built on top of it.
-      Step through a byte-accurate boot simulator, browse the full 46-module
-      course library, or set up the real toolchain and boot it yourself.
+      An x86 operating system built by hand, from the bootloader to a
+      POSIX-flavored kernel, plus a browser built on top of it. Step through
+      the boot sequence, browse the full 46-module course library, or set up
+      the toolchain and boot it yourself.
     </p>
   </div>
   <div class="view-tabs" id="view-tabs">
